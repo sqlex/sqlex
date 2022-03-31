@@ -1,0 +1,5 @@
+# created on ${DATE}, by ${USER}
+
+# method {
+#     select * from dual
+# }

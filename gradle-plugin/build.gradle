@@ -1,0 +1,25 @@
+plugins {
+    id 'java-gradle-plugin'
+    id 'groovy'
+    id 'org.jetbrains.kotlin.jvm'
+    id 'maven-publish'
+}
+
+gradlePlugin {
+    plugins {
+        sqlex {
+            id = "me.danwi.sqlex"
+            implementationClass = "me.danwi.sqlex.gradle.SqlExPlugin"
+        }
+    }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib"
+    implementation project(":parser")
+}
+
+//kotlin和groovy兼容交互
+compileGroovy.dependsOn compileKotlin
+compileGroovy.classpath += files(compileKotlin.destinationDir)
+classes.dependsOn compileGroovy

@@ -1,0 +1,32 @@
+plugins {
+    id 'java'
+    id 'org.jetbrains.kotlin.jvm'
+    id 'org.jetbrains.intellij' version '1.4.0'
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib"
+    implementation "org.antlr:antlr4-intellij-adaptor:0.1"
+    implementation(project(":parser"))
+}
+
+// See https://github.com/JetBrains/gradle-intellij-plugin/
+intellij {
+    def ideaPathProperty = localProperties.get('idea.path')
+    if (ideaPathProperty == null) {
+        type = 'IU'
+        version = '2021.3'
+    } else {
+        localPath = ideaPathProperty
+    }
+
+    pluginName = 'sqlex'
+
+    plugins = [
+            'java',
+            'DatabaseTools',
+            'org.jetbrains.kotlin:213-1.6.10-release-923-IJ5744.223',
+            'PsiViewer:213-SNAPSHOT'
+    ]
+}
+

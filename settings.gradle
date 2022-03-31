@@ -1,0 +1,9 @@
+rootProject.name = 'sqlex'
+
+include 'core'
+include 'idea-plugin'
+include 'parser'
+include 'gradle-plugin'
+include 'spring'
+include 'maven-plugin'
+

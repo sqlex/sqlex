@@ -1,0 +1,115 @@
+<idea-plugin>
+    <id>me.danwi.sqlex</id>
+    <name>SqlEx</name>
+    <vendor email="demon@danwi.me" url="https://danwi.me">DanWi</vendor>
+
+    <description><![CDATA[
+    SqlEx开发插件,用于辅助SqlEx框架的使用,能在开发过程中做生成类的智能提示
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.java</depends>
+    <depends>com.intellij.database</depends>
+
+    <projectListeners>
+        <!--监听Source Root变更-->
+        <listener class="me.danwi.sqlex.idea.listener.impl.SqlExModuleRootListener"
+                  topic="com.intellij.openapi.roots.ModuleRootListener"/>
+        <!--监听配置文件的变更-->
+        <listener class="me.danwi.sqlex.idea.listener.impl.SqlExConfigChangeListener"
+                  topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
+        <listener class="me.danwi.sqlex.idea.listener.impl.SqlExSchemaChangeListener"
+                  topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
+        <listener class="me.danwi.sqlex.idea.listener.impl.SqlExMethodChangeListener"
+                  topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
+        <!--内部监听-->
+        <!--监听 Repository Service 的变更,实现编辑器通知-->
+        <listener class="me.danwi.sqlex.idea.editor.SqlExRefreshNotificationProvider"
+                  topic="me.danwi.sqlex.idea.listener.SqlExRepositoryEventListener"/>
+    </projectListeners>
+
+    <extensions defaultExtensionNs="JavaScript">
+        <!--配置文件schema定义-->
+        <JsonSchema.ProviderFactory implementation="me.danwi.sqlex.idea.config.SqlExConfigJsonSchemaProviderFactory"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!--启动Activity-->
+        <postStartupActivity implementation="me.danwi.sqlex.idea.SqlExStartupActivity"/>
+        <!--SqlEx通知组-->
+        <notificationGroup id="SqlEx Notification Group" displayType="BALLOON" isLogByDefault="true"/>
+        <!--schema同步通知面板-->
+        <editorNotificationProvider
+                implementation="me.danwi.sqlex.idea.editor.SqlExRefreshNotificationProvider"/>
+        <additionalTextAttributes scheme="Default" file="colorSchemes/SqlExMethodDefault.xml"/>
+        <additionalTextAttributes scheme="Darcula" file="colorSchemes/SqlExMethodDefault.xml"/>
+
+        <!--配置文件模板-->
+        <internalFileTemplate id="SqlEx.Config" name="SqlEx Config" order="first"/>
+
+        <!--模式定义文件-->
+        <fileType name="SqlEx Schema"
+                  implementationClass="me.danwi.sqlex.idea.sqls.SqlExSchemaFileType"
+                  fieldName="INSTANCE"
+                  language="SQL" extensions="sqls"
+        />
+        <internalFileTemplate id="SqlEx.Schema" name="SqlEx Schema" order="after SqlEx.Config"/>
+
+        <!--方法定义文件-->
+        <fileType name="SqlEx Method"
+                  implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodFileType"
+                  fieldName="INSTANCE"
+                  language="SqlExMethod" extensions="sqlm"
+        />
+        <internalFileTemplate id="SqlEx.Method" name="SqlEx Method" order="after SqlEx.Schema"/>
+        <lang.parserDefinition language="SqlExMethod"
+                               implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodParserDefinition"/>
+        <lang.syntaxHighlighter language="SqlExMethod"
+                                implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodSyntaxHighlighter"/>
+        <lang.commenter language="SqlExMethod" implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodCommenter"/>
+        <lang.braceMatcher language="SqlExMethod"
+                           implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodBraceMatcher"/>
+        <lang.formatter language="SqlExMethod"
+                        implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodFormattingModelBuilder"/>
+        <multiHostInjector implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodSQLInjector"/>
+        <multiHostInjector implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodJavaInjector"/>
+        <completion.contributor language="SQL"
+                                implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodSQLParameterCompletionContributor"/>
+        <localInspection language="SqlExMethod"
+                         groupName="SqlEx"
+                         displayName="Duplicated name"
+                         level="ERROR"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodDuplicateInspection"
+        />
+        <localInspection language="SQL"
+                         groupName="SqlEx"
+                         displayName="Unknown parameter"
+                         level="ERROR"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodUnknownParameterInspection"/>
+        <localInspection language="SQL"
+                         groupName="SqlEx"
+                         displayName="Unnamed parameter"
+                         level="ERROR"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodUnnamedParameterInspection"/>
+        <colorSettingsPage implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodColorSettingsPage"/>
+        <!--sqlm和java的交互-->
+        <resolveScopeEnlarger implementation="me.danwi.sqlex.idea.sqlm.generator.SqlExMethodResolveScopeEnlarger"/>
+        <java.shortNamesCache implementation="me.danwi.sqlex.idea.sqlm.generator.SqlExMethodGeneratedShortNamesCache"/>
+        <java.elementFinder implementation="me.danwi.sqlex.idea.sqlm.generator.SqlExMethodGeneratedElementFinder"/>
+    </extensions>
+
+    <actions>
+        <!--查看生成的Java文件-->
+        <action id="SqlEx.showGeneratedJava"
+                class="me.danwi.sqlex.idea.sqlm.actions.SqlExMethodShowGeneratedJavaAction"
+                text="显示Java文件"
+                description="显示自动生成的Java文件内容"
+                icon="AllIcons.FileTypes.Java">
+            <keyboard-shortcut keymap="$default" first-keystroke="control alt shift G"/>
+            <add-to-group group-id="EditorPopupMenu"/>
+        </action>
+    </actions>
+</idea-plugin>

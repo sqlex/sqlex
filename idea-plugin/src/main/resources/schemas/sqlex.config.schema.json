@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SqlEx Configuration",
+  "description": "SqlEx 配置文件",
+  "type": "object",
+  "properties": {
+    "package": {
+      "description": "根包路径前缀",
+      "type": "string",
+      "examples": [
+        "com.example.dao",
+        "me.danwi.sqlextx.dao"
+      ]
+    }
+  },
+  "required": [
+    "package"
+  ]
+}
