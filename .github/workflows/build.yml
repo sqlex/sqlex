@@ -58,3 +58,54 @@ jobs:
         with:
           name: windows-shared-library
           path: parser/src/main/resources/native/windows/libsqlex.dll
+
+  native-darwin-amd64:
+    runs-on: macos-10.15
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.18.0
+
+      - name: Build shared library
+        env:
+          GOOS: darwin
+          GOARCH: amd64
+        run: |
+          cd ./3rdparty/mysql
+          go build -buildmode c-shared -ldflags "-s -w" -trimpath -o ../../parser/src/main/resources/native/darwin/x86/libsqlex.dylib github.com/pingcap/tidb/sqlex
+
+      - name: Upload shared library
+        uses: actions/upload-artifact@v3
+        with:
+          name: darwin-amd64-shared-library
+          path: parser/src/main/resources/native/darwin/x86/libsqlex.dylib
+
+  native-darwin-aarch64:
+    runs-on: macos-11
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.18.0
+
+      - name: Build shared library
+        env:
+          GOOS: darwin
+          GOARCH: arm64
+          CGO_ENABLED: 1
+        run: |
+          cd ./3rdparty/mysql
+          go build -buildmode c-shared -ldflags "-s -w" -trimpath -o ../../parser/src/main/resources/native/darwin/aarch64/libsqlex.dylib github.com/pingcap/tidb/sqlex
+
+      - name: Upload shared library
+        uses: actions/upload-artifact@v3
+        with:
+          name: darwin-aarch64-shared-library
+          path: parser/src/main/resources/native/darwin/aarch64/libsqlex.dylib
