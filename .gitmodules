@@ -1,0 +1,3 @@
+[submodule "3rdparty/mysql"]
+	path = 3rdparty/mysql
+	url = ../mysql.git
