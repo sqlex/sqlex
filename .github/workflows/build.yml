@@ -48,7 +48,7 @@ jobs:
           GOOS: windows
           GOARCH: amd64
           CGO_ENABLED: 1
-          CC: gcc-mingw-w64-x86-64
+          CC: x86_64-w64-mingw32-gcc
         run: |
           cd ./3rdparty/mysql
           go build -buildmode c-shared -ldflags "-s -w" -trimpath -o ../../parser/src/main/resources/native/windows/libsqlex.dll github.com/pingcap/tidb/sqlex
