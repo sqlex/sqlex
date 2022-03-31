@@ -25,5 +25,36 @@ jobs:
       - name: Upload shared library
         uses: actions/upload-artifact@v3
         with:
-          name: shared-library
+          name: linux-shared-library
           path: parser/src/main/resources/native/linux/libsqlex.so
+
+  native-windows:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: ConorMacBride/install-package@v1
+        with:
+          apt: mingw-w64
+
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.18.0
+
+      - name: Build shared library
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: 1
+          CC: gcc-mingw-w64-x86-64
+        run: |
+          cd ./3rdparty/mysql
+          go build -buildmode c-shared -ldflags "-s -w" -trimpath -o ../../parser/src/main/resources/native/windows/libsqlex.dll github.com/pingcap/tidb/sqlex
+
+      - name: Upload shared library
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-shared-library
+          path: parser/src/main/resources/native/windows/libsqlex.dll
