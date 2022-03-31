@@ -137,25 +137,25 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: linux-shared-library
-          path: parser/src/main/resources/native/linux/libsqlex.so
+          path: parser/src/main/resources/native/linux/
 
       - name: Download windows shared library
         uses: actions/download-artifact@v3
         with:
           name: windows-shared-library
-          path: parser/src/main/resources/native/windows/libsqlex.ddl
+          path: parser/src/main/resources/native/windows/
 
       - name: Download darwin amd64 shared library
         uses: actions/download-artifact@v3
         with:
           name: darwin-amd64-shared-library
-          path: parser/src/main/resources/native/darwin/x86/libsqlex.dylib
+          path: parser/src/main/resources/native/darwin/x86/
 
       - name: Download darwin aarch64 shared library
         uses: actions/download-artifact@v3
         with:
           name: darwin-aarch64-shared-library
-          path: parser/src/main/resources/native/darwin/aarch64/libsqlex.dylib
+          path: parser/src/main/resources/native/darwin/aarch64/
 
       - name: Execute Gradle test
         run: ./gradlew test
@@ -187,25 +187,25 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: linux-shared-library
-          path: parser/src/main/resources/native/linux/libsqlex.so
+          path: parser/src/main/resources/native/linux/
 
       - name: Download windows shared library
         uses: actions/download-artifact@v3
         with:
           name: windows-shared-library
-          path: parser/src/main/resources/native/windows/libsqlex.ddl
+          path: parser/src/main/resources/native/windows/
 
       - name: Download darwin amd64 shared library
         uses: actions/download-artifact@v3
         with:
           name: darwin-amd64-shared-library
-          path: parser/src/main/resources/native/darwin/x86/libsqlex.dylib
+          path: parser/src/main/resources/native/darwin/x86/
 
       - name: Download darwin aarch64 shared library
         uses: actions/download-artifact@v3
         with:
           name: darwin-aarch64-shared-library
-          path: parser/src/main/resources/native/darwin/aarch64/libsqlex.dylib
+          path: parser/src/main/resources/native/darwin/aarch64/
 
       - name: Execute Gradle build
         run: ./gradlew build
