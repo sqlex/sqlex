@@ -6,13 +6,13 @@ go version
 if [[ "$OSTYPE" =~ ^darwin ]];then
     LIB="libsqlex.dylib"
     if [[ $(uname -m) == 'arm64' ]]; then
-      DIST="../../parser/src/main/resource/native/darwin/aarch64"
+      DIST="../../parser/src/main/resources/native/darwin/aarch64"
     else
-      DIST="../../parser/src/main/resource/native/darwin/x86"
+      DIST="../../parser/src/main/resources/native/darwin/x86"
     fi 
 elif [[ "$OSTYPE" =~ ^linux ]]; then
     LIB="libsqlex.dylib"
-    DIST="../../parser/src/main/resource/native/linux"
+    DIST="../../parser/src/main/resources/native/linux"
 else
   echo "不支持的操作系统,目前仅支持macos/linux"
   exit 1
