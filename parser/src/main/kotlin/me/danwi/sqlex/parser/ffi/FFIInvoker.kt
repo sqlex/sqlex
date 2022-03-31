@@ -8,6 +8,7 @@ import java.io.File
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 
 interface FFIInterface : Library {
     fun FFIInvoke(reqJson: GoString.ByValue): Pointer?
@@ -24,40 +25,58 @@ class FFIResponse {
 val ffiInterface: FFIInterface by lazy {
     //释放原生动态库
     val resourcePath: String
-    val dylibName: String
+    val dylibExtensionName: String
     //根据操作系统来选择
     val osName = System.getProperty("os.name")
     if (osName.startsWith("Mac OS")) {
         resourcePath = if (System.getProperty("os.arch") == "aarch64")
-            "native/darwin/aarch64"
+            "native/darwin/aarch64/libsqlex.dylib"
         else
-            "native/darwin/x86"
-        dylibName = "libsqlex.dylib"
+            "native/darwin/x86/libsqlex.dylib"
+        dylibExtensionName = "dylib"
     } else if (osName.startsWith("Windows")) {
-        resourcePath = "native/windows"
-        dylibName = "libsqlex.dll"
+        resourcePath = "native/windows/libsqlex.dll"
+        dylibExtensionName = "dll"
     } else {
-        resourcePath = "native/linux"
-        dylibName = "libsqlex.so"
+        resourcePath = "native/linux/libsqlex.so"
+        dylibExtensionName = "so"
     }
     //获取资源
-    val inputStream =
-        object {}::class.java.classLoader.getResourceAsStream("$resourcePath/$dylibName")
+    val hashInputStream =
+        object {}::class.java.classLoader.getResourceAsStream(resourcePath)
             ?: throw IOException("无法获取内嵌原生库")
-    //创建临时文件
-    val tempDir = System.getProperty("java.io.tmpdir")
-    val dylibDir = File(tempDir, "sqlex_dylib_${System.nanoTime()}")
-    if (!dylibDir.mkdirs()) throw IOException("无法创建原生库目录")
-    dylibDir.deleteOnExit()
-    val dylibFile = File(dylibDir, dylibName)
-    //释放文件
-    try {
-        Files.copy(inputStream, dylibFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-    } catch (e: Exception) {
-        dylibFile.delete()
-        throw e
+    //释放后的名称
+    val hashFileName = hashInputStream.use {
+        //创建消息摘要
+        val digest = MessageDigest.getInstance("MD5")
+        val buffer = ByteArray(1024)
+        var length: Int
+        while (true) {
+            length = hashInputStream.read(buffer)
+            if (length == -1)
+                break
+            digest.update(buffer, 0, length)
+        }
+        val hash = digest.digest().joinToString("") { String.format("%02x", it) }
+        "$hash.$dylibExtensionName"
     }
-    dylibFile.deleteOnExit()
+    //创建临时目录
+    val tempDir = System.getProperty("java.io.tmpdir")
+    val dylibDir = File(tempDir, "sqlex_dylib")
+    dylibDir.mkdirs()
+    //最终动态库文件
+    val dylibFile = File(dylibDir, hashFileName)
+    //判断文件是否已经存在
+    if (!dylibFile.exists()) {
+        //获取资源
+        val dylibInputStream =
+            object {}::class.java.classLoader.getResourceAsStream(resourcePath)
+                ?: throw IOException("无法获取内嵌原生库")
+        //释放文件
+        dylibInputStream.use {
+            Files.copy(dylibInputStream, dylibFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
     //释放完毕,开始加载
     Native.load(dylibFile.absolutePath, FFIInterface::class.java, mapOf(Pair(Library.OPTION_STRING_ENCODING, "utf-8")))
 }
