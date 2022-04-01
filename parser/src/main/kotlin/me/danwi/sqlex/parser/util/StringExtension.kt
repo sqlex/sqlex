@@ -3,6 +3,8 @@ package me.danwi.sqlex.parser.util
 import org.apache.commons.text.StringEscapeUtils
 import java.io.File
 
+//SqlEx生成目录下的标记文件
+const val SqlExGeneratedTagFileName = "generate-by-sqlex.txt"
 
 //SqlEx配置文件名
 const val SqlExConfigFileName = "sqlex.yaml"
