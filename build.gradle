@@ -38,6 +38,10 @@ allprojects {
                 withJavadocJar()
                 withSourcesJar()
             }
+            javadoc {
+                options.encoding = 'UTF-8'
+                options.charSet = 'UTF-8'
+            }
         }
         if (pluginManager.hasPlugin("org.jetbrains.kotlin.jvm")) {
             compileKotlin {
