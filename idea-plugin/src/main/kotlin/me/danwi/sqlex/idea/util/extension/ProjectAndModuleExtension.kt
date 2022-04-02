@@ -11,6 +11,7 @@ import com.intellij.openapi.module.Module
 import com.intellij.openapi.module.ModuleManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ModuleRootManager
+import com.intellij.openapi.roots.ModuleRootModificationUtil
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.sql.database.SqlDataSourceImpl
@@ -20,6 +21,7 @@ import com.intellij.sql.dialects.SqlImportUtil
 import com.intellij.sql.dialects.SqlResolveMappings
 import com.intellij.sql.dialects.mysql.MysqlDialect
 import me.danwi.sqlex.idea.service.SqlExRepositoryService
+import me.danwi.sqlex.parser.util.SqlExGeneratedTagFileName
 import java.nio.file.Path
 import java.nio.file.Paths
 
@@ -118,3 +120,21 @@ val Module.sqlexRepositoryServices: MutableList<SqlExRepositoryService>
 //获取模块的SourceRoots
 val Module.sourceRoots: Array<VirtualFile>
     inline get() = ModuleRootManager.getInstance(this).sourceRoots
+
+//把所有生成的源码目录的源码标记去掉
+fun Module.unmarkAllGeneratedSourceRoot() {
+    //生成的源码目录
+    val generatedSourceRoots = this.sourceRoots.filter { it.findChild(SqlExGeneratedTagFileName) != null }
+
+    generatedSourceRoots.forEach { generatedSourceRoot ->
+        val module = generatedSourceRoot.module ?: return@forEach
+        ModuleRootModificationUtil.updateModel(module) { model ->
+            //删除相关的源码目录
+            model.contentEntries.forEach { contentEntry ->
+                contentEntry.sourceFolders
+                    .filter { it.file == generatedSourceRoot }
+                    .forEach { contentEntry.removeSourceFolder(it) }
+            }
+        }
+    }
+}

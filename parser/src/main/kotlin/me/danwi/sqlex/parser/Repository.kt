@@ -1,9 +1,12 @@
 package me.danwi.sqlex.parser
 
 import me.danwi.sqlex.parser.config.SqlExConfig
+import me.danwi.sqlex.parser.config.createSqlExConfig
 import me.danwi.sqlex.parser.util.*
 import org.antlr.v4.runtime.CharStreams
 import org.antlr.v4.runtime.CommonTokenStream
+import java.io.File
+import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicInteger
 
 //数据名称索引
@@ -216,3 +219,63 @@ val Field.javaType: String
             else -> "Object"
         }
     }
+
+//给定一个sqlex的source root,将代码生成到指定到文件中
+fun generateRepositorySource(sourceRoot: File, outputDir: File) {
+    //获取目录下的所有文件
+    val files = sourceRoot.walk()
+    //读取配置文件
+    var tempConfigContent: String? = null
+    files.maxDepth(1)
+        .filter { it.isFile && it.absolutePath.isSqlExConfigFilePath }
+        .forEach {
+            if (tempConfigContent == null)
+                tempConfigContent = it.readText()
+            else
+                throw Exception("${sourceRoot.absolutePath}下有多个sqlex配置文件")
+        }
+    val config = createSqlExConfig(tempConfigContent ?: return)
+    //获取到schema文件集合
+    val schemaFiles = files
+        .filter { it.isFile && it.name.isSqlExSchemaFilePath }
+        .map {
+            Pair(
+                Regex("^(\\d+)").find(it.name)?.groups?.get(0)?.value?.toInt(),
+                it
+            )
+        }
+        .filter { it.first != null }
+        .sortedBy { it.first }
+        .map { it.second.readText() }
+    //构建repository
+    val builder = RepositoryBuilder(config)
+    schemaFiles.forEach { builder.addSchema(it) }
+    val repository = builder.build()
+    //在生成的源码目录下写入一个文件做标识
+    val tagFile = File(outputDir.absolutePath, SqlExGeneratedTagFileName)
+    if (!tagFile.exists()) {
+        tagFile.parentFile.mkdirs()
+        tagFile.writeText("this directory is auto generate by sqlex, DO NOT change anything in it")
+    }
+    try {
+        //获取到所有的sqlm文件
+        files
+            .filter { it.isFile && it.absolutePath.isSqlExMethodFilePath }
+            .map {
+                Pair(
+                    it.absolutePath.windowsPathNormalize.removePrefix(sourceRoot.absolutePath.windowsPathNormalize)
+                        .removePrefix("/"), it.readText()
+                )
+            }
+            .map { repository.generateJavaFile(it.first, it.second) }
+            .forEach {
+                val sourceFile = Paths.get(outputDir.absolutePath, it.relativePath).toFile()
+                sourceFile.parentFile.mkdirs()
+                if (sourceFile.exists())
+                    throw Exception("重复源码生成: ${sourceFile.absolutePath}")
+                sourceFile.writeText(it.source)
+            }
+    } finally {
+        repository.close()
+    }
+}
