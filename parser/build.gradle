@@ -32,14 +32,6 @@ generateGrammarSource {
 compileKotlin.dependsOn generateGrammarSource
 compileTestKotlin.dependsOn generateTestGrammarSource
 
-publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
-        }
-    }
-}
-
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib"
     implementation "net.java.dev.jna:jna:5.10.0"
@@ -50,4 +42,14 @@ dependencies {
 
     testImplementation "org.junit.jupiter:junit-jupiter-api:5.8.2"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.8.2"
+}
+
+//使用自定义任务来生成sourcesJar,排除掉resources下的原生库文件
+task('sourcesJar', type: Jar, dependsOn: classes) {
+    archiveClassifier.set('sources')
+    from sourceSets.main.allSource
+    exclude("**/*.dylib")
+    exclude("**/*.dll")
+    exclude("**/*.so")
+    exclude("**/*.h")
 }

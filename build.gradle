@@ -1,14 +1,23 @@
 plugins {
     id 'org.jetbrains.kotlin.jvm' version '1.6.10' apply false
+    id 'io.github.gradle-nexus.publish-plugin' version '1.1.0'
 }
 
+//加载全局的local.properties
+def globalProperties = new Properties()
+def globalLocalFile = project.file('local.properties')
+if (globalLocalFile.isFile()) {
+    globalProperties.load(globalLocalFile.newDataInputStream())
+}
+ext.localProperties = globalProperties
 
+//所有项目应用
 allprojects {
     group 'me.danwi.sqlex'
     version '1.0-SNAPSHOT'
 
     //本地属性相关
-    it.ext.localProperties = new Properties()
+    it.ext.localProperties = globalProperties.clone()
     def localFile = it.file('local.properties')
     if (localFile.isFile()) {
         it.ext.localProperties.load(localFile.newDataInputStream())
@@ -25,6 +34,10 @@ allprojects {
                 targetCompatibility = 1.8
                 options.encoding = "UTF-8"
             }
+            java {
+                withJavadocJar()
+                withSourcesJar()
+            }
         }
         if (pluginManager.hasPlugin("org.jetbrains.kotlin.jvm")) {
             compileKotlin {
@@ -32,6 +45,59 @@ allprojects {
             }
             compileTestKotlin {
                 kotlinOptions.jvmTarget = "1.8"
+            }
+        }
+        //如果配置了maven-publish插件,则自动填充相关配置
+        if (pluginManager.hasPlugin("maven-publish")) {
+            publishing {
+                publications {
+                    mavenJava(MavenPublication) {
+                        from components.java
+                        pom {
+                            name = project.name
+                            description = "sqlex ${project.name} component"
+                            url = 'https://github.com/sqlex'
+                            scm {
+                                connection = 'scm:git:https://github.com/sqlex/sqlex.git'
+                                developerConnection = 'scm:git:https://github.com/sqlex/sqlex.git'
+                                url = 'https://github.com/sqlex'
+                            }
+                            licenses {
+                                license {
+                                    name = 'The Apache License, Version 2.0'
+                                    url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                                }
+                            }
+                            developers {
+                                developer {
+                                    id = 'sqlex'
+                                    name = 'sqlex'
+                                    email = 'demon@danwi.me'
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        //如果配置了maven-publish,有签名配置,且没有配置签名,则尝试应用全局签名配置
+        if (pluginManager.hasPlugin("maven-publish") && localProperties.get("signing.key") != null && !pluginManager.hasPlugin("signing")) {
+            pluginManager.apply("signing")
+            signing {
+                useInMemoryPgpKeys(localProperties.get("signing.key"), localProperties.get("signing.password"))
+                sign publishing.publications["mavenJava"]
+            }
+        }
+    }
+}
+
+//配置全局的maven central属性
+if (localProperties.get('ossrh.username')) {
+    nexusPublishing {
+        repositories {
+            sonatype {
+                username = localProperties.get("ossrh.username")
+                password = localProperties.get("ossrh.password")
             }
         }
     }
