@@ -62,20 +62,11 @@ class Repository(private val databaseName: String, private val session: Session,
 
     fun generateJavaFile(relativePath: String, content: String): JavaFile {
         //java相对路径名
-        val javaRelativePath = relativePath.windowsPathNormalize.removeSuffix(".$SqlExMethodExtensionName") + ".java"
+        val javaRelativePath = relativePath.sqlmPathToJavaPath
         //获取包名
-        val packageName = relativePath
-            .windowsPathNormalize
-            .substringBeforeLast('/')
-            .removePrefix("/").removeSuffix("/")
-            .replace('/', '.')
+        val packageName = javaRelativePath.relativePathToPackageName
         //类名
-        val className =
-            relativePath
-                .windowsPathNormalize
-                .substringAfterLast('/')
-                .removePrefix("/")
-                .removeSuffix(".${SqlExMethodExtensionName}")
+        val className = javaRelativePath.classNameOfJavaRelativePath
         //解析sqlm文件内容
         val parser =
             SqlExMethodLanguageParser(CommonTokenStream(SqlExMethodLanguageLexer(CharStreams.fromString(content))))
