@@ -13,25 +13,25 @@ class SqlExMethodChangeListener(private val project: Project) : BulkFileListener
         //添加
         events.filterIsInstance<VFileCreateEvent>()
             .filter { it.file?.fileType is SqlExMethodFileType }
-            .forEach { invokeWithoutException { it.file?.sqlexRepositoryService?.updateSqlMethodFile(it.file) } }
+            .forEach { invokeWithoutException { it.file?.sqlexRepositoryService?.repository?.updateMethodFile(it.file) } }
 
         //删除
         events.filterIsInstance<VFileDeleteEvent>()
             .filter { it.file.fileType is SqlExMethodFileType }
-            .forEach { it.file.parent.sqlexRepositoryService?.removeSqlMethodFile(it.file) }
+            .forEach { it.file.parent.sqlexRepositoryService?.repository?.removeMethodFile(it.file) }
 
         //内容变更
         events.filterIsInstance<VFileContentChangeEvent>()
             .filter { it.file.fileType is SqlExMethodFileType }
-            .forEach { invokeWithoutException { it.file.sqlexRepositoryService?.updateSqlMethodFile(it.file) } }
+            .forEach { invokeWithoutException { it.file.sqlexRepositoryService?.repository?.updateMethodFile(it.file) } }
 
         //移动事件
         events.filterIsInstance<VFileMoveEvent>()
             .filter { it.oldPath.isSqlExMethodFilePath && it.newPath.isSqlExMethodFilePath }
             .forEach {
                 invokeWithoutException {
-                    it.oldParent.sqlexRepositoryService?.removeSqlMethodFile(it.oldPath)
-                    it.newParent.sqlexRepositoryService?.updateSqlMethodFile(it.file)
+                    it.oldParent.sqlexRepositoryService?.repository?.removeMethodFile(it.oldPath)
+                    it.newParent.sqlexRepositoryService?.repository?.updateMethodFile(it.file)
                 }
             }
 
@@ -41,7 +41,7 @@ class SqlExMethodChangeListener(private val project: Project) : BulkFileListener
             .forEach {
                 val newFile = it.newParent.findChild(it.newChildName) ?: throw Exception("无法找到拷贝的目标文件")
                 if (newFile.fileType is SqlExMethodFileType)
-                    invokeWithoutException { it.file.sqlexRepositoryService?.updateSqlMethodFile(newFile) }
+                    invokeWithoutException { it.file.sqlexRepositoryService?.repository?.updateMethodFile(newFile) }
             }
 
         //文件属性修改事件
@@ -49,8 +49,8 @@ class SqlExMethodChangeListener(private val project: Project) : BulkFileListener
             .filter { it.file.fileType is SqlExMethodFileType }
             .forEach {
                 invokeWithoutException {
-                    it.file.sqlexRepositoryService?.removeSqlMethodFile(it.oldPath)
-                    it.file.sqlexRepositoryService?.updateSqlMethodFile(it.file)
+                    it.file.sqlexRepositoryService?.repository?.removeMethodFile(it.oldPath)
+                    it.file.sqlexRepositoryService?.repository?.updateMethodFile(it.file)
                 }
             }
     }

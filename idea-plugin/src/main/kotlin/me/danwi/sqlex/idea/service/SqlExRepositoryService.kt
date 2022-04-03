@@ -1,10 +1,7 @@
 package me.danwi.sqlex.idea.service
 
-import com.intellij.ide.highlighter.JavaFileType
-import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.invokeAndWaitIfNeeded
-import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
@@ -12,16 +9,11 @@ import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.psi.PsiClass
-import com.intellij.psi.PsiFileFactory
-import com.intellij.psi.PsiJavaFile
 import com.intellij.sql.database.SqlDataSourceImpl
 import com.intellij.sql.dialects.SqlDialectMappings
 import com.intellij.sql.dialects.mysql.MysqlDialect
 import me.danwi.sqlex.idea.listener.SqlExRepositoryEventListener
 import me.danwi.sqlex.idea.util.extension.*
-import me.danwi.sqlex.parser.JavaFile
-import me.danwi.sqlex.parser.Repository
 import me.danwi.sqlex.parser.RepositoryBuilder
 import me.danwi.sqlex.parser.config.createSqlExConfig
 import java.util.concurrent.locks.ReentrantLock
@@ -57,14 +49,9 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                 refresh()
         }
 
-    //所有的Java类
-    val allJavaClass: Array<PsiClass>
-        get() {
-            val classes = javaClassCache.values
-            val innerClass = classes.flatMap { it.innerClasses.toList() }
-            return (classes + innerClass).toTypedArray()
-        }
-
+    //SqlEx代码仓库
+    var repository: SqlExRepository? = null
+        private set
     // endregion
 
     // region 私有变量
@@ -82,14 +69,8 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
     //任务指示器
     private var indicator: ProgressIndicator? = null
 
-    //解析库
-    private var repository: Repository? = null
-
     //数据源
     private var dataSource: SqlDataSourceImpl? = null
-
-    //生成的javaClass缓存
-    private val javaClassCache = mutableMapOf<String, PsiClass>()
 
     //endregion
 
@@ -121,7 +102,7 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                             //需要清理的builder
                             var builderToClean: RepositoryBuilder? = null
                             //需要清理的repository
-                            var repositoryToClean: Repository? = null
+                            var repositoryToClean: SqlExRepository? = null
                             try {
                                 //开始刷新
                                 messagePublisher.beforeRefresh(this@SqlExRepositoryService)
@@ -177,7 +158,10 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                     indicator.checkCanceled()
                                 }
                                 indicator.isIndeterminate = true
-                                val repository = builder.build()
+                                //构建SqlEx仓库
+                                val parserRepository = builder.build()
+                                val ddlScript = parserRepository.DDL
+                                val repository = SqlExRepository(project, parserRepository)
                                 repositoryToClean = repository
                                 this@SqlExRepositoryService.repository = repository
 
@@ -195,10 +179,10 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                     dataSource = project.findDataSource(rootPackage)
                                 //如果现有的数据源没有,则新建一个
                                 if (dataSource == null)
-                                    dataSource = project.addDataSource(rootPackage, repository.DDL, sourceRoot)
+                                    dataSource = project.addDataSource(rootPackage, ddlScript, sourceRoot)
                                 //设置关键信息
                                 dataSource.sqlexName = rootPackage
-                                dataSource.ddl = repository.DDL
+                                dataSource.ddl = ddlScript
                                 //保存到临时变量
                                 this@SqlExRepositoryService.dataSource = dataSource
 
@@ -211,7 +195,7 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                     indicator.text =
                                         "SqlEx: 解析Method(${index + 1}/${methodFiles.size}) ${file.sourceRootRelativePath}"
                                     indicator.fraction = (index + 1) / methodFiles.size.toDouble() / 2.0 + 0.5
-                                    updateSqlMethodFile(file)
+                                    repository.updateMethodFile(file)
                                     indicator.checkCanceled()
                                 }
 
@@ -243,63 +227,13 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
         this.indicator?.cancel()
     }
 
-    fun generateJavaFile(file: VirtualFile?): JavaFile? {
-        if (file == null)
-            return null
-        return repository?.generateJavaFile(
-            file.sourceRootRelativePath ?: throw Exception("无法获取文件${file.name}的相对路径"),
-            file.textContent ?: throw Exception("无法读取文件${file.name}的内容")
-        )
-    }
-
-    fun updateSqlMethodFile(file: VirtualFile?) {
-        if (file == null)
-            return
-        val javaFile = generateJavaFile(file) ?: return
-        val javaClass = runReadAction {
-            (PsiFileFactory.getInstance(project)
-                .createFileFromText(
-                    "${SQLEX_GENERATED_PREFIX}${javaFile.javaClass}.java",
-                    JavaFileType.INSTANCE,
-                    javaFile.source
-                ) as PsiJavaFile).classes.firstOrNull()
-        } ?: return
-
-        javaClassCache[file.path] = javaClass
-    }
-
-    fun removeSqlMethodFile(filePath: String) {
-        javaClassCache.remove(filePath)
-    }
-
-    fun removeSqlMethodFile(file: VirtualFile?) {
-        javaClassCache.remove(file?.path ?: return)
-    }
-
-    fun findClasses(qualifiedPackage: String): Array<PsiClass> {
-        return javaClassCache.values
-            .filter { it.qualifiedPackageName == qualifiedPackage }
-            .toTypedArray()
-    }
-
-    fun findClass(qualifiedName: String): PsiClass? {
-        return allJavaClass.firstOrNull { it.qualifiedName == qualifiedName }
-    }
-
-    fun findClassByName(name: String): PsiClass? {
-        return allJavaClass.firstOrNull { it.name == name }
-    }
-
-    fun isBelong(sourceRoot: VirtualFile): Boolean {
-        return this.sourceRoot == sourceRoot
-    }
-
     fun close() {
         stopRefresh()
         val dataSource = this.dataSource
         if (dataSource != null)
             project.removeDataSource(dataSource, sourceRoot)
         this.repository?.close()
+        this.repository = null
     }
 }
 
@@ -318,7 +252,7 @@ fun syncRepositoryService(project: Project) {
             val sourceRoots = module.sourceRoots.filter { it.isSqlExSourceRoot }
             val sqlExRepositoryServices = module.sqlexRepositoryServices
             //删除已经不存在的repository
-            val repositoriesToDelete = sqlExRepositoryServices.filter { r -> sourceRoots.none { r.isBelong(it) } }
+            val repositoriesToDelete = sqlExRepositoryServices.filter { r -> sourceRoots.none { it == r.sourceRoot } }
             repositoriesToDelete.forEach {
                 it.close()
                 sqlExRepositoryServices.remove(it)
@@ -326,7 +260,7 @@ fun syncRepositoryService(project: Project) {
             }
             //添加新的repository
             sourceRoots
-                .filter { s -> sqlExRepositoryServices.none { it.isBelong(s) } }
+                .filter { s -> sqlExRepositoryServices.none { it.sourceRoot == s } }
                 .map { SqlExRepositoryService(it) }
                 .forEach {
                     sqlExRepositoryServices.add(it)

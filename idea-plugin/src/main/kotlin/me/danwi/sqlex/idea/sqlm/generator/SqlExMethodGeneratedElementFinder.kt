@@ -11,7 +11,7 @@ class SqlExMethodGeneratedElementFinder(private val project: Project) : PsiEleme
     override fun findClasses(qualifiedName: String, scope: GlobalSearchScope): Array<PsiClass> {
         return project.sqlexRepositoryServices
             .filter { scope.contains(it.sourceRoot) }
-            .mapNotNull { it.findClass(qualifiedName) }
+            .mapNotNull { it.repository?.findClass(qualifiedName) }
             .toTypedArray()
     }
 
@@ -22,7 +22,8 @@ class SqlExMethodGeneratedElementFinder(private val project: Project) : PsiEleme
     override fun getClasses(psiPackage: PsiPackage, scope: GlobalSearchScope): Array<PsiClass> {
         return project.sqlexRepositoryServices
             .filter { scope.contains(it.sourceRoot) }
-            .flatMap { it.findClasses(psiPackage.qualifiedName).toList() }
+            .mapNotNull { it.repository }
+            .flatMap { it.findClasses(psiPackage.qualifiedName) }
             .toTypedArray()
     }
 }
