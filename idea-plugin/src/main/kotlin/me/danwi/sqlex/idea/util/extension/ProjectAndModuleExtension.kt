@@ -48,7 +48,8 @@ fun Project.addDataSource(name: String, sourceRoot: VirtualFile): SqlDataSourceI
         //创建数据源
         val dataSource = dataSourceManager.createEmpty()
         dataSource.sqlexName = name
-        dataSource.sqlexSourceRootPath = sourceRoot.projectRootRelativePath
+        dataSource.comment = "SqlEx schema of [ ${sourceRoot.projectRootRelativePath} ]"
+        dataSource.sqlexSourceRootPath = sourceRoot.path
         dataSource.ddl = "" //暂时以空白作为内容
         //添加数据源
         dataSourceManager.addDataSource(dataSource)
@@ -78,12 +79,14 @@ fun Project.removeDataSource(dataSource: SqlDataSourceImpl, sourceRoot: VirtualF
         //设置解析路径
         if (sourceRoot != null)
             SqlResolveMappings.getInstance(this).setMapping(sourceRoot, null)
+        //删除source root属性数据
+        dataSource.sqlexSourceRootPath = null
         dataSourceManager.removeDataSource(dataSource)
     }
 }
 
 fun Project.findDataSource(sourceRoot: VirtualFile): SqlDataSourceImpl? {
-    return this.allSqlExDataSources.find { it.sqlexSourceRootPath == sourceRoot.projectRootRelativePath }
+    return this.allSqlExDataSources.find { it.sqlexSourceRootPath == sourceRoot.path }
 }
 
 //创建通知

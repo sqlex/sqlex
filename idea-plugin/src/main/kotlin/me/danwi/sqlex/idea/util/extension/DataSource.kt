@@ -1,5 +1,6 @@
 package me.danwi.sqlex.idea.util.extension
 
+import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.application.invokeAndWaitIfNeeded
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.vfs.VirtualFile
@@ -11,8 +12,11 @@ import java.nio.file.Paths
 //添加Database Tool数据源的名称前缀
 const val SQLEX_DATABASE_TOOL_NAME_PREFIX = "SqlEx:"
 
-//添加Database Tool数据源的Commnet前缀
-const val SQLEX_DATABASE_TOOL_COMMENT_PREFIX = "DDL Schema for:"
+//Database Tool数据源key前缀
+const val SQLEX_DATABASE_TOOL_DATASOURCE = "me.danwi.sqlex.datatools.datasource"
+
+//Database Tool数据源source root子属性
+const val SQLEX_DATABASE_TOOL_DATASOURCE_SOURCEROOT = "sourceroot"
 
 var SqlDataSourceImpl.sqlexName: String
     get() = this.name.removePrefix("$SQLEX_DATABASE_TOOL_NAME_PREFIX ")
@@ -21,9 +25,14 @@ var SqlDataSourceImpl.sqlexName: String
     }
 
 var SqlDataSourceImpl.sqlexSourceRootPath: String?
-    get() = this.comment?.removePrefix("$SQLEX_DATABASE_TOOL_COMMENT_PREFIX ")
+    get() = PropertiesComponent.getInstance(project)
+        .getValue("${SQLEX_DATABASE_TOOL_DATASOURCE}.${this.uniqueId}.${SQLEX_DATABASE_TOOL_DATASOURCE_SOURCEROOT}")
     set(value) {
-        this.comment = "$SQLEX_DATABASE_TOOL_COMMENT_PREFIX $value"
+        val dataKey = "${SQLEX_DATABASE_TOOL_DATASOURCE}.${this.uniqueId}.${SQLEX_DATABASE_TOOL_DATASOURCE_SOURCEROOT}"
+        if (value == null)
+            PropertiesComponent.getInstance(project).unsetValue(dataKey)
+        else
+            PropertiesComponent.getInstance(project).setValue(dataKey, value)
     }
 
 var SqlDataSourceImpl.ddlFile: VirtualFile?

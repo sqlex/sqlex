@@ -242,7 +242,7 @@ fun syncRepositoryService(project: Project) {
         val sqlexSourceRoots =
             project.modules
                 .flatMap { m -> m.sourceRoots.filter { s -> s.isSqlExSourceRoot } }
-                .map { it.projectRootRelativePath }
+                .map { it.path }
         project.allSqlExDataSources
             .filter { !sqlexSourceRoots.contains(it.sqlexSourceRootPath) }
             .forEach { project.removeDataSource(it) }
