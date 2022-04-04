@@ -9,7 +9,6 @@ import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.sql.database.SqlDataSourceImpl
 import com.intellij.sql.dialects.SqlDialectMappings
 import com.intellij.sql.dialects.mysql.MysqlDialect
 import me.danwi.sqlex.idea.listener.SqlExRepositoryEventListener
@@ -68,9 +67,6 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
 
     //任务指示器
     private var indicator: ProgressIndicator? = null
-
-    //数据源
-    private var dataSource: SqlDataSourceImpl? = null
 
     //endregion
 
@@ -173,18 +169,14 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                 val rootPackage = config.rootPackage ?: throw Exception("无法获取SqlEx Config的根包名")
 
                                 //同步数据源
-                                var dataSource = this@SqlExRepositoryService.dataSource
-                                //如果临时变量数据源不存在,则在现存的数据源中查找
-                                if (dataSource == null)
-                                    dataSource = project.findDataSource(rootPackage)
+                                //在现存的数据源中查找
+                                var dataSource = project.findDataSource(sourceRoot)
                                 //如果现有的数据源没有,则新建一个
                                 if (dataSource == null)
-                                    dataSource = project.addDataSource(rootPackage, ddlScript, sourceRoot)
+                                    dataSource = project.addDataSource(rootPackage, sourceRoot)
                                 //设置关键信息
                                 dataSource.sqlexName = rootPackage
                                 dataSource.ddl = ddlScript
-                                //保存到临时变量
-                                this@SqlExRepositoryService.dataSource = dataSource
 
                                 indicator.checkCanceled()
 
@@ -229,7 +221,7 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
 
     fun close() {
         stopRefresh()
-        val dataSource = this.dataSource
+        val dataSource = project.findDataSource(sourceRoot)
         if (dataSource != null)
             project.removeDataSource(dataSource, sourceRoot)
         this.repository?.close()
@@ -246,6 +238,15 @@ fun syncRepositoryService(project: Project) {
     val messagePublisher = project.messageBus.syncPublisher(SqlExRepositoryEventListener.REPOSITORY_SERVICE_TOPIC)
     //加锁
     repositoryServiceSyncLocker.withLock {
+        //在处理之前先删除所有遗留的垃圾数据源
+        val sqlexSourceRoots =
+            project.modules
+                .flatMap { m -> m.sourceRoots.filter { s -> s.isSqlExSourceRoot } }
+                .map { it.projectRootRelativePath }
+        project.allSqlExDataSources
+            .filter { !sqlexSourceRoots.contains(it.sqlexSourceRootPath) }
+            .forEach { project.removeDataSource(it) }
+
         //处理所有的module
         project.modules.forEach { module ->
             //拿到这个模块下的所有SqlEx source root

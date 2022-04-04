@@ -19,7 +19,6 @@ import com.intellij.sql.database.SqlDataSourceManager
 import com.intellij.sql.dialects.SqlDialectMappings
 import com.intellij.sql.dialects.SqlImportUtil
 import com.intellij.sql.dialects.SqlResolveMappings
-import com.intellij.sql.dialects.mysql.MysqlDialect
 import me.danwi.sqlex.idea.service.SqlExRepositoryService
 import me.danwi.sqlex.parser.util.SqlExGeneratedTagFileName
 import java.nio.file.Path
@@ -37,27 +36,21 @@ val Project.pluginTempDir: Path
 val Project.sqlexRepositoryServices: List<SqlExRepositoryService>
     inline get() = this.modules.flatMap { it.sqlexRepositoryServices }
 
-//添加Database Tool数据源
-const val SQLEX_DATABASE_TOOL_PREFIX = "SqlEx:"
-
 val Project.allSqlExDataSources: List<SqlDataSourceImpl>
-    get() = SqlDataSourceManager.getInstance(this).dataSources.filter { it.name.startsWith(SQLEX_DATABASE_TOOL_PREFIX) }
+    get() = SqlDataSourceManager.getInstance(this)
+        .dataSources
+        .filter { it.name.startsWith(SQLEX_DATABASE_TOOL_NAME_PREFIX) }
 
-fun Project.addDataSource(name: String, ddl: String, sourceRoot: VirtualFile): SqlDataSourceImpl {
+fun Project.addDataSource(name: String, sourceRoot: VirtualFile): SqlDataSourceImpl {
     return invokeAndWaitIfNeeded {
         //获取数据源管理器
         val dataSourceManager = SqlDataSourceManager.getInstance(this)
         //创建数据源
         val dataSource = dataSourceManager.createEmpty()
-        dataSource.name = "$SQLEX_DATABASE_TOOL_PREFIX $name"
-        //创建ddl文件
-        val ddlVirtualFile =
-            createVirtualFile(Paths.get(this.pluginTempDir.toString(), "ddls", "$name.sql").toString(), ddl)
-                ?: throw Exception("无法找到ddl对应的虚拟文件")
-        //设置ddl文件方言
-        SqlDialectMappings.getInstance(this).setMapping(ddlVirtualFile, MysqlDialect.INSTANCE)
-        //设置ddl文件
-        dataSource.setFiles(arrayOf(ddlVirtualFile))
+        dataSource.sqlexName = name
+        dataSource.sqlexSourceRootPath = sourceRoot.projectRootRelativePath
+        dataSource.ddl = "" //暂时以空白作为内容
+        //添加数据源
         dataSourceManager.addDataSource(dataSource)
         //设置解析路径
         SqlResolveMappings.getInstance(this)
@@ -89,8 +82,8 @@ fun Project.removeDataSource(dataSource: SqlDataSourceImpl, sourceRoot: VirtualF
     }
 }
 
-fun Project.findDataSource(name: String): SqlDataSourceImpl? {
-    return this.allSqlExDataSources.find { it.sqlexName == name }
+fun Project.findDataSource(sourceRoot: VirtualFile): SqlDataSourceImpl? {
+    return this.allSqlExDataSources.find { it.sqlexSourceRootPath == sourceRoot.projectRootRelativePath }
 }
 
 //创建通知
