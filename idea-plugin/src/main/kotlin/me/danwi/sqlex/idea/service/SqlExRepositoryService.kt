@@ -17,6 +17,7 @@ import me.danwi.sqlex.parser.RepositoryBuilder
 import me.danwi.sqlex.parser.config.createSqlExConfig
 import me.danwi.sqlex.parser.exception.SqlExRepositoryMethodException
 import me.danwi.sqlex.parser.exception.SqlExRepositorySchemaException
+import me.danwi.sqlex.parser.util.schemaFileVersion
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -131,12 +132,7 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                 }
                                 //排序
                                 val sortedSchemaFiles = schemaFiles
-                                    .map {
-                                        Pair(
-                                            Regex("^(\\d+)").find(it.name)?.groups?.get(0)?.value?.toInt(),
-                                            it
-                                        )
-                                    }
+                                    .map { Pair(it.name.schemaFileVersion, it) }
                                     .filter { it.first !== null }
                                     .sortedBy { it.first }
                                     .map { it.second }
@@ -149,11 +145,13 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                 val builder = RepositoryBuilder(config)
                                 builderToClean = builder
                                 sortedSchemaFiles.forEachIndexed { index, file ->
+                                    val relativePath =
+                                        file.sourceRootRelativePath ?: throw Exception("无法获取${file.name}的相对路径")
                                     indicator.text =
-                                        "SqlEx: 解析Schema(${index + 1}/${sortedSchemaFiles.size}) ${file.sourceRootRelativePath}"
+                                        "SqlEx: 解析Schema(${index + 1}/${sortedSchemaFiles.size}) $relativePath"
                                     indicator.fraction = (index + 1) / sortedSchemaFiles.size.toDouble() / 2.0
                                     builder.addSchema(
-                                        file.path,
+                                        relativePath,
                                         file.textContent ?: throw Exception("无法读取${file.name}的文件内容")
                                     )
                                     indicator.checkCanceled()
@@ -208,11 +206,11 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                         NotificationType.WARNING
                                     )
                                     is SqlExRepositorySchemaException -> project.showNotification(
-                                        "解析Schema文件 [${e.filepath}] 错误: ${e.message}",
+                                        "解析Schema文件 [${e.relativePath}] 错误: ${e.message}",
                                         NotificationType.ERROR
                                     )
                                     is SqlExRepositoryMethodException -> project.showNotification(
-                                        "解析Method文件 [${e.filepath}] 错误: ${e.message}",
+                                        "解析Method文件 [${e.relativePath}] 错误: ${e.message}",
                                         NotificationType.ERROR
                                     )
                                     else -> project.showNotification(

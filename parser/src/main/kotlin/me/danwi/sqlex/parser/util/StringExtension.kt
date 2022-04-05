@@ -41,26 +41,27 @@ val String.windowsPathNormalize: String
         return this
     }
 
-//转化成pascal命名
-val String.pascalName: String
-    get() {
-        if (this.isEmpty()) return ""
-        return this.split("_", "-").joinToString("") { it.firstUpperCase }
-    }
-
-private val String.firstUpperCase: String
-    get() {
-        if (this.isEmpty()) return ""
-        return this[0].uppercaseChar() + this.substring(1)
-    }
+//计算相对路径
+fun String.relativePathTo(parentPath: String): String {
+    return this.windowsPathNormalize.removePrefix(parentPath.windowsPathNormalize).removePrefix("/")
+}
 
 //java包名和相对路径的转换
 val String.relativePathToPackageName: String
-    inline get() = this
-        .windowsPathNormalize
-        .substringBeforeLast('/')
-        .removePrefix("/").removeSuffix("/")
-        .replace('/', '.')
+    inline get() {
+        val normalizedPath = this.windowsPathNormalize
+        //有文件名
+        return if (normalizedPath.substringAfterLast("/").contains(".")) {
+            normalizedPath
+                .substringBeforeLast('/')
+                .removePrefix("/").removeSuffix("/")
+                .replace('/', '.')
+        } else {
+            normalizedPath
+                .removePrefix("/").removeSuffix("/")
+                .replace('/', '.')
+        }
+    }
 
 val String.packageNameToRelativePath: String
     inline get() = this.windowsPathNormalize.replace('.', '/')
@@ -74,6 +75,23 @@ val String.classNameOfJavaRelativePath: String
         .substringAfterLast('/')
         .removePrefix("/")
         .removeSuffix(".java")
+
+//获取schema文件的版本号
+val String.schemaFileVersion: Int?
+    inline get() = Regex("^(\\d+)").find(this.windowsPathNormalize.substringAfterLast("/"))?.groups?.get(0)?.value?.toInt()
+
+//转化成pascal命名
+val String.pascalName: String
+    get() {
+        if (this.isEmpty()) return ""
+        return this.split("_", "-").joinToString("") { it.firstUpperCase }
+    }
+
+private val String.firstUpperCase: String
+    get() {
+        if (this.isEmpty()) return ""
+        return this[0].uppercaseChar() + this.substring(1)
+    }
 
 //SQL命名参数化
 data class NamedParameter(val name: String, val position: Int)
