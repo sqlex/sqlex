@@ -1,5 +1,6 @@
 package me.danwi.sqlex.parser.config
 
+import me.danwi.sqlex.parser.exception.SqlExParserException
 import org.yaml.snakeyaml.TypeDescription
 import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.constructor.Constructor
@@ -26,5 +27,5 @@ class SqlExConfig {
 
 fun SqlExConfig.validate() {
     if (this.rootPackage?.isEmpty() != false)
-        throw Exception("package property is required")
+        throw SqlExParserException("package property is required")
 }
