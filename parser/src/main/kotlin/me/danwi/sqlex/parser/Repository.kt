@@ -16,6 +16,8 @@ import java.util.concurrent.atomic.AtomicInteger
 //数据名称索引
 private val index = AtomicInteger()
 
+private const val RepositoryClassName = "Repository"
+
 class RepositoryBuilder(private val config: SqlExConfig) {
     private val databaseName = "sqlex_${index.getAndIncrement()}"
 
@@ -96,6 +98,32 @@ class Repository(
 
     val DDL: String
         get() = session.DDL
+
+    //SqlEx Repository顶级类
+    val repositoryJavaFile: JavaFile by lazy {
+        JavaFile(
+            RepositoryClassName,
+            rootPackage,
+            "${rootPackage.packageNameToRelativePath}/${RepositoryClassName}.java",
+            //language=JAVA
+            """
+                package $rootPackage;
+                
+                import me.danwi.sqlex.core.annotation.*;
+                import me.danwi.sqlex.core.RepositoryLike;
+                
+                @SqlExGenerated
+                ${
+                schemas
+                    .mapIndexed { version, script -> "@SqlExSchema(version=$version, script=\"${script.literal}\")" }
+                    .joinToString("\n")
+            }
+                public interface $RepositoryClassName extends RepositoryLike {
+                
+                }
+            """.trimIndent()
+        )
+    }
 
     fun generateJavaFile(relativePath: String, content: String): JavaFile {
         try {
@@ -203,7 +231,7 @@ class Repository(
                 ${imports.joinToString("\n") { "import ${it.className().text};" }}
                 
                 @SqlExGenerated
-                public interface $className {
+                public interface $className extends ${repositoryJavaFile.javaClassQualifiedName} {
                     ${methodSegments.joinToString("\n")}
                 }
             """.trimIndent()
@@ -284,13 +312,20 @@ fun generateRepositorySource(sourceRoot: File, outputDir: File) {
     val builder = RepositoryBuilder(config)
     schemaFiles.forEach { builder.addSchema(it.absolutePath.relativePathTo(sourceRoot.absolutePath), it.readText()) }
     val repository = builder.build()
-    //在生成的源码目录下写入一个文件做标识
-    val tagFile = File(outputDir.absolutePath, SqlExGeneratedTagFileName)
-    if (!tagFile.exists()) {
-        tagFile.parentFile.mkdirs()
-        tagFile.writeText("this directory is auto generate by sqlex, DO NOT change anything in it")
-    }
     try {
+        //在生成的源码目录下写入一个文件做标识
+        val tagFile = File(outputDir.absolutePath, SqlExGeneratedTagFileName)
+        if (!tagFile.exists()) {
+            tagFile.parentFile.mkdirs()
+            tagFile.writeText("this directory is auto generate by sqlex, DO NOT change anything in it")
+        }
+        //生成顶级Repository类文件
+        val repositoryJavaFile = repository.repositoryJavaFile
+        val repositorySourceFile = Paths.get(outputDir.absolutePath, repositoryJavaFile.relativePath).toFile()
+        repositorySourceFile.parentFile.mkdirs()
+        if (repositorySourceFile.exists())
+            throw SqlExRepositoryGenerateException(repositorySourceFile.absolutePath, "重复源码生成")
+        repositorySourceFile.writeText(repositoryJavaFile.source)
         //获取到所有的sqlm文件
         files
             .filter { it.isFile && it.absolutePath.isSqlExMethodFilePath }
