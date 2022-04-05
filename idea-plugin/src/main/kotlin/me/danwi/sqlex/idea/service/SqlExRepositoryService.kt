@@ -17,6 +17,7 @@ import me.danwi.sqlex.parser.RepositoryBuilder
 import me.danwi.sqlex.parser.config.createSqlExConfig
 import me.danwi.sqlex.parser.exception.SqlExRepositoryMethodException
 import me.danwi.sqlex.parser.exception.SqlExRepositorySchemaException
+import me.danwi.sqlex.parser.util.schemaFileVersion
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -131,12 +132,7 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                 }
                                 //排序
                                 val sortedSchemaFiles = schemaFiles
-                                    .map {
-                                        Pair(
-                                            Regex("^(\\d+)").find(it.name)?.groups?.get(0)?.value?.toInt(),
-                                            it
-                                        )
-                                    }
+                                    .map { Pair(it.name.schemaFileVersion, it) }
                                     .filter { it.first !== null }
                                     .sortedBy { it.first }
                                     .map { it.second }

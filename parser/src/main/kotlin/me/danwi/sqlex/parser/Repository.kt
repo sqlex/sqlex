@@ -21,9 +21,37 @@ class RepositoryBuilder(private val config: SqlExConfig) {
 
     private val session: Session = Session(databaseName)
 
+    private val rootPackageRelativePath =
+        config.rootPackage?.packageNameToRelativePath ?: throw SqlExRepositoryException("无法获取根包信息")
+
+    private var currentSchemaVersion = -1
+
+    private val schemaContentCache = mutableListOf<String>()
+
     fun addSchema(relativePath: String, script: String) {
         try {
+            //schema文件必须包含在根包下面
+            if (!relativePath.startsWith(rootPackageRelativePath)) {
+                throw SqlExRepositorySchemaException(
+                    relativePath,
+                    "Schema文件必须在根包下,当前根包: ${rootPackageRelativePath.relativePathToPackageName} ,Schema文件所在包: ${relativePath.relativePathToPackageName}"
+                )
+            }
+            //获取schema的版本
+            val version = relativePath.schemaFileVersion
+            if (version != currentSchemaVersion + 1)
+                if (currentSchemaVersion == -1)
+                    throw SqlExRepositorySchemaException(relativePath, "Schema文件的版本必须从0开始")
+                else
+                    throw SqlExRepositorySchemaException(
+                        relativePath,
+                        "Schema文件版本必须连续且不重复,当前需要 ${currentSchemaVersion + 1} 版本,实际提供 ${version} 版本"
+                    )
+            //执行
             session.executeScript(script)
+            //添加到缓存
+            schemaContentCache.add(script)
+            currentSchemaVersion++
         } catch (e: Exception) {
             try {
                 session.execute("drop database $databaseName")
@@ -36,7 +64,7 @@ class RepositoryBuilder(private val config: SqlExConfig) {
 
     fun build(): Repository {
         try {
-            return Repository(databaseName, Session(databaseName), config)
+            return Repository(databaseName, Session(databaseName), config, schemaContentCache)
         } catch (e: Exception) {
             try {
                 session.execute("drop database $databaseName")
@@ -58,7 +86,14 @@ class RepositoryBuilder(private val config: SqlExConfig) {
     }
 }
 
-class Repository(private val databaseName: String, private val session: Session, private val config: SqlExConfig) {
+class Repository(
+    private val databaseName: String,
+    private val session: Session,
+    private val config: SqlExConfig,
+    private val schemas: List<String>
+) {
+    private val rootPackage = config.rootPackage ?: throw SqlExRepositoryException("无法获取根包信息")
+
     val DDL: String
         get() = session.DDL
 
@@ -68,6 +103,12 @@ class Repository(private val databaseName: String, private val session: Session,
             val javaRelativePath = relativePath.sqlmPathToJavaPath
             //获取包名
             val packageName = javaRelativePath.relativePathToPackageName
+            //判断是否根包的合法性
+            if (!packageName.startsWith(rootPackage))
+                throw SqlExRepositoryMethodException(
+                    relativePath,
+                    "Method文件必须在根包下,当前根包: $rootPackage ,Method文件所在包: $packageName"
+                )
             //类名
             val className = javaRelativePath.classNameOfJavaRelativePath
             //解析sqlm文件内容
@@ -235,12 +276,7 @@ fun generateRepositorySource(sourceRoot: File, outputDir: File) {
     //获取到schema文件集合
     val schemaFiles = files
         .filter { it.isFile && it.name.isSqlExSchemaFilePath }
-        .map {
-            Pair(
-                Regex("^(\\d+)").find(it.name)?.groups?.get(0)?.value?.toInt(),
-                it
-            )
-        }
+        .map { Pair(it.name.schemaFileVersion, it) }
         .filter { it.first != null }
         .sortedBy { it.first }
         .map { it.second }

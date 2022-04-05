@@ -48,11 +48,20 @@ fun String.relativePathTo(parentPath: String): String {
 
 //java包名和相对路径的转换
 val String.relativePathToPackageName: String
-    inline get() = this
-        .windowsPathNormalize
-        .substringBeforeLast('/')
-        .removePrefix("/").removeSuffix("/")
-        .replace('/', '.')
+    inline get() {
+        val normalizedPath = this.windowsPathNormalize
+        //有文件名
+        return if (normalizedPath.substringAfterLast("/").contains(".")) {
+            normalizedPath
+                .substringBeforeLast('/')
+                .removePrefix("/").removeSuffix("/")
+                .replace('/', '.')
+        } else {
+            normalizedPath
+                .removePrefix("/").removeSuffix("/")
+                .replace('/', '.')
+        }
+    }
 
 val String.packageNameToRelativePath: String
     inline get() = this.windowsPathNormalize.replace('.', '/')
@@ -66,6 +75,10 @@ val String.classNameOfJavaRelativePath: String
         .substringAfterLast('/')
         .removePrefix("/")
         .removeSuffix(".java")
+
+//获取schema文件的版本号
+val String.schemaFileVersion: Int?
+    inline get() = Regex("^(\\d+)").find(this.windowsPathNormalize.substringAfterLast("/"))?.groups?.get(0)?.value?.toInt()
 
 //转化成pascal命名
 val String.pascalName: String
