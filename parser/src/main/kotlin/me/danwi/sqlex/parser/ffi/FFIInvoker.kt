@@ -4,8 +4,9 @@ import com.google.gson.Gson
 import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
+import me.danwi.sqlex.parser.exception.SqlExFFIException
+import me.danwi.sqlex.parser.exception.SqlExFFIInvokeException
 import java.io.File
-import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
@@ -44,7 +45,7 @@ val ffiInterface: FFIInterface by lazy {
     //获取资源
     val hashInputStream =
         object {}::class.java.classLoader.getResourceAsStream(resourcePath)
-            ?: throw IOException("无法获取内嵌原生库")
+            ?: throw SqlExFFIException("无法获取内嵌原生库")
     //释放后的名称
     val hashFileName = hashInputStream.use {
         //创建消息摘要
@@ -71,7 +72,7 @@ val ffiInterface: FFIInterface by lazy {
         //获取资源
         val dylibInputStream =
             object {}::class.java.classLoader.getResourceAsStream(resourcePath)
-                ?: throw IOException("无法获取内嵌原生库")
+                ?: throw SqlExFFIException("无法获取内嵌原生库")
         //释放文件
         dylibInputStream.use {
             Files.copy(dylibInputStream, dylibFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
@@ -86,15 +87,16 @@ inline fun <reified T> ffiInvoke(module: String, method: String, vararg args: An
     val request = FFIRequest(module, method, args.map { Gson().toJson(it) }.toTypedArray())
     val requestGoString = GoString.ByValue(Gson().toJson(request))
     //调用
-    val responseJsonStrPointer = ffiInterface.FFIInvoke(requestGoString) ?: throw Exception("FFI调用空引用异常")
+    val responseJsonStrPointer =
+        ffiInterface.FFIInvoke(requestGoString) ?: throw SqlExFFIInvokeException(module, method, "FFI调用空引用异常")
     //将返回值转换成字符串
     val responseJson = responseJsonStrPointer.getString(0, "utf-8")
     //判断是否发生了错误
-    if (responseJson == "") throw Exception("FFI调用发生错误")
+    if (responseJson == "") throw SqlExFFIInvokeException(module, method, "FFI调用发生错误")
     //解析结果
     val response = Gson().fromJson(responseJson, FFIResponse::class.java)
     //是否出错
-    if (!response.success) throw Exception(response.message)
+    if (!response.success) throw SqlExFFIInvokeException(module, method, response.message)
     //解析返回
     return Gson().fromJson(response.returnValue, T::class.java)
 }

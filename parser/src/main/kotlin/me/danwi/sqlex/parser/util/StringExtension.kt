@@ -1,5 +1,6 @@
 package me.danwi.sqlex.parser.util
 
+import me.danwi.sqlex.parser.exception.SqlExParserException
 import org.apache.commons.text.StringEscapeUtils
 import java.io.File
 
@@ -124,7 +125,7 @@ val String.namedParameterSQL: NamedParameterSQL
                 } else if (char == ':' && this[index + 1] == ':') {
                     inDoubleColon = true
                 } else if (char == '?') {
-                    throw Exception("不能使用非命名参数(?)")
+                    throw SqlExParserException("不能使用非命名参数(?)")
                 } else if (char == ':' && index + 1 < length && Character.isJavaIdentifierStart(this[index + 1])) {
                     var parameterIndex = index + 2
                     while (parameterIndex < length && Character.isJavaIdentifierPart(this[parameterIndex])) {

@@ -15,6 +15,8 @@ import me.danwi.sqlex.idea.listener.SqlExRepositoryEventListener
 import me.danwi.sqlex.idea.util.extension.*
 import me.danwi.sqlex.parser.RepositoryBuilder
 import me.danwi.sqlex.parser.config.createSqlExConfig
+import me.danwi.sqlex.parser.exception.SqlExRepositoryMethodException
+import me.danwi.sqlex.parser.exception.SqlExRepositorySchemaException
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -150,7 +152,10 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                     indicator.text =
                                         "SqlEx: 解析Schema(${index + 1}/${sortedSchemaFiles.size}) ${file.sourceRootRelativePath}"
                                     indicator.fraction = (index + 1) / sortedSchemaFiles.size.toDouble() / 2.0
-                                    builder.addSchema(file.textContent ?: throw Exception("无法读取${file.name}的文件内容"))
+                                    builder.addSchema(
+                                        file.path,
+                                        file.textContent ?: throw Exception("无法读取${file.name}的文件内容")
+                                    )
                                     indicator.checkCanceled()
                                 }
                                 indicator.isIndeterminate = true
@@ -202,7 +207,18 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                         "SqlEx索引更新被取消",
                                         NotificationType.WARNING
                                     )
-                                    else -> project.showNotification(e.message ?: "未知错误", NotificationType.ERROR)
+                                    is SqlExRepositorySchemaException -> project.showNotification(
+                                        "解析Schema文件 [${e.filepath}] 错误: ${e.message}",
+                                        NotificationType.ERROR
+                                    )
+                                    is SqlExRepositoryMethodException -> project.showNotification(
+                                        "解析Method文件 [${e.filepath}] 错误: ${e.message}",
+                                        NotificationType.ERROR
+                                    )
+                                    else -> project.showNotification(
+                                        "重建SqlEx索引时发生错误: ${e.message ?: "未知错误"}, 索引构建失败",
+                                        NotificationType.ERROR
+                                    )
                                 }
                             } finally {
                                 this@SqlExRepositoryService.indicator = null
