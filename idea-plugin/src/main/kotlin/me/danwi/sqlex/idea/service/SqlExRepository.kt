@@ -21,6 +21,22 @@ class SqlExRepository(private val project: Project, private val repository: Repo
     private val javaClassCache = mutableMapOf<String, PsiClass>()
     private val psiManager = PsiManager.getInstance(project)
 
+    init {
+        //添加顶级Repository类
+        val javaFile = repository.repositoryJavaFile
+        //生成psi class
+        val javaClass = runReadAction {
+            (PsiFileFactory.getInstance(project)
+                .createFileFromText(
+                    "${SQLEX_GENERATED_PREFIX}${javaFile.javaClass}.java",
+                    JavaFileType.INSTANCE,
+                    javaFile.source
+                ) as PsiJavaFile).classes.firstOrNull()
+        } ?: throw Exception("无法生成java class")
+        //存入缓存
+        javaClassCache["FAKE:${javaFile.relativePath}"] = javaClass
+    }
+
     val allJavaClassCache: List<PsiClass>
         get() {
             val classes = javaClassCache.values

@@ -11,12 +11,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class DatabaseManager {
+public class DataSource<R extends RepositoryLike> {
     private String replace(String str, int start, int end, String newStr) {
         return str.substring(0, start) + newStr + str.substring(end);
     }
 
-    public <T> T getInstance(Class<T> clazz) {
+    public <D extends R> D getInstance(Class<D> clazz) {
         InvocationHandler handler = new InvocationHandler() {
             @Override
             public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
@@ -114,7 +114,7 @@ public class DatabaseManager {
             }
         };
 
-        return (T) Proxy.newProxyInstance(
+        return (D) Proxy.newProxyInstance(
                 clazz.getClassLoader(),
                 new Class[]{clazz},
                 handler
