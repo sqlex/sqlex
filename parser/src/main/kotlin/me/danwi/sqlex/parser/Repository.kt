@@ -96,23 +96,23 @@ class Repository(private val databaseName: String, private val session: Session,
                         .map {
                             //language=JAVA
                             """
-                            private ${it.javaType} _${it.name};
-                            public ${it.javaType} get${it.name.pascalName}() {
-                                return this._${it.name};
-                            }
-                            public void set${it.name.pascalName}(${it.javaType} value) {
-                                this._${it.name} = value;
-                            }
-                        """.trimIndent()
+                                private ${it.javaType} _${it.name};
+                                public ${it.javaType} get${it.name.pascalName}() {
+                                    return this._${it.name};
+                                }
+                                public void set${it.name.pascalName}(${it.javaType} value) {
+                                    this._${it.name} = value;
+                                }
+                            """.trimIndent()
                         }
                     //合成一个实体类源码
                     //language=JAVA
                     val resultClassContent = """
-                    @SqlExGenerated
-                    static class $resultClassName {
-                        ${resultFieldSegments.joinToString("\n")}
-                    }
-                """.trimIndent()
+                        @SqlExGenerated
+                        static class $resultClassName {
+                            ${resultFieldSegments.joinToString("\n")}
+                        }
+                    """.trimIndent()
 
                     //SQL语句中的参数
                     val parametersInSQL = namedParameterSQL.parameters.map { it.name }.distinct()
@@ -140,32 +140,32 @@ class Repository(private val databaseName: String, private val session: Session,
 
                     //方法片段
                     """
-                    $resultClassContent
-        
-                    @SqlExScript("${namedParameterSQL.sql.literal}")
-                    @SqlExParameterPosition({${parameterPosition.joinToString()}})
-                    @SqlExMarkerPosition({${namedParameterSQL.parameters.joinToString { it.position.toString() }}})
-                    ${inExprPositions.joinToString("\n") { "@SqlExInExprPosition(not=${it.not},marker=${it.marker},start=${it.start},end=${it.end})" }}
-                    List<$resultClassName> $methodName(${parametersInMethod.joinToString(", ") { "${it.second} ${it.first}" }});
-                """.trimIndent()
+                        $resultClassContent
+            
+                        @SqlExScript("${namedParameterSQL.sql.literal}")
+                        @SqlExParameterPosition({${parameterPosition.joinToString()}})
+                        @SqlExMarkerPosition({${namedParameterSQL.parameters.joinToString { it.position.toString() }}})
+                        ${inExprPositions.joinToString("\n") { "@SqlExInExprPosition(not=${it.not},marker=${it.marker},start=${it.start},end=${it.end})" }}
+                        List<$resultClassName> $methodName(${parametersInMethod.joinToString(", ") { "${it.second} ${it.first}" }});
+                    """.trimIndent()
                 }
             //整个java文件内容
             //language=JAVA
             val javaFileContent = """
-            package ${packageName};
-            
-            //core依赖
-            import me.danwi.sqlex.core.annotation.*;
-            //常用依赖
-            import java.util.List;
-            //数据类型依赖
-            ${imports.joinToString("\n") { "import ${it.className().text};" }}
-            
-            @SqlExGenerated
-            public interface $className {
-                ${methodSegments.joinToString("\n")}
-            }
-        """.trimIndent()
+                package ${packageName};
+                
+                //core依赖
+                import me.danwi.sqlex.core.annotation.*;
+                //常用依赖
+                import java.util.List;
+                //数据类型依赖
+                ${imports.joinToString("\n") { "import ${it.className().text};" }}
+                
+                @SqlExGenerated
+                public interface $className {
+                    ${methodSegments.joinToString("\n")}
+                }
+            """.trimIndent()
             return JavaFile(className, packageName, javaRelativePath, javaFileContent)
         } catch (e: Exception) {
             throw SqlExRepositoryMethodException(relativePath, e.message ?: "未知的Method解析错误")
