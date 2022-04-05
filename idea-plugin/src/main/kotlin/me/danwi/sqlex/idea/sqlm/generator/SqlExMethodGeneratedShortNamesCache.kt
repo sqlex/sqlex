@@ -13,13 +13,14 @@ class SqlExMethodGeneratedShortNamesCache(private val project: Project) : PsiSho
     override fun getClassesByName(name: String, scope: GlobalSearchScope): Array<PsiClass> {
         return project.sqlexRepositoryServices
             .filter { scope.contains(it.sourceRoot) }
-            .mapNotNull { it.findClassByName(name) }
+            .mapNotNull { it.repository?.findClassByName(name) }
             .toTypedArray()
     }
 
     override fun getAllClassNames(): Array<String> {
         return project.sqlexRepositoryServices
-            .flatMap { it.allJavaClass.map { c -> c.name } }
+            .mapNotNull { it.repository }
+            .flatMap { it.allJavaClassCache.map { c -> c.name } }
             .filterNotNull()
             .distinct()
             .toTypedArray()

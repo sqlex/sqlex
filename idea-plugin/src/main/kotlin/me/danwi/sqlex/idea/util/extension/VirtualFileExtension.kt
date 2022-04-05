@@ -9,10 +9,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import me.danwi.sqlex.idea.service.SqlExRepositoryService
-import me.danwi.sqlex.parser.util.SqlExConfigFileName
-import me.danwi.sqlex.parser.util.SqlExMethodExtensionName
-import me.danwi.sqlex.parser.util.SqlExSchemaExtensionName
-import me.danwi.sqlex.parser.util.isSqlExConfigFileName
+import me.danwi.sqlex.parser.util.*
 
 //判断这个VirtualFile是否为一个SqlEx配置文件
 val VirtualFile?.isSqlExConfig: Boolean
@@ -49,8 +46,8 @@ val VirtualFile.sourceRoot: VirtualFile?
     get() {
         val module = this.module ?: return null
         return module.sourceRoots.firstOrNull {
-            val thisSegments = this.path.split("/")
-            val itSegments = it.path.split("/")
+            val thisSegments = this.path.windowsPathNormalize.split("/")
+            val itSegments = it.path.windowsPathNormalize.split("/")
             for ((i, v) in itSegments.withIndex()) if (thisSegments[i] != v) return@firstOrNull false
             true
         }
@@ -60,14 +57,14 @@ val VirtualFile.sourceRoot: VirtualFile?
 val VirtualFile.sourceRootRelativePath: String?
     inline get() {
         val sourceRoot = this.sourceRoot ?: return null
-        return this.path.removePrefix(sourceRoot.path).removePrefix("/")
+        return this.path.windowsPathNormalize.removePrefix(sourceRoot.path.windowsPathNormalize).removePrefix("/")
     }
 
 //获取文件对于project root的路径
 val VirtualFile.projectRootRelativePath: String?
     inline get() {
-        val projectPath = this.project?.basePath ?: return null
-        return this.path.removePrefix(projectPath).removePrefix("/")
+        val projectPath = this.project?.basePath?.windowsPathNormalize ?: return null
+        return this.path.windowsPathNormalize.removePrefix(projectPath).removePrefix("/")
     }
 
 //判断文件是否为source root

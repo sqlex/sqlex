@@ -38,7 +38,7 @@ class SqlExMethodShowGeneratedJavaAction : AnAction() {
                 throw Exception("索引已经过期,请先重建索引")
 
             //生成java文件
-            val javaFile = service.generateJavaFile(methodFile) ?: throw Exception("Java文件生成失败")
+            val javaFile = service.repository?.findJavaSource(methodFile) ?: throw Exception("Java文件生成失败")
             //解析为psi
             val psiJavaFile = PsiFileFactory.getInstance(project)
                 .createFileFromText(JavaLanguage.INSTANCE, javaFile.source)

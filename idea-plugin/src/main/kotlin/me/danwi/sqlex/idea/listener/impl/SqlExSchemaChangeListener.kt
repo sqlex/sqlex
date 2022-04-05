@@ -5,15 +5,15 @@ import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.*
 import me.danwi.sqlex.idea.util.extension.isSqlExSchema
 import me.danwi.sqlex.idea.util.extension.sqlexRepositoryService
-import me.danwi.sqlex.parser.util.SqlExSchemaExtensionName
+import me.danwi.sqlex.parser.util.isSqlExSchemaFilePath
 
 class SqlExSchemaChangeListener(private val project: Project) : BulkFileListener {
     override fun after(events: MutableList<out VFileEvent>) {
         events.filter {
-                    (it is VFileCopyEvent && it.newChildName.endsWith(SqlExSchemaExtensionName))
-                    || (it is VFileMoveEvent && (it.newPath.endsWith(SqlExSchemaExtensionName) || it.oldPath.endsWith(SqlExSchemaExtensionName)))
-                    || (it is VFilePropertyChangeEvent && (it.newPath.endsWith(SqlExSchemaExtensionName) || it.oldPath.endsWith(SqlExSchemaExtensionName)))
-                    || (it is VFileDeleteEvent && it.path.endsWith(SqlExSchemaExtensionName))
+            (it is VFileCopyEvent && it.newChildName.isSqlExSchemaFilePath)
+                    || (it is VFileMoveEvent && (it.newPath.isSqlExSchemaFilePath || it.oldPath.isSqlExSchemaFilePath))
+                    || (it is VFilePropertyChangeEvent && (it.newPath.isSqlExSchemaFilePath || it.oldPath.isSqlExSchemaFilePath))
+                    || (it is VFileDeleteEvent && it.path.isSqlExSchemaFilePath)
                     || (it is VFileContentChangeEvent && it.file.isSqlExSchema)
         }.filter {
             if (it is VFilePropertyChangeEvent) {

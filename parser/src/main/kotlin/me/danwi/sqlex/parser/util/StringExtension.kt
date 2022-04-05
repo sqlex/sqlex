@@ -53,6 +53,27 @@ private val String.firstUpperCase: String
         return this[0].uppercaseChar() + this.substring(1)
     }
 
+//java包名和相对路径的转换
+val String.relativePathToPackageName: String
+    inline get() = this
+        .windowsPathNormalize
+        .substringBeforeLast('/')
+        .removePrefix("/").removeSuffix("/")
+        .replace('/', '.')
+
+val String.packageNameToRelativePath: String
+    inline get() = this.windowsPathNormalize.replace('.', '/')
+
+//sqlm路径到java路径到转换
+val String.sqlmPathToJavaPath: String
+    inline get() = this.windowsPathNormalize.removeSuffix(".$SqlExMethodExtensionName") + ".java"
+
+val String.classNameOfJavaRelativePath: String
+    inline get() = this.windowsPathNormalize
+        .substringAfterLast('/')
+        .removePrefix("/")
+        .removeSuffix(".java")
+
 //SQL命名参数化
 data class NamedParameter(val name: String, val position: Int)
 data class NamedParameterSQL(val sql: String, val parameters: List<NamedParameter>)
