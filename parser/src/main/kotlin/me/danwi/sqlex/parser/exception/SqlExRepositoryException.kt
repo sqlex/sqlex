@@ -4,12 +4,12 @@ open class SqlExRepositoryException(message: String) : SqlExParserException(mess
 
 }
 
-class SqlExRepositorySchemaException(val filepath: String, message: String?) :
+class SqlExRepositorySchemaException(val relativePath: String, message: String?) :
     SqlExRepositoryException(message ?: "未知的Schema解析错误") {
 
 }
 
-class SqlExRepositoryMethodException(val filepath: String, message: String) : SqlExRepositoryException(message) {
+class SqlExRepositoryMethodException(val relativePath: String, message: String) : SqlExRepositoryException(message) {
 
 }
 

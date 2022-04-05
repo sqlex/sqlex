@@ -246,7 +246,7 @@ fun generateRepositorySource(sourceRoot: File, outputDir: File) {
         .map { it.second }
     //构建repository
     val builder = RepositoryBuilder(config)
-    schemaFiles.forEach { builder.addSchema(it.absolutePath, it.readText()) }
+    schemaFiles.forEach { builder.addSchema(it.absolutePath.relativePathTo(sourceRoot.absolutePath), it.readText()) }
     val repository = builder.build()
     //在生成的源码目录下写入一个文件做标识
     val tagFile = File(outputDir.absolutePath, SqlExGeneratedTagFileName)
@@ -259,12 +259,11 @@ fun generateRepositorySource(sourceRoot: File, outputDir: File) {
         files
             .filter { it.isFile && it.absolutePath.isSqlExMethodFilePath }
             .map {
-                Pair(
-                    it.absolutePath.windowsPathNormalize.removePrefix(sourceRoot.absolutePath.windowsPathNormalize)
-                        .removePrefix("/"), it.readText()
+                repository.generateJavaFile(
+                    it.absolutePath.relativePathTo(sourceRoot.absolutePath),
+                    it.readText()
                 )
             }
-            .map { repository.generateJavaFile(it.first, it.second) }
             .forEach {
                 val sourceFile = Paths.get(outputDir.absolutePath, it.relativePath).toFile()
                 sourceFile.parentFile.mkdirs()

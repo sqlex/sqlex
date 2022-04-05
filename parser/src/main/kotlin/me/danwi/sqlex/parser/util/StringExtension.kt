@@ -41,18 +41,10 @@ val String.windowsPathNormalize: String
         return this
     }
 
-//转化成pascal命名
-val String.pascalName: String
-    get() {
-        if (this.isEmpty()) return ""
-        return this.split("_", "-").joinToString("") { it.firstUpperCase }
-    }
-
-private val String.firstUpperCase: String
-    get() {
-        if (this.isEmpty()) return ""
-        return this[0].uppercaseChar() + this.substring(1)
-    }
+//计算相对路径
+fun String.relativePathTo(parentPath: String): String {
+    return this.windowsPathNormalize.removePrefix(parentPath.windowsPathNormalize).removePrefix("/")
+}
 
 //java包名和相对路径的转换
 val String.relativePathToPackageName: String
@@ -74,6 +66,19 @@ val String.classNameOfJavaRelativePath: String
         .substringAfterLast('/')
         .removePrefix("/")
         .removeSuffix(".java")
+
+//转化成pascal命名
+val String.pascalName: String
+    get() {
+        if (this.isEmpty()) return ""
+        return this.split("_", "-").joinToString("") { it.firstUpperCase }
+    }
+
+private val String.firstUpperCase: String
+    get() {
+        if (this.isEmpty()) return ""
+        return this[0].uppercaseChar() + this.substring(1)
+    }
 
 //SQL命名参数化
 data class NamedParameter(val name: String, val position: Int)
