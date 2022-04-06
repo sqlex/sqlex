@@ -67,4 +67,4 @@ jobs:
       - name: Publish to release repository
         env:
           RELEASE: 1
-        run: ./gradlew publishToSonatype
+        run: ./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository
