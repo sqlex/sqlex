@@ -2,7 +2,8 @@ plugins {
     id 'java-gradle-plugin'
     id 'groovy'
     id 'org.jetbrains.kotlin.jvm'
-    id "com.gradle.plugin-publish" version "0.21.0"
+    id 'maven-publish'
+    id 'signing'
 }
 
 gradlePlugin {
@@ -14,30 +15,39 @@ gradlePlugin {
     }
 }
 
-pluginBundle {
-    website = 'https://github.com/sqlex'
-    vcsUrl = 'https://github.com/sqlex/sqlex.git'
-    description = 'sqlex plugin'
-    mavenCoordinates {
-        groupId = "me.danwi.sqlex"
-        artifactId = "gradle-plugin"
-    }
-    plugins {
-        sqlex {
-            displayName = 'sqlex plugin'
-            tags = ['sql', 'sqlex', 'orm', 'compile']
+afterEvaluate {
+    publishing.publications.forEach {
+        it.pom {
+            name = project.name
+            description = "sqlex ${project.name} component"
+            url = 'https://github.com/sqlex'
+            scm {
+                connection = 'scm:git:https://github.com/sqlex/sqlex.git'
+                developerConnection = 'scm:git:https://github.com/sqlex/sqlex.git'
+                url = 'https://github.com/sqlex'
+            }
+            licenses {
+                license {
+                    name = 'The Apache License, Version 2.0'
+                    url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                }
+            }
+            developers {
+                developer {
+                    id = 'sqlex'
+                    name = 'sqlex'
+                    email = 'demon@danwi.me'
+                }
+            }
         }
     }
-}
 
-//设置gradle上传的key
-task("setupKeySecret") {
-    if (localProperties.get("gradle.key") != null) {
-        System.properties.setProperty("gradle.publish.key", localProperties.get("gradle.key"))
-        System.properties.setProperty("gradle.publish.secret", localProperties.get("gradle.secret"))
-    }
+    if (localProperties.get("signing.key") != null)
+        signing {
+            useInMemoryPgpKeys(localProperties.get("signing.key"), localProperties.get("signing.password"))
+            publishing.publications.forEach{ sign it }
+        }
 }
-tasks.publishPlugins.dependsOn tasks.setupKeySecret
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib"

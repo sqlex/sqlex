@@ -51,11 +51,11 @@ allprojects {
                 kotlinOptions.jvmTarget = "1.8"
             }
         }
-        //如果配置了maven-publish插件,则自动填充相关配置
-        if (pluginManager.hasPlugin("maven-publish")) {
+        //如果配置了maven-publish插件,且不是gradle插件项目(需要自定义发布),则自动填充相关配置
+        if (pluginManager.hasPlugin("maven-publish") && !pluginManager.hasPlugin("java-gradle-plugin")) {
             publishing {
                 publications {
-                    mavenJava(MavenPublication) {
+                    Java(MavenPublication) {
                         from components.java
                         pom {
                             name = project.name
@@ -84,12 +84,12 @@ allprojects {
                 }
             }
         }
-        //如果配置了maven-publish,有签名配置,且没有配置签名,则尝试应用全局签名配置
+        //如果配置了maven-publish,有签名配置,且没有应用自己的签名插件,则尝试应用全局签名配置
         if (pluginManager.hasPlugin("maven-publish") && localProperties.get("signing.key") != null && !pluginManager.hasPlugin("signing")) {
             pluginManager.apply("signing")
             signing {
                 useInMemoryPgpKeys(localProperties.get("signing.key"), localProperties.get("signing.password"))
-                sign publishing.publications["mavenJava"]
+                publishing.publications.forEach { sign it }
             }
         }
     }
