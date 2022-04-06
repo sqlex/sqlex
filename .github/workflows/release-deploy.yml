@@ -41,8 +41,8 @@ jobs:
           name: darwin-shared-library
           path: parser/src/main/resources/native/darwin/
 
-      - name: Pre-Build
-        run: ./gradlew build
+      - name: Pre-Test
+        run: ./gradlew test
 
       - name: Wait others to succeed
         uses: lewagon/wait-on-check-action@v1.0.0
