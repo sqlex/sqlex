@@ -1,4 +1,4 @@
-name: build native shared library
+name: native
 
 on:
   workflow_call:
