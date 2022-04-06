@@ -5,6 +5,14 @@ plugins {
 
 //加载全局的local.properties
 def globalProperties = new Properties()
+//判断是否为RELEASE环境
+if (System.getenv("RELEASE") != null) {
+    globalProperties.put("release", true)
+    globalProperties.put("development", false)
+} else {
+    globalProperties.put("release", false)
+    globalProperties.put("development", true)
+}
 def globalLocalFile = project.file('local.properties')
 if (globalLocalFile.isFile()) {
     globalProperties.load(globalLocalFile.newDataInputStream())
@@ -13,15 +21,19 @@ ext.localProperties = globalProperties
 
 //所有项目应用
 allprojects {
-    group 'me.danwi.sqlex'
-    version '1.0-SNAPSHOT'
-
     //本地属性相关
     it.ext.localProperties = globalProperties.clone()
     def localFile = it.file('local.properties')
     if (localFile.isFile()) {
         it.ext.localProperties.load(localFile.newDataInputStream())
     }
+
+    group 'me.danwi.sqlex'
+    version '0.0.1'
+
+    //开发环境,版本统一添加SNAPSHOT
+    if (localProperties.development)
+        version = version + '-SNAPSHOT'
 
     repositories {
         mavenCentral()
