@@ -1,4 +1,4 @@
-name: build
+name: test
 
 on: push
 
@@ -6,7 +6,7 @@ jobs:
   build-native:
     uses: ./.github/workflows/native.yml
 
-  build:
+  test:
     needs:
       - build-native
 
@@ -44,5 +44,5 @@ jobs:
           name: darwin-shared-library
           path: parser/src/main/resources/native/darwin/
 
-      - name: Execute Gradle build
-        run: ./gradlew build
+      - name: Execute Gradle test
+        run: ./gradlew test
