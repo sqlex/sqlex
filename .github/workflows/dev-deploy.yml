@@ -19,7 +19,7 @@ jobs:
         uses: lewagon/wait-on-check-action@v1.0.0
         with:
           ref: ${{ github.ref }}
-          running-workflow-name: 'dev deploy'
+          running-workflow-name: 'deploy'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 10
 
