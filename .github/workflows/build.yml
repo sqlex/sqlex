@@ -4,7 +4,7 @@ on: push
 
 jobs:
   build-native:
-    uses: ./github/workflows/native.yml
+    uses: ./.github/workflows/native.yml
 
   test:
     needs:
