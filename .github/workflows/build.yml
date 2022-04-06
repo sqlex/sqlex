@@ -8,9 +8,7 @@ jobs:
 
   test:
     needs:
-      - native-linux
-      - native-windows
-      - native-darwin
+      - build-native
 
     strategy:
       matrix:
@@ -53,9 +51,7 @@ jobs:
 
   build:
     needs:
-      - native-linux
-      - native-windows
-      - native-darwin
+      - build-native
 
     strategy:
       matrix:
