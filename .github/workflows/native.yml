@@ -4,7 +4,7 @@ on:
   workflow_call:
 
 jobs:
-  native-linux:
+  linux:
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v3
@@ -29,7 +29,7 @@ jobs:
           name: linux-shared-library
           path: 3rdparty/mysql/libsqlex.so
 
-  native-windows:
+  windows:
     runs-on: ubuntu-20.04
     steps:
       - uses: ConorMacBride/install-package@v1
@@ -60,8 +60,8 @@ jobs:
           name: windows-shared-library
           path: 3rdparty/mysql/libsqlex.dll
 
-  native-darwin:
-    runs-on: macos-11
+  darwin-amd64:
+    runs-on: macos-10.15
     steps:
       - uses: actions/checkout@v3
         with:
@@ -77,8 +77,64 @@ jobs:
           GOARCH: amd64
         run: |
           cd ./3rdparty/mysql
-          GOOS=darwin GOARCH=amd64 go build -buildmode c-shared -ldflags "-s -w" -trimpath -o libsqlex_amd64.dylib github.com/pingcap/tidb/sqlex
-          GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -buildmode c-shared -ldflags "-s -w" -trimpath -o libsqlex_arm64.dylib github.com/pingcap/tidb/sqlex
+          go build -buildmode c-shared -ldflags "-s -w" -trimpath -o libsqlex_amd64.dylib github.com/pingcap/tidb/sqlex
+
+      - name: Upload shared library
+        uses: actions/upload-artifact@v3
+        with:
+          name: darwin-amd64-shared-library
+          path: 3rdparty/mysql/libsqlex_amd64.dylib
+
+  darwin-aarch64:
+    runs-on: macos-11
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.18.0
+
+      - name: Build shared library
+        env:
+          GOOS: darwin
+          GOARCH: arm64
+          CGO_ENABLED: 1
+        run: |
+          cd ./3rdparty/mysql
+          go build -buildmode c-shared -ldflags "-s -w" -trimpath -o libsqlex_arm64.dylib github.com/pingcap/tidb/sqlex
+
+      - name: Upload shared library
+        uses: actions/upload-artifact@v3
+        with:
+          name: darwin-aarch64-shared-library
+          path: 3rdparty/mysql/libsqlex_arm64.dylib
+
+  darwin-combine:
+    runs-on: macos-11
+    needs:
+      - darwin-amd64
+      - darwin-aarch64
+    steps:
+      - name: Download darwin shared library
+        uses: actions/download-artifact@v3
+        with:
+          name: darwin-amd64-shared-library
+          path: 3rdparty/mysql
+
+      - name: Download darwin aarch64 shared library
+        uses: actions/download-artifact@v3
+        with:
+          name: darwin-aarch64-shared-library
+          path: 3rdparty/mysql
+
+      - name: Combine shared library
+        env:
+          GOOS: darwin
+          GOARCH: amd64
+        run: |
+          cd ./3rdparty/mysql
           lipo ./libsqlex_amd64.dylib ./libsqlex_arm64.dylib -create -output ./libsqlex.dylib
 
       - name: Upload shared library
