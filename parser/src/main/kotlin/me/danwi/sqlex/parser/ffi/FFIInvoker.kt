@@ -30,10 +30,7 @@ val ffiInterface: FFIInterface by lazy {
     //根据操作系统来选择
     val osName = System.getProperty("os.name")
     if (osName.startsWith("Mac OS")) {
-        resourcePath = if (System.getProperty("os.arch") == "aarch64")
-            "native/darwin/aarch64/libsqlex.dylib"
-        else
-            "native/darwin/x86/libsqlex.dylib"
+        resourcePath = "native/darwin/libsqlex.dylib"
         dylibExtensionName = "dylib"
     } else if (osName.startsWith("Windows")) {
         resourcePath = "native/windows/libsqlex.dll"
