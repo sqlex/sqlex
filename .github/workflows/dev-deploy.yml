@@ -1,0 +1,15 @@
+name: dev deploy
+
+on: push
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait test to succeed
+        uses: lewagon/wait-on-check-action@v1.0.0
+        with:
+          ref: ${{ github.ref }}
+          running-workflow-name: 'dev deploy'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
