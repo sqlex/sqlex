@@ -2,11 +2,11 @@ name: dev deploy
 
 on:
   push:
-    branches:
-      - master
+    tags:
+      - v*
 
 jobs:
-  deploy:
+  release-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -22,7 +22,7 @@ jobs:
         uses: lewagon/wait-on-check-action@v1.0.0
         with:
           ref: ${{ github.ref }}
-          running-workflow-name: 'deploy'
+          running-workflow-name: 'release-deploy'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 10
 
@@ -30,7 +30,7 @@ jobs:
         uses: lewagon/wait-on-check-action@v1.0.0
         with:
           ref: ${{ github.ref }}
-          running-workflow-name: 'deploy'
+          running-workflow-name: 'release-deploy'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 10
 
@@ -42,4 +42,6 @@ jobs:
           echo signing.password=${{ secrets.SIGNING_PASSWD }} >> local.properties
 
       - name: Publish to snapshot repository
+        env:
+          RELEASE: 1
         run: ./gradlew publishToSonatype
