@@ -2,7 +2,7 @@ plugins {
     id 'java-gradle-plugin'
     id 'groovy'
     id 'org.jetbrains.kotlin.jvm'
-    id 'maven-publish'
+    id "com.gradle.plugin-publish" version "0.21.0"
 }
 
 gradlePlugin {
@@ -13,6 +13,31 @@ gradlePlugin {
         }
     }
 }
+
+pluginBundle {
+    website = 'https://github.com/sqlex'
+    vcsUrl = 'https://github.com/sqlex/sqlex.git'
+    description = 'sqlex plugin'
+    mavenCoordinates {
+        groupId = "me.danwi.sqlex"
+        artifactId = "gradle-plugin"
+    }
+    plugins {
+        sqlex {
+            displayName = 'sqlex plugin'
+            tags = ['sql', 'sqlex', 'orm', 'compile']
+        }
+    }
+}
+
+//设置gradle上传的key
+task("setupKeySecret") {
+    if (localProperties.get("gradle.key") != null) {
+        System.properties.setProperty("gradle.publish.key", localProperties.get("gradle.key"))
+        System.properties.setProperty("gradle.publish.secret", localProperties.get("gradle.secret"))
+    }
+}
+tasks.publishPlugins.dependsOn tasks.setupKeySecret
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib"
