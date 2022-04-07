@@ -13,4 +13,7 @@ class MethodSubtree(node: ASTNode, idElementType: IElementType) : IdentifierDefS
 
     val paramList: ParamListSubtree?
         get() = children.find { it is ParamListSubtree } as ParamListSubtree?
+
+    val sql: SqlSubtree?
+        get() = children.find { it is SqlSubtree } as SqlSubtree?
 }
