@@ -82,6 +82,13 @@
                          enabledByDefault="true"
                          implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodDuplicateInspection"
         />
+        <localInspection language="SqlExMethod"
+                         groupName="SqlEx"
+                         displayName="Naming suggestion"
+                         level="WEAK WARNING"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodNamingSuggestionInspection"
+        />
         <localInspection language="SQL"
                          groupName="SqlEx"
                          displayName="Unknown parameter"
