@@ -21,7 +21,7 @@ class SqlExMethodNamingSuggestionInspection : LocalInspectionTool() {
                 if (element.methodName.startsWith("get"))
                     holder.registerProblem(
                         element,
-                        "数据查询方法建议以find开头,例如 getAll -> findAll",
+                        "数据查询方法建议以find开头,例如 ${element.methodName} -> find${element.methodName.removePrefix("get")}",
                         object : LocalQuickFix {
                             override fun getFamilyName(): String {
                                 return "将方法名修改为find开头"
@@ -38,7 +38,7 @@ class SqlExMethodNamingSuggestionInspection : LocalInspectionTool() {
                 if (element.methodName.startsWith("set"))
                     holder.registerProblem(
                         element,
-                        "数据修改方法建议以update开口,例如 setName -> updateName",
+                        "数据修改方法建议以update开口,例如 ${element.methodName} -> update${element.methodName.removePrefix("set")}",
                         object : LocalQuickFix {
                             override fun getFamilyName(): String {
                                 return "将方法名修改为update开头"
