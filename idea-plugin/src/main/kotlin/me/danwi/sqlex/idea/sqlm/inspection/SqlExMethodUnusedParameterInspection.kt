@@ -3,30 +3,39 @@ package me.danwi.sqlex.idea.sqlm.inspection
 import com.intellij.codeInspection.LocalInspectionTool
 import com.intellij.codeInspection.ProblemHighlightType
 import com.intellij.codeInspection.ProblemsHolder
+import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiElementVisitor
-import com.intellij.psi.PsiFile
-import me.danwi.sqlex.idea.sqlm.SqlExMethodFile
-import me.danwi.sqlex.parser.util.namedParameterSQL
+import com.intellij.sql.psi.SqlParameter
+import me.danwi.sqlex.idea.sqlm.psi.MethodNameSubtree
+import me.danwi.sqlex.idea.sqlm.psi.MethodSubtree
+import me.danwi.sqlex.idea.util.extension.visit
 
 class SqlExMethodUnusedParameterInspection : LocalInspectionTool() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): PsiElementVisitor {
         return object : PsiElementVisitor() {
-            override fun visitFile(file: PsiFile) {
-                if (file !is SqlExMethodFile) return
+            override fun visitElement(element: PsiElement) {
+                if (element !is MethodNameSubtree) return
 
-                //获取到所有的方法定义
-                val methods = file.root?.methods ?: listOf()
+                val method = element.parent
+                if (method !is MethodSubtree) return
 
-                //参数未使用检测
-                for (method in methods) {
-                    val params = method.paramList?.params?.mapNotNull { it.paramName } ?: continue
-                    val usedParams = method.sql?.text?.namedParameterSQL?.parameters?.map { it.name } ?: listOf()
-                    params.filter {
-                        usedParams.none { u -> it.text == u }
-                    }.forEach {
+                //获取SQL中使用的参数
+                val injectedSQLFile = method.sql?.injectedSQLFile ?: return
+                val paramsInSQL = mutableListOf<String>()
+                injectedSQLFile.visit {
+                    if (it is SqlParameter) {
+                        val nameElement = it.nameElement ?: return@visit
+                        paramsInSQL.add(nameElement.text)
+                    }
+                }
+
+                //获取方法签名中的参数列表
+                val paramsInMethod = method.paramList?.params?.mapNotNull { it.paramName } ?: return
+                paramsInMethod.forEach { paramInMethod ->
+                    if (paramsInSQL.none { paramInMethod.text == it }) {
                         holder.registerProblem(
-                            it,
-                            "未使用方法签名中定义的参数 ${it.text}",
+                            paramInMethod,
+                            "该参数未在SQL中使用",
                             ProblemHighlightType.WEAK_WARNING
                         )
                     }
