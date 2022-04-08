@@ -1,11 +1,12 @@
 package me.danwi.sqlex.idea.sqlm.inspection
 
-import com.intellij.codeInspection.LocalInspectionTool
-import com.intellij.codeInspection.ProblemHighlightType
-import com.intellij.codeInspection.ProblemsHolder
+import com.intellij.codeInspection.*
+import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiElementVisitor
+import com.intellij.psi.util.elementType
 import com.intellij.sql.psi.SqlParameter
+import me.danwi.sqlex.idea.sqlm.SqlExMethodParserDefinition.Companion.TOKEN_COMMA
 import me.danwi.sqlex.idea.sqlm.psi.MethodNameSubtree
 import me.danwi.sqlex.idea.sqlm.psi.MethodSubtree
 import me.danwi.sqlex.idea.util.extension.childrenOf
@@ -30,7 +31,26 @@ class SqlExMethodUnusedParameterInspection : LocalInspectionTool() {
                         holder.registerProblem(
                             paramInMethod,
                             "该参数未在SQL中使用",
-                            ProblemHighlightType.WEAK_WARNING
+                            ProblemHighlightType.WEAK_WARNING,
+                            object : LocalQuickFix {
+                                override fun getFamilyName(): String {
+                                    return "删除 ${paramInMethod.text} 参数"
+                                }
+
+                                override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
+                                    val paramName = descriptor.psiElement
+                                    val param = paramName.parent
+                                    val prevComma = param.prevSibling
+                                    val nextComma = param.nextSibling
+
+                                    param.delete()
+                                    if (prevComma.elementType == TOKEN_COMMA) {
+                                        prevComma.delete()
+                                    } else if (nextComma.elementType == TOKEN_COMMA) {
+                                        nextComma.delete()
+                                    }
+                                }
+                            }
                         )
                     }
                 }
