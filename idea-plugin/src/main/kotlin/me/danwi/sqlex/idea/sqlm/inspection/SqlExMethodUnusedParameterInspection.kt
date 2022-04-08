@@ -8,7 +8,7 @@ import com.intellij.psi.PsiElementVisitor
 import com.intellij.sql.psi.SqlParameter
 import me.danwi.sqlex.idea.sqlm.psi.MethodNameSubtree
 import me.danwi.sqlex.idea.sqlm.psi.MethodSubtree
-import me.danwi.sqlex.idea.util.extension.visit
+import me.danwi.sqlex.idea.util.extension.childrenOf
 
 class SqlExMethodUnusedParameterInspection : LocalInspectionTool() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): PsiElementVisitor {
@@ -21,13 +21,7 @@ class SqlExMethodUnusedParameterInspection : LocalInspectionTool() {
 
                 //获取SQL中使用的参数
                 val injectedSQLFile = method.sql?.injectedSQLFile ?: return
-                val paramsInSQL = mutableListOf<String>()
-                injectedSQLFile.visit {
-                    if (it is SqlParameter) {
-                        val nameElement = it.nameElement ?: return@visit
-                        paramsInSQL.add(nameElement.text)
-                    }
-                }
+                val paramsInSQL = injectedSQLFile.childrenOf<SqlParameter>().mapNotNull { it.nameElement?.text }
 
                 //获取方法签名中的参数列表
                 val paramsInMethod = method.paramList?.params?.mapNotNull { it.paramName } ?: return
