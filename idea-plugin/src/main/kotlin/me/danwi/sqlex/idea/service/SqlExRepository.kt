@@ -5,6 +5,7 @@ import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiFileFactory
@@ -15,6 +16,8 @@ import me.danwi.sqlex.idea.util.extension.sourceRootRelativePath
 import me.danwi.sqlex.idea.util.extension.textContent
 import me.danwi.sqlex.parser.JavaFile
 import me.danwi.sqlex.parser.Repository
+
+val sqlexMethodFileCacheKey = Key<VirtualFile>("me.danwi.sqlex.sqlexMethodFileCacheKey")
 
 class SqlExRepository(private val project: Project, private val repository: Repository) {
     private val javaFileCache = mutableMapOf<String, JavaFile>()
@@ -65,6 +68,8 @@ class SqlExRepository(private val project: Project, private val repository: Repo
                     javaFile.source
                 ) as PsiJavaFile).classes.firstOrNull()
         } ?: throw Exception("无法生成java class")
+        //放入virtual file缓存
+        javaClass.putUserData(sqlexMethodFileCacheKey, file)
         //存入缓存
         javaClassCache[file.path] = javaClass
         //更新psi缓存

@@ -10,6 +10,7 @@
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.java</depends>
     <depends>com.intellij.database</depends>
+    <depends optional="true" config-file="withKotlin.xml">org.jetbrains.kotlin</depends>
 
     <projectListeners>
         <!--监听Source Root变更-->
@@ -112,6 +113,7 @@
         <resolveScopeEnlarger implementation="me.danwi.sqlex.idea.sqlm.generator.SqlExMethodResolveScopeEnlarger"/>
         <java.shortNamesCache implementation="me.danwi.sqlex.idea.sqlm.generator.SqlExMethodGeneratedShortNamesCache"/>
         <java.elementFinder implementation="me.danwi.sqlex.idea.sqlm.generator.SqlExMethodGeneratedElementFinder"/>
+        <gotoDeclarationHandler implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodGotoDeclarationHandler"/>
     </extensions>
 
     <actions>

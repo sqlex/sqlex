@@ -1,0 +1,6 @@
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <!--sqlm和kotlin的交互-->
+        <gotoDeclarationHandler implementation="me.danwi.sqlex.idea.sqlm.kotlin.SqlExMethodGotoDeclarationHandler"/>
+    </extensions>
+</idea-plugin>
