@@ -4,8 +4,9 @@ import java.io.IOException;
 import java.io.Reader;
 
 /**
+ * 此类型会使用 {@link java.sql.PreparedStatement#setClob(int, Reader)} 设置参数
+ *
  * @author wjy
- * @date 2022/4/9
  */
 public class ClobReader extends Reader {
 

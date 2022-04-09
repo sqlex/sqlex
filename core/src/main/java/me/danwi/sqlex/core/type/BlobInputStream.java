@@ -4,8 +4,9 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
+ * 此类型会使用 {@link java.sql.PreparedStatement#setBlob(int, InputStream)} 设置参数
+ *
  * @author wjy
- * @date 2022/4/9
  */
 public class BlobInputStream extends InputStream {
     private InputStream inputStream;

@@ -1,11 +1,13 @@
 package me.danwi.sqlex.core.type;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Reader;
 
 /**
+ * 此类型会使用 {@link java.sql.PreparedStatement#setCharacterStream(int, Reader)} 设置参数
+ *
  * @author wjy
- * @date 2022/4/9
  */
 public class CharacterReader extends Reader {
 
