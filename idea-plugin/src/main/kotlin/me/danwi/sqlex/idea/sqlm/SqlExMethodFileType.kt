@@ -1,7 +1,7 @@
 package me.danwi.sqlex.idea.sqlm
 
-import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileTypes.LanguageFileType
+import me.danwi.sqlex.idea.util.SqlExMethodFileIcon
 import me.danwi.sqlex.parser.util.SqlExMethodExtensionName
 import javax.swing.Icon
 
@@ -24,6 +24,6 @@ class SqlExMethodFileType : LanguageFileType(SqlExMethodLanguage.INSTANCE) {
     }
 
     override fun getIcon(): Icon {
-        return AllIcons.Providers.Mysql
+        return SqlExMethodFileIcon
     }
 }
