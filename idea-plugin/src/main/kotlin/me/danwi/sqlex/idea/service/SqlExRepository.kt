@@ -17,7 +17,9 @@ import me.danwi.sqlex.idea.util.extension.textContent
 import me.danwi.sqlex.parser.JavaFile
 import me.danwi.sqlex.parser.Repository
 
-val sqlexMethodFileCacheKey = Key<VirtualFile>("me.danwi.sqlex.sqlexMethodFileCacheKey")
+val sqlexMethodGeneratedCacheKey = Key<Boolean>("me.danwi.sqlex.sqlexMethodGeneratedCache")
+val sqlexMethodFileCacheKey = Key<VirtualFile>("me.danwi.sqlex.sqlexMethodFileCache")
+val sqlexMethodPsiClassCacheKey = Key<PsiClass>("me.danwi.sqlex.sqlexMethodPsiClassCache")
 
 class SqlExRepository(private val project: Project, private val repository: Repository) {
     private val javaFileCache = mutableMapOf<String, JavaFile>()
@@ -29,12 +31,14 @@ class SqlExRepository(private val project: Project, private val repository: Repo
         val javaFile = repository.repositoryJavaFile
         //生成psi class
         val javaClass = runReadAction {
-            (PsiFileFactory.getInstance(project)
+            val psiFile = PsiFileFactory.getInstance(project)
                 .createFileFromText(
-                    "${SQLEX_GENERATED_PREFIX}${javaFile.javaClass}.java",
+                    "${javaFile.className}.java",
                     JavaFileType.INSTANCE,
                     javaFile.source
-                ) as PsiJavaFile).classes.firstOrNull()
+                ) as PsiJavaFile
+            psiFile.putUserData(sqlexMethodGeneratedCacheKey, true)
+            psiFile.classes.firstOrNull()
         } ?: throw Exception("无法生成java class")
         //存入缓存
         javaClassCache["FAKE:${javaFile.relativePath}"] = javaClass
@@ -61,15 +65,18 @@ class SqlExRepository(private val project: Project, private val repository: Repo
         val javaFile = generateJavaFile(file)
         //生成psi class
         val javaClass = runReadAction {
-            (PsiFileFactory.getInstance(project)
+            val psiFile = PsiFileFactory.getInstance(project)
                 .createFileFromText(
-                    "${SQLEX_GENERATED_PREFIX}${javaFile.javaClass}.java",
+                    "${javaFile.className}.java",
                     JavaFileType.INSTANCE,
                     javaFile.source
-                ) as PsiJavaFile).classes.firstOrNull()
+                ) as PsiJavaFile
+            psiFile.putUserData(sqlexMethodGeneratedCacheKey, true)
+            psiFile.classes.firstOrNull()
         } ?: throw Exception("无法生成java class")
         //放入virtual file缓存
         javaClass.putUserData(sqlexMethodFileCacheKey, file)
+        file.putUserData(sqlexMethodPsiClassCacheKey, javaClass)
         //存入缓存
         javaClassCache[file.path] = javaClass
         //更新psi缓存
