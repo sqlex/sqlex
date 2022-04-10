@@ -1,11 +1,11 @@
 package me.danwi.sqlex.idea.sqlm.psi
 
-import com.intellij.icons.AllIcons
 import com.intellij.lang.ASTNode
 import com.intellij.navigation.ItemPresentation
 import com.intellij.psi.PsiMethod
 import com.intellij.psi.tree.IElementType
 import me.danwi.sqlex.idea.service.sqlexMethodPsiClassCacheKey
+import me.danwi.sqlex.idea.util.SqlExMethodIcon
 import me.danwi.sqlex.idea.util.extension.childrenOf
 import org.antlr.intellij.adaptor.psi.IdentifierDefSubtree
 import javax.swing.Icon
@@ -47,6 +47,6 @@ class MethodItemPresentation(private val element: MethodSubtree) : ItemPresentat
     }
 
     override fun getIcon(unused: Boolean): Icon {
-        return AllIcons.Providers.Mysql
+        return SqlExMethodIcon
     }
 }

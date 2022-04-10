@@ -1,12 +1,12 @@
 package me.danwi.sqlex.idea.sqlm
 
-import com.intellij.icons.AllIcons
 import com.intellij.openapi.editor.colors.EditorColors
 import com.intellij.openapi.editor.colors.TextAttributesKey
 import com.intellij.openapi.fileTypes.SyntaxHighlighter
 import com.intellij.openapi.options.colors.AttributesDescriptor
 import com.intellij.openapi.options.colors.ColorDescriptor
 import com.intellij.openapi.options.colors.ColorSettingsPage
+import me.danwi.sqlex.idea.util.SqlExMethodFileIcon
 import javax.swing.Icon
 
 class SqlExMethodColorSettingsPage : ColorSettingsPage {
@@ -17,7 +17,7 @@ class SqlExMethodColorSettingsPage : ColorSettingsPage {
     }
 
     override fun getIcon(): Icon {
-        return AllIcons.Providers.Mysql
+        return SqlExMethodFileIcon
     }
 
     override fun getHighlighter(): SyntaxHighlighter {
