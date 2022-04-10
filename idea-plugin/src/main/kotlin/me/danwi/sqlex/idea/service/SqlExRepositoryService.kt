@@ -21,9 +21,6 @@ import me.danwi.sqlex.parser.util.schemaFileVersion
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
-//生成的虚拟java文件前缀
-const val SQLEX_GENERATED_PREFIX = "SQLEX_GENERATE_FROM:"
-
 class SqlExRepositoryService(val sourceRoot: VirtualFile) {
     // region 公有变量
 
