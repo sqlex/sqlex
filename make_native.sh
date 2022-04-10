@@ -7,7 +7,7 @@ if [[ "$OSTYPE" =~ ^darwin ]];then
     LIB="libsqlex.dylib"
     DIST="../../parser/src/main/resources/native/darwin"
 elif [[ "$OSTYPE" =~ ^linux ]]; then
-    LIB="libsqlex.dylib"
+    LIB="libsqlex.so"
     DIST="../../parser/src/main/resources/native/linux"
 else
   echo "不支持的操作系统,目前仅支持macos/linux"
