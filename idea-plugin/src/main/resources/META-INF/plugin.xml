@@ -115,6 +115,8 @@
         <java.shortNamesCache implementation="me.danwi.sqlex.idea.sqlm.generator.SqlExMethodGeneratedShortNamesCache"/>
         <java.elementFinder implementation="me.danwi.sqlex.idea.sqlm.generator.SqlExMethodGeneratedElementFinder"/>
         <gotoDeclarationHandler implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodGotoDeclarationHandler"/>
+        <lang.documentationProvider language="JAVA"
+                                    implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodDocumentationProvider"/>
     </extensions>
 
     <actions>
