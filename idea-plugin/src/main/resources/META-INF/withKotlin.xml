@@ -2,5 +2,7 @@
     <extensions defaultExtensionNs="com.intellij">
         <!--sqlm和kotlin的交互-->
         <gotoDeclarationHandler implementation="me.danwi.sqlex.idea.sqlm.kotlin.SqlExMethodGotoDeclarationHandler"/>
+        <lang.documentationProvider language="kotlin"
+                                    implementationClass="me.danwi.sqlex.idea.sqlm.kotlin.SqlExMethodDocumentationProvider"/>
     </extensions>
 </idea-plugin>
