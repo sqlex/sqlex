@@ -14,6 +14,13 @@ fun createSqlExConfig(content: String): SqlExConfig {
         "getRootPackage",
         "setRootPackage"
     )
+    configDesc.substituteProperty(
+        "converters",
+        List::class.java,
+        "getConverters",
+        "setConverters"
+    )
+
     constructor.addTypeDescription(configDesc)
     val yaml = Yaml(constructor)
     val config = yaml.loadAs(content, SqlExConfig::class.java)
@@ -23,6 +30,7 @@ fun createSqlExConfig(content: String): SqlExConfig {
 
 class SqlExConfig {
     var rootPackage: String? = null
+    var converters: List<String> = listOf()
 }
 
 fun SqlExConfig.validate() {
