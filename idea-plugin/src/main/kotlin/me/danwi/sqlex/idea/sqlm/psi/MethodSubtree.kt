@@ -4,7 +4,7 @@ import com.intellij.lang.ASTNode
 import com.intellij.navigation.ItemPresentation
 import com.intellij.psi.PsiMethod
 import com.intellij.psi.tree.IElementType
-import me.danwi.sqlex.idea.service.sqlexMethodPsiClassCacheKey
+import me.danwi.sqlex.idea.service.SqlExMethodPsiClassCacheKey
 import me.danwi.sqlex.idea.util.SqlExMethodIcon
 import me.danwi.sqlex.idea.util.extension.childrenOf
 import org.antlr.intellij.adaptor.psi.IdentifierDefSubtree
@@ -25,7 +25,7 @@ class MethodSubtree(node: ASTNode, idElementType: IElementType) : IdentifierDefS
 
     val javaMethod: PsiMethod?
         get() {
-            val javaClass = this.containingFile.virtualFile.getUserData(sqlexMethodPsiClassCacheKey) ?: return null
+            val javaClass = this.containingFile.virtualFile.getUserData(SqlExMethodPsiClassCacheKey) ?: return null
             val methodName = this.methodName?.methodName ?: return null
             return javaClass.childrenOf<PsiMethod>().find { it.name == methodName }
         }

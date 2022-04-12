@@ -6,7 +6,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.ResolveScopeEnlarger
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.SearchScope
-import me.danwi.sqlex.idea.service.sqlexMethodGeneratedCacheKey
+import me.danwi.sqlex.idea.service.SqlExMethodGeneratedCacheKey
 
 class SqlExMethodResolveScopeEnlarger : ResolveScopeEnlarger() {
     override fun getAdditionalResolveScope(file: VirtualFile, project: Project): SearchScope? {
@@ -16,7 +16,7 @@ class SqlExMethodResolveScopeEnlarger : ResolveScopeEnlarger() {
 
 class SqlExMethodCustomSearchScope : GlobalSearchScope() {
     override fun contains(file: VirtualFile): Boolean {
-        return file.getUserData(sqlexMethodGeneratedCacheKey) == true
+        return file.getUserData(SqlExMethodGeneratedCacheKey) == true
     }
 
     override fun isSearchInModuleContent(module: Module): Boolean {

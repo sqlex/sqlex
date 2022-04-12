@@ -98,11 +98,12 @@ fun Project.showNotification(text: String, type: NotificationType) {
 }
 
 //缓存key
-val repositoryServiceCacheKey = Key<MutableList<SqlExRepositoryService>>("me.danwi.sqlex.repositoryServiceCaches")
+private val repositoryServiceCacheKey =
+    Key<MutableList<SqlExRepositoryService>>("me.danwi.sqlex.RepositoryServiceCaches")
 
 //获取模块下的SqlExRepositoryService列表
 val Module.sqlexRepositoryServices: MutableList<SqlExRepositoryService>
-    inline get() {
+    get() {
         synchronized(this) {
             var services = this.getUserData(repositoryServiceCacheKey)
             if (services == null) {
