@@ -7,6 +7,7 @@ import com.intellij.psi.tree.IElementType
 import me.danwi.sqlex.idea.service.SqlExMethodPsiClassCacheKey
 import me.danwi.sqlex.idea.util.SqlExMethodIcon
 import me.danwi.sqlex.idea.util.extension.childrenOf
+import me.danwi.sqlex.idea.util.extension.projectRootRelativePath
 import org.antlr.intellij.adaptor.psi.IdentifierDefSubtree
 import javax.swing.Icon
 
@@ -37,7 +38,7 @@ class MethodSubtree(node: ASTNode, idElementType: IElementType) : IdentifierDefS
 
 class MethodItemPresentation(private val element: MethodSubtree) : ItemPresentation {
     override fun getLocationString(): String {
-        return element.containingFile.virtualFile.path
+        return element.containingFile.virtualFile.projectRootRelativePath ?: ""
     }
 
     override fun getPresentableText(): String {
