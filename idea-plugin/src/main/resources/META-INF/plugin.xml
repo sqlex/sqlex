@@ -47,6 +47,10 @@
         <additionalTextAttributes scheme="Darcula" file="colorSchemes/SqlExMethodDefault.xml"/>
 
         <!--配置文件模板-->
+        <fileType name="SqlEx Config"
+                  implementationClass="me.danwi.sqlex.idea.config.SqlExConfigFileType"
+                  fieldName="INSTANCE"
+                  language="yaml" extensions="yaml"/>
         <internalFileTemplate id="SqlEx.Config" name="SqlEx Config" order="first"/>
 
         <!--模式定义文件-->
