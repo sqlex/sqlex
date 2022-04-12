@@ -6,7 +6,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiReference
 import com.intellij.psi.search.SearchScope
 import com.intellij.psi.search.searches.ReferencesSearch
-import me.danwi.sqlex.idea.service.sqlexMethodPsiClassCacheKey
+import me.danwi.sqlex.idea.service.SqlExMethodPsiClassCacheKey
 import me.danwi.sqlex.idea.sqlm.psi.MethodNameSubtree
 import me.danwi.sqlex.idea.sqlm.psi.MethodSubtree
 import me.danwi.sqlex.idea.util.extension.parentOf
@@ -40,14 +40,14 @@ class SqlExMethodMethodFindUsageHandler(private val element: PsiElement) : FindU
     ): MutableCollection<PsiReference> {
         val method = target.parentOf<MethodSubtree>() ?: return mutableListOf()
         val javaMethod = method.javaMethod ?: return mutableListOf()
-        return ReferencesSearch.search(javaMethod).findAll()
+        return ReferencesSearch.search(javaMethod, searchScope).findAll()
     }
 }
 
 class SqlExMethodMFileFindUsageHandler(private val element: PsiElement) : FindUsagesHandler(element) {
     override fun getSecondaryElements(): Array<PsiElement> {
         return arrayOf(
-            element.containingFile.virtualFile.getUserData(sqlexMethodPsiClassCacheKey) ?: return PsiElement.EMPTY_ARRAY
+            element.containingFile.virtualFile.getUserData(SqlExMethodPsiClassCacheKey) ?: return PsiElement.EMPTY_ARRAY
         )
     }
 
@@ -56,7 +56,7 @@ class SqlExMethodMFileFindUsageHandler(private val element: PsiElement) : FindUs
         searchScope: SearchScope
     ): MutableCollection<PsiReference> {
         val psiClass =
-            element.containingFile.virtualFile.getUserData(sqlexMethodPsiClassCacheKey) ?: return mutableListOf()
-        return ReferencesSearch.search(psiClass).findAll()
+            element.containingFile.virtualFile.getUserData(SqlExMethodPsiClassCacheKey) ?: return mutableListOf()
+        return ReferencesSearch.search(psiClass, searchScope).findAll()
     }
 }
