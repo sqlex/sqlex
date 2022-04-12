@@ -52,6 +52,7 @@
                   fieldName="INSTANCE"
                   language="yaml" extensions="yaml"/>
         <internalFileTemplate id="SqlEx.Config" name="SqlEx Config" order="first"/>
+        <multiHostInjector implementation="me.danwi.sqlex.idea.config.SqlExConfigJavaInjector"/>
 
         <!--模式定义文件-->
         <fileType name="SqlEx Schema"
