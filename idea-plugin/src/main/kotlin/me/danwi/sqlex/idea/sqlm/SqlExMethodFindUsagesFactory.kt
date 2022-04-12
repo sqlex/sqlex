@@ -40,7 +40,7 @@ class SqlExMethodMethodFindUsageHandler(private val element: PsiElement) : FindU
     ): MutableCollection<PsiReference> {
         val method = target.parentOf<MethodSubtree>() ?: return mutableListOf()
         val javaMethod = method.javaMethod ?: return mutableListOf()
-        return ReferencesSearch.search(javaMethod).findAll()
+        return ReferencesSearch.search(javaMethod, searchScope).findAll()
     }
 }
 
@@ -57,6 +57,6 @@ class SqlExMethodMFileFindUsageHandler(private val element: PsiElement) : FindUs
     ): MutableCollection<PsiReference> {
         val psiClass =
             element.containingFile.virtualFile.getUserData(SqlExMethodPsiClassCacheKey) ?: return mutableListOf()
-        return ReferencesSearch.search(psiClass).findAll()
+        return ReferencesSearch.search(psiClass, searchScope).findAll()
     }
 }
