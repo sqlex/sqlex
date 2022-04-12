@@ -16,7 +16,7 @@ fun PsiClassType.genericArgument(index: Int): PsiClassType? {
 //获取ParameterConverter的来源泛型
 val PsiClassType.converterFromType: PsiClassType?
     get() {
-        if (this.psiClass?.isParameterConverter == false)
+        if (this.psiClass?.isParameterConverterInterface == false)
             return null
         return this.genericArgument(0)
     }
@@ -24,7 +24,7 @@ val PsiClassType.converterFromType: PsiClassType?
 //获取ParameterConverter的目的泛型
 val PsiClassType.converterToType: PsiClassType?
     get() {
-        if (this.psiClass?.isParameterConverter == false)
+        if (this.psiClass?.isParameterConverterInterface == false)
             return null
         return this.genericArgument(1)
     }

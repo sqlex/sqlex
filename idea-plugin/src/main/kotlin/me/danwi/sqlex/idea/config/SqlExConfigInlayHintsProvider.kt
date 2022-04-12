@@ -69,7 +69,7 @@ class Collector(editor: Editor) : FactoryInlayHintsCollector(editor) {
             return true
         //获取到这个class实现的ParameterConverter接口
         val converter =
-            injectedClass.implementsListTypes.firstOrNull { it.psiClass?.isParameterConverter == true } ?: return true
+            injectedClass.implementsListTypes.firstOrNull { it.psiClass?.isParameterConverterInterface == true } ?: return true
         val fromTypeClass = converter.converterFromType?.psiClass
         val toTypeClass = converter.converterToType?.psiClass
 

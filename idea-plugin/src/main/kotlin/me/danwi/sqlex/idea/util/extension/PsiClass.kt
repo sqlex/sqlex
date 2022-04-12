@@ -19,6 +19,6 @@ val PsiClass.sqlexMethodFile: VirtualFile?
 val PsiClass.classType: PsiClassType
     inline get() = PsiTypesUtil.getClassType(this)
 
-//判断这个psi是否为参数转换器
-val PsiClass.isParameterConverter: Boolean
+//判断这个psi是否为参数转换器接口
+val PsiClass.isParameterConverterInterface: Boolean
     inline get() = qualifiedName == ParameterConverterInterfaceQualifiedName
