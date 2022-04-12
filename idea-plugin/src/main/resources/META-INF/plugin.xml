@@ -55,6 +55,13 @@
         <multiHostInjector implementation="me.danwi.sqlex.idea.config.SqlExConfigJavaInjector"/>
         <codeInsight.inlayProvider language="yaml"
                                    implementationClass="me.danwi.sqlex.idea.config.SqlExConfigInlayHintsProvider"/>
+        <localInspection language="yaml"
+                         groupName="SqlEx"
+                         displayName="Invalid converters config"
+                         level="ERROR"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.config.SqlExConfigConvertersInspection"
+        />
 
         <!--模式定义文件-->
         <fileType name="SqlEx Schema"
