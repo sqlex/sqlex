@@ -1,5 +1,7 @@
 package me.danwi.sqlex.core.type;
 
+import org.jetbrains.annotations.Nullable;
+
 /**
  * 参数类型转换器
  *
@@ -7,5 +9,5 @@ package me.danwi.sqlex.core.type;
  * @param <D> 预支持类型
  */
 public interface ParameterConverter<P, D> {
-    D convert(P parameter);
+    @Nullable D convert(@Nullable P parameter);
 }
