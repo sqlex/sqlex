@@ -99,6 +99,7 @@
                                 implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodParameterTypeCompletionContributor"/>
         <completion.contributor language="SQL"
                                 implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodSQLParameterCompletionContributor"/>
+        <gotoDeclarationHandler implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodTypeGotoDeclarationHandler"/>
         <findUsagesHandlerFactory implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodFindUsagesFactory"/>
         <localInspection language="SqlExMethod"
                          groupName="SqlEx"
