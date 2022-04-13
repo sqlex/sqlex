@@ -112,6 +112,14 @@
                          level="WEAK WARNING"
                          enabledByDefault="true"
                          implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodUnusedParameterInspection"/>
+        <localInspection language="SqlExMethod"
+                         groupName="SqlEx"
+                         displayName="Invalid type parameter"
+                         level="ERROR"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodInvalidTypeParameterInspection"
+        />
+
         <localInspection language="SQL"
                          groupName="SqlEx"
                          displayName="Unknown parameter"
