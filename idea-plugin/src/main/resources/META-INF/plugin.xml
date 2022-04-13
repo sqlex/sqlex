@@ -93,7 +93,10 @@
         <lang.formatter language="SqlExMethod"
                         implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodFormattingModelBuilder"/>
         <multiHostInjector implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodSQLInjector"/>
-        <multiHostInjector implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodJavaInjector"/>
+        <completion.contributor language="SqlExMethod"
+                                implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodImportCompletionContributor"/>
+        <completion.contributor language="SqlExMethod"
+                                implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodParameterTypeCompletionContributor"/>
         <completion.contributor language="SQL"
                                 implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodSQLParameterCompletionContributor"/>
         <findUsagesHandlerFactory implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodFindUsagesFactory"/>
