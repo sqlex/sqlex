@@ -95,6 +95,7 @@ class Repository(
     private val schemas: List<String>
 ) {
     private val rootPackage = config.rootPackage ?: throw SqlExRepositoryException("无法获取根包信息")
+    private val converters = config.converters
 
     val DDL: String
         get() = session.DDL
@@ -113,6 +114,11 @@ class Repository(
                 import me.danwi.sqlex.core.RepositoryLike;
                 
                 @SqlExGenerated
+                ${
+                converters
+                    .mapIndexed { index, converter -> "@SqlExConverter(order=${index},converter=${converter}.class)" }
+                    .joinToString("\n")
+            }
                 ${
                 schemas
                     .mapIndexed { version, script -> "@SqlExSchema(version=$version, script=\"${script.literal}\")" }
