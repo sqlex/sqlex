@@ -1,7 +1,10 @@
 package me.danwi.sqlex.parser
 
+//参数转换器的类名
+const val ParameterConverterInterfaceName = "ParameterConverter"
+
 //参数转换器的全限定类名
-const val ParameterConverterInterfaceQualifiedName = "me.danwi.sqlex.core.type.ParameterConverter"
+const val ParameterConverterInterfaceQualifiedName = "me.danwi.sqlex.core.type.${ParameterConverterInterfaceName}"
 
 /**
  * 预支持的类型

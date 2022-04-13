@@ -1,5 +1,10 @@
 <idea-plugin>
     <extensions defaultExtensionNs="com.intellij">
+        <localInspection language="kotlin" groupName="SqlEx" level="ERROR" enabledByDefault="true"
+                         displayName="Kotlin converter implement"
+                         implementationClass="me.danwi.sqlex.idea.inspection.SqlExKotlinConverterImplementInspection"
+        />
+
         <!--sqlm和kotlin的交互-->
         <gotoDeclarationHandler implementation="me.danwi.sqlex.idea.sqlm.kotlin.SqlExMethodGotoDeclarationHandler"/>
         <lang.documentationProvider language="kotlin"
