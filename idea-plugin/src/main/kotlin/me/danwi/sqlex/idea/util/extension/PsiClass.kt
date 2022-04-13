@@ -44,3 +44,7 @@ val PsiClass?.isParameterConverter: Boolean
             ?.psiClass
             .isPreSupported
     }
+
+//判断这个psi是否包含无参构造函数
+val PsiClass.hasNoArgsConstructor: Boolean
+    get() = this.constructors.isEmpty() || this.constructors.any { !it.hasParameters() }

@@ -46,6 +46,11 @@
         <additionalTextAttributes scheme="Default" file="colorSchemes/SqlExMethodDefault.xml"/>
         <additionalTextAttributes scheme="Darcula" file="colorSchemes/SqlExMethodDefault.xml"/>
 
+        <localInspection language="JAVA" groupName="SqlEx" level="ERROR" enabledByDefault="true"
+                         displayName="Java converter implement"
+                         implementationClass="me.danwi.sqlex.idea.inspection.SqlExJavaConverterImplementInspection"
+        />
+
         <!--配置文件模板-->
         <fileType name="SqlEx Config"
                   implementationClass="me.danwi.sqlex.idea.config.SqlExConfigFileType"
