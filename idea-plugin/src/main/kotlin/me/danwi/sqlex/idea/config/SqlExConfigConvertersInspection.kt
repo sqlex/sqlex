@@ -30,7 +30,7 @@ class SqlExConfigConvertersInspection : LocalInspectionTool() {
                     holder.registerProblem(
                         element,
                         "请填写正确的参数类型转换类",
-                        ProblemHighlightType.ERROR
+                        ProblemHighlightType.WEAK_WARNING
                     )
                     return
                 }
