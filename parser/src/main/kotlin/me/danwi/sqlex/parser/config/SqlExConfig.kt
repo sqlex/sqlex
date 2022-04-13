@@ -18,7 +18,8 @@ fun createSqlExConfig(content: String): SqlExConfig {
         "converters",
         List::class.java,
         "getConverters",
-        "setConverters"
+        "setConverters",
+        String::class.java,
     )
 
     constructor.addTypeDescription(configDesc)
