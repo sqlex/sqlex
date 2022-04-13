@@ -1,12 +1,12 @@
 package me.danwi.sqlex.idea.sqlm.psi
 
 import com.intellij.lang.ASTNode
-import com.intellij.psi.LiteralTextEscaper
-import com.intellij.psi.PsiLanguageInjectionHost
-import com.intellij.psi.PsiParserFacade
+import com.intellij.psi.*
 import com.intellij.psi.impl.source.tree.LeafElement
 import com.intellij.psi.tree.IElementType
 import me.danwi.sqlex.idea.sqlm.SqlExMethodFile
+import me.danwi.sqlex.idea.util.extension.childrenOf
+import me.danwi.sqlex.idea.util.extension.injectedOf
 import org.antlr.intellij.adaptor.psi.IdentifierDefSubtree
 
 class ParamTypeSubtree(node: ASTNode, idElementType: IElementType) : IdentifierDefSubtree(node, idElementType),
@@ -77,4 +77,18 @@ class ParamTypeSubtree(node: ASTNode, idElementType: IElementType) : IdentifierD
             root.add(whiteElement)
         }
     }
+
+    //获取参数对应的java类型
+    val javaType: PsiClass?
+        get() {
+            val psiClass = this
+                .injectedOf<PsiJavaFile>()
+                ?.childrenOf<PsiMethod>()
+                ?.find { it.name == "dummy" }
+                ?.childrenOf<PsiJavaCodeReferenceElement>()
+                ?.firstOrNull()
+                ?.resolve()
+            if (psiClass !is PsiClass) return null
+            return psiClass
+        }
 }
