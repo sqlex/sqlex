@@ -195,6 +195,9 @@ class Repository(
         //根据类型来生成不同到方法
         return when (statementInfo.type) {
             StatementType.Select -> generateSelectMethod(method, namedParameterSQL, statementInfo)
+            StatementType.Insert -> generateInsertMethod(method, namedParameterSQL, statementInfo)
+            StatementType.Update -> generateUpdateOrDelete(method, namedParameterSQL, statementInfo)
+            StatementType.Delete -> generateUpdateOrDelete(method, namedParameterSQL, statementInfo)
             else -> throw Exception("不支持的语句类型,只支持(select/insert/update/delete)")
         }
     }
@@ -227,6 +230,55 @@ class Repository(
             List<$resultClassName> $methodName($parameterPart);
         """.trimIndent()
     }
+
+    //生成Insert方法,返回值为lastInsertID TODO:目前只支持单个自增生成的值,以后改写为多个
+    private fun generateInsertMethod(
+        method: SqlExMethodLanguageParser.MethodContext,
+        namedParameterSQL: NamedParameterSQL,
+        statementInfo: StatementInfo
+    ): String {
+        //获取到方法名
+        val methodName = method.methodName().text
+        //生成注解部分
+        val annotationPart = generateAnnotation(
+            namedParameterSQL.sql,
+            method.paramList(),
+            namedParameterSQL.parameters,
+            statementInfo.inExprPositions
+        )
+        //方法中的参数
+        val parameterPart = generateParameter(methodName, method.paramList(), namedParameterSQL.parameters)
+        //返回方法的内容
+        return """
+            $annotationPart
+            Long $methodName($parameterPart);
+        """.trimIndent()
+    }
+
+    //生成Update/Delete方法,返回值为影响的行数
+    private fun generateUpdateOrDelete(
+        method: SqlExMethodLanguageParser.MethodContext,
+        namedParameterSQL: NamedParameterSQL,
+        statementInfo: StatementInfo
+    ): String {
+        //获取到方法名
+        val methodName = method.methodName().text
+        //生成注解部分
+        val annotationPart = generateAnnotation(
+            namedParameterSQL.sql,
+            method.paramList(),
+            namedParameterSQL.parameters,
+            statementInfo.inExprPositions
+        )
+        //方法中的参数
+        val parameterPart = generateParameter(methodName, method.paramList(), namedParameterSQL.parameters)
+        //返回方法的内容
+        return """
+            $annotationPart
+            Long $methodName($parameterPart);
+        """.trimIndent()
+    }
+
 
     //生成参数签名部分
     private fun generateParameter(
