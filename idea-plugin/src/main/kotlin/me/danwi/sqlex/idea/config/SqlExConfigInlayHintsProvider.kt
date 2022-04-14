@@ -4,16 +4,11 @@ package me.danwi.sqlex.idea.config
 
 import com.intellij.codeInsight.hints.*
 import com.intellij.database.dialects.base.endOffset
-import com.intellij.lang.Language
-import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.fileTypes.FileType
-import com.intellij.openapi.project.Project
 import com.intellij.psi.*
 import me.danwi.sqlex.idea.util.extension.*
 import org.jetbrains.yaml.psi.YAMLKeyValue
 import org.jetbrains.yaml.psi.YAMLScalar
-import java.util.*
 import javax.swing.JPanel
 
 private val settingsKey = SettingsKey<NoSettings>("me.danwi.sqlex.SqlExConfigInlayProviderSettingsKey")
@@ -38,18 +33,7 @@ class SqlExConfigInlayHintsProvider : InlayHintsProvider<NoSettings> {
 
     override fun createConfigurable(settings: NoSettings) = object : ImmediateConfigurable {
         override fun createComponent(listener: ChangeListener) = JPanel()
-        override val cases: List<ImmediateConfigurable.Case> = Collections.emptyList()
-        override val mainCheckboxText: String = "显示额外的辅助信息"
-        override fun reset() {}
     }
-
-    override val description: String? = null
-    override val group = InlayGroup.OTHER_GROUP
-    override val isVisibleInSettings = true
-    override fun getProperty(key: String): String? = null
-    override fun isLanguageSupported(language: Language) = true
-    override fun createFile(project: Project, fileType: FileType, document: Document) =
-        PsiFileFactory.getInstance(project).createFileFromText("dummy", fileType, document.text)
 }
 
 class Collector(editor: Editor) : FactoryInlayHintsCollector(editor) {
@@ -69,7 +53,8 @@ class Collector(editor: Editor) : FactoryInlayHintsCollector(editor) {
             return true
         //获取到这个class实现的ParameterConverter接口
         val converter =
-            injectedClass.implementsListTypes.firstOrNull { it.psiClass?.isParameterConverterInterface == true } ?: return true
+            injectedClass.implementsListTypes.firstOrNull { it.psiClass?.isParameterConverterInterface == true }
+                ?: return true
         val fromTypeClass = converter.converterFromType?.psiClass
         val toTypeClass = converter.converterToType?.psiClass
 
