@@ -1,7 +1,7 @@
 plugins {
     id 'java'
     id 'org.jetbrains.kotlin.jvm'
-    id 'org.jetbrains.intellij' version '1.4.0'
+    id 'org.jetbrains.intellij' version '1.5.2'
 }
 
 dependencies {
@@ -22,12 +22,6 @@ intellij {
 
     pluginName = 'sqlex'
 
-    plugins = [
-            'yaml',
-            'java',
-            'DatabaseTools',
-            'org.jetbrains.kotlin:213-1.6.10-release-923-IJ5744.223',
-            'PsiViewer:213-SNAPSHOT'
-    ]
+    plugins = ['yaml', 'java', 'DatabaseTools', 'Kotlin']
 }
 
