@@ -58,9 +58,11 @@ allprojects {
         if (pluginManager.hasPlugin("org.jetbrains.kotlin.jvm")) {
             compileKotlin {
                 kotlinOptions.jvmTarget = "1.8"
+                kotlinOptions.freeCompilerArgs = ['-Xjvm-default=compatibility']
             }
             compileTestKotlin {
                 kotlinOptions.jvmTarget = "1.8"
+                kotlinOptions.freeCompilerArgs = ['-Xjvm-default=compatibility']
             }
         }
         //如果配置了maven-publish插件,且不是gradle插件项目(需要自定义发布),则自动填充相关配置
