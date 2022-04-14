@@ -161,7 +161,8 @@ class Repository(
                     //解析sql
                     val namedParameterSQL = sqlText.namedParameterSQL
                     val fields = session.getFields(namedParameterSQL.sql)
-                    val inExprPositions = session.getInExprPositions(namedParameterSQL.sql)
+                    val statementInfo = session.getStatementInfo(namedParameterSQL.sql)
+                    val inExprPositions = statementInfo.inExprPositions
 
                     //TODO:假设都是select语句
                     //结果类类名

@@ -1,7 +1,7 @@
-import me.danwi.sqlex.parser.InExprPosition
 import me.danwi.sqlex.parser.Session
+import me.danwi.sqlex.parser.StatementType
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.Assertions.*;
 
 class SessionTest {
     @Test
@@ -155,34 +155,82 @@ class SessionTest {
     }
 
     @Test
+    fun getStatementType() {
+        val session = Session("getInExprPositions_test")
+
+        var sql = "select * from person"
+        assertEquals(StatementType.Select, session.getStatementInfo(sql).type)
+
+        sql = """
+            select * from person
+            union all
+            select * from person
+        """.trimIndent()
+        assertEquals(StatementType.Select, session.getStatementInfo(sql).type)
+
+        sql = """
+            with recursive temp as (
+                select * from person
+                union all
+                select * from person
+            )
+            select * from temp
+        """.trimIndent()
+        assertEquals(StatementType.Select, session.getStatementInfo(sql).type)
+
+        sql = "insert into person values(1,2,3,4)"
+        assertEquals(StatementType.Insert, session.getStatementInfo(sql).type)
+
+        sql = "update person set age = 30 where id =1"
+        assertEquals(StatementType.Update, session.getStatementInfo(sql).type)
+
+        sql = "delete from person where id = 1"
+        assertEquals(StatementType.Delete, session.getStatementInfo(sql).type)
+
+        sql = "show tables"
+        assertEquals(StatementType.Other, session.getStatementInfo(sql).type)
+
+        sql = "drop table person"
+        assertEquals(StatementType.Other, session.getStatementInfo(sql).type)
+
+        sql = "drop database person"
+        assertEquals(StatementType.Other, session.getStatementInfo(sql).type)
+
+        sql = "create database test"
+        assertEquals(StatementType.Other, session.getStatementInfo(sql).type)
+
+        session.close()
+    }
+
+    @Test
     fun getInExprPositions() {
         val session = Session("getInExprPositions_test")
 
         var sql = "select * from person where name in (?)"
 
-        var positions = session.getInExprPositions(sql)
+        var positions = session.getStatementInfo(sql).inExprPositions
         assertEquals(1, positions.size)
         assertFalse(positions[0].not)
         assertEquals('?', sql[positions[0].marker])
         assertEquals("name in (?)", sql.substring(positions[0].start, positions[0].end))
 
         sql = "select * from person where chinese = '中国人' and name in (?)"
-        positions = session.getInExprPositions(sql)
+        positions = session.getStatementInfo(sql).inExprPositions
         assertEquals(1, positions.size)
         assertFalse(positions[0].not)
         assertEquals('?', sql[positions[0].marker])
         assertEquals("name in (?)", sql.substring(positions[0].start, positions[0].end))
 
         sql = "select * from person where name in (select name from person where name = 'nobody')"
-        positions = session.getInExprPositions(sql)
+        positions = session.getStatementInfo(sql).inExprPositions
         assertEquals(0, positions.size)
 
         sql = "select * from person where name in ('alice', 'bob', 'candy')"
-        positions = session.getInExprPositions(sql)
+        positions = session.getStatementInfo(sql).inExprPositions
         assertEquals(0, positions.size)
 
         sql = "select * from person where chinese = '中国人' and name in (?) and age not in (?)"
-        positions = session.getInExprPositions(sql)
+        positions = session.getStatementInfo(sql).inExprPositions
         assertEquals(2, positions.size)
 
         assertFalse(positions[0].not)
@@ -199,7 +247,7 @@ class SessionTest {
                   and name in (?) 
                   and age not in (?)
         """.trimIndent()
-        positions = session.getInExprPositions(sql)
+        positions = session.getStatementInfo(sql).inExprPositions
         assertEquals(2, positions.size)
 
         assertFalse(positions[0].not)

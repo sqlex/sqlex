@@ -11,7 +11,11 @@ class Field {
     lateinit var elements: Array<String>
 }
 
+enum class StatementType { Select, Insert, Update, Delete, Other }
+
 class InExprPosition(val not: Boolean, val marker: Int, val start: Int, val end: Int)
+
+class StatementInfo(val type: StatementType, val inExprPositions: Array<InExprPosition>)
 
 class Session(database: String) {
     //创建Session
@@ -39,8 +43,8 @@ class Session(database: String) {
         return ffiInvoke("DatabaseAPI", "GetFields", sessionID, sql)
     }
 
-    fun getInExprPositions(sql: String): Array<InExprPosition> {
-        return ffiInvoke("DatabaseAPI", "GetInExprPositions", sql)
+    fun getStatementInfo(sql: String): StatementInfo {
+        return ffiInvoke("DatabaseAPI", "GetStatementInfo", sql)
     }
 
     fun close() {
