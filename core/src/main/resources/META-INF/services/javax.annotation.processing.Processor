@@ -1,1 +1,2 @@
 me.danwi.sqlex.core.apt.SqlExConverterCheckAnnotationProcessor
+me.danwi.sqlex.core.apt.SqlExParameterCheckAnnotationProcessor

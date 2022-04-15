@@ -323,6 +323,7 @@ class Repository(
         //返回注解内容
         //language=JAVA
         return """
+            @SqlExParameterCheck
             @SqlExScript("${sql.literal}")
             @SqlExParameterPosition({${parameterPosition.joinToString()}})
             @SqlExMarkerPosition({${parameters.joinToString { it.position.toString() }}})
