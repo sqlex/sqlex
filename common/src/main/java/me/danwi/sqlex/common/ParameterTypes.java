@@ -2,7 +2,7 @@ package me.danwi.sqlex.common;
 
 public class ParameterTypes {
     //参数转换器的类名
-    public static final String ParameterConverterInterfaceName = "ParameterConverterParameterConverter";
+    public static final String ParameterConverterInterfaceName = "ParameterConverter";
 
     //参数转换器的全限定类名
     public static final String ParameterConverterInterfaceQualifiedName = "me.danwi.sqlex.core.type." + ParameterConverterInterfaceName;
