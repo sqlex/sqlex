@@ -348,16 +348,75 @@ class Repository(
 
     //生成结果内部类的字段
     private fun generateField(field: Field): String {
+        val javaType = getJavaType(field)
         //language=JAVA
         return """
-            private ${field.javaType} _${field.name};
-            public ${field.javaType} get${field.name.pascalName}() {
+            private $javaType _${field.name};
+            public $javaType get${field.name.pascalName}() {
                 return this._${field.name};
             }
-            public void set${field.name.pascalName}(${field.javaType} value) {
+            public void set${field.name.pascalName}($javaType value) {
                 this._${field.name} = value;
             }
         """.trimIndent()
+    }
+
+    //获取字段的java类型名称
+    private fun getJavaType(field: Field): String {
+        if (field.dbType == "bit") { //bit(n)
+            return if (field.length == 1L) "Boolean" else "byte[]"
+        } else if (field.dbType == "tinyint") { //tinyint(n) 或者 bool, boolean
+            //TODO: tinyInt1isBit为false时, Integer; 为true时, Boolean且size是1. 默认为false
+            return "Integer"
+        } else if (listOf("smallint", "mediumint").contains(field.dbType)) { //smallint, mediumint(不管是否unsigned)
+            return "Integer"
+        } else if (listOf("int", "integer").contains(field.dbType)) { //int, integer(unsigned时, java.lang.Long)
+            return if (field.unsigned) "Long" else "Integer"
+        } else if (field.dbType == "bigint") { //bigint(unsigned时, java.math.BigInteger)
+            return if (field.unsigned) "Long" else "java.math.BigInteger"
+        } else if (field.dbType == "float") { //float
+            return "Float"
+        } else if (field.dbType == "double") { //double
+            return "Double"
+        } else if (field.dbType == "decimal") { //decimal
+            return "java.math.BigDecimal"
+        } else if (field.dbType == "date") { //date
+            return "java.sql.Date"
+        } else if (field.dbType == "datetime") { //datetime
+            return "java.sql.Timestamp"
+        } else if (field.dbType == "timestamp") { //timestamp
+            return "java.sql.Timestamp"
+        } else if (field.dbType == "time") { //time
+            return "java.sql.Time"
+        } else if (field.dbType == "year") { //year
+            return "java.sql.Date"
+        } else if (listOf("char", "varchar").contains(field.dbType)) { //char, varchar
+            return if (field.binary) "byte[]" else "String"
+        } else if (listOf(
+                "binary",
+                "varbinary",
+                "tinyblob",
+                "blob",
+                "mediumblob",
+                "longblob"
+            ).contains(field.dbType)
+        ) { //binary, varbinary, tinyblob, blob, mediumblob, longblob
+            return "byte[]"
+        } else if (listOf(
+                "tinytext",
+                "text",
+                "mediumtext",
+                "longtext",
+                "enum",
+                "set"
+            ).contains(field.dbType)
+        ) { //tinytext, text, mediumtext, longtext
+            return "String"
+        } else {
+            //return "Object"
+            //内测阶段直接抛出异常, 便于排错
+            throw Exception("${field.dbType} 映射失败!!!")
+        }
     }
 
     fun close() {
@@ -372,38 +431,6 @@ class Repository(
 class JavaFile(val className: String, val packageName: String, val relativePath: String, val source: String) {
     val javaClassQualifiedName = "$packageName.$className"
 }
-
-val Field.javaType: String
-    get() {
-        if (this.dbType == "bit") {//bit(n)
-            return if (this.length == 1L) {
-                "Boolean"
-            } else {
-                "byte[]"
-            }
-        } else if (this.dbType == "tinyint") {//tinyint(n) 或者 BOOL, BOOLEAN
-            return if (this.length == 1L) {
-                "Boolean"
-            } else {
-                "Integer"
-            }
-        }
-        return when (this.dbType) {
-            "smallint", "mediumint", "int", "integer" -> "Integer"
-            "bigint" -> "Long"
-            "float" -> "Float"
-            "double" -> "Double"
-            "decimal" -> "java.math.BigDecimal"
-            "date" -> "java.sql.Date"
-            "datetime", "timestamp" -> "java.sql.Timestamp"
-            "time" -> "java.sql.Time"
-            "year" -> "java.sql.Date"
-            "char", "varchar" -> "String"
-            "binary", "varbinary",
-            "tinyblob", "blob", "mediumblob", "longblob" -> "byte[]"
-            else -> "Object"
-        }
-    }
 
 //给定一个sqlex的source root,将代码生成到指定到文件中
 fun generateRepositorySource(sourceRoot: File, outputDir: File) {
