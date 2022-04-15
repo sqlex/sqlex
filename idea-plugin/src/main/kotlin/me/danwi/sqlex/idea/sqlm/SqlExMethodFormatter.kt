@@ -11,6 +11,7 @@ import com.intellij.psi.formatter.common.InjectedLanguageBlockBuilder
 import me.danwi.sqlex.idea.sqlm.SqlExMethodParserDefinition.Companion.RULE_IMPORT
 import me.danwi.sqlex.idea.sqlm.SqlExMethodParserDefinition.Companion.RULE_METHOD
 import me.danwi.sqlex.idea.sqlm.SqlExMethodParserDefinition.Companion.RULE_METHOD_NAME
+import me.danwi.sqlex.idea.sqlm.SqlExMethodParserDefinition.Companion.RULE_PAGED
 import me.danwi.sqlex.idea.sqlm.SqlExMethodParserDefinition.Companion.RULE_PARAM
 import me.danwi.sqlex.idea.sqlm.SqlExMethodParserDefinition.Companion.RULE_PARAM_LIST
 import me.danwi.sqlex.idea.sqlm.SqlExMethodParserDefinition.Companion.RULE_PARAM_NAME
@@ -142,6 +143,9 @@ fun createSpaceBuilder(settings: CodeStyleSettings): SpacingBuilder {
         .between(RULE_METHOD, RULE_METHOD).blankLines(1)
         //返回类型1方法名
         .between(RULE_RETURN_TYPE, RULE_METHOD_NAME).spaces(1)
+        //方法名0*0(
+        .between(RULE_METHOD_NAME, RULE_PAGED).none()
+        .between(RULE_PAGED, TOKEN_LB).none()
         //方法名0(
         .between(RULE_METHOD_NAME, TOKEN_LB).none()
         //参数名0:0参数类型

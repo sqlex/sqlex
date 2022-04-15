@@ -8,7 +8,9 @@ importEx: IMPORT className;
 
 className: (ID DOT)* (ID|STAR);
 
-method: returnType? methodName LB paramList? RB LCB sql RCB;
+method: returnType? methodName paged? LB paramList? RB LCB sql RCB;
+
+paged: STAR;
 
 paramList: (param COMMA)* param;
 

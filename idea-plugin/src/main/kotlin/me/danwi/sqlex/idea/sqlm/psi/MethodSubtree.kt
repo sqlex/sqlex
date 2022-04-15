@@ -24,6 +24,9 @@ class MethodSubtree(node: ASTNode, idElementType: IElementType) : IdentifierDefS
     val sql: SqlSubtree?
         get() = children.find { it is SqlSubtree } as SqlSubtree?
 
+    val isPaged: Boolean
+        get() = children.any { it is PagedSubtree }
+
     val javaMethod: PsiMethod?
         get() {
             val javaClass = this.containingFile.virtualFile.getUserData(SqlExMethodPsiClassCacheKey) ?: return null
