@@ -311,10 +311,11 @@ class Repository(
             namedParameterSQL.sql,
             method.paramList(),
             namedParameterSQL.parameters,
-            statementInfo.inExprPositions
+            statementInfo.inExprPositions,
+            false,
         )
         //方法中的参数
-        val parameterPart = generateParameter(methodName, method.paramList(), namedParameterSQL.parameters)
+        val parameterPart = generateParameter(methodName, method.paramList(), namedParameterSQL.parameters, false)
         //返回方法的内容
         return """
             @SqlExDelete
