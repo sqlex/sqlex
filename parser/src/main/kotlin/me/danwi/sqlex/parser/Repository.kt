@@ -314,11 +314,6 @@ class Repository(
             }
             Pair(it.paramName().text, paramType)
         }?.toMutableList() ?: mutableListOf()
-        //如果是分页方法,还需要补上两个分页参数
-        if (isPaged) {
-            parametersInMethod.add(Pair(PageSizeParameterName, PageSizeParameterType))
-            parametersInMethod.add(Pair(PageNoParameterName, PageNoParameterType))
-        }
         //检查sqlm方法签名中是否存在同名参数
         if (parametersInMethod.map { it.first }.distinct().size < parametersInMethod.size)
             throw Exception("方法[${methodName}]签名中存在同名参数")
@@ -326,6 +321,11 @@ class Repository(
         val noExistInMethod = parametersInSQL.find { !parametersInMethod.map { p -> p.first }.contains(it) }
         if (noExistInMethod != null)
             throw Exception("参数${noExistInMethod}在方法[$methodName]签名中未定义")
+        //如果是分页方法,还需要补上两个分页参数
+        if (isPaged) {
+            parametersInMethod.add(Pair(PageSizeParameterName, PageSizeParameterType))
+            parametersInMethod.add(Pair(PageNoParameterName, PageNoParameterType))
+        }
         //返回参数部分源码
         return parametersInMethod.joinToString(", ") { "${it.second} ${it.first}" }
     }
