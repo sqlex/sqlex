@@ -1,10 +1,11 @@
 rootProject.name = 'sqlex'
 
+include 'common'
 include 'core'
 include 'idea-plugin'
 include 'parser'
 include 'gradle-plugin'
 include 'spring'
 include 'maven-plugin'
-
 project(':maven-plugin').name = 'sqlex-maven-plugin'
+
