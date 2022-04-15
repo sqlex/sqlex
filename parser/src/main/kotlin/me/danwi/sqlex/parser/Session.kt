@@ -8,6 +8,7 @@ class Field {
     lateinit var dbType: String
     var length: Long = -1
     var unsigned: Boolean = false
+    var binary: Boolean = false
     var decimal: Long = -1
     lateinit var elements: Array<String>
 }
