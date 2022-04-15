@@ -1,5 +1,7 @@
 package me.danwi.sqlex.core.apt;
 
+import me.danwi.sqlex.common.Paged;
+import me.danwi.sqlex.core.annotation.SqlExPaged;
 import me.danwi.sqlex.core.annotation.SqlExParameterCheck;
 
 import javax.annotation.processing.AbstractProcessor;
@@ -7,11 +9,9 @@ import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.VariableElement;
+import javax.lang.model.element.*;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
@@ -93,9 +93,26 @@ public class SqlExParameterCheckAnnotationProcessor extends AbstractProcessor {
         TypeMirror repositoryType = interfaceElement.getInterfaces().get(0);
         //获取能够被转换到数据类型
         List<String> registeredTypes = getRegisteredTypes(repositoryType);
+        //是否是一个分页方法
+        boolean isPagedMethod = method.getAnnotation(SqlExPaged.class) != null;
         //获取所有的参数,挨个检查
         for (VariableElement parameter : method.getParameters()) {
             TypeMirror parameterType = parameter.asType();
+            //先检查分页参数
+            if (isPagedMethod) {
+                Name parameterName = parameter.getSimpleName();
+                if (parameterName.contentEquals(Paged.PageSizeParameterName)) {
+                    if (parameterType.getKind() != TypeKind.LONG)
+                        throw new Exception("pageSize参数的类型必须为long");
+                    continue;
+                }
+                if (parameterName.contentEquals(Paged.PageNoParameterName)) {
+                    if (parameterType.getKind() != TypeKind.LONG)
+                        throw new Exception("pageNo参数的类型必须为long");
+                    continue;
+                }
+            }
+            //普通参数,只需要判断数据类型
             //判断他是否为一个List  TODO: 可能会更改为Iterable
             if (util.getQualifiedName(parameterType).contentEquals("java.util.List")) {
                 parameterType = ((DeclaredType) parameterType).getTypeArguments().get(0);
