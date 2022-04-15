@@ -197,8 +197,8 @@ class Repository(
         return when (statementInfo.type) {
             StatementType.Select -> generateSelectMethod(method, namedParameterSQL, statementInfo)
             StatementType.Insert -> generateInsertMethod(method, namedParameterSQL, statementInfo)
-            StatementType.Update -> generateUpdateOrDelete(method, namedParameterSQL, statementInfo)
-            StatementType.Delete -> generateUpdateOrDelete(method, namedParameterSQL, statementInfo)
+            StatementType.Update -> generateUpdateMethod(method, namedParameterSQL, statementInfo)
+            StatementType.Delete -> generateDeleteMethod(method, namedParameterSQL, statementInfo)
             else -> throw Exception("不支持的语句类型,只支持(select/insert/update/delete)")
         }
     }
@@ -227,6 +227,7 @@ class Repository(
         return """
             $resultClassSourcePart
             
+            @SqlExSelect
             $annotationPart
             List<$resultClassName> $methodName($parameterPart);
         """.trimIndent()
@@ -251,13 +252,14 @@ class Repository(
         val parameterPart = generateParameter(methodName, method.paramList(), namedParameterSQL.parameters)
         //返回方法的内容
         return """
+            @SqlExInsert
             $annotationPart
             Long $methodName($parameterPart);
         """.trimIndent()
     }
 
-    //生成Update/Delete方法,返回值为影响的行数
-    private fun generateUpdateOrDelete(
+    //生成Update方法,返回值为影响的行数
+    private fun generateUpdateMethod(
         method: SqlExMethodLanguageParser.MethodContext,
         namedParameterSQL: NamedParameterSQL,
         statementInfo: StatementInfo
@@ -275,6 +277,32 @@ class Repository(
         val parameterPart = generateParameter(methodName, method.paramList(), namedParameterSQL.parameters)
         //返回方法的内容
         return """
+            @SqlExUpdate
+            $annotationPart
+            Long $methodName($parameterPart);
+        """.trimIndent()
+    }
+
+    //生成Delete方法,返回值为影响的行数
+    private fun generateDeleteMethod(
+        method: SqlExMethodLanguageParser.MethodContext,
+        namedParameterSQL: NamedParameterSQL,
+        statementInfo: StatementInfo
+    ): String {
+        //获取到方法名
+        val methodName = method.methodName().text
+        //生成注解部分
+        val annotationPart = generateAnnotation(
+            namedParameterSQL.sql,
+            method.paramList(),
+            namedParameterSQL.parameters,
+            statementInfo.inExprPositions
+        )
+        //方法中的参数
+        val parameterPart = generateParameter(methodName, method.paramList(), namedParameterSQL.parameters)
+        //返回方法的内容
+        return """
+            @SqlExDelete
             $annotationPart
             Long $methodName($parameterPart);
         """.trimIndent()
