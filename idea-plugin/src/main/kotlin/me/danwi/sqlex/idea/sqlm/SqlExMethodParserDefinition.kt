@@ -42,6 +42,7 @@ open class SqlExMethodParserDefinition : ParserDefinition {
         val RULE_METHOD: RuleIElementType = rules[SqlExMethodLanguageParser.RULE_method]
         val RULE_RETURN_TYPE: RuleIElementType = rules[SqlExMethodLanguageParser.RULE_returnType]
         val RULE_METHOD_NAME: RuleIElementType = rules[SqlExMethodLanguageParser.RULE_methodName]
+        val RULE_PAGED: RuleIElementType = rules[SqlExMethodLanguageParser.RULE_paged]
         val RULE_PARAM_LIST: RuleIElementType = rules[SqlExMethodLanguageParser.RULE_paramList]
         val RULE_PARAM: RuleIElementType = rules[SqlExMethodLanguageParser.RULE_param]
         val RULE_PARAM_NAME: RuleIElementType = rules[SqlExMethodLanguageParser.RULE_paramName]
@@ -102,6 +103,7 @@ open class SqlExMethodParserDefinition : ParserDefinition {
             RULE_METHOD -> MethodSubtree(node, node.elementType)
             RULE_RETURN_TYPE -> ReturnTypeSubtree(node, node.elementType)
             RULE_METHOD_NAME -> MethodNameSubtree(node, node.elementType)
+            RULE_PAGED -> PagedSubtree(node, node.elementType)
             RULE_PARAM_LIST -> ParamListSubtree(node, node.elementType)
             RULE_PARAM -> ParamSubtree(node, node.elementType)
             RULE_PARAM_NAME -> ParamNameSubtree(node, node.elementType)
