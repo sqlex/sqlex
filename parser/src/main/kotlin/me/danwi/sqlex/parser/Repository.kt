@@ -131,6 +131,7 @@ class Repository(
         )
     }
 
+    //生成整个java文件
     fun generateJavaFile(relativePath: String, content: String): JavaFile {
         try {
             //java相对路径名
@@ -151,79 +152,10 @@ class Repository(
             val root = parser.root()
             val imports = root.importEx()
             val methods = root.method()
-            //生成方法片段
-            val methodSegments = methods
-                .map { method ->
-                    //获取到方法名
-                    val methodName = method.methodName().text
-                    //获取到sql文本
-                    val sqlText = method.sql().text
-                    //解析sql
-                    val namedParameterSQL = sqlText.namedParameterSQL
-                    val fields = session.getFields(namedParameterSQL.sql)
-                    val inExprPositions = session.getInExprPositions(namedParameterSQL.sql)
-
-                    //TODO:假设都是select语句
-                    //结果类类名
-                    val resultClassName = method.returnType()?.text ?: "${methodName.pascalName}Result"
-                    //生成字段源码
-                    val resultFieldSegments = fields
-                        .map {
-                            //language=JAVA
-                            """
-                                private ${it.javaType} _${it.name};
-                                public ${it.javaType} get${it.name.pascalName}() {
-                                    return this._${it.name};
-                                }
-                                public void set${it.name.pascalName}(${it.javaType} value) {
-                                    this._${it.name} = value;
-                                }
-                            """.trimIndent()
-                        }
-                    //合成一个实体类源码
-                    //language=JAVA
-                    val resultClassContent = """
-                        @SqlExGenerated
-                        static class $resultClassName {
-                            ${resultFieldSegments.joinToString("\n")}
-                        }
-                    """.trimIndent()
-
-                    //SQL语句中的参数
-                    val parametersInSQL = namedParameterSQL.parameters.map { it.name }.distinct()
-                    //sqlm方法签名中的参数
-                    val parametersInMethod = method.paramList()?.param()?.map {
-                        val paramType = if (it.paramRepeat() == null) {
-                            it.paramType().text
-                        } else {
-                            "List<${it.paramType().text}>"
-                        }
-                        Pair(it.paramName().text, paramType)
-                    } ?: listOf()
-                    //检查sqlm方法签名中是否存在同名参数
-                    if (parametersInMethod.map { it.first }.distinct().size < parametersInMethod.size)
-                        throw SqlExRepositoryMethodException(relativePath, "方法[$methodName]签名中存在同名参数")
-                    //检查SQL中参数和sqlm中参数的一致性
-                    val noExistInMethod = parametersInSQL.find { !parametersInMethod.map { p -> p.first }.contains(it) }
-                    if (noExistInMethod != null)
-                        throw SqlExRepositoryMethodException(relativePath, "参数${noExistInMethod}在方法[$methodName]签名中未定义")
-                    //解析SQL参数在方法签名参数中的位置,做好映射
-                    val parameterPosition =
-                        namedParameterSQL.parameters.map {
-                            parametersInMethod.map { it.first }.indexOfFirst { p -> p == it.name }
-                        }
-
-                    //方法片段
-                    """
-                        $resultClassContent
-            
-                        @SqlExScript("${namedParameterSQL.sql.literal}")
-                        @SqlExParameterPosition({${parameterPosition.joinToString()}})
-                        @SqlExMarkerPosition({${namedParameterSQL.parameters.joinToString { it.position.toString() }}})
-                        ${inExprPositions.joinToString("\n") { "@SqlExInExprPosition(not=${it.not},marker=${it.marker},start=${it.start},end=${it.end})" }}
-                        List<$resultClassName> $methodName(${parametersInMethod.joinToString(", ") { "${it.second} ${it.first}" }});
-                    """.trimIndent()
-                }
+            //import部分
+            val importSourcePart = generateImport(imports)
+            //方法部分
+            val methodSourceParts = methods.map { generateMethod(it) }
             //整个java文件内容
             //language=JAVA
             val javaFileContent = """
@@ -234,17 +166,196 @@ class Repository(
                 //常用依赖
                 import java.util.List;
                 //数据类型依赖
-                ${imports.joinToString("\n") { "import ${it.className().text};" }}
+                $importSourcePart
                 
                 @SqlExGenerated
                 public interface $className extends ${repositoryJavaFile.javaClassQualifiedName} {
-                    ${methodSegments.joinToString("\n")}
+                    ${methodSourceParts.joinToString("\n")}
                 }
             """.trimIndent()
             return JavaFile(className, packageName, javaRelativePath, javaFileContent)
         } catch (e: Exception) {
             throw SqlExRepositoryMethodException(relativePath, e.message ?: "未知的Method解析错误")
         }
+    }
+
+    //生成import部分
+    private fun generateImport(imports: List<SqlExMethodLanguageParser.ImportExContext>): String {
+        return imports.joinToString("\n") { "import ${it.className().text};" }
+    }
+
+    //生成方法
+    private fun generateMethod(method: SqlExMethodLanguageParser.MethodContext): String {
+        //获取到sql文本
+        val sqlText = method.sql().text
+        //解析sql的命名参数信息
+        val namedParameterSQL = sqlText.namedParameterSQL
+        //获取到sql语句信息
+        val statementInfo = session.getStatementInfo(namedParameterSQL.sql)
+        //根据类型来生成不同到方法
+        return when (statementInfo.type) {
+            StatementType.Select -> generateSelectMethod(method, namedParameterSQL, statementInfo)
+            StatementType.Insert -> generateInsertMethod(method, namedParameterSQL, statementInfo)
+            StatementType.Update -> generateUpdateOrDelete(method, namedParameterSQL, statementInfo)
+            StatementType.Delete -> generateUpdateOrDelete(method, namedParameterSQL, statementInfo)
+            else -> throw Exception("不支持的语句类型,只支持(select/insert/update/delete)")
+        }
+    }
+
+    //生成select方法,包括方法返回值内部类
+    private fun generateSelectMethod(
+        method: SqlExMethodLanguageParser.MethodContext,
+        namedParameterSQL: NamedParameterSQL,
+        statementInfo: StatementInfo
+    ): String {
+        //获取到方法名
+        val methodName = method.methodName().text
+        //结果类源码
+        val resultClassName = method.returnType()?.text ?: "${methodName.pascalName}Result"
+        val resultClassSourcePart = generateResultClass(resultClassName, namedParameterSQL.sql)
+        //生成注解部分
+        val annotationPart = generateAnnotation(
+            namedParameterSQL.sql,
+            method.paramList(),
+            namedParameterSQL.parameters,
+            statementInfo.inExprPositions
+        )
+        //方法中的参数
+        val parameterPart = generateParameter(methodName, method.paramList(), namedParameterSQL.parameters)
+        //返回方法的内容
+        return """
+            $resultClassSourcePart
+            
+            $annotationPart
+            List<$resultClassName> $methodName($parameterPart);
+        """.trimIndent()
+    }
+
+    //生成Insert方法,返回值为lastInsertID TODO:目前只支持单个自增生成的值,以后改写为多个
+    private fun generateInsertMethod(
+        method: SqlExMethodLanguageParser.MethodContext,
+        namedParameterSQL: NamedParameterSQL,
+        statementInfo: StatementInfo
+    ): String {
+        //获取到方法名
+        val methodName = method.methodName().text
+        //生成注解部分
+        val annotationPart = generateAnnotation(
+            namedParameterSQL.sql,
+            method.paramList(),
+            namedParameterSQL.parameters,
+            statementInfo.inExprPositions
+        )
+        //方法中的参数
+        val parameterPart = generateParameter(methodName, method.paramList(), namedParameterSQL.parameters)
+        //返回方法的内容
+        return """
+            $annotationPart
+            Long $methodName($parameterPart);
+        """.trimIndent()
+    }
+
+    //生成Update/Delete方法,返回值为影响的行数
+    private fun generateUpdateOrDelete(
+        method: SqlExMethodLanguageParser.MethodContext,
+        namedParameterSQL: NamedParameterSQL,
+        statementInfo: StatementInfo
+    ): String {
+        //获取到方法名
+        val methodName = method.methodName().text
+        //生成注解部分
+        val annotationPart = generateAnnotation(
+            namedParameterSQL.sql,
+            method.paramList(),
+            namedParameterSQL.parameters,
+            statementInfo.inExprPositions
+        )
+        //方法中的参数
+        val parameterPart = generateParameter(methodName, method.paramList(), namedParameterSQL.parameters)
+        //返回方法的内容
+        return """
+            $annotationPart
+            Long $methodName($parameterPart);
+        """.trimIndent()
+    }
+
+
+    //生成参数签名部分
+    private fun generateParameter(
+        methodName: String,
+        paramList: SqlExMethodLanguageParser.ParamListContext?,
+        parameters: List<NamedParameter>
+    ): String {
+        //SQL语句中的参数
+        val parametersInSQL = parameters.map { it.name }.distinct()
+        //sqlm方法签名中的参数
+        val parametersInMethod = paramList?.param()?.map {
+            val paramType = if (it.paramRepeat() == null) {
+                it.paramType().text
+            } else {
+                "List<${it.paramType().text}>"
+            }
+            Pair(it.paramName().text, paramType)
+        } ?: listOf()
+        //检查sqlm方法签名中是否存在同名参数
+        if (parametersInMethod.map { it.first }.distinct().size < parametersInMethod.size)
+            throw Exception("方法[${methodName}]签名中存在同名参数")
+        //检查SQL中参数和sqm中参数的一致性
+        val noExistInMethod = parametersInSQL.find { !parametersInMethod.map { p -> p.first }.contains(it) }
+        if (noExistInMethod != null)
+            throw Exception("参数${noExistInMethod}在方法[$methodName]签名中未定义")
+        //返回参数部分源码
+        return parametersInMethod.joinToString(", ") { "${it.second} ${it.first}" }
+    }
+
+    //生成方法上注解部分
+    private fun generateAnnotation(
+        sql: String,
+        paramList: SqlExMethodLanguageParser.ParamListContext?,
+        parameters: List<NamedParameter>,
+        inExprPositions: Array<InExprPosition>
+    ): String {
+        //获取方法签名中的参数
+        val parametersInMethod = paramList?.param()?.map { it.paramName().text } ?: listOf()
+        //解析SQL参数在方法签名参数中的位置,做好映射
+        val parameterPosition = parameters.map { parametersInMethod.indexOfFirst { p -> p == it.name } }
+        //返回注解内容
+        //language=JAVA
+        return """
+            @SqlExScript("${sql.literal}")
+            @SqlExParameterPosition({${parameterPosition.joinToString()}})
+            @SqlExMarkerPosition({${parameters.joinToString { it.position.toString() }}})
+            ${inExprPositions.joinToString("\n") { "@SqlExInExprPosition(not=${it.not},marker=${it.marker},start=${it.start},end=${it.end})" }}
+        """.trimIndent()
+    }
+
+    //生成结果内部类
+    private fun generateResultClass(className: String, sql: String): String {
+        //获取到sql的返回字段
+        val fields = session.getFields(sql)
+        val fieldSourceParts = fields.map { generateField(it) }
+        //返回结果类内容
+        //language=JAVA
+        return """
+            @SqlExGenerated
+            static class $className {
+                ${fieldSourceParts.joinToString("\n")}
+            }
+        """.trimIndent()
+    }
+
+    //生成结果内部类的字段
+    private fun generateField(field: Field): String {
+        //language=JAVA
+        return """
+            private ${field.javaType} _${field.name};
+            public ${field.javaType} get${field.name.pascalName}() {
+                return this._${field.name};
+            }
+            public void set${field.name.pascalName}(${field.javaType} value) {
+                this._${field.name} = value;
+            }
+        """.trimIndent()
     }
 
     fun close() {
