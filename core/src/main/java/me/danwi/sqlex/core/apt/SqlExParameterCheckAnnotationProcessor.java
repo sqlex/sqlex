@@ -101,7 +101,7 @@ public class SqlExParameterCheckAnnotationProcessor extends AbstractProcessor {
                 parameterType = ((DeclaredType) parameterType).getTypeArguments().get(0);
             }
             if (!util.isSupportedType(typesUtil.asElement(parameterType), registeredTypes)) {
-                throw new Exception("参数 " + parameter.getSimpleName() + " 使用了被支持的参数数据类型(" + util.getQualifiedName(parameterType) + ")");
+                throw new Exception("参数 " + parameter.getSimpleName() + " 使用了不被支持的参数数据类型(" + util.getQualifiedName(parameterType) + ")");
             }
         }
     }
