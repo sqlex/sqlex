@@ -16,27 +16,31 @@ class SqlExPlugin implements Plugin<Project> {
     void apply(Project project) {
         this.project = project
 
-        //确保语言插件存在
-        ensureCompileLanguagePlugin()
-        //添加source set
-        addSourceSetExtensions()
+        //插件是否成功应用
+        def isApplied = false
 
-        project.afterEvaluate {
+        project.pluginManager.withPlugin("java") {
+            //添加source set
+            addSourceSetExtensions()
             //添加sqlex任务
             addSqlExTasks()
             //idea集成
             addSourcesToIDE()
+            //应用成功
+            isApplied = true
+        }
+
+        project.afterEvaluate {
+            if (!isApplied)
+                throw new GradleException("SqlEx插件依赖Java插件做代码编译,请在项目中引入Java插件")
+
+            //配置annotation processor
+            ensureAnnotationProcessor()
         }
     }
 
     private SourceSetContainer getSourceSets() {
         return project.sourceSets
-    }
-
-    //确保有一个能编译jvm的语言插件,如果没有自己应用一个,用于编译生成的代码
-    private void ensureCompileLanguagePlugin() {
-        if (!project.pluginManager.hasPlugin('java'))
-            throw new GradleException("项目没有引入Java插件")
     }
 
     //添加source set拓展
@@ -86,5 +90,17 @@ class SqlExPlugin implements Plugin<Project> {
                     model.module.sourceDirs += sqlexDir
             }
         }
+    }
+
+    //确保annotationProcessor的存在
+    private void ensureAnnotationProcessor() {
+        def implementationDependencies = project.getConfigurations().findByName("implementation").dependencies
+        def annotationProcessorDependencies = project.getConfigurations().findByName("annotationProcessor").dependencies
+
+        def implementation = implementationDependencies.find { it.name == "core" && it.group == "me.danwi.sqlex" }
+        def annotationProcessor = annotationProcessorDependencies.find { it.name == "core" && it.group == "me.danwi.sqlex" }
+
+        if (implementation != null && annotationProcessor == null)
+            project.dependencies.add("annotationProcessor", "${implementation.group}:${implementation.name}:${implementation.version}")
     }
 }
