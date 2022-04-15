@@ -387,18 +387,18 @@ class Repository(
         } else if (field.dbType == "time") { //time
             return "java.sql.Time"
         } else if (field.dbType == "year") { //year
-            //TODO: yearIsDateType为false时, java.sql.Short; 为true时 java.sql.Date且剩余字段为1月1日午夜. 默认为true
             return "java.sql.Date"
         } else if (listOf("char", "varchar").contains(field.dbType)) { //char, varchar
             return if (field.binary) "byte[]" else "String"
         } else if (listOf(
                 "binary",
                 "varbinary",
+                "tinyblob",
                 "blob",
                 "mediumblob",
                 "longblob"
             ).contains(field.dbType)
-        ) { //varbinary, blob, mediumblob, longblob
+        ) { //binary, varbinary, tinyblob, blob, mediumblob, longblob
             return "byte[]"
         } else if (listOf(
                 "tinytext",
@@ -411,7 +411,9 @@ class Repository(
         ) { //tinytext, text, mediumtext, longtext
             return "String"
         } else {
-            return "Object"
+            //return "Object"
+            //内测阶段直接抛出异常, 便于排错
+            throw Exception("${field.dbType} 映射失败!!!")
         }
     }
 
