@@ -113,6 +113,7 @@ class Repository(
                 import me.danwi.sqlex.core.annotation.*;
                 import me.danwi.sqlex.core.RepositoryLike;
                 
+                @SqlExConverterCheck
                 @SqlExGenerated
                 ${
                 converters
