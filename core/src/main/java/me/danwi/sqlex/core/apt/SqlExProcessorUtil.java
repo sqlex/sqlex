@@ -5,14 +5,12 @@ import me.danwi.sqlex.core.annotation.SqlExConverter;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.*;
+import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class SqlExProcessorUtil {
@@ -74,18 +72,20 @@ public class SqlExProcessorUtil {
 
     //判断这个转换器是不是一个合法的参数类型转换器,如果是,则返回他的from type
     public TypeMirror isValidateParameterConverter(TypeElement element) throws Exception {
-        //判断他是否实现了ParameterConverter接口
-        boolean isConverter = element.getInterfaces().stream()
-                .map(types::asElement)
-                .anyMatch(it -> {
-                    if (it instanceof TypeElement) {
-                        return ((TypeElement) it).getQualifiedName().contentEquals(ParameterTypes.ParameterConverterInterfaceQualifiedName);
+        //获取其实现的ParameterConverter接口
+        List<DeclaredType> declaredTypes = element.getInterfaces().stream()
+                .map(it -> {
+                    if (getQualifiedName(it).contentEquals(ParameterTypes.ParameterConverterInterfaceQualifiedName) && it instanceof DeclaredType) {
+                        return (DeclaredType) it;
                     }
-                    return false;
-                });
-        if (!isConverter) {
+                    return null;
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        if (declaredTypes.size() == 0)
             throw new Exception("未实现参数类型转换器接口");
-        }
+        DeclaredType converterInterface = declaredTypes.get(0);
         //获取所有的构造函数,判断其是否有无参构造函数
         if (element.getEnclosedElements().stream()
                 .filter(it -> it.getKind() == ElementKind.CONSTRUCTOR)
@@ -97,45 +97,37 @@ public class SqlExProcessorUtil {
                 .filter(Objects::nonNull)
                 .noneMatch(it -> it.getParameters().size() == 0))
             throw new Exception("参数类型转换器必须包含一个无参构造函数");
-        //获取到convert方法,从而判断其类型是否正确
-        List<? extends Element> methods = element.getEnclosedElements().stream()
-                .filter(it -> it.getKind() == ElementKind.METHOD && it.getSimpleName().contentEquals("convert")) //名称限定
-                .map(it -> {
-                    if (it instanceof ExecutableElement)
-                        return (ExecutableElement) it;
-                    return null;
-                })
-                .filter(Objects::nonNull)
-                .filter(it -> it.getParameters().size() == 1) //参数个数限定
-                .collect(Collectors.toList());
-        if (methods.size() != 1) {
-            throw new Exception("参数类型转换器中有且只能有一个名为 convert 的方法");
-        }
-        //转换方法
-        ExecutableElement convertMethod = (ExecutableElement) methods.get(0);
+        //获取转换器的来源类型和目的类型
+        List<? extends TypeMirror> typeArguments = converterInterface.getTypeArguments();
+        if (typeArguments.size() != 2)
+            throw new Exception("转换器接口拥有错误的泛型参数个数");
         //获取其返回类型
-        TypeMirror toType = convertMethod.getReturnType();
+        TypeMirror toType = typeArguments.get(1);
         //判断其是否是预支持类型
-        if (!isPreSupportedType(types.asElement(toType))) {
+        if (!isSupportedType(types.asElement(toType), Collections.emptyList())) {
             throw new Exception("参数类型转换器的目标类型 " + getQualifiedName(toType) + " 不是预支持的数据类型");
         }
         //获取其来源类型
-        TypeMirror typeMirror = convertMethod.getParameters().get(0).asType();
+        TypeMirror typeMirror = typeArguments.get(0);
         if (typeMirror == null)
             throw new Exception("无法确定参数类型转换器的目标类型");
         return typeMirror;
     }
 
 
-    //判断这个类型是否为预支持类型
-    private boolean isPreSupportedType(Element element) {
+    //判断这个类型是否为支持的参数类型类型
+    public boolean isSupportedType(Element element, List<String> additional) {
         String qualifiedName = getQualifiedName(element);
-        if (Arrays.asList(ParameterTypes.PreSupportedTypes).contains(qualifiedName)) {
+        //是否在预支持列表中
+        if (Arrays.asList(ParameterTypes.PreSupportedTypes).contains(qualifiedName))
             return true;
-        }
+        //是否在额外支持的列表中
+        if (additional.contains(qualifiedName))
+            return true;
+        //获取父类,来判断
         Element superClass = getSuperClass(element);
         if (superClass == null)
             return false;
-        return isPreSupportedType(superClass);
+        return isSupportedType(superClass, additional);
     }
 }
