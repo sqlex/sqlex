@@ -346,13 +346,14 @@ class Repository(
 
     //生成结果内部类的字段
     private fun generateField(field: Field): String {
+        val javaType = getJavaType(field)
         //language=JAVA
         return """
-            private ${getJavaType(field)} _${field.name};
-            public ${getJavaType(field)} get${field.name.pascalName}() {
+            private $javaType _${field.name};
+            public $javaType get${field.name.pascalName}() {
                 return this._${field.name};
             }
-            public void set${field.name.pascalName}(${getJavaType(field)} value) {
+            public void set${field.name.pascalName}($javaType value) {
                 this._${field.name} = value;
             }
         """.trimIndent()
