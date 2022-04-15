@@ -8,6 +8,7 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib"
     implementation "org.antlr:antlr4-intellij-adaptor:0.1"
     implementation(project(":parser"))
+    implementation(project(":common"))
 }
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/

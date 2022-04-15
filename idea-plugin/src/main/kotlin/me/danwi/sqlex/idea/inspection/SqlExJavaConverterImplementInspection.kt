@@ -6,8 +6,8 @@ import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiElementVisitor
+import me.danwi.sqlex.common.ParameterTypes.ParameterConverterInterfaceQualifiedName
 import me.danwi.sqlex.idea.util.extension.*
-import me.danwi.sqlex.parser.ParameterConverterInterfaceQualifiedName
 
 class SqlExJavaConverterImplementInspection : LocalInspectionTool() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): PsiElementVisitor {

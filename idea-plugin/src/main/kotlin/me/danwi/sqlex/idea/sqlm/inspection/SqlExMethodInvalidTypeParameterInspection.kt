@@ -6,11 +6,11 @@ import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiElementVisitor
+import me.danwi.sqlex.common.ParameterTypes.PreSupportedTypes
 import me.danwi.sqlex.idea.sqlm.psi.ParamTypeSubtree
 import me.danwi.sqlex.idea.util.extension.configFile
 import me.danwi.sqlex.idea.util.extension.converters
 import me.danwi.sqlex.idea.util.extension.psiFile
-import me.danwi.sqlex.parser.PreSupportedTypes
 import org.jetbrains.yaml.psi.YAMLFile
 
 class SqlExMethodInvalidTypeParameterInspection : LocalInspectionTool() {

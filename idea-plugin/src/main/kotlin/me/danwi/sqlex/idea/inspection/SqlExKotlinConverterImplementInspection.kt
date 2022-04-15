@@ -6,8 +6,8 @@ import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.psi.JavaPsiFacade
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiElementVisitor
+import me.danwi.sqlex.common.ParameterTypes.ParameterConverterInterfaceName
 import me.danwi.sqlex.idea.util.extension.*
-import me.danwi.sqlex.parser.ParameterConverterInterfaceName
 import org.jetbrains.kotlin.idea.util.jvmFqName
 import org.jetbrains.kotlin.psi.KtClass
 
