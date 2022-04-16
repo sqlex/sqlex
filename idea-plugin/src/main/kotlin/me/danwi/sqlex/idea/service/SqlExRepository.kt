@@ -1,9 +1,6 @@
 package me.danwi.sqlex.idea.service
 
 import com.intellij.ide.highlighter.JavaFileType
-import com.intellij.openapi.application.invokeLater
-import com.intellij.openapi.application.runReadAction
-import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
@@ -11,9 +8,7 @@ import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiFileFactory
 import com.intellij.psi.PsiJavaFile
 import com.intellij.psi.PsiManager
-import me.danwi.sqlex.idea.util.extension.qualifiedPackageName
-import me.danwi.sqlex.idea.util.extension.sourceRootRelativePath
-import me.danwi.sqlex.idea.util.extension.textContent
+import me.danwi.sqlex.idea.util.extension.*
 import me.danwi.sqlex.parser.JavaFile
 import me.danwi.sqlex.parser.Repository
 

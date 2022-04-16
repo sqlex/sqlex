@@ -2,7 +2,6 @@ package me.danwi.sqlex.idea.util.extension
 
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.application.invokeAndWaitIfNeeded
-import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.sql.database.SqlDataSourceImpl
 import com.intellij.sql.dialects.SqlDialectMappings
