@@ -76,13 +76,15 @@ class SqlExRepository(private val project: Project, private val repository: Repo
         file.putUserData(SqlExMethodPsiClassCacheKey, javaClass)
         //存入缓存
         javaClassCache[file.path] = javaClass
+        //移除源码缓存
+        javaFileCache.remove(file.path)
         //更新psi缓存
         invokeLater { runWriteAction { psiManager.dropPsiCaches() } }
     }
 
-    fun removeMethodFile(relativePath: String) {
-        javaClassCache.remove(relativePath)
-        javaFileCache.remove(relativePath)
+    fun removeMethodFile(filePath: String) {
+        javaClassCache.remove(filePath)
+        javaFileCache.remove(filePath)
         //更新缓存
         invokeLater { runWriteAction { psiManager.dropPsiCaches() } }
     }

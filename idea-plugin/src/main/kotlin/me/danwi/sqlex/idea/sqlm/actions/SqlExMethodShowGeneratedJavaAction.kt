@@ -9,6 +9,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.ex.EditorEx
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.psi.PsiFile
@@ -33,10 +34,12 @@ class SqlExMethodShowGeneratedJavaAction : AnAction() {
         val editor = event.getData(CommonDataKeys.EDITOR) ?: return
 
         try {
+            //先对文档做一个保存
+            FileDocumentManager.getInstance().saveDocument(editor.document)
+            //获取SqlEx Repository服务
             val service = methodFile.sqlexRepositoryService ?: throw Exception("该文件不存在对应的索引服务,请尝试重建索引")
             if (!service.isValid)
                 throw Exception("索引已经过期,请先重建索引")
-
             //生成java文件
             val javaFile = service.repository?.findJavaSource(methodFile) ?: throw Exception("Java文件生成失败")
             //解析为psi
