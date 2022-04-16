@@ -22,10 +22,6 @@ class SqlExPlugin implements Plugin<Project> {
         project.pluginManager.withPlugin("java") {
             //添加source set
             addSourceSetExtensions()
-            //添加sqlex任务
-            addSqlExTasks()
-            //idea集成
-            addSourcesToIDE()
             //应用成功
             isApplied = true
         }
@@ -33,9 +29,12 @@ class SqlExPlugin implements Plugin<Project> {
         project.afterEvaluate {
             if (!isApplied)
                 throw new GradleException("SqlEx插件依赖Java插件做代码编译,请在项目中引入Java插件")
-
             //配置annotation processor
             ensureAnnotationProcessor()
+            //添加sqlex任务
+            addSqlExTasks()
+            //idea集成
+            addSourcesToIDE()
         }
     }
 
