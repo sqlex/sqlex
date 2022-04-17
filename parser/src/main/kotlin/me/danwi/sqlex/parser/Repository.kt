@@ -189,8 +189,6 @@ class Repository(
 
     //生成方法
     private fun generateMethod(method: SqlExMethodLanguageParser.MethodContext): String {
-        //是否为分页方法
-        val isPaged = method.paged() != null
         //获取到sql文本
         val sqlText = method.sql().text
         //解析sql的命名参数信息
@@ -198,11 +196,11 @@ class Repository(
         //获取到sql语句信息
         val statementInfo = session.getStatementInfo(namedParameterSQL.sql)
         //只有select中才能使用paged
-        if (isPaged && statementInfo.type != StatementType.Select)
+        if (method.paged() != null && statementInfo.type != StatementType.Select)
             throw Exception("只有Select方法才能标记为分页方法")
         //根据类型来生成不同到方法
         return when (statementInfo.type) {
-            StatementType.Select -> generateSelectMethod(method, namedParameterSQL, statementInfo, isPaged)
+            StatementType.Select -> generateSelectMethod(method, namedParameterSQL, statementInfo)
             StatementType.Insert -> generateInsertMethod(method, namedParameterSQL, statementInfo)
             StatementType.Update -> generateUpdateMethod(method, namedParameterSQL, statementInfo)
             StatementType.Delete -> generateDeleteMethod(method, namedParameterSQL, statementInfo)
@@ -215,10 +213,11 @@ class Repository(
         method: SqlExMethodLanguageParser.MethodContext,
         namedParameterSQL: NamedParameterSQL,
         statementInfo: StatementInfo,
-        isPaged: Boolean
     ): String {
         //获取到方法名
         val methodName = method.methodName().text
+        //是否为分页方法
+        val isPaged = method.paged() != null
         //结果类源码
         val resultClassName = method.returnType()?.text ?: "${methodName.pascalName}Result"
         val resultClassSourcePart = generateResultClass(resultClassName, namedParameterSQL.sql)
@@ -227,13 +226,21 @@ class Repository(
             namedParameterSQL.sql,
             method.paramList(),
             namedParameterSQL.parameters,
-            statementInfo.inExprPositions,
-            isPaged,
+            statementInfo,
         )
         //方法中的参数
         val parameterPart = generateParameter(methodName, method.paramList(), namedParameterSQL.parameters, isPaged)
         //方法的返回值
         var returnTypePart = "List<$resultClassName>"
+        //是否为单行查询
+        val oneRow = statementInfo.hasLimit && statementInfo.limitRows.toInt() == 1
+        if (oneRow) {
+            //单行
+            if (isPaged)
+                throw Exception("单行查询不能声明为分页方法")
+            returnTypePart = resultClassName
+        }
+        //是否为分页查询
         if (isPaged)
             returnTypePart = "PagedResult<$resultClassName>"
         //返回方法的内容
@@ -241,6 +248,8 @@ class Repository(
             $resultClassSourcePart
             
             @SqlExSelect
+            ${if (oneRow) "@SqlExOneRow" else ""}
+            ${if (isPaged) "@SqlExPaged" else ""}
             $annotationPart
             $returnTypePart $methodName($parameterPart);
         """.trimIndent()
@@ -259,8 +268,7 @@ class Repository(
             namedParameterSQL.sql,
             method.paramList(),
             namedParameterSQL.parameters,
-            statementInfo.inExprPositions,
-            false,
+            statementInfo,
         )
         //方法中的参数
         val parameterPart = generateParameter(methodName, method.paramList(), namedParameterSQL.parameters, false)
@@ -285,8 +293,7 @@ class Repository(
             namedParameterSQL.sql,
             method.paramList(),
             namedParameterSQL.parameters,
-            statementInfo.inExprPositions,
-            false,
+            statementInfo,
         )
         //方法中的参数
         val parameterPart = generateParameter(methodName, method.paramList(), namedParameterSQL.parameters, false)
@@ -311,8 +318,7 @@ class Repository(
             namedParameterSQL.sql,
             method.paramList(),
             namedParameterSQL.parameters,
-            statementInfo.inExprPositions,
-            false,
+            statementInfo,
         )
         //方法中的参数
         val parameterPart = generateParameter(methodName, method.paramList(), namedParameterSQL.parameters, false)
@@ -364,8 +370,7 @@ class Repository(
         sql: String,
         paramList: SqlExMethodLanguageParser.ParamListContext?,
         parameters: List<NamedParameter>,
-        inExprPositions: Array<InExprPosition>,
-        isPaged: Boolean,
+        statementInfo: StatementInfo,
     ): String {
         //获取方法签名中的参数
         val parametersInMethod = paramList?.param()?.map { it.paramName().text } ?: listOf()
@@ -374,12 +379,12 @@ class Repository(
         //返回注解内容
         //language=JAVA
         return """
-            ${if (isPaged) "@SqlExPaged" else ""}
             @SqlExParameterCheck
             @SqlExScript("${sql.literal}")
             @SqlExParameterPosition({${parameterPosition.joinToString()}})
             @SqlExMarkerPosition({${parameters.joinToString { it.position.toString() }}})
-            ${inExprPositions.joinToString("\n") { "@SqlExInExprPosition(not=${it.not},marker=${it.marker},start=${it.start},end=${it.end})" }}
+            ${statementInfo.inExprPositions.joinToString("\n") { "@SqlExInExprPosition(not=${it.not},marker=${it.marker},start=${it.start},end=${it.end})" }}
+            ${statementInfo.limitPositions.joinToString("\n") { "@SqlExLimitPosition(hasOffset=${it.hasOffset},count=${it.count},offset${it.offset})" }}
         """.trimIndent()
     }
 
