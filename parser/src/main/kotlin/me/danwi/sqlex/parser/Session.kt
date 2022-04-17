@@ -54,7 +54,7 @@ class Session(database: String) {
     }
 
     fun getStatementInfo(sql: String): StatementInfo {
-        return ffiInvoke("DatabaseAPI", "GetStatementInfo", sessionID, sql)
+        return ffiInvoke("DatabaseAPI", "GetStatementInfo", sql)
     }
 
     fun close() {

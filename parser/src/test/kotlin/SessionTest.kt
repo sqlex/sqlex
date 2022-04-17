@@ -434,7 +434,8 @@ class SessionTest {
 
         sql = "select * from person limit 0"
         info = session.getStatementInfo(sql)
-        assertFalse(info.hasLimit)
+        assertTrue(info.hasLimit)
+        assertEquals(0, info.limitRows.toInt())
 
         sql = "select * from person limit 100,1"
         info = session.getStatementInfo(sql)
