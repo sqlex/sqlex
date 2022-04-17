@@ -17,12 +17,9 @@ enum class StatementType { Select, Insert, Update, Delete, Other }
 
 class InExprPosition(val not: Boolean, val marker: Int, val start: Int, val end: Int)
 
-class LimitPosition(val hasOffset: Boolean, val count: Int, val offset: Int)
-
 class StatementInfo(
     val type: StatementType,
     val inExprPositions: Array<InExprPosition>,
-    val limitPositions: Array<LimitPosition>,
     val hasLimit: Boolean,
     val limitRows: ULong,
 )

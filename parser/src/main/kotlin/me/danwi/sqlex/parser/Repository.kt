@@ -384,7 +384,6 @@ class Repository(
             @SqlExParameterPosition({${parameterPosition.joinToString()}})
             @SqlExMarkerPosition({${parameters.joinToString { it.position.toString() }}})
             ${statementInfo.inExprPositions.joinToString("\n") { "@SqlExInExprPosition(not=${it.not},marker=${it.marker},start=${it.start},end=${it.end})" }}
-            ${statementInfo.limitPositions.joinToString("\n") { "@SqlExLimitPosition(hasOffset=${it.hasOffset},count=${it.count},offset${it.offset})" }}
         """.trimIndent()
     }
 
