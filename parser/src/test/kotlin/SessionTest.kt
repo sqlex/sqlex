@@ -156,7 +156,36 @@ class SessionTest {
 
     @Test
     fun getStatementType() {
-        val session = Session("getInExprPositions_test")
+        var session = Session("getStatementType_test")
+
+        //language=MySQL
+        session.execute(
+            """
+            create table person(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            create table department(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column departmentID int not null
+        """.trimIndent()
+        )
+        session.close()
+
+        //重开session
+        session = Session("getStatementType_test")
 
         var sql = "select * from person"
         assertEquals(StatementType.Select, session.getStatementInfo(sql).type)
@@ -204,7 +233,37 @@ class SessionTest {
 
     @Test
     fun getInExprPositions() {
-        val session = Session("getInExprPositions_test")
+        var session = Session("getInExprPositions_test")
+
+        //language=MySQL
+        session.execute(
+            """
+            create table person(
+                id int auto_increment primary key,
+                name varchar(255) not null,
+                age int not null
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            create table department(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column departmentID int not null
+        """.trimIndent()
+        )
+        session.close()
+
+        //重开session
+        session = Session("getInExprPositions_test")
 
         var sql = "select * from person where name in (?)"
 
@@ -214,7 +273,7 @@ class SessionTest {
         assertEquals('?', sql[positions[0].marker])
         assertEquals("name in (?)", sql.substring(positions[0].start, positions[0].end))
 
-        sql = "select * from person where chinese = '中国人' and name in (?)"
+        sql = "select * from person where name = '中国人' and name in (?)"
         positions = session.getStatementInfo(sql).inExprPositions
         assertEquals(1, positions.size)
         assertFalse(positions[0].not)
@@ -229,7 +288,7 @@ class SessionTest {
         positions = session.getStatementInfo(sql).inExprPositions
         assertEquals(0, positions.size)
 
-        sql = "select * from person where chinese = '中国人' and name in (?) and age not in (?)"
+        sql = "select * from person where name = '中国人' and name in (?) and age not in (?)"
         positions = session.getStatementInfo(sql).inExprPositions
         assertEquals(2, positions.size)
 
@@ -243,7 +302,7 @@ class SessionTest {
 
         sql = """
             select * from person
-                where chinese = '中国人'
+                where name = '中国人'
                   and name in (?) 
                   and age not in (?)
         """.trimIndent()
@@ -259,5 +318,72 @@ class SessionTest {
         assertEquals("age not in (?)", sql.substring(positions[1].start, positions[1].end))
 
         session.close()
+    }
+
+    @Test
+    fun getLimitRows() {
+        var session = Session("getLimitRows_test")
+
+        //language=MySQL
+        session.execute(
+            """
+            create table person(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            create table department(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column departmentID int not null
+        """.trimIndent()
+        )
+        session.close()
+
+        //TODO:重新开session
+        session = Session("getLimitRows_test")
+
+        var sql = "select * from person limit 1"
+        var info = session.getStatementInfo(sql)
+        assertTrue(info.hasLimit)
+        assertEquals(1, info.limitRows.toInt())
+
+        sql = "select * from person limit 0"
+        info = session.getStatementInfo(sql)
+        assertTrue(info.hasLimit)
+        assertEquals(0, info.limitRows.toInt())
+
+        sql = "select * from person limit 100,1"
+        info = session.getStatementInfo(sql)
+        assertTrue(info.hasLimit)
+        assertEquals(1, info.limitRows.toInt())
+
+        sql = "select * from person limit 10 offset 100"
+        info = session.getStatementInfo(sql)
+        assertTrue(info.hasLimit)
+        assertEquals(10, info.limitRows.toInt())
+
+        sql = "select * from person limit ?"
+        info = session.getStatementInfo(sql)
+        assertFalse(info.hasLimit)
+
+        sql = "select * from person limit ?, 1"
+        info = session.getStatementInfo(sql)
+        assertTrue(info.hasLimit)
+        assertEquals(1, info.limitRows.toInt())
+
+        sql = "select * from person limit 100, ?"
+        info = session.getStatementInfo(sql)
+        assertFalse(info.hasLimit)
     }
 }

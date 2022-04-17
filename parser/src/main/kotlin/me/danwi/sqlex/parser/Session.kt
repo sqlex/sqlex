@@ -17,7 +17,12 @@ enum class StatementType { Select, Insert, Update, Delete, Other }
 
 class InExprPosition(val not: Boolean, val marker: Int, val start: Int, val end: Int)
 
-class StatementInfo(val type: StatementType, val inExprPositions: Array<InExprPosition>)
+class StatementInfo(
+    val type: StatementType,
+    val inExprPositions: Array<InExprPosition>,
+    val hasLimit: Boolean,
+    val limitRows: ULong,
+)
 
 class Session(database: String) {
     //创建Session
