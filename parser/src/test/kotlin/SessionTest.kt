@@ -260,4 +260,144 @@ class SessionTest {
 
         session.close()
     }
+
+    @Test
+    fun getLimitPositions() {
+        var session = Session("getLimitPositions_test")
+
+        //language=MySQL
+        session.execute(
+            """
+            create table person(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            create table department(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column departmentID int not null
+        """.trimIndent()
+        )
+        session.close()
+
+        //TODO:重新开session
+        session = Session("getLimitPositions_test")
+
+        var sql = "select * from person limit ?"
+
+        var positions = session.getStatementInfo(sql).limitPositions
+        assertEquals(1, positions.size)
+        assertFalse(positions[0].hasOffset)
+        assertEquals('?', sql[positions[0].count])
+
+        sql = "select * from person where name = '中国人' limit ?"
+        positions = session.getStatementInfo(sql).limitPositions
+        assertEquals(1, positions.size)
+        assertFalse(positions[0].hasOffset)
+        assertEquals('?', sql[positions[0].count])
+
+        sql = "select * from person where name in (select name from person limit ?) limit ?"
+        positions = session.getStatementInfo(sql).limitPositions
+        assertEquals(2, positions.size)
+        assertFalse(positions[0].hasOffset)
+        assertEquals('?', sql[positions[0].count])
+
+        assertFalse(positions[1].hasOffset)
+        assertEquals('?', sql[positions[1].count])
+
+        sql = "select * from person where name = '中国人' limit ?, ?"
+        positions = session.getStatementInfo(sql).limitPositions
+        assertEquals(1, positions.size)
+
+        assertTrue(positions[0].hasOffset)
+        assertEquals('?', sql[positions[0].count])
+        assertEquals('?', sql[positions[0].offset])
+
+        sql = "select * from person where name = '中国人' limit ? offset ?"
+        positions = session.getStatementInfo(sql).limitPositions
+        assertEquals(1, positions.size)
+
+        assertTrue(positions[0].hasOffset)
+        assertEquals('?', sql[positions[0].count])
+        assertEquals('?', sql[positions[0].offset])
+
+        session.close()
+    }
+
+    @Test
+    fun getLimitRows() {
+        var session = Session("getLimitRows_test")
+
+        //language=MySQL
+        session.execute(
+            """
+            create table person(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            create table department(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column departmentID int not null
+        """.trimIndent()
+        )
+        session.close()
+
+        //TODO:重新开session
+        session = Session("getLimitRows_test")
+
+        var sql = "select * from person limit 1"
+        var info = session.getStatementInfo(sql)
+        assertTrue(info.hasLimit)
+        assertEquals(1, info.limitRows.toInt())
+
+        sql = "select * from person limit 0"
+        info = session.getStatementInfo(sql)
+        assertFalse(info.hasLimit)
+
+        sql = "select * from person limit 100,1"
+        info = session.getStatementInfo(sql)
+        assertTrue(info.hasLimit)
+        assertEquals(1, info.limitRows.toInt())
+
+        sql = "select * from person limit 10 offset 100"
+        info = session.getStatementInfo(sql)
+        assertTrue(info.hasLimit)
+        assertEquals(10, info.limitRows.toInt())
+
+        sql = "select * from person limit ?"
+        info = session.getStatementInfo(sql)
+        assertFalse(info.hasLimit)
+
+        sql = "select * from person limit ?, 1"
+        info = session.getStatementInfo(sql)
+        assertTrue(info.hasLimit)
+        assertEquals(1, info.limitRows.toInt())
+
+        sql = "select * from person limit 100, ?"
+        info = session.getStatementInfo(sql)
+        assertFalse(info.hasLimit)
+    }
 }

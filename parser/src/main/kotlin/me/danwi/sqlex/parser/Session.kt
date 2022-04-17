@@ -17,7 +17,15 @@ enum class StatementType { Select, Insert, Update, Delete, Other }
 
 class InExprPosition(val not: Boolean, val marker: Int, val start: Int, val end: Int)
 
-class StatementInfo(val type: StatementType, val inExprPositions: Array<InExprPosition>)
+class LimitPosition(val hasOffset: Boolean, val count: Int, val offset: Int)
+
+class StatementInfo(
+    val type: StatementType,
+    val inExprPositions: Array<InExprPosition>,
+    val limitPositions: Array<LimitPosition>,
+    val hasLimit: Boolean,
+    val limitRows: ULong,
+)
 
 class Session(database: String) {
     //创建Session
@@ -46,7 +54,7 @@ class Session(database: String) {
     }
 
     fun getStatementInfo(sql: String): StatementInfo {
-        return ffiInvoke("DatabaseAPI", "GetStatementInfo", sql)
+        return ffiInvoke("DatabaseAPI", "GetStatementInfo", sessionID, sql)
     }
 
     fun close() {
