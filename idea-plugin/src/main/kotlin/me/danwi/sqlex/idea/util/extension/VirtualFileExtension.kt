@@ -8,20 +8,23 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
+import me.danwi.sqlex.idea.config.SqlExConfigFileType
 import me.danwi.sqlex.idea.service.SqlExRepositoryService
+import me.danwi.sqlex.idea.sqlm.SqlExMethodFileType
+import me.danwi.sqlex.idea.sqls.SqlExSchemaFileType
 import me.danwi.sqlex.parser.util.*
 
 //判断这个VirtualFile是否为一个SqlEx配置文件
 val VirtualFile?.isSqlExConfig: Boolean
-    inline get() = this?.name.isSqlExConfigFileName
+    inline get() = this?.fileType == SqlExConfigFileType.INSTANCE && this.name.isSqlExConfigFileName
 
 //判断这个VirtualFile是否为一个SqlExSchema文件
 val VirtualFile?.isSqlExSchema: Boolean
-    inline get() = this?.extension == SqlExSchemaExtensionName
+    inline get() = this?.fileType == SqlExSchemaFileType.INSTANCE && this.extension == SqlExSchemaExtensionName
 
 //判断这个VirtualFile是否为一个SqlExMethod文件
 val VirtualFile?.isSqlExMethod: Boolean
-    inline get() = this?.extension == SqlExMethodExtensionName
+    inline get() = this?.fileType == SqlExMethodFileType.INSTANCE && this.extension == SqlExMethodExtensionName
 
 //读取文件的内容
 val VirtualFile.textContent: String?
