@@ -112,13 +112,25 @@ class SessionTest {
             alter table person add column departmentID int not null
         """.trimIndent()
         )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column age int unsigned not null
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column status char(255) charset binary not null
+        """.trimIndent()
+        )
         session.close()
 
         //TODO:重新开session,需要处理一下golang那边的BUG
         session = Session("getFields_test")
 
         var fields = session.getFields("select * from person")
-        assertEquals(3, fields.size)
+        assertEquals(5, fields.size)
 
         assertEquals("id", fields[0].name)
         assertEquals("int", fields[0].dbType)
@@ -131,6 +143,17 @@ class SessionTest {
         assertEquals("departmentID", fields[2].name)
         assertEquals("int", fields[2].dbType)
         assertEquals(11, fields[2].length)
+
+        assertEquals("age", fields[3].name)
+        assertEquals("int", fields[3].dbType)
+        assertEquals(10, fields[3].length)
+        assertEquals(true, fields[3].unsigned)
+
+        assertEquals("status", fields[4].name)
+        assertEquals("binary", fields[4].dbType)
+        assertEquals(255, fields[4].length)
+        assertEquals(true, fields[4].binary)
+
 
         //language=MySQL
         fields = session.getFields(
