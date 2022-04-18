@@ -385,5 +385,35 @@ class SessionTest {
         sql = "select * from person limit 100, ?"
         info = session.getStatementInfo(sql)
         assertFalse(info.hasLimit)
+
+        //测union中的情形
+        sql = """
+            select * from person
+            union
+            select * from person
+            limit 1
+        """.trimIndent()
+        info = session.getStatementInfo(sql)
+        assertTrue(info.hasLimit)
+        assertEquals(1, info.limitRows.toInt())
+
+        sql = """
+            (select * from person limit 1)
+            union
+            select * from person
+        """.trimIndent()
+        info = session.getStatementInfo(sql)
+        assertFalse(info.hasLimit)
+
+        sql = """
+            select * from person
+            union
+            (
+                select * from person
+                limit 1
+            )
+        """.trimIndent()
+        info = session.getStatementInfo(sql)
+        assertFalse(info.hasLimit)
     }
 }
