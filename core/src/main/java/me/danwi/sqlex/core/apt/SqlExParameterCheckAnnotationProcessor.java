@@ -92,7 +92,11 @@ public class SqlExParameterCheckAnnotationProcessor extends AbstractProcessor {
             throw new Exception("该方法不在一个SqlEx接口中");
         TypeMirror repositoryType = interfaceElement.getInterfaces().get(0);
         //获取能够被转换到数据类型
-        List<String> registeredTypes = getRegisteredTypes(repositoryType);
+        List<String> registeredTypes = Collections.emptyList();
+        try {
+            registeredTypes = getRegisteredTypes(repositoryType);
+        } catch (Exception ignored) {
+        }
         //是否是一个分页方法
         boolean isPagedMethod = method.getAnnotation(SqlExPaged.class) != null;
         //获取所有的参数,挨个检查
