@@ -153,7 +153,7 @@
                          displayName="Paged limit"
                          level="ERROR"
                          enabledByDefault="true"
-                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodPagedSqlInspection"/>
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodPagedLimitInspection"/>
         <colorSettingsPage implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodColorSettingsPage"/>
         <!--sqlm和java的交互-->
         <resolveScopeEnlarger implementation="me.danwi.sqlex.idea.sqlm.generator.SqlExMethodResolveScopeEnlarger"/>

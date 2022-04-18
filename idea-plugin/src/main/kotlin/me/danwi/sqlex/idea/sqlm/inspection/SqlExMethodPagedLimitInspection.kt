@@ -13,7 +13,7 @@ import me.danwi.sqlex.idea.util.extension.childrenOf
 import me.danwi.sqlex.idea.util.extension.containingSqlExMethod
 import me.danwi.sqlex.idea.util.extension.parentOf
 
-class SqlExMethodPagedSqlInspection : LocalInspectionTool() {
+class SqlExMethodPagedLimitInspection : LocalInspectionTool() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): PsiElementVisitor {
         return object : PsiElementVisitor() {
             override fun visitElement(element: PsiElement) {
