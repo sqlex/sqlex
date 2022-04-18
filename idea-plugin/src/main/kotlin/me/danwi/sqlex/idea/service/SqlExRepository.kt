@@ -9,15 +9,15 @@ import com.intellij.psi.PsiFileFactory
 import com.intellij.psi.PsiJavaFile
 import com.intellij.psi.PsiManager
 import me.danwi.sqlex.idea.util.extension.*
-import me.danwi.sqlex.parser.JavaFile
 import me.danwi.sqlex.parser.Repository
+import me.danwi.sqlex.parser.generate.GeneratedJavaFile
 
 val SqlExMethodGeneratedCacheKey = Key<Boolean>("me.danwi.sqlex.SqlExMethodGeneratedCache")
 val SqlExMethodFileCacheKey = Key<VirtualFile>("me.danwi.sqlex.SqlExMethodFileCache")
 val SqlExMethodPsiClassCacheKey = Key<PsiClass>("me.danwi.sqlex.SqlExMethodPsiClassCache")
 
 class SqlExRepository(private val project: Project, private val repository: Repository) {
-    private val javaFileCache = mutableMapOf<String, JavaFile>()
+    private val javaFileCache = mutableMapOf<String, GeneratedJavaFile>()
     private val javaClassCache = mutableMapOf<String, PsiClass>()
     private val psiManager = PsiManager.getInstance(project)
 
@@ -37,20 +37,20 @@ class SqlExRepository(private val project: Project, private val repository: Repo
             return (classes + innerClass)
         }
 
-    private fun generateJavaFile(file: VirtualFile): JavaFile {
+    private fun generateJavaFile(file: VirtualFile): GeneratedJavaFile {
         return repository.generateJavaFile(
             file.sourceRootRelativePath ?: throw Exception("无法获取文件${file.name}的相对路径"),
             file.textContent ?: throw Exception("无法读取文件${file.name}的内容")
         )
     }
 
-    private fun generateJavaPsiClass(javaFile: JavaFile): PsiClass {
+    private fun generateJavaPsiClass(generatedJavaSourceFile: GeneratedJavaFile): PsiClass {
         return runReadAction {
             val psiFile = PsiFileFactory.getInstance(project)
                 .createFileFromText(
-                    "${javaFile.className}.java",
+                    "${generatedJavaSourceFile.className}.java",
                     JavaFileType.INSTANCE,
-                    javaFile.source
+                    generatedJavaSourceFile.source
                 ) as PsiJavaFile
             //生成的virtual file可能不存在,需要通过view provider获取
             val generatedVirtualFile = psiFile.virtualFile ?: psiFile.viewProvider.virtualFile
@@ -96,7 +96,7 @@ class SqlExRepository(private val project: Project, private val repository: Repo
     }
 
     //获取sqlm文件对应的java源码
-    fun findJavaSource(file: VirtualFile?): JavaFile? {
+    fun findJavaSource(file: VirtualFile?): GeneratedJavaFile? {
         val path = file?.path ?: return null
         if (!javaFileCache.contains(path)) {
             javaFileCache[path] = generateJavaFile(file)

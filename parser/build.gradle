@@ -39,6 +39,7 @@ dependencies {
     implementation "com.google.code.gson:gson:2.9.0"
     implementation "org.yaml:snakeyaml:1.30"
     implementation 'org.apache.commons:commons-text:1.9'
+    implementation 'com.squareup:javapoet:1.13.0'
     antlr("org.antlr:antlr4:4.9.3")
 
     testImplementation "org.junit.jupiter:junit-jupiter-api:5.8.2"
