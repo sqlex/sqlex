@@ -17,6 +17,9 @@ import com.intellij.psi.PsiFileFactory
 import com.intellij.psi.codeStyle.CodeStyleManager
 import com.intellij.ui.popup.PopupPositionManager
 import com.intellij.util.DocumentUtil
+import me.danwi.sqlex.idea.config.SqlExConfigFileType
+import me.danwi.sqlex.idea.sqlm.SqlExMethodFileType
+import me.danwi.sqlex.idea.util.extension.isSqlExConfig
 import me.danwi.sqlex.idea.util.extension.isSqlExMethod
 import me.danwi.sqlex.idea.util.extension.showNotification
 import me.danwi.sqlex.idea.util.extension.sqlexRepositoryService
@@ -25,23 +28,32 @@ import javax.swing.JPanel
 
 class SqlExMethodShowGeneratedJavaAction : AnAction() {
     override fun update(event: AnActionEvent) {
-        event.presentation.isVisible = event.getData(CommonDataKeys.VIRTUAL_FILE).isSqlExMethod
+        val file = event.getData(CommonDataKeys.VIRTUAL_FILE)
+        if (file == null) {
+            event.presentation.isVisible = false
+            return
+        }
+        event.presentation.isVisible = file.isSqlExConfig || file.isSqlExMethod
     }
 
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.getData(CommonDataKeys.PROJECT) ?: return
-        val methodFile = event.getData(CommonDataKeys.VIRTUAL_FILE) ?: return
+        val file = event.getData(CommonDataKeys.VIRTUAL_FILE) ?: return
         val editor = event.getData(CommonDataKeys.EDITOR) ?: return
+
+        //只有配置文件和方法文件才能显示生成的Java源码文件
+        if (file.fileType != SqlExConfigFileType.INSTANCE && file.fileType != SqlExMethodFileType.INSTANCE)
+            return
 
         try {
             //先对文档做一个保存
             FileDocumentManager.getInstance().saveDocument(editor.document)
             //获取SqlEx Repository服务
-            val service = methodFile.sqlexRepositoryService ?: throw Exception("该文件不存在对应的索引服务,请尝试重建索引")
+            val service = file.sqlexRepositoryService ?: return
             if (!service.isValid)
                 throw Exception("索引已经过期,请先重建索引")
             //生成java文件
-            val javaFile = service.repository?.findJavaSource(methodFile) ?: throw Exception("Java文件生成失败")
+            val javaFile = service.repository?.findJavaSource(file) ?: throw Exception("不存在该文件所对应的Java源码文件")
             //解析为psi
             val psiJavaFile = PsiFileFactory.getInstance(project)
                 .createFileFromText(JavaLanguage.INSTANCE, javaFile.source)
