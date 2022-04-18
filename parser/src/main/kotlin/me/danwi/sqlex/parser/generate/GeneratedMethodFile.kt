@@ -313,9 +313,6 @@ class GeneratedMethodFile(
             }
             Pair(it.paramName().text, paramType)
         }?.toMutableList() ?: mutableListOf()
-        //检查sqlm方法签名中是否存在同名参数
-        if (parametersInMethod.map { it.first }.distinct().size < parametersInMethod.size)
-            throw Exception("方法[${methodName}]签名中存在同名参数")
         //检查SQL中参数和sqm中参数的一致性
         val noExistInMethod = parametersInSQL.find { !parametersInMethod.map { p -> p.first }.contains(it) }
         if (noExistInMethod != null)
@@ -325,6 +322,9 @@ class GeneratedMethodFile(
             parametersInMethod.add(Pair(Paged.PageSizeParameterName, ClassName.LONG))
             parametersInMethod.add(Pair(Paged.PageNoParameterName, ClassName.LONG))
         }
+        //检查sqlm方法签名中是否存在同名参数
+        if (parametersInMethod.map { it.first }.distinct().size < parametersInMethod.size)
+            throw Exception("方法[${methodName}]签名中存在同名参数")
         //返回参数
         return parametersInMethod.map { ParameterSpec.builder(it.second, it.first).build() }
     }
