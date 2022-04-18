@@ -22,12 +22,10 @@ class SqlExRepository(private val project: Project, private val repository: Repo
     private val psiManager = PsiManager.getInstance(project)
 
     init {
-        //添加顶级Repository类
-        val javaFile = repository.repositoryJavaFile
-        //生成psi class
-        val javaClass = generateJavaPsiClass(javaFile)
+        //生成顶级Repository的psi class
+        val javaClass = generateJavaPsiClass(repository.repositoryJavaFile)
         //存入缓存
-        javaClassCache["FAKE:${javaFile.relativePath}"] = javaClass
+        javaClassCache["FAKE:${repository.repositoryJavaFile.relativePath}"] = javaClass
     }
 
     val allJavaClassCache: List<PsiClass>
@@ -95,8 +93,12 @@ class SqlExRepository(private val project: Project, private val repository: Repo
         invokeLater { runWriteAction { psiManager.dropPsiCaches() } }
     }
 
-    //获取sqlm文件对应的java源码
+    //获取文件对应的java源码
     fun findJavaSource(file: VirtualFile?): GeneratedJavaFile? {
+        //如果是配置文件,则返回顶级Repository的源码
+        if (file.isSqlExConfig)
+            return repository.repositoryJavaFile
+        //其他则返回方法的源码
         val path = file?.path ?: return null
         if (!javaFileCache.contains(path)) {
             javaFileCache[path] = generateJavaFile(file)
