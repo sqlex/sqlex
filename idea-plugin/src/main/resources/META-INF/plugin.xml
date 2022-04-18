@@ -129,6 +129,12 @@
                          enabledByDefault="true"
                          implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodInvalidTypeParameterInspection"
         />
+        <localInspection language="SqlExMethod"
+                         groupName="SqlEx"
+                         displayName="Paged parameter"
+                         level="ERROR"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodPagedParameterInspection"/>
 
         <localInspection language="SQL"
                          groupName="SqlEx"
@@ -142,6 +148,12 @@
                          level="ERROR"
                          enabledByDefault="true"
                          implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodUnnamedParameterInspection"/>
+        <localInspection language="SQL"
+                         groupName="SqlEx"
+                         displayName="Paged limit"
+                         level="ERROR"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodPagedLimitInspection"/>
         <colorSettingsPage implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodColorSettingsPage"/>
         <!--sqlm和java的交互-->
         <resolveScopeEnlarger implementation="me.danwi.sqlex.idea.sqlm.generator.SqlExMethodResolveScopeEnlarger"/>
