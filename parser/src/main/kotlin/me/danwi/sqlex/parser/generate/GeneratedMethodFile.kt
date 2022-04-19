@@ -78,8 +78,14 @@ class GeneratedMethodFile(
         //返回生成的接口
         return TypeSpec
             .interfaceBuilder(className)
+            .addAnnotation(
+                //所属的repository
+                AnnotationSpec
+                    .builder(CoreAnnotationsPackageName.getClassName("SqlExRepository"))
+                    .addMember("value", "\$T.class", ClassName.get(rootPackage, RepositoryClassName))
+                    .build()
+            )
             .addModifiers(Modifier.PUBLIC)
-            .addSuperinterface(ClassName.get("${RepositoryPackageNamePlaceHolder}.${rootPackage}", RepositoryClassName))
             .addTypes(innerClasses)
             .addMethods(methodSpecs)
             .build()

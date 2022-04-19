@@ -36,8 +36,7 @@ abstract class GeneratedJavaFile(val packageName: String, val className: String)
                     .builder(CoreAnnotationsPackageName.getClassName("SqlExGenerated"))
                     .build()
             ).build()
-            val source = JavaFile.builder(packageName, type).indent("    ").build().toString()
-            source.replace("${RepositoryPackageNamePlaceHolder}.", "")
+            return@lazy JavaFile.builder(packageName, type).indent("    ").build().toString()
         } catch (e: Exception) {
             throw SqlExRepositoryMethodException(
                 relativePath,

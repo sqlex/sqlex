@@ -3,6 +3,7 @@ package me.danwi.sqlex.core.apt;
 import me.danwi.sqlex.common.Paged;
 import me.danwi.sqlex.core.annotation.SqlExPaged;
 import me.danwi.sqlex.core.annotation.SqlExParameterCheck;
+import me.danwi.sqlex.core.annotation.SqlExRepository;
 
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Messager;
@@ -11,6 +12,7 @@ import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
@@ -88,9 +90,16 @@ public class SqlExParameterCheckAnnotationProcessor extends AbstractProcessor {
             throw new Exception("该方法不在一个接口中");
         TypeElement interfaceElement = (TypeElement) enclosingElement;
         //获取其repository接口
-        if (interfaceElement.getInterfaces().size() != 1)
-            throw new Exception("该方法不在一个SqlEx接口中");
-        TypeMirror repositoryType = interfaceElement.getInterfaces().get(0);
+        SqlExRepository repositoryAnnotation = interfaceElement.getAnnotation(SqlExRepository.class);
+        TypeMirror repositoryType = null;
+        try {
+            //noinspection ResultOfMethodCallIgnored
+            repositoryAnnotation.value();
+        } catch (MirroredTypeException e) {
+            repositoryType = e.getTypeMirror();
+        }
+        if (repositoryType == null)
+            throw new Exception("无法获取该方法所在的repository");
         //获取能够被转换到数据类型
         List<String> registeredTypes = Collections.emptyList();
         try {
