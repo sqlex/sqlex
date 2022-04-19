@@ -23,7 +23,7 @@ private class ImportedClasses(imported: List<SqlExMethodLanguageParser.ImportExC
     }
 
     fun getClassName(className: String): ClassName {
-        return imported.find { it.canonicalName() == className } ?: ClassName.get("", className)
+        return imported.find { it.simpleName() == className } ?: ClassName.get("", className)
     }
 }
 
