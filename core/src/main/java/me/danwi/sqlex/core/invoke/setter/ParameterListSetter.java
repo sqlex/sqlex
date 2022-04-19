@@ -1,47 +1,20 @@
-package me.danwi.sqlex.core.repository;
+package me.danwi.sqlex.core.invoke.setter;
 
-import me.danwi.sqlex.core.RepositoryLike;
-import me.danwi.sqlex.core.annotation.SqlExConverter;
+import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.type.ParameterConverter;
 
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.sql.*;
-import java.util.HashMap;
-import java.util.Map;
 
-public class ParameterSetter {
-    //转换器缓存
-    final private Map<Class<?>, ParameterConverter<Object, Object>> parameterConverters = new HashMap<>();
+public class ParameterListSetter implements ParameterSetter {
+    final ParameterConverterRegistry registry;
 
-    public ParameterSetter(Class<? extends RepositoryLike> repository) throws Exception {
-        //获取repository上注册参数类型转换器
-        SqlExConverter[] converterAnnotations = repository.getAnnotationsByType(SqlExConverter.class);
-        //解析到缓存中
-        for (SqlExConverter converterAnnotation : converterAnnotations) {
-            Class<?> converter = converterAnnotation.converter();
-            //获取他到from type
-            Type[] converterInterfaces = converter.getGenericInterfaces();
-            for (Type converterInterface : converterInterfaces) {
-                if (converterInterface instanceof ParameterizedType) {
-                    ParameterizedType parameterizedType = (ParameterizedType) converterInterface;
-                    if (parameterizedType.getRawType().getTypeName().equals(ParameterConverter.class.getTypeName())) {
-                        Type[] typeArguments = parameterizedType.getActualTypeArguments();
-                        if (typeArguments.length == 2) {
-                            if (typeArguments[0] instanceof Class) {
-                                @SuppressWarnings("unchecked")
-                                ParameterConverter<Object, Object> instance = (ParameterConverter<Object, Object>) converter.getDeclaredConstructor().newInstance();
-                                parameterConverters.put((Class<?>) typeArguments[0], instance);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    public ParameterListSetter(ParameterConverterRegistry registry) {
+        this.registry = registry;
     }
 
-    public void setParameter(PreparedStatement statement, Object[] args) throws SQLException {
+    @Override
+    public void setParameters(PreparedStatement statement, Object[] args) throws SQLException {
         for (int i = 0; i < args.length; i++) {
             setParameter(statement, i, args[i]);
         }
@@ -100,13 +73,11 @@ public class ParameterSetter {
             statement.setTimestamp(index, new Timestamp(((java.util.Date) arg).getTime()));
             return;
         } else {
-            //去mapping中查找
-            for (Map.Entry<Class<?>, ParameterConverter<Object, Object>> converterEntry : parameterConverters.entrySet()) {
-                if (converterEntry.getKey().isInstance(arg)) {
-                    Object convertedArg = converterEntry.getValue().convert(arg);
-                    setParameter(statement, index, convertedArg);
-                    return;
-                }
+            ParameterConverter<Object, Object> converter = registry.getConverterFor(arg);
+            if (converter != null) {
+                Object convertedArg = converter.convert(arg);
+                setParameter(statement, index, convertedArg);
+                return;
             }
         }
 

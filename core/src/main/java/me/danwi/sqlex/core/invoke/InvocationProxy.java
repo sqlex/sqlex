@@ -1,21 +1,21 @@
 package me.danwi.sqlex.core.invoke;
 
-import me.danwi.sqlex.core.repository.ParameterSetter;
-import me.danwi.sqlex.core.repository.ResultGetter;
+import me.danwi.sqlex.core.invoke.getter.BeanResultGetter;
+import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.transaction.TransactionManager;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 
 public class InvocationProxy implements InvocationHandler {
     final private TransactionManager transactionManager;
-    final private ParameterSetter parameterSetter;
-    final private ResultGetter resultGetter;
+    final private ParameterConverterRegistry parameterConverterRegistry;
 
-    public InvocationProxy(TransactionManager transactionManager, ParameterSetter parameterSetter, ResultGetter resultGetter) {
+    public InvocationProxy(TransactionManager transactionManager, ParameterConverterRegistry parameterConverterRegistry) {
         this.transactionManager = transactionManager;
-        this.parameterSetter = parameterSetter;
-        this.resultGetter = resultGetter;
+        this.parameterConverterRegistry = parameterConverterRegistry;
     }
 
     @Override
