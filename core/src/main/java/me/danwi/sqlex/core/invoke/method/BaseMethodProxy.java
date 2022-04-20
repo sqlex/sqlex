@@ -28,7 +28,7 @@ public abstract class BaseMethodProxy implements MethodProxy {
     //参数转换器注册表
     private final ParameterConverterRegistry registry;
 
-    static class MarkerInfo {
+    private static class MarkerInfo {
         public int argIndex; //引用方法参数的位置
         public SqlExInExprPosition inExprPosition; //?是否在一个in(?)表达式中
     }

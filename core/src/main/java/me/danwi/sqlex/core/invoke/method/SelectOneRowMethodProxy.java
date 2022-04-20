@@ -11,13 +11,13 @@ import java.sql.Connection;
 import java.util.List;
 
 public class SelectOneRowMethodProxy extends SelectMethodProxy {
+    public SelectOneRowMethodProxy(@NotNull Method method, @NotNull TransactionManager transactionManager, @NotNull ParameterConverterRegistry registry) throws SqlExImpossibleException, IntrospectionException {
+        super(method, transactionManager, registry);
+    }
+
     @Override
     protected Class<?> getBeanType(Method method) {
         return method.getReturnType();
-    }
-
-    public SelectOneRowMethodProxy(@NotNull Method method, @NotNull TransactionManager transactionManager, @NotNull ParameterConverterRegistry registry) throws SqlExImpossibleException, IntrospectionException {
-        super(method, transactionManager, registry);
     }
 
     @Override
