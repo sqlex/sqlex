@@ -4,6 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.sql.Connection;
+import java.sql.SQLException;
 
 /**
  * 事务管理器
@@ -21,12 +22,12 @@ public interface TransactionManager {
      *
      * @return 新建立的事务
      */
-    @NotNull Transaction newTransaction();
+    @NotNull Transaction newTransaction() throws SQLException;
 
     /**
      * 直接获取数据库连接(手动挡)
      *
      * @return 数据库连接
      */
-    @NotNull Connection newConnection();
+    @NotNull Connection newConnection() throws SQLException;
 }

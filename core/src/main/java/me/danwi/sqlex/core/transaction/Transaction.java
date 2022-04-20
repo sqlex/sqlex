@@ -4,6 +4,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.Closeable;
 import java.sql.Connection;
+import java.sql.SQLException;
 
 /**
  * 事务
@@ -19,10 +20,10 @@ public interface Transaction extends Closeable {
     /**
      * 提交当前事务
      */
-    void commit();
+    void commit() throws SQLException;
 
     /**
      * 回滚当前事务
      */
-    void rollback();
+    void rollback() throws SQLException;
 }
