@@ -55,20 +55,20 @@ public class DaoFactory {
 
     /**
      * 以事务的方式来运行函数
-     * 默认事务隔离级别{@link Connection#TRANSACTION_REPEATABLE_READ}
+     * 使用默认事务隔离级别
      *
      * @param action 函数
      * @param <T>    闭包函数的返回值
      * @return 返回闭包函数的返回值
      */
     public <T> T transaction(Action<T> action) throws Exception {
-        return transaction(action, Connection.TRANSACTION_REPEATABLE_READ);
+        return transaction(action, transactionManager.getDefaultIsolationLevel());
     }
 
     /**
      * 以事务的方式来运行函数
      *
-     * @param transactionIsolationLevel 事务隔离级别
+     * @param transactionIsolationLevel 事务隔离级别, 例如:{@link Connection#TRANSACTION_REPEATABLE_READ}
      * @param action                    函数
      * @param <T>                       闭包函数的返回值
      * @return 返回闭包函数的返回值

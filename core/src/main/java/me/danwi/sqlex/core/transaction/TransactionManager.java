@@ -11,6 +11,13 @@ import java.sql.SQLException;
  */
 public interface TransactionManager {
     /**
+     * 获取默认事务管理级别
+     *
+     * @return 默认事务管理级别
+     */
+    Integer getDefaultIsolationLevel();
+
+    /**
      * 获取当前存在的事务
      *
      * @return 当前正在进行的事务, 没有则返回空
@@ -19,13 +26,13 @@ public interface TransactionManager {
 
     /**
      * 新建事务
-     * 默认事务隔离级别{@link Connection#TRANSACTION_REPEATABLE_READ}
+     * 使用默认事务隔离级别
      *
      * @return 新建立的事务
      */
     @NotNull
     default Transaction newTransaction() throws SQLException {
-        return newTransaction(Connection.TRANSACTION_REPEATABLE_READ);
+        return newTransaction(getDefaultIsolationLevel());
     }
 
     /**
@@ -34,7 +41,7 @@ public interface TransactionManager {
      * @param transactionIsolationLevel 事务隔离级别
      * @return 新建立的事务
      */
-    @NotNull Transaction newTransaction(int transactionIsolationLevel) throws SQLException;
+    @NotNull Transaction newTransaction(Integer transactionIsolationLevel) throws SQLException;
 
     /**
      * 直接获取数据库连接(手动挡)

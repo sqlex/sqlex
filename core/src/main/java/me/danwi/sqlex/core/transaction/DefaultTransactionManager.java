@@ -14,11 +14,23 @@ import java.sql.SQLException;
 public class DefaultTransactionManager implements TransactionManager {
     final private DataSource dataSource;
 
+    private Integer defaultIsolationLevel;
+
     final private ThreadLocal<Transaction> threadLocal = new ThreadLocal<>();
 
 
     public DefaultTransactionManager(DataSource dataSource) {
         this.dataSource = dataSource;
+    }
+
+    public DefaultTransactionManager(DataSource dataSource, int defaultIsolationLevel) {
+        this.dataSource = dataSource;
+        this.defaultIsolationLevel = defaultIsolationLevel;
+    }
+
+    @Override
+    public Integer getDefaultIsolationLevel() {
+        return defaultIsolationLevel;
     }
 
     @Override
@@ -27,7 +39,7 @@ public class DefaultTransactionManager implements TransactionManager {
     }
 
     @Override
-    public @NotNull Transaction newTransaction(int transactionIsolationLevel) throws SQLException {
+    public @NotNull Transaction newTransaction(Integer transactionIsolationLevel) throws SQLException {
         Connection connection = newConnection();
         DefaultTransaction defaultTransaction = new DefaultTransaction(connection, transactionIsolationLevel);
         threadLocal.set(defaultTransaction);
@@ -43,20 +55,24 @@ public class DefaultTransactionManager implements TransactionManager {
      * 默认事务
      */
     public class DefaultTransaction implements Transaction {
-        final private Connection connection;
+        private final Connection connection;
         private final boolean originAutoCommit;
-        private final int originIsolationLevel;
+        private Integer originIsolationLevel = Integer.MIN_VALUE;
+        private final Integer desiredIsolationLevel;
 
-        public DefaultTransaction(Connection connection, int desiredIsolationLevel) throws SQLException {
+        public DefaultTransaction(Connection connection, Integer desiredIsolationLevel) throws SQLException {
             this.connection = connection;
+            this.desiredIsolationLevel = desiredIsolationLevel;
+            //设置事务隔离级别
+            if (desiredIsolationLevel != null) {
+                originIsolationLevel = connection.getTransactionIsolation();
+                if (!originIsolationLevel.equals(desiredIsolationLevel))
+                    connection.setTransactionIsolation(desiredIsolationLevel);
+            }
             //设置自动提交
             originAutoCommit = connection.getAutoCommit();
             if (originAutoCommit)
                 connection.setAutoCommit(false);
-            //设置事务隔离级别
-            originIsolationLevel = connection.getTransactionIsolation();
-            if (originIsolationLevel != desiredIsolationLevel)
-                connection.setTransactionIsolation(desiredIsolationLevel);
         }
 
         @Override
@@ -80,12 +96,12 @@ public class DefaultTransactionManager implements TransactionManager {
                 //如果已经关闭来
                 if (connection.isClosed())
                     return;
+                //还原事务隔离级别属性
+                if (desiredIsolationLevel != null && !originIsolationLevel.equals(desiredIsolationLevel))
+                    connection.setTransactionIsolation(originIsolationLevel);
                 //还原自动提交属性
                 if (originAutoCommit)
                     connection.setAutoCommit(true);
-                //还原事务隔离级别属性
-                if (originIsolationLevel != connection.getTransactionIsolation())
-                    connection.setTransactionIsolation(originIsolationLevel);
                 //关闭连接
                 connection.close();
             } catch (SQLException ignored) {
