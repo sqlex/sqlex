@@ -23,7 +23,7 @@ private class ImportedClasses(imported: List<SqlExMethodLanguageParser.ImportExC
     }
 
     fun getClassName(className: String): ClassName {
-        return imported.find { it.canonicalName() == className } ?: ClassName.get("", className)
+        return imported.find { it.simpleName() == className } ?: ClassName.get("", className)
     }
 }
 
@@ -78,8 +78,14 @@ class GeneratedMethodFile(
         //返回生成的接口
         return TypeSpec
             .interfaceBuilder(className)
+            .addAnnotation(
+                //所属的repository
+                AnnotationSpec
+                    .builder(CoreAnnotationsPackageName.getClassName("SqlExRepository"))
+                    .addMember("value", "\$T.class", ClassName.get(rootPackage, RepositoryClassName))
+                    .build()
+            )
             .addModifiers(Modifier.PUBLIC)
-            .addSuperinterface(ClassName.get("${RepositoryPackageNamePlaceHolder}.${rootPackage}", RepositoryClassName))
             .addTypes(innerClasses)
             .addMethods(methodSpecs)
             .build()

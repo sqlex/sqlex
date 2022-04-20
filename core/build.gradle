@@ -11,6 +11,10 @@ shadowJar {
 dependencies {
     implementation project(":common") //使用shadow插件,直接将common中的.class导入到jar中,免得在annotation processor时找不到
     shadow "org.jetbrains:annotations:23.0.0"
+
+    compileOnly 'org.springframework:spring-jdbc:5.3.18'
+    compileOnly 'org.springframework:spring-tx:5.3.18'
+
     testImplementation "org.junit.jupiter:junit-jupiter-api:5.8.2"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.8.2"
 }

@@ -6,9 +6,6 @@ import javax.lang.model.element.Modifier
 
 const val RepositoryClassName = "Repository"
 
-//黑魔法,因为太菜写不好IDEA的package相关代码,只能在这里做点小黑科技
-const val RepositoryPackageNamePlaceHolder = "_not_._exist_._package_._just_._for_._placeholder_"
-
 class GeneratedRepositoryFile(
     rootPackage: String,
     private val converters: List<String>,
