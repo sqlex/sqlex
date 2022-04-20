@@ -67,7 +67,7 @@ public abstract class BaseMethodProxy implements MethodProxy {
         return str.substring(0, start) + newStr + str.substring(end);
     }
 
-    //设置单个参数
+    //设置单个参数 TODO: 部分数据类型没有补全
     private void setParameter(PreparedStatement statement, int index, Object arg) throws SQLException {
         if (arg == null) {
             statement.setNull(index, Types.NULL);

@@ -85,6 +85,7 @@ public class BeanMapper {
     }
 
 
+    //从结果集中获取实体 TODO: 部分数据类型没有补全
     public List<?> fetch(ResultSet resultSet) throws SQLException {
         //结果列表
         LinkedList<Object> resultList = new LinkedList<>();
