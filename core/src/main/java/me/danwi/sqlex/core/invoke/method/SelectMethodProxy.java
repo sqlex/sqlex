@@ -44,6 +44,9 @@ public class SelectMethodProxy extends BaseMethodProxy {
         return null;
     }
 
+    protected BeanMapper getBeanMapper() {
+        return beanMapper;
+    }
 
     @Override
     protected Object invoke(Object[] args, Connection connection) throws Exception {
@@ -54,7 +57,7 @@ public class SelectMethodProxy extends BaseMethodProxy {
             setParameters(statement, reorderArgs);
             //获取到返回值
             try (ResultSet rs = statement.executeQuery()) {
-                return beanMapper.fetch(rs);
+                return getBeanMapper().fetch(rs);
             }
         }
     }
