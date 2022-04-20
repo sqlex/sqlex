@@ -19,11 +19,15 @@ public interface Transaction extends Closeable {
 
     /**
      * 提交当前事务
+     *
+     * @throws SQLException 提交事务异常
      */
     void commit() throws SQLException;
 
     /**
      * 回滚当前事务
+     *
+     * @throws SQLException 提交事务异常
      */
     void rollback() throws SQLException;
 }

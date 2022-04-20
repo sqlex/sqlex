@@ -29,6 +29,7 @@ public interface TransactionManager {
      * 使用默认事务隔离级别
      *
      * @return 新建立的事务
+     * @throws SQLException 新建事务异常
      */
     @NotNull
     default Transaction newTransaction() throws SQLException {
@@ -40,6 +41,7 @@ public interface TransactionManager {
      *
      * @param transactionIsolationLevel 事务隔离级别
      * @return 新建立的事务
+     * @throws SQLException 新建事务异常
      */
     @NotNull Transaction newTransaction(Integer transactionIsolationLevel) throws SQLException;
 
@@ -47,6 +49,7 @@ public interface TransactionManager {
      * 直接获取数据库连接(手动挡)
      *
      * @return 数据库连接
+     * @throws SQLException 新建数据库连接异常
      */
     @NotNull Connection newConnection() throws SQLException;
 }

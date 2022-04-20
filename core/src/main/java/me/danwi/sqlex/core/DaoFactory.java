@@ -23,6 +23,7 @@ public class DaoFactory {
      *
      * @param dataSource 数据源
      * @param repository SqlEx Repository
+     * @throws Exception 转换器解析异常
      */
     public DaoFactory(DataSource dataSource, Class<? extends RepositoryLike> repository) throws Exception {
         this.transactionManager = new DefaultTransactionManager(dataSource);
@@ -34,6 +35,7 @@ public class DaoFactory {
      *
      * @param transactionManager 事务管理器
      * @param repository         SqlEx Repository
+     * @throws Exception 转换器解析异常
      */
     public DaoFactory(TransactionManager transactionManager, Class<? extends RepositoryLike> repository) throws Exception {
         this.transactionManager = transactionManager;
@@ -44,6 +46,7 @@ public class DaoFactory {
      * 新建事务,适合手动管理事务
      *
      * @return 事务
+     * @throws SQLException 新建事务异常
      */
     public Transaction newTransaction() throws SQLException {
         return this.transactionManager.newTransaction();
@@ -60,6 +63,7 @@ public class DaoFactory {
      * @param action 函数
      * @param <T>    闭包函数的返回值
      * @return 返回闭包函数的返回值
+     * @throws Exception action运行异常
      */
     public <T> T transaction(Action<T> action) throws Exception {
         return transaction(action, transactionManager.getDefaultIsolationLevel());
@@ -72,6 +76,7 @@ public class DaoFactory {
      * @param action                    函数
      * @param <T>                       闭包函数的返回值
      * @return 返回闭包函数的返回值
+     * @throws Exception action运行异常
      */
     public <T> T transaction(Action<T> action, int transactionIsolationLevel) throws Exception {
         //获取当前的事务
