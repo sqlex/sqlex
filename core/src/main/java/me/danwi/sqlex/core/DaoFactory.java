@@ -17,24 +17,48 @@ public class DaoFactory {
     final private ParameterConverterRegistry parameterConverterRegistry;
     final private Map<Class<?>, InvocationProxy> invocationProxyCache = new HashMap<>();
 
-    public DaoFactory(TransactionManager transactionManager, Class<? extends RepositoryLike> repository) throws Exception {
-        this.transactionManager = transactionManager;
-        this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
-    }
-
+    /**
+     * 新建数据访问对象工厂实例,使用默认事务管理器
+     *
+     * @param dataSource 数据源
+     * @param repository SqlEx Repository
+     */
     public DaoFactory(DataSource dataSource, Class<? extends RepositoryLike> repository) throws Exception {
         this.transactionManager = new DefaultTransactionManager(dataSource);
         this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
     }
 
+    /**
+     * 使用指定的事务管理器来新建数据访问对象工厂实例
+     *
+     * @param transactionManager 事务管理器
+     * @param repository         SqlEx Repository
+     */
+    public DaoFactory(TransactionManager transactionManager, Class<? extends RepositoryLike> repository) throws Exception {
+        this.transactionManager = transactionManager;
+        this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
+    }
+
+    /**
+     * 新建事务,适合手动管理事务
+     *
+     * @return 事务
+     */
     public Transaction newTransaction() throws SQLException {
         return this.transactionManager.newTransaction();
     }
-    
+
     public interface Action<T> {
         T run(Transaction transaction) throws Exception;
     }
 
+    /**
+     * 以事务的方式来运行函数
+     *
+     * @param action 函数
+     * @param <T>    闭包函数的返回值
+     * @return 返回闭包函数的返回值
+     */
     public <T> T transaction(Action<T> action) throws Exception {
         //获取当前的事务
         Transaction currentTransaction = transactionManager.getCurrentTransaction();
@@ -47,20 +71,31 @@ public class DaoFactory {
         }
 
         try {
+            //运行并获取到结果
             T result = action.run(currentTransaction);
             if (isTopLevelTransaction)
                 currentTransaction.commit();
             return result;
         } catch (Exception e) {
+            //发生异常,如果是顶层事务,则需要回滚
             if (isTopLevelTransaction)
                 currentTransaction.rollback();
+            //继续向上抛出异常
             throw e;
         } finally {
+            //如果是顶层事务,需要在最后关闭事务
             if (isTopLevelTransaction)
                 currentTransaction.close();
         }
     }
 
+    /**
+     * 获取数据访问对象的实例
+     *
+     * @param dao 数据访问对象Class
+     * @param <D> 数据访问对象类型
+     * @return 数据访问对象实例
+     */
     public <D> D getInstance(Class<D> dao) {
         //尝试从缓存中获取
         InvocationProxy invocationProxy = invocationProxyCache.get(dao);

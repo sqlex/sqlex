@@ -8,6 +8,9 @@ import java.io.IOException;
 import java.sql.Connection;
 import java.sql.SQLException;
 
+/**
+ * 默认的基于ThreadLocal的事务管理器
+ */
 public class DefaultTransactionManager implements TransactionManager {
     final private DataSource dataSource;
 
@@ -36,6 +39,9 @@ public class DefaultTransactionManager implements TransactionManager {
         return dataSource.getConnection();
     }
 
+    /**
+     * 默认事务
+     */
     public class DefaultTransaction implements Transaction {
         final private Connection connection;
         private final boolean originAutoCommit;

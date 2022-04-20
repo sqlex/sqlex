@@ -230,14 +230,17 @@ public abstract class BaseMethodProxy implements MethodProxy {
         Transaction currentTransaction = transactionManager.getCurrentTransaction();
         Connection connection;
         if (currentTransaction != null)
+            //存在事务,则从事务中获取连接
             connection = currentTransaction.getConnection();
         else
+            //不存在事务,则新建一个连接
             connection = transactionManager.newConnection();
 
         //调用方法
         try {
             return invoke(args, connection);
         } finally {
+            //不是事务中的连接主要手动关闭
             if (currentTransaction == null)
                 connection.close();
         }
