@@ -24,13 +24,10 @@ public class SelectMethodProxy extends BaseMethodProxy {
         Class<?> beanType = getBeanType(method);
         if (beanType == null)
             throw new SqlExImpossibleException("无法确定返回值类型");
-        try {
-            beanMapper = new BeanMapper(beanType);
-        } catch (IntrospectionException e) {
-            throw new SqlExImpossibleException("无法解析返回值类型");
-        }
+        beanMapper = new BeanMapper(beanType);
     }
 
+    //获取方法返回值中实体bean的类型
     protected Class<?> getBeanType(Method method) {
         //获取返回值类型,List<T>,PageResult<T>
         Type genericReturnType = method.getGenericReturnType();
