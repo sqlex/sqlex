@@ -27,9 +27,9 @@ public class DefaultTransactionManager implements TransactionManager {
     }
 
     @Override
-    public @NotNull Transaction newTransaction() throws SQLException {
+    public @NotNull Transaction newTransaction(int transactionIsolationLevel) throws SQLException {
         Connection connection = newConnection();
-        DefaultTransaction defaultTransaction = new DefaultTransaction(connection);
+        DefaultTransaction defaultTransaction = new DefaultTransaction(connection, transactionIsolationLevel);
         threadLocal.set(defaultTransaction);
         return defaultTransaction;
     }
@@ -45,12 +45,18 @@ public class DefaultTransactionManager implements TransactionManager {
     public class DefaultTransaction implements Transaction {
         final private Connection connection;
         private final boolean originAutoCommit;
+        private final int originIsolationLevel;
 
-        public DefaultTransaction(Connection connection) throws SQLException {
+        public DefaultTransaction(Connection connection, int desiredIsolationLevel) throws SQLException {
             this.connection = connection;
+            //设置自动提交
             originAutoCommit = connection.getAutoCommit();
             if (originAutoCommit)
                 connection.setAutoCommit(false);
+            //设置事务隔离级别
+            originIsolationLevel = connection.getTransactionIsolation();
+            if (originIsolationLevel != desiredIsolationLevel)
+                connection.setTransactionIsolation(desiredIsolationLevel);
         }
 
         @Override
@@ -71,12 +77,20 @@ public class DefaultTransactionManager implements TransactionManager {
         @Override
         public void close() throws IOException {
             try {
+                //如果已经关闭来
+                if (connection.isClosed())
+                    return;
+                //还原自动提交属性
                 if (originAutoCommit)
                     connection.setAutoCommit(true);
+                //还原事务隔离级别属性
+                if (originIsolationLevel != connection.getTransactionIsolation())
+                    connection.setTransactionIsolation(originIsolationLevel);
+                //关闭连接
                 connection.close();
             } catch (SQLException ignored) {
             } finally {
-                threadLocal.set(null);
+                threadLocal.remove();
             }
         }
     }

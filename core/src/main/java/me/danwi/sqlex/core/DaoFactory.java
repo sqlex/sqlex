@@ -8,6 +8,7 @@ import me.danwi.sqlex.core.transaction.TransactionManager;
 
 import javax.sql.DataSource;
 import java.lang.reflect.Proxy;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
@@ -54,12 +55,25 @@ public class DaoFactory {
 
     /**
      * 以事务的方式来运行函数
+     * 默认事务隔离级别{@link Connection#TRANSACTION_REPEATABLE_READ}
      *
      * @param action 函数
      * @param <T>    闭包函数的返回值
      * @return 返回闭包函数的返回值
      */
     public <T> T transaction(Action<T> action) throws Exception {
+        return transaction(action, Connection.TRANSACTION_REPEATABLE_READ);
+    }
+
+    /**
+     * 以事务的方式来运行函数
+     *
+     * @param transactionIsolationLevel 事务隔离级别
+     * @param action                    函数
+     * @param <T>                       闭包函数的返回值
+     * @return 返回闭包函数的返回值
+     */
+    public <T> T transaction(Action<T> action, int transactionIsolationLevel) throws Exception {
         //获取当前的事务
         Transaction currentTransaction = transactionManager.getCurrentTransaction();
         //是否为顶级事务
@@ -67,7 +81,7 @@ public class DaoFactory {
         //如果当前不存在事务,则新建一个
         if (currentTransaction == null) {
             isTopLevelTransaction = true;
-            currentTransaction = transactionManager.newTransaction();
+            currentTransaction = transactionManager.newTransaction(transactionIsolationLevel);
         }
 
         try {

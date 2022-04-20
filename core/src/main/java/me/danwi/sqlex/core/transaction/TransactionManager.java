@@ -19,10 +19,22 @@ public interface TransactionManager {
 
     /**
      * 新建事务
+     * 默认事务隔离级别{@link Connection#TRANSACTION_REPEATABLE_READ}
      *
      * @return 新建立的事务
      */
-    @NotNull Transaction newTransaction() throws SQLException;
+    @NotNull
+    default Transaction newTransaction() throws SQLException {
+        return newTransaction(Connection.TRANSACTION_REPEATABLE_READ);
+    }
+
+    /**
+     * 新建事务
+     *
+     * @param transactionIsolationLevel 事务隔离级别
+     * @return 新建立的事务
+     */
+    @NotNull Transaction newTransaction(int transactionIsolationLevel) throws SQLException;
 
     /**
      * 直接获取数据库连接(手动挡)
