@@ -1,5 +1,6 @@
 package me.danwi.sqlex.core;
 
+import com.mysql.cj.jdbc.MysqlConnectionPoolDataSource;
 import me.danwi.sqlex.core.invoke.InvocationProxy;
 import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.transaction.DefaultTransactionManager;
@@ -19,13 +20,32 @@ public class DaoFactory {
     final private Map<Class<?>, InvocationProxy> invocationProxyCache = new HashMap<>();
 
     /**
+     * 新建数据访问对象工厂实例
+     *
+     * @param url        连接
+     * @param username   用户名
+     * @param password   密码
+     * @param repository SqlEx Repository
+     * @throws SQLException 转换器解析异常
+     */
+    public DaoFactory(String url, String username, String password, Class<? extends RepositoryLike> repository) throws SQLException {
+        MysqlConnectionPoolDataSource dataSource = new MysqlConnectionPoolDataSource();
+        dataSource.setURL(url);
+        dataSource.setUser(username);
+        dataSource.setPassword(password);
+        this.transactionManager = new DefaultTransactionManager(dataSource);
+        this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
+    }
+
+
+    /**
      * 新建数据访问对象工厂实例,使用默认事务管理器
      *
      * @param dataSource 数据源
      * @param repository SqlEx Repository
-     * @throws Exception 转换器解析异常
+     * @throws SQLException 转换器解析异常
      */
-    public DaoFactory(DataSource dataSource, Class<? extends RepositoryLike> repository) throws Exception {
+    public DaoFactory(DataSource dataSource, Class<? extends RepositoryLike> repository) throws SQLException {
         this.transactionManager = new DefaultTransactionManager(dataSource);
         this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
     }
@@ -35,9 +55,9 @@ public class DaoFactory {
      *
      * @param transactionManager 事务管理器
      * @param repository         SqlEx Repository
-     * @throws Exception 转换器解析异常
+     * @throws SQLException 转换器解析异常
      */
-    public DaoFactory(TransactionManager transactionManager, Class<? extends RepositoryLike> repository) throws Exception {
+    public DaoFactory(TransactionManager transactionManager, Class<? extends RepositoryLike> repository) throws SQLException {
         this.transactionManager = transactionManager;
         this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
     }
