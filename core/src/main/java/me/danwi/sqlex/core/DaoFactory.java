@@ -160,9 +160,9 @@ public class DaoFactory {
                     //检查这个Dao接口是否属于repository
                     SqlExRepository annotation = dao.getAnnotation(SqlExRepository.class);
                     if (annotation == null)
-                        throw new Exception("Dao接口不属于该工厂做管理的SqlEx Repository");
+                        throw new Exception("Dao接口不属于该工厂所管理的SqlEx Repository");
                     if (!annotation.value().getName().equals(this.repositoryClass.getName()))
-                        throw new Exception("Dao接口不属于该工厂做管理的SqlEx Repository");
+                        throw new Exception("Dao接口不属于该工厂所管理的SqlEx Repository");
                     //缓存中没有再自己新建
                     invocationProxy = new InvocationProxy(transactionManager, parameterConverterRegistry);
                     invocationProxyCache.put(dao, invocationProxy);
