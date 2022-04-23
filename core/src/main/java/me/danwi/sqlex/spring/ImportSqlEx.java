@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 @Import(SqlExImportRegistrar.class)
 public @interface ImportSqlEx {
-    Class<? extends RepositoryLike> repository();
+    Class<? extends RepositoryLike> value();
 
     String factoryName() default "";
 }
