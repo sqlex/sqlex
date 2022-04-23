@@ -2,7 +2,7 @@ package me.danwi.sqlex.core;
 
 import com.mysql.cj.jdbc.MysqlConnectionPoolDataSource;
 import me.danwi.sqlex.core.annotation.SqlExRepository;
-import me.danwi.sqlex.core.exception.SqlExBaseException;
+import me.danwi.sqlex.core.exception.SqlExException;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.invoke.InvocationProxy;
 import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
@@ -152,7 +152,7 @@ public class DaoFactory {
      * @return 数据访问对象实例
      * @throws SqlExImpossibleException 给定的Dao接口不属于Factory管理的Repository
      */
-    public <D> D getInstance(Class<D> dao) throws SqlExImpossibleException {
+    public <D> D getInstance(Class<D> dao) throws SqlExException {
         //尝试从缓存中获取
         InvocationProxy invocationProxy = invocationProxyCache.get(dao);
         if (invocationProxy == null) {
@@ -162,9 +162,9 @@ public class DaoFactory {
                     //检查这个Dao接口是否属于repository
                     SqlExRepository annotation = dao.getAnnotation(SqlExRepository.class);
                     if (annotation == null)
-                        throw new SqlExBaseException("Dao接口不属于该工厂所管理的SqlEx Repository");
+                        throw new SqlExException("Dao接口不属于该工厂所管理的SqlEx Repository");
                     if (!annotation.value().getName().equals(this.repositoryClass.getName()))
-                        throw new SqlExBaseException("Dao接口不属于该工厂所管理的SqlEx Repository");
+                        throw new SqlExException("Dao接口不属于该工厂所管理的SqlEx Repository");
                     //缓存中没有再自己新建
                     invocationProxy = new InvocationProxy(transactionManager, parameterConverterRegistry);
                     invocationProxyCache.put(dao, invocationProxy);

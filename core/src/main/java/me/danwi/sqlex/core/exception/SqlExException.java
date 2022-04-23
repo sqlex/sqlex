@@ -3,22 +3,22 @@ package me.danwi.sqlex.core.exception;
 /**
  * SqlEx 核心包 异常基类
  */
-public class SqlExBaseException extends RuntimeException {
+public class SqlExException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
-    public SqlExBaseException() {
+    public SqlExException() {
         super();
     }
 
-    public SqlExBaseException(String message) {
+    public SqlExException(String message) {
         super(message);
     }
 
-    public SqlExBaseException(String message, Throwable cause) {
+    public SqlExException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public SqlExBaseException(Throwable cause) {
+    public SqlExException(Throwable cause) {
         super(cause);
     }
 }
