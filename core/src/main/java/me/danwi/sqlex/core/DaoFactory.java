@@ -91,19 +91,19 @@ public class DaoFactory {
      * @throws Exception action运行异常
      */
     public <T> T transaction(Action<T> action) throws Exception {
-        return transaction(action, transactionManager.getDefaultIsolationLevel());
+        return transaction(transactionManager.getDefaultIsolationLevel(), action);
     }
 
     /**
      * 以事务的方式来运行函数
      *
-     * @param transactionIsolationLevel 事务隔离级别, 例如:{@link Connection#TRANSACTION_REPEATABLE_READ}
      * @param action                    函数
+     * @param transactionIsolationLevel 事务隔离级别, 例如:{@link Connection#TRANSACTION_REPEATABLE_READ}
      * @param <T>                       闭包函数的返回值
      * @return 返回闭包函数的返回值
      * @throws Exception action运行异常
      */
-    public <T> T transaction(Action<T> action, int transactionIsolationLevel) throws Exception {
+    public <T> T transaction(int transactionIsolationLevel, Action<T> action) throws Exception {
         //获取当前的事务
         Transaction currentTransaction = transactionManager.getCurrentTransaction();
         //是否为顶级事务
