@@ -118,7 +118,7 @@ public class DaoFactory {
             try {
                 currentTransaction = transactionManager.newTransaction(transactionIsolationLevel);
             } catch (SQLException e) {
-                throw new SqlExException("无法新建事务", e);
+                throw new SqlExException(e);
             }
         }
         //异常
