@@ -43,7 +43,7 @@ public class BeanMapper {
         }
     }
 
-    private PropertyInfo[] getPropertyInfo(ResultSet resultSet) throws SQLException {
+    private PropertyInfo[] getPropertyInfo(ResultSet resultSet) throws SQLException, SqlExImpossibleException {
         PropertyInfo[] propertyInfo = this.beanPropertyInfoCaches;
         if (propertyInfo == null) {
             synchronized (this) {
@@ -86,7 +86,7 @@ public class BeanMapper {
 
 
     //从结果集中获取实体 TODO: 部分数据类型没有补全
-    public List<?> fetch(ResultSet resultSet) throws SQLException {
+    public List<?> fetch(ResultSet resultSet) throws SQLException, SqlExImpossibleException {
         //结果列表
         LinkedList<Object> resultList = new LinkedList<>();
 

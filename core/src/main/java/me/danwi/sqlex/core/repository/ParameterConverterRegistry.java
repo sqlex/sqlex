@@ -19,7 +19,7 @@ public class ParameterConverterRegistry {
         this.parameterConverters = parameterConverters;
     }
 
-    public static ParameterConverterRegistry fromRepository(Class<? extends RepositoryLike> repository) throws SQLException {
+    public static ParameterConverterRegistry fromRepository(Class<? extends RepositoryLike> repository) throws SqlExImpossibleException {
         Map<Class<?>, ParameterConverter<Object, Object>> parameterConverters = new HashMap<>();
         //获取repository上注册参数类型转换器
         SqlExConverter[] converterAnnotations = repository.getAnnotationsByType(SqlExConverter.class);
