@@ -92,9 +92,9 @@ public class DaoFactory {
      * @param action 函数
      * @param <T>    闭包函数的返回值
      * @return 返回闭包函数的返回值
-     * @throws Exception action运行异常
+     * @throws SqlExActionExecuteException action运行异常
      */
-    public <T> T transaction(Action<T> action) throws Exception {
+    public <T> T transaction(Action<T> action) {
         return transaction(transactionManager.getDefaultIsolationLevel(), action);
     }
 
@@ -176,7 +176,7 @@ public class DaoFactory {
      * @return 数据访问对象实例
      * @throws SqlExRepositoryNotMatchException 给定的Dao接口不属于Factory管理的Repository
      */
-    public <D> D getInstance(Class<D> dao) throws SqlExException {
+    public <D> D getInstance(Class<D> dao) {
         //尝试从缓存中获取
         InvocationProxy invocationProxy = invocationProxyCache.get(dao);
         if (invocationProxy == null) {
