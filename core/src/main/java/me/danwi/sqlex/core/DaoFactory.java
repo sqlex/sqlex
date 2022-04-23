@@ -2,6 +2,9 @@ package me.danwi.sqlex.core;
 
 import com.mysql.cj.jdbc.MysqlConnectionPoolDataSource;
 import me.danwi.sqlex.core.annotation.SqlExRepository;
+import me.danwi.sqlex.core.exception.SqlExActionExecuteException;
+import me.danwi.sqlex.core.exception.SqlExException;
+import me.danwi.sqlex.core.exception.SqlExRepositoryNotMatchException;
 import me.danwi.sqlex.core.invoke.InvocationProxy;
 import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.transaction.DefaultTransactionManager;
@@ -9,6 +12,7 @@ import me.danwi.sqlex.core.transaction.Transaction;
 import me.danwi.sqlex.core.transaction.TransactionManager;
 
 import javax.sql.DataSource;
+import java.io.IOException;
 import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -88,22 +92,22 @@ public class DaoFactory {
      * @param action 函数
      * @param <T>    闭包函数的返回值
      * @return 返回闭包函数的返回值
-     * @throws Exception action运行异常
+     * @throws SqlExActionExecuteException action运行异常
      */
-    public <T> T transaction(Action<T> action) throws Exception {
-        return transaction(action, transactionManager.getDefaultIsolationLevel());
+    public <T> T transaction(Action<T> action) {
+        return transaction(transactionManager.getDefaultIsolationLevel(), action);
     }
 
     /**
      * 以事务的方式来运行函数
      *
-     * @param transactionIsolationLevel 事务隔离级别, 例如:{@link Connection#TRANSACTION_REPEATABLE_READ}
      * @param action                    函数
+     * @param transactionIsolationLevel 事务隔离级别, 例如:{@link Connection#TRANSACTION_REPEATABLE_READ}
      * @param <T>                       闭包函数的返回值
      * @return 返回闭包函数的返回值
-     * @throws Exception action运行异常
+     * @throws SqlExActionExecuteException action运行异常
      */
-    public <T> T transaction(Action<T> action, int transactionIsolationLevel) throws Exception {
+    public <T> T transaction(Integer transactionIsolationLevel, Action<T> action) {
         //获取当前的事务
         Transaction currentTransaction = transactionManager.getCurrentTransaction();
         //是否为顶级事务
@@ -111,25 +115,47 @@ public class DaoFactory {
         //如果当前不存在事务,则新建一个
         if (currentTransaction == null) {
             isTopLevelTransaction = true;
-            currentTransaction = transactionManager.newTransaction(transactionIsolationLevel);
+            try {
+                currentTransaction = transactionManager.newTransaction(transactionIsolationLevel);
+            } catch (SQLException e) {
+                throw new SqlExException(e);
+            }
         }
-
+        //异常
+        SqlExException exception = null;
         try {
             //运行并获取到结果
-            T result = action.run(currentTransaction);
-            if (isTopLevelTransaction)
-                currentTransaction.commit();
-            return result;
+            return action.run(currentTransaction);
+        } catch (SqlExException e) {
+            //已经是SqlExException,不要重复包装
+            exception = e;
+            throw exception;
+        } catch (SQLException e) {
+            //普通SQL异常
+            exception = new SqlExException(e);
+            throw exception;
         } catch (Exception e) {
-            //发生异常,如果是顶层事务,则需要回滚
-            if (isTopLevelTransaction)
-                currentTransaction.rollback();
-            //继续向上抛出异常
-            throw e;
+            //其他在执行action过程中的异常
+            exception = new SqlExActionExecuteException(e);
+            throw exception;
         } finally {
-            //如果是顶层事务,需要在最后关闭事务
-            if (isTopLevelTransaction)
-                currentTransaction.close();
+            if (isTopLevelTransaction) {
+                try {
+                    if (exception == null)
+                        currentTransaction.commit();
+                    else
+                        currentTransaction.rollback();
+                } catch (SQLException e) {
+                    //noinspection ThrowFromFinallyBlock
+                    throw new SqlExException(e);
+                } finally {
+                    try {
+                        currentTransaction.close();
+                    } catch (IOException ignored) {
+                        //忽略事务关闭异常
+                    }
+                }
+            }
         }
     }
 
@@ -148,9 +174,9 @@ public class DaoFactory {
      * @param dao 数据访问对象Class
      * @param <D> 数据访问对象类型
      * @return 数据访问对象实例
-     * @throws Exception 给定的Dao接口不属于Factory管理的Repository
+     * @throws SqlExRepositoryNotMatchException 给定的Dao接口不属于Factory管理的Repository
      */
-    public <D> D getInstance(Class<D> dao) throws Exception {
+    public <D> D getInstance(Class<D> dao) {
         //尝试从缓存中获取
         InvocationProxy invocationProxy = invocationProxyCache.get(dao);
         if (invocationProxy == null) {
@@ -160,9 +186,9 @@ public class DaoFactory {
                     //检查这个Dao接口是否属于repository
                     SqlExRepository annotation = dao.getAnnotation(SqlExRepository.class);
                     if (annotation == null)
-                        throw new Exception("Dao接口不属于该工厂所管理的SqlEx Repository");
+                        throw new SqlExRepositoryNotMatchException();
                     if (!annotation.value().getName().equals(this.repositoryClass.getName()))
-                        throw new Exception("Dao接口不属于该工厂所管理的SqlEx Repository");
+                        throw new SqlExRepositoryNotMatchException();
                     //缓存中没有再自己新建
                     invocationProxy = new InvocationProxy(transactionManager, parameterConverterRegistry);
                     invocationProxyCache.put(dao, invocationProxy);

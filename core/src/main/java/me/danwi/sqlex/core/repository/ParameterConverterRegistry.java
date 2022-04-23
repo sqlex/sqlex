@@ -7,7 +7,6 @@ import me.danwi.sqlex.core.type.ParameterConverter;
 
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -19,7 +18,7 @@ public class ParameterConverterRegistry {
         this.parameterConverters = parameterConverters;
     }
 
-    public static ParameterConverterRegistry fromRepository(Class<? extends RepositoryLike> repository) throws SQLException {
+    public static ParameterConverterRegistry fromRepository(Class<? extends RepositoryLike> repository) {
         Map<Class<?>, ParameterConverter<Object, Object>> parameterConverters = new HashMap<>();
         //获取repository上注册参数类型转换器
         SqlExConverter[] converterAnnotations = repository.getAnnotationsByType(SqlExConverter.class);
@@ -41,7 +40,7 @@ public class ParameterConverterRegistry {
                                     //noinspection unchecked
                                     instance = (ParameterConverter<Object, Object>) converter.getDeclaredConstructor().newInstance();
                                 } catch (Exception e) {
-                                    throw new SqlExImpossibleException("无法实例话参数类型转换器");
+                                    throw new SqlExImpossibleException("无法实例化参数类型转换器");
                                 }
                                 parameterConverters.put((Class<?>) typeArguments[0], instance);
                             }

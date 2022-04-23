@@ -22,7 +22,7 @@ public class BeanMapper {
     //实体类属性信息缓存
     private PropertyInfo[] beanPropertyInfoCaches;
 
-    BeanMapper(Class<?> bean) throws SqlExImpossibleException {
+    BeanMapper(Class<?> bean) {
         beanClass = bean;
         try {
             beanConstructor = beanClass.getDeclaredConstructor();

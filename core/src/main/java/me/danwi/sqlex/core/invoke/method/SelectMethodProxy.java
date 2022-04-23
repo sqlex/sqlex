@@ -10,13 +10,14 @@ import java.lang.reflect.Type;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
 
 
 public class SelectMethodProxy extends BaseMethodProxy {
     private final BeanMapper beanMapper;
 
-    public SelectMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry) throws SqlExImpossibleException {
+    public SelectMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry) {
         super(method, transactionManager, registry);
         //新建bean mapper
         Class<?> beanType = getBeanType(method);
@@ -44,7 +45,7 @@ public class SelectMethodProxy extends BaseMethodProxy {
     }
 
     @Override
-    protected Object invoke(Object[] args, Connection connection) throws Exception {
+    protected Object invoke(Object[] args, Connection connection) throws SQLException {
         String sql = rewriteSQL(args);
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             //设置预处理语句参数
