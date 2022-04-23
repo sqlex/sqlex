@@ -224,7 +224,7 @@ public abstract class BaseMethodProxy implements MethodProxy {
     }
 
     @Override
-    public Object invoke(Object[] args) throws Exception {
+    public Object invoke(Object[] args) throws SQLException {
         //获取事务
         Transaction currentTransaction = transactionManager.getCurrentTransaction();
         Connection connection;
@@ -245,5 +245,5 @@ public abstract class BaseMethodProxy implements MethodProxy {
         }
     }
 
-    protected abstract Object invoke(Object[] args, Connection connection) throws Exception;
+    protected abstract Object invoke(Object[] args, Connection connection) throws SQLException;
 }

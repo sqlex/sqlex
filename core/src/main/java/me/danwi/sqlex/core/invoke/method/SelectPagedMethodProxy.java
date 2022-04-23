@@ -9,16 +9,17 @@ import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.List;
 
 public class SelectPagedMethodProxy extends SelectMethodProxy {
-    public SelectPagedMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry) throws SqlExImpossibleException {
+    public SelectPagedMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry) {
         super(method, transactionManager, registry);
     }
 
     @Override
-    protected Object invoke(Object[] args, Connection connection) throws Exception {
+    protected Object invoke(Object[] args, Connection connection) throws SQLException, SqlExImpossibleException {
         //不带分页参数的参数
         Object[] argsWithoutPage = Arrays.copyOfRange(args, 0, args.length - 2);
         //分页参数

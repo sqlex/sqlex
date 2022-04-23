@@ -10,6 +10,7 @@ import java.lang.reflect.Type;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
 
 
@@ -44,7 +45,7 @@ public class SelectMethodProxy extends BaseMethodProxy {
     }
 
     @Override
-    protected Object invoke(Object[] args, Connection connection) throws Exception {
+    protected Object invoke(Object[] args, Connection connection) throws SQLException {
         String sql = rewriteSQL(args);
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             //设置预处理语句参数

@@ -8,6 +8,7 @@ import me.danwi.sqlex.core.transaction.TransactionManager;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -23,7 +24,7 @@ public class InvocationProxy implements InvocationHandler {
     }
 
     @Override
-    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+    public Object invoke(Object proxy, Method method, Object[] args) throws SQLException, SqlExImpossibleException {
         //尝试从缓存中获取
         MethodProxy methodProxy = methodProxyCache.get(method);
         if (methodProxy == null) {
