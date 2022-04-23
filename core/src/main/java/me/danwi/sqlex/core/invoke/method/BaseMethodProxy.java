@@ -9,7 +9,6 @@ import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.transaction.Transaction;
 import me.danwi.sqlex.core.transaction.TransactionManager;
 import me.danwi.sqlex.core.type.ParameterConverter;
-import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
@@ -33,7 +32,7 @@ public abstract class BaseMethodProxy implements MethodProxy {
         public SqlExInExprPosition inExprPosition; //?是否在一个in(?)表达式中
     }
 
-    public BaseMethodProxy(@NotNull Method method, @NotNull TransactionManager transactionManager, @NotNull ParameterConverterRegistry registry) {
+    public BaseMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry) {
         this.transactionManager = transactionManager;
         //获取sql
         sql = method.getAnnotation(SqlExScript.class).value();
@@ -63,7 +62,7 @@ public abstract class BaseMethodProxy implements MethodProxy {
     }
 
     //替换字符串
-    private @NotNull String replace(@NotNull String str, int start, int end, String newStr) {
+    private String replace(String str, int start, int end, String newStr) {
         return str.substring(0, start) + newStr + str.substring(end);
     }
 

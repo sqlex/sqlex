@@ -13,7 +13,7 @@ public class SqlExImportRegistrar implements ImportBeanDefinitionRegistrar {
         AnnotationAttributes attributes = AnnotationAttributes
                 .fromMap(importingClassMetadata.getAnnotationAttributes(ImportSqlEx.class.getName()));
         assert attributes != null;
-        Class<?> repository = attributes.getClass("repository");
+        Class<?> repository = attributes.getClass("value");
         String factoryName = attributes.getString("factoryName");
         AbstractBeanDefinition definition = BeanDefinitionBuilder.genericBeanDefinition(SqlExBeanDefinitionProcessor.class)
                 .addConstructorArgValue(repository)

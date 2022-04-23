@@ -1,8 +1,5 @@
 package me.danwi.sqlex.core.transaction;
 
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-
 import javax.sql.DataSource;
 import java.io.IOException;
 import java.sql.Connection;
@@ -34,12 +31,12 @@ public class DefaultTransactionManager implements TransactionManager {
     }
 
     @Override
-    public @Nullable Transaction getCurrentTransaction() {
+    public Transaction getCurrentTransaction() {
         return threadLocal.get();
     }
 
     @Override
-    public @NotNull Transaction newTransaction(Integer transactionIsolationLevel) throws SQLException {
+    public Transaction newTransaction(Integer transactionIsolationLevel) throws SQLException {
         Connection connection = newConnection();
         DefaultTransaction defaultTransaction = new DefaultTransaction(connection, transactionIsolationLevel);
         threadLocal.set(defaultTransaction);
@@ -47,7 +44,7 @@ public class DefaultTransactionManager implements TransactionManager {
     }
 
     @Override
-    public @NotNull Connection newConnection() throws SQLException {
+    public Connection newConnection() throws SQLException {
         return dataSource.getConnection();
     }
 
@@ -76,7 +73,7 @@ public class DefaultTransactionManager implements TransactionManager {
         }
 
         @Override
-        public @NotNull Connection getConnection() {
+        public Connection getConnection() {
             return connection;
         }
 

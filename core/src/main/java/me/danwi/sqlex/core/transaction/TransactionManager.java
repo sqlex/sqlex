@@ -1,8 +1,5 @@
 package me.danwi.sqlex.core.transaction;
 
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-
 import java.sql.Connection;
 import java.sql.SQLException;
 
@@ -22,7 +19,7 @@ public interface TransactionManager {
      *
      * @return 当前正在进行的事务, 没有则返回空
      */
-    @Nullable Transaction getCurrentTransaction();
+    Transaction getCurrentTransaction();
 
     /**
      * 新建事务
@@ -31,7 +28,6 @@ public interface TransactionManager {
      * @return 新建立的事务
      * @throws SQLException 新建事务异常
      */
-    @NotNull
     default Transaction newTransaction() throws SQLException {
         return newTransaction(getDefaultIsolationLevel());
     }
@@ -43,7 +39,7 @@ public interface TransactionManager {
      * @return 新建立的事务
      * @throws SQLException 新建事务异常
      */
-    @NotNull Transaction newTransaction(Integer transactionIsolationLevel) throws SQLException;
+    Transaction newTransaction(Integer transactionIsolationLevel) throws SQLException;
 
     /**
      * 直接获取数据库连接(手动挡)
@@ -51,5 +47,5 @@ public interface TransactionManager {
      * @return 数据库连接
      * @throws SQLException 新建数据库连接异常
      */
-    @NotNull Connection newConnection() throws SQLException;
+    Connection newConnection() throws SQLException;
 }

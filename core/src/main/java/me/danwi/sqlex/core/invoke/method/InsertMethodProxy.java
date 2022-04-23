@@ -2,7 +2,6 @@ package me.danwi.sqlex.core.invoke.method;
 
 import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.transaction.TransactionManager;
-import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Method;
 import java.sql.Connection;
@@ -10,7 +9,7 @@ import java.sql.PreparedStatement;
 import java.util.List;
 
 public class InsertMethodProxy extends BaseMethodProxy {
-    public InsertMethodProxy(@NotNull Method method, @NotNull TransactionManager transactionManager, @NotNull ParameterConverterRegistry registry) {
+    public InsertMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry) {
         super(method, transactionManager, registry);
     }
 
