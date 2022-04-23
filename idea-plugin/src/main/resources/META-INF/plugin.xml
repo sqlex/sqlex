@@ -12,6 +12,7 @@
     <depends>org.jetbrains.plugins.yaml</depends>
     <depends>com.intellij.database</depends>
     <depends optional="true" config-file="withKotlin.xml">org.jetbrains.kotlin</depends>
+    <depends optional="true" config-file="withSpring.xml">com.intellij.spring</depends>
 
     <projectListeners>
         <!--监听Source Root变更-->
