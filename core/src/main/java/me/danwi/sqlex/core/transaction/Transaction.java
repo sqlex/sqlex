@@ -1,7 +1,5 @@
 package me.danwi.sqlex.core.transaction;
 
-import org.jetbrains.annotations.NotNull;
-
 import java.io.Closeable;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -15,7 +13,7 @@ public interface Transaction extends Closeable {
      *
      * @return 数据库连接
      */
-    @NotNull Connection getConnection();
+    Connection getConnection();
 
     /**
      * 提交当前事务

@@ -4,7 +4,6 @@ import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.transaction.TransactionManager;
 import me.danwi.sqlex.core.type.PagedResult;
-import org.jetbrains.annotations.NotNull;
 
 import java.lang.reflect.Method;
 import java.sql.Connection;
@@ -14,7 +13,7 @@ import java.util.Arrays;
 import java.util.List;
 
 public class SelectPagedMethodProxy extends SelectMethodProxy {
-    public SelectPagedMethodProxy(@NotNull Method method, @NotNull TransactionManager transactionManager, @NotNull ParameterConverterRegistry registry) throws SqlExImpossibleException {
+    public SelectPagedMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry) throws SqlExImpossibleException {
         super(method, transactionManager, registry);
     }
 
