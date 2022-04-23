@@ -107,7 +107,7 @@ public class DaoFactory {
      * @return 返回闭包函数的返回值
      * @throws SqlExActionExecuteException action运行异常
      */
-    public <T> T transaction(int transactionIsolationLevel, Action<T> action) {
+    public <T> T transaction(Integer transactionIsolationLevel, Action<T> action) {
         //获取当前的事务
         Transaction currentTransaction = transactionManager.getCurrentTransaction();
         //是否为顶级事务
