@@ -1,0 +1,6 @@
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij.spring">
+        <customLocalComponentsDiscoverer
+                implementation="me.danwi.sqlex.idea.sqlm.spring.SqlExMethodComponentDiscoverer"/>
+    </extensions>
+</idea-plugin>

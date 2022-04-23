@@ -23,6 +23,6 @@ intellij {
 
     pluginName = 'sqlex'
 
-    plugins = ['yaml', 'java', 'DatabaseTools', 'Kotlin']
+    plugins = ['yaml', 'java', 'DatabaseTools', 'Kotlin', 'Spring']
 }
 
