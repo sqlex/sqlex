@@ -3,7 +3,6 @@ package me.danwi.sqlex.core;
 import com.mysql.cj.jdbc.MysqlConnectionPoolDataSource;
 import me.danwi.sqlex.core.annotation.SqlExRepository;
 import me.danwi.sqlex.core.exception.SqlExException;
-import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.invoke.InvocationProxy;
 import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.transaction.DefaultTransactionManager;

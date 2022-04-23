@@ -17,7 +17,7 @@ import java.util.List;
 public class SelectMethodProxy extends BaseMethodProxy {
     private final BeanMapper beanMapper;
 
-    public SelectMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry) throws SqlExImpossibleException {
+    public SelectMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry) {
         super(method, transactionManager, registry);
         //新建bean mapper
         Class<?> beanType = getBeanType(method);
