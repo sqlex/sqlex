@@ -150,7 +150,7 @@ public class DaoFactory {
      * @param dao 数据访问对象Class
      * @param <D> 数据访问对象类型
      * @return 数据访问对象实例
-     * @throws SqlExImpossibleException 给定的Dao接口不属于Factory管理的Repository
+     * @throws SqlExException 给定的Dao接口不属于Factory管理的Repository
      */
     public <D> D getInstance(Class<D> dao) throws SqlExException {
         //尝试从缓存中获取
