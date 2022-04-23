@@ -30,7 +30,7 @@ allprojects {
     }
 
     group 'me.danwi.sqlex'
-    version '0.2.0'
+    version '0.2.1'
 
     //开发环境,版本统一添加SNAPSHOT
     if (localProperties.development)
