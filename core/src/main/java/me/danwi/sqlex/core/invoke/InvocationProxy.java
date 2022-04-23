@@ -24,7 +24,7 @@ public class InvocationProxy implements InvocationHandler {
     }
 
     @Override
-    public Object invoke(Object proxy, Method method, Object[] args) throws SQLException, SqlExImpossibleException {
+    public Object invoke(Object proxy, Method method, Object[] args) throws SQLException {
         //尝试从缓存中获取
         MethodProxy methodProxy = methodProxyCache.get(method);
         if (methodProxy == null) {

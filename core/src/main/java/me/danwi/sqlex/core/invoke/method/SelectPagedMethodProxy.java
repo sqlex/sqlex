@@ -19,7 +19,7 @@ public class SelectPagedMethodProxy extends SelectMethodProxy {
     }
 
     @Override
-    protected Object invoke(Object[] args, Connection connection) throws SQLException, SqlExImpossibleException {
+    protected Object invoke(Object[] args, Connection connection) throws SQLException {
         //不带分页参数的参数
         Object[] argsWithoutPage = Arrays.copyOfRange(args, 0, args.length - 2);
         //分页参数

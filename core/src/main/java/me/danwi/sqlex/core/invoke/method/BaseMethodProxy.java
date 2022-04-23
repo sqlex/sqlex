@@ -67,7 +67,7 @@ public abstract class BaseMethodProxy implements MethodProxy {
     }
 
     //设置单个参数 TODO: 部分数据类型没有补全
-    private void setParameter(PreparedStatement statement, int index, Object arg) throws SQLException, SqlExImpossibleException {
+    private void setParameter(PreparedStatement statement, int index, Object arg) throws SQLException {
         if (arg == null) {
             statement.setNull(index, Types.NULL);
             return;
