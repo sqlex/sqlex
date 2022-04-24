@@ -111,7 +111,7 @@
                 class="me.danwi.sqlex.idea.sqlm.actions.SqlExMethodShowGeneratedJavaAction"
                 text="显示Java文件"
                 description="显示自动生成的Java文件内容"
-                icon="AllIcons.FileTypes.Java">
+                icon="SqlExIcons.ShowSourceAction">
             <keyboard-shortcut keymap="$default" first-keystroke="control alt shift G"/>
             <add-to-group group-id="EditorPopupMenu"/>
         </action>

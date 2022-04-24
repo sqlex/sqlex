@@ -6,7 +6,7 @@ import com.intellij.openapi.fileTypes.SyntaxHighlighter
 import com.intellij.openapi.options.colors.AttributesDescriptor
 import com.intellij.openapi.options.colors.ColorDescriptor
 import com.intellij.openapi.options.colors.ColorSettingsPage
-import me.danwi.sqlex.idea.util.SqlExMethodFileIcon
+import icons.SqlExIcons
 import javax.swing.Icon
 
 class SqlExMethodColorSettingsPage : ColorSettingsPage {
@@ -17,7 +17,7 @@ class SqlExMethodColorSettingsPage : ColorSettingsPage {
     }
 
     override fun getIcon(): Icon {
-        return SqlExMethodFileIcon
+        return SqlExIcons.MethodFile
     }
 
     override fun getHighlighter(): SyntaxHighlighter {

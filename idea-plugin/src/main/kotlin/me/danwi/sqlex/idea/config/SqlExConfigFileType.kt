@@ -1,7 +1,7 @@
 package me.danwi.sqlex.idea.config
 
 import com.intellij.openapi.fileTypes.LanguageFileType
-import me.danwi.sqlex.idea.util.SqlExConfigFileIcon
+import icons.SqlExIcons
 import me.danwi.sqlex.parser.util.SqlExConfigFileExtensionName
 import org.jetbrains.yaml.YAMLLanguage
 import javax.swing.Icon
@@ -25,6 +25,6 @@ class SqlExConfigFileType : LanguageFileType(YAMLLanguage.INSTANCE) {
     }
 
     override fun getIcon(): Icon {
-        return SqlExConfigFileIcon
+        return SqlExIcons.ConfigFile
     }
 }

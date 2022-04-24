@@ -3,8 +3,8 @@ package me.danwi.sqlex.idea.sqlm
 import com.intellij.extapi.psi.PsiFileBase
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.psi.FileViewProvider
+import icons.SqlExIcons
 import me.danwi.sqlex.idea.sqlm.psi.RootSubtree
-import me.danwi.sqlex.idea.util.SqlExMethodFileIcon
 import javax.swing.Icon
 
 class SqlExMethodFile(viewProvider: FileViewProvider) : PsiFileBase(viewProvider, SqlExMethodLanguage.INSTANCE) {
@@ -13,7 +13,7 @@ class SqlExMethodFile(viewProvider: FileViewProvider) : PsiFileBase(viewProvider
     }
 
     override fun getIcon(flags: Int): Icon {
-        return SqlExMethodFileIcon
+        return SqlExIcons.MethodFile
     }
 
     override fun toString(): String {
