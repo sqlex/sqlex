@@ -1,0 +1,119 @@
+<idea-plugin>
+    <projectListeners>
+        <listener class="me.danwi.sqlex.idea.listener.impl.SqlExMethodChangeListener"
+                  topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
+    </projectListeners>
+    <extensions defaultExtensionNs="com.intellij">
+        <!--方法定义文件-->
+        <fileType name="SqlEx Method"
+                  implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodFileType"
+                  fieldName="INSTANCE"
+                  language="SqlExMethod" extensions="sqlm"
+        />
+        <!--文件模版-->
+        <internalFileTemplate id="SqlEx.Method" name="SqlEx Method" order="after SqlEx.Schema"/>
+
+        <!--自定义语言相关-->
+        <!--语法分析器-->
+        <lang.parserDefinition language="SqlExMethod"
+                               implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodParserDefinition"/>
+        <!--高亮等编辑器基本特性-->
+        <lang.syntaxHighlighter language="SqlExMethod"
+                                implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodSyntaxHighlighter"/>
+        <lang.commenter language="SqlExMethod" implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodCommenter"/>
+        <lang.braceMatcher language="SqlExMethod"
+                           implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodBraceMatcher"/>
+        <lang.formatter language="SqlExMethod"
+                        implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodFormattingModelBuilder"/>
+        <!--智能提示相关-->
+        <multiHostInjector implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodSQLInjector"/>
+        <completion.contributor language="SqlExMethod"
+                                implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodImportCompletionContributor"/>
+        <completion.contributor language="SqlExMethod"
+                                implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodParameterTypeCompletionContributor"/>
+        <completion.contributor language="SQL"
+                                implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodSQLParameterCompletionContributor"/>
+        <!--符号定义查找-->
+        <gotoDeclarationHandler implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodTypeGotoDeclarationHandler"/>
+        <findUsagesHandlerFactory implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodFindUsagesFactory"/>
+        <gotoSymbolContributor implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodSymbolContributor"/>
+        <!--和Jvm系的交互-->
+        <resolveScopeEnlarger implementation="me.danwi.sqlex.idea.sqlm.generator.SqlExMethodResolveScopeEnlarger"/>
+        <java.shortNamesCache implementation="me.danwi.sqlex.idea.sqlm.generator.SqlExMethodGeneratedShortNamesCache"/>
+        <java.elementFinder implementation="me.danwi.sqlex.idea.sqlm.generator.SqlExMethodGeneratedElementFinder"/>
+        <gotoDeclarationHandler implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodGotoDeclarationHandler"/>
+        <lang.documentationProvider language="JAVA"
+                                    implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodDocumentationProvider"/>
+
+        <!--错误感知-->
+        <localInspection language="SqlExMethod"
+                         groupName="SqlEx"
+                         displayName="Duplicated name"
+                         level="ERROR"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodDuplicateInspection"
+        />
+        <localInspection language="SqlExMethod"
+                         groupName="SqlEx"
+                         displayName="Naming suggestion"
+                         level="WEAK WARNING"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodNamingSuggestionInspection"
+        />
+        <localInspection language="SqlExMethod"
+                         groupName="SqlEx"
+                         displayName="Unused parameter"
+                         level="WEAK WARNING"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodUnusedParameterInspection"/>
+        <localInspection language="SqlExMethod"
+                         groupName="SqlEx"
+                         displayName="Invalid type parameter"
+                         level="ERROR"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodInvalidTypeParameterInspection"
+        />
+        <localInspection language="SqlExMethod"
+                         groupName="SqlEx"
+                         displayName="Paged parameter"
+                         level="ERROR"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodPagedParameterInspection"/>
+
+        <localInspection language="SQL"
+                         groupName="SqlEx"
+                         displayName="Unknown parameter"
+                         level="ERROR"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodUnknownParameterInspection"/>
+        <localInspection language="SQL"
+                         groupName="SqlEx"
+                         displayName="Unnamed parameter"
+                         level="ERROR"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodUnnamedParameterInspection"/>
+        <localInspection language="SQL"
+                         groupName="SqlEx"
+                         displayName="Paged limit"
+                         level="ERROR"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodPagedLimitInspection"/>
+
+        <!--定义color-->
+        <additionalTextAttributes scheme="Default" file="colorSchemes/SqlExMethodDefault.xml"/>
+        <additionalTextAttributes scheme="Darcula" file="colorSchemes/SqlExMethodDefault.xml"/>
+        <colorSettingsPage implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodColorSettingsPage"/>
+    </extensions>
+
+    <actions>
+        <!--查看生成的Java文件-->
+        <action id="SqlEx.showGeneratedJava"
+                class="me.danwi.sqlex.idea.sqlm.actions.SqlExMethodShowGeneratedJavaAction"
+                text="显示Java文件"
+                description="显示自动生成的Java文件内容"
+                icon="AllIcons.FileTypes.Java">
+            <keyboard-shortcut keymap="$default" first-keystroke="control alt shift G"/>
+            <add-to-group group-id="EditorPopupMenu"/>
+        </action>
+    </actions>
+</idea-plugin>
