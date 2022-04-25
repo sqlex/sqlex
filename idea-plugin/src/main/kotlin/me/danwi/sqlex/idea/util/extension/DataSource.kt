@@ -1,6 +1,5 @@
 package me.danwi.sqlex.idea.util.extension
 
-import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.application.invokeAndWaitIfNeeded
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.sql.database.SqlDataSourceImpl
@@ -11,11 +10,8 @@ import java.nio.file.Paths
 //添加Database Tool数据源的名称前缀
 const val SQLEX_DATABASE_TOOL_NAME_PREFIX = "SqlEx:"
 
-//Database Tool数据源key前缀
-const val SQLEX_DATABASE_TOOL_DATASOURCE = "me.danwi.sqlex.datatools.datasource"
-
-//Database Tool数据源source root子属性
-const val SQLEX_DATABASE_TOOL_DATASOURCE_SOURCEROOT = "sourceroot"
+//数据源source root属性key
+private val dataSourceSourceRootPropertyKey = PropertyKey<String>("me.danwi.sqlex.datatools.datasource.sourceroot")
 
 var SqlDataSourceImpl.sqlexName: String
     get() = this.name.removePrefix("$SQLEX_DATABASE_TOOL_NAME_PREFIX ")
@@ -24,14 +20,13 @@ var SqlDataSourceImpl.sqlexName: String
     }
 
 var SqlDataSourceImpl.sqlexSourceRootPath: String?
-    get() = PropertiesComponent.getInstance(project)
-        .getValue("${SQLEX_DATABASE_TOOL_DATASOURCE}.${this.uniqueId}.${SQLEX_DATABASE_TOOL_DATASOURCE_SOURCEROOT}")
+    get() = project.getProperty(dataSourceSourceRootPropertyKey.child(this.uniqueId))
     set(value) {
-        val dataKey = "${SQLEX_DATABASE_TOOL_DATASOURCE}.${this.uniqueId}.${SQLEX_DATABASE_TOOL_DATASOURCE_SOURCEROOT}"
+        val propertyKey = dataSourceSourceRootPropertyKey.child(this.uniqueId)
         if (value == null)
-            PropertiesComponent.getInstance(project).unsetValue(dataKey)
+            project.unsetProperty(propertyKey)
         else
-            PropertiesComponent.getInstance(project).setValue(dataKey, value)
+            project.setProperty(propertyKey, value)
     }
 
 var SqlDataSourceImpl.ddlFile: VirtualFile?

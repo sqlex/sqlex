@@ -1,7 +1,10 @@
 package me.danwi.sqlex.idea.util.extension
 
+import com.google.gson.Gson
 import com.intellij.database.util.TreePattern
 import com.intellij.database.util.TreePatternUtils
+import com.intellij.ide.util.PropertiesComponent
+import com.intellij.notification.Notification
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.PathManager
@@ -10,15 +13,12 @@ import com.intellij.openapi.module.Module
 import com.intellij.openapi.module.ModuleManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ModuleRootManager
-import com.intellij.openapi.roots.ModuleRootModificationUtil
-import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.sql.database.SqlDataSourceImpl
 import com.intellij.sql.database.SqlDataSourceManager
 import com.intellij.sql.dialects.SqlDialectMappings
 import com.intellij.sql.dialects.SqlImportUtil
 import com.intellij.sql.dialects.SqlResolveMappings
-import me.danwi.sqlex.idea.service.SqlExRepositoryService
 import me.danwi.sqlex.parser.util.SqlExGeneratedTagFileName
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -30,10 +30,6 @@ val Project.modules: Array<Module>
 //获取project的临时目录
 val Project.pluginTempDir: Path
     inline get() = Paths.get(PathManager.getTempPath(), "sqlex", this.locationHash)
-
-//获取项目下的SqlExRepositoryService列表
-val Project.sqlexRepositoryServices: List<SqlExRepositoryService>
-    inline get() = this.modules.flatMap { it.sqlexRepositoryServices }
 
 val Project.allSqlExDataSources: List<SqlDataSourceImpl>
     get() = SqlDataSourceManager.getInstance(this)
@@ -48,7 +44,7 @@ fun Project.addDataSource(name: String, sourceRoot: VirtualFile): SqlDataSourceI
         val dataSource = dataSourceManager.createEmpty()
         dataSource.sqlexName = name
         dataSource.comment = "SqlEx schema of [ ${sourceRoot.projectRootRelativePath} ]"
-        dataSource.sqlexSourceRootPath = sourceRoot.path
+        dataSource.sqlexSourceRootPath = sourceRoot.projectRootRelativePath ?: throw Exception("无法获取source root相对路径")
         dataSource.ddl = "" //暂时以空白作为内容
         //添加数据源
         dataSourceManager.addDataSource(dataSource)
@@ -85,33 +81,21 @@ fun Project.removeDataSource(dataSource: SqlDataSourceImpl, sourceRoot: VirtualF
 }
 
 fun Project.findDataSource(sourceRoot: VirtualFile): SqlDataSourceImpl? {
-    return this.allSqlExDataSources.find { it.sqlexSourceRootPath == sourceRoot.path }
+    return this.allSqlExDataSources.find {
+        it.sqlexSourceRootPath == sourceRoot.projectRootRelativePath
+    }
 }
 
 //创建通知
-fun Project.showNotification(text: String, type: NotificationType) {
-    NotificationGroupManager.getInstance()
+fun Project.createNotification(text: String, type: NotificationType = NotificationType.INFORMATION): Notification {
+    return NotificationGroupManager.getInstance()
         .getNotificationGroup("SqlEx Notification Group")
         .createNotification(text, type)
-        .notify(this)
 }
 
-//缓存key
-private val repositoryServiceCacheKey =
-    Key<MutableList<SqlExRepositoryService>>("me.danwi.sqlex.RepositoryServiceCaches")
-
-//获取模块下的SqlExRepositoryService列表
-val Module.sqlexRepositoryServices: MutableList<SqlExRepositoryService>
-    get() {
-        synchronized(this) {
-            var services = this.getUserData(repositoryServiceCacheKey)
-            if (services == null) {
-                services = mutableListOf()
-                this.putUserData(repositoryServiceCacheKey, services)
-            }
-            return services
-        }
-    }
+fun Project.showNotification(text: String, type: NotificationType = NotificationType.INFORMATION) {
+    createNotification(text, type).notify(this)
+}
 
 //获取模块的SourceRoots
 val Module.sourceRoots: Array<VirtualFile>
@@ -119,18 +103,27 @@ val Module.sourceRoots: Array<VirtualFile>
 
 //把所有生成的源码目录的源码标记去掉
 fun Module.unmarkAllGeneratedSourceRoot() {
-    //生成的源码目录
-    val generatedSourceRoots = this.sourceRoots.filter { it.findChild(SqlExGeneratedTagFileName) != null }
+    this.sourceRoots
+        .filter { it.findChild(SqlExGeneratedTagFileName) != null }
+        .forEach { it.unmarkSource() }
+}
 
-    generatedSourceRoots.forEach { generatedSourceRoot ->
-        val module = generatedSourceRoot.module ?: return@forEach
-        ModuleRootModificationUtil.updateModel(module) { model ->
-            //删除相关的源码目录
-            model.contentEntries.forEach { contentEntry ->
-                contentEntry.sourceFolders
-                    .filter { it.file == generatedSourceRoot }
-                    .forEach { contentEntry.removeSourceFolder(it) }
-            }
-        }
+//项目级别的属性存储
+data class PropertyKey<T>(val key: String) {
+    fun child(key: String): PropertyKey<T> {
+        return PropertyKey<T>("${this.key}.$key")
     }
+}
+
+fun <T> Project.setProperty(key: PropertyKey<T>, value: T) {
+    PropertiesComponent.getInstance(this).setValue(key.key, Gson().toJson(value))
+}
+
+inline fun <reified T> Project.getProperty(key: PropertyKey<T>): T? {
+    val json = PropertiesComponent.getInstance(this).getValue(key.key)
+    return Gson().fromJson(json, T::class.java)
+}
+
+fun <T> Project.unsetProperty(key: PropertyKey<T>) {
+    PropertiesComponent.getInstance(this).unsetValue(key.key)
 }

@@ -1,25 +1,37 @@
-package me.danwi.sqlex.idea.service
+package me.danwi.sqlex.idea.repositroy
 
 import com.intellij.notification.NotificationType
+import com.intellij.notification.NotificationsManager
+import com.intellij.openapi.actionSystem.AnAction
+import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.invokeAndWaitIfNeeded
+import com.intellij.openapi.module.Module
 import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Key
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.psi.search.FileTypeIndex
+import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.sql.dialects.SqlDialectMappings
 import com.intellij.sql.dialects.mysql.MysqlDialect
+import me.danwi.sqlex.idea.config.SqlExConfigFileType
 import me.danwi.sqlex.idea.listener.SqlExRepositoryEventListener
 import me.danwi.sqlex.idea.util.extension.*
 import me.danwi.sqlex.parser.RepositoryBuilder
 import me.danwi.sqlex.parser.config.createSqlExConfig
 import me.danwi.sqlex.parser.exception.SqlExRepositoryMethodException
 import me.danwi.sqlex.parser.exception.SqlExRepositorySchemaException
+import me.danwi.sqlex.parser.util.SqlExConfigFileName
 import me.danwi.sqlex.parser.util.schemaFileVersion
+import java.nio.file.Paths
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
+import kotlin.io.path.absolutePathString
 
 class SqlExRepositoryService(val sourceRoot: VirtualFile) {
     // region 公有变量
@@ -37,20 +49,12 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                 messagePublisher.validChanged(this, value)
         }
 
-    //SqlEx过期是否自动刷新
-    var autoRefresh = true
-        set(value) {
-            val oldValue = field
-            field = value
-            if (oldValue != value)
-                messagePublisher.autoRefreshChanged(this, value)
-            if (!isValid && !oldValue && value)
-                refresh()
-        }
-
     //SqlEx代码仓库
     var repository: SqlExRepository? = null
         private set
+
+    //根包
+    var rootPackage: String = ""
     // endregion
 
     // region 私有变量
@@ -92,6 +96,8 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                     true
                 ) {
                     override fun run(indicator: ProgressIndicator) {
+                        //开始刷新
+                        messagePublisher.beforeRefresh(this@SqlExRepositoryService)
                         refreshLocker.withLock {
                             //暴露任务指示器
                             this@SqlExRepositoryService.indicator = indicator
@@ -100,8 +106,6 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                             //需要清理的repository
                             var repositoryToClean: SqlExRepository? = null
                             try {
-                                //开始刷新
-                                messagePublisher.beforeRefresh(this@SqlExRepositoryService)
                                 indicator.isIndeterminate = true
                                 indicator.text = "SqlEx: 等待任务开始"
                                 indicator.checkCanceled()
@@ -112,6 +116,7 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                 val configFileContent =
                                     sourceRoot.configFile?.textContent ?: throw Exception("无法读取配置文件")
                                 val config = createSqlExConfig(configFileContent)
+                                rootPackage = config.rootPackage ?: throw Exception("配置文件中不存在根包信息")
 
                                 indicator.checkCanceled()
 
@@ -180,6 +185,9 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
 
                                 indicator.checkCanceled()
 
+                                //设置源码目录
+                                sourceRoot.markAsSource()
+
                                 //解析method文件
                                 indicator.text = "SqlEx: 解析Method"
                                 indicator.isIndeterminate = false
@@ -218,9 +226,9 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                             } finally {
                                 this@SqlExRepositoryService.indicator = null
                             }
-                            //完成刷新
-                            messagePublisher.afterRefresh(this@SqlExRepositoryService)
                         }
+                        //完成刷新
+                        messagePublisher.afterRefresh(this@SqlExRepositoryService)
                     }
                 })
         }
@@ -232,6 +240,7 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
 
     fun close() {
         stopRefresh()
+        sourceRoot.unmarkSource()
         val dataSource = project.findDataSource(sourceRoot)
         if (dataSource != null)
             project.removeDataSource(dataSource, sourceRoot)
@@ -241,45 +250,143 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
 }
 
 //同步锁
-val repositoryServiceSyncLocker = ReentrantLock()
+private val repositoryServiceSyncLocker = ReentrantLock()
 
-//同步Module上RepositoryService列表
-fun syncRepositoryService(project: Project) {
-    //事件消息发布器
-    val messagePublisher = project.messageBus.syncPublisher(SqlExRepositoryEventListener.REPOSITORY_SERVICE_TOPIC)
-    //加锁
-    repositoryServiceSyncLocker.withLock {
-        //在处理之前先删除所有遗留的垃圾数据源
-        val sqlexSourceRoots =
-            project.modules
-                .flatMap { m -> m.sourceRoots.filter { s -> s.isSqlExSourceRoot } }
-                .map { it.path }
-        project.allSqlExDataSources
-            .filter { !sqlexSourceRoots.contains(it.sqlexSourceRootPath) }
-            .forEach { project.removeDataSource(it) }
+//缓存key
+private val repositoryServiceCacheKey =
+    Key<MutableList<SqlExRepositoryService>>("me.danwi.sqlex.RepositoryServiceCaches")
 
-        //处理所有的module
-        project.modules.forEach { module ->
-            //拿到这个模块下的所有SqlEx source root
-            val sourceRoots = module.sourceRoots.filter { it.isSqlExSourceRoot }
-            val sqlExRepositoryServices = module.sqlexRepositoryServices
-            //删除已经不存在的repository
-            val repositoriesToDelete = sqlExRepositoryServices.filter { r -> sourceRoots.none { it == r.sourceRoot } }
-            repositoriesToDelete.forEach {
-                it.close()
-                sqlExRepositoryServices.remove(it)
-                messagePublisher.removed(it)
+//配置key
+private val importedRepositoriesPropertyKey = PropertyKey<List<String>>("me.danwi.sqlex.ImportedRepositories")
+private val ignoredRepositoriesPropertyKey = PropertyKey<List<String>>("me.danwi.sqlex.IgnoredRepositories")
+
+//获取模块下的SqlExRepositoryService列表
+val Module.sqlexRepositoryServices: MutableList<SqlExRepositoryService>
+    get() {
+        synchronized(this) {
+            var services = this.getUserData(repositoryServiceCacheKey)
+            if (services == null) {
+                services = mutableListOf()
+                this.putUserData(repositoryServiceCacheKey, services)
             }
-            //添加新的repository
-            sourceRoots
-                .filter { s -> sqlExRepositoryServices.none { it.sourceRoot == s } }
-                .map { SqlExRepositoryService(it) }
-                .forEach {
-                    sqlExRepositoryServices.add(it)
-                    messagePublisher.created(it)
-                    it.refresh()
-                }
+            return services
         }
     }
+
+//获取项目下的SqlExRepositoryService列表
+val Project.sqlexRepositoryServices: List<SqlExRepositoryService>
+    inline get() = this.modules.flatMap { it.sqlexRepositoryServices }
+
+//获取项目下的所有可能的SqlEx Source Root
+val Project.allMaybeSqlExSourceRoot: List<VirtualFile>
+    inline get() = FileTypeIndex
+        .getFiles(SqlExConfigFileType.INSTANCE, GlobalSearchScope.allScope(this))
+        .mapNotNull { it.parent }
+
+fun Project.showMaybeSqlExImportNotification() {
+    val imported = this.getProperty(importedRepositoriesPropertyKey) ?: listOf()
+    val ignored = this.getProperty(ignoredRepositoriesPropertyKey) ?: listOf()
+    //获取可能存在的sqlex repository
+    allMaybeSqlExSourceRoot
+        .filter { it.projectRootRelativePath != null }
+        .filter { !imported.contains(it.projectRootRelativePath) && !ignored.contains(it.projectRootRelativePath) }
+        .forEach { sourceRoot ->
+            val notification = this.createNotification("发现SqlEx源码目录(${sourceRoot.projectRootRelativePath}),是否导入?")
+            notification.addAction(object : AnAction("导入") {
+                override fun actionPerformed(e: AnActionEvent) {
+                    notification.expire()
+                    this@showMaybeSqlExImportNotification.importRepository(sourceRoot)
+                }
+            })
+            notification.addAction(object : AnAction("忽略") {
+                override fun actionPerformed(e: AnActionEvent) {
+                    notification.expire()
+                    this@showMaybeSqlExImportNotification.ignoreRepository(sourceRoot)
+                }
+            })
+            notification.notify(this)
+        }
+
+}
+
+//同步Repository
+fun Project.syncRepositoryService() {
+    repositoryServiceSyncLocker.withLock {
+        this.modules.forEach { module ->
+            //去掉所有生成的源码标记
+            module.unmarkAllGeneratedSourceRoot()
+            //删除所有的repository
+            module.sqlexRepositoryServices.forEach { service ->
+                service.close()
+                messageBus.syncPublisher(SqlExRepositoryEventListener.REPOSITORY_SERVICE_TOPIC).removed(service)
+            }
+            module.sqlexRepositoryServices.clear()
+        }
+        //删除所有的SqlExDataSource
+        this.allSqlExDataSources.forEach { this.removeDataSource(it) }
+        //本地文件系统
+        val localFileSystem = LocalFileSystem.getInstance()
+        //project路径
+        val projectPath = this.basePath ?: throw Exception("无法获取项目的根目录")
+        //获取导入的repository配置
+        val sourceRoot = this.getProperty(importedRepositoriesPropertyKey)
+            ?.mapNotNull { localFileSystem.refreshAndFindFileByPath(Paths.get(projectPath, it).absolutePathString()) }
+            ?: return
+        //新建service
+        sourceRoot.forEach {
+            val module = it.module ?: return@forEach
+            val repositoryServices = module.sqlexRepositoryServices
+            val newRepositoryService = SqlExRepositoryService(it)
+            repositoryServices.add(newRepositoryService)
+            messageBus.syncPublisher(SqlExRepositoryEventListener.REPOSITORY_SERVICE_TOPIC)
+                .created(newRepositoryService)
+            newRepositoryService.refresh()
+        }
+    }
+}
+
+//导入Repository
+fun Project.importRepository(sourceRoot: VirtualFile) {
+    repositoryServiceSyncLocker.withLock {
+        if (sourceRoot.findChild(SqlExConfigFileName)?.isSqlExConfig == false)
+            return
+        //判断repository是否已经存在
+        if (this.sqlexRepositoryServices.any { it.sourceRoot == sourceRoot })
+            throw Exception("该Repository已被导入")
+        //获取source root对应的module
+        val module = sourceRoot.module ?: return
+        val repositoryServices = module.sqlexRepositoryServices
+        val newRepositoryService = SqlExRepositoryService(sourceRoot)
+        repositoryServices.add(newRepositoryService)
+        messageBus.syncPublisher(SqlExRepositoryEventListener.REPOSITORY_SERVICE_TOPIC).created(newRepositoryService)
+        newRepositoryService.refresh()
+        //保存导入配置
+        this.setProperty(
+            importedRepositoriesPropertyKey,
+            this.sqlexRepositoryServices.mapNotNull { it.sourceRoot.projectRootRelativePath })
+    }
+}
+
+//删除导入的Repository
+fun Project.removeImportedRepository(sourceRoot: VirtualFile) {
+    repositoryServiceSyncLocker.withLock {
+        val repositoryServices = sourceRoot.module?.sqlexRepositoryServices ?: return
+        val repositoryService = repositoryServices.find { it.sourceRoot == sourceRoot } ?: return
+        repositoryService.close()
+        repositoryServices.remove(repositoryService)
+        messageBus.syncPublisher(SqlExRepositoryEventListener.REPOSITORY_SERVICE_TOPIC).removed(repositoryService)
+        //将其存入忽略列表
+        ignoreRepository(sourceRoot)
+        //保存导入配置
+        this.setProperty(
+            importedRepositoriesPropertyKey,
+            this.sqlexRepositoryServices.mapNotNull { it.sourceRoot.projectRootRelativePath })
+    }
+}
+
+fun Project.ignoreRepository(sourceRoot: VirtualFile) {
+    val ignored = this.getProperty(ignoredRepositoriesPropertyKey)?.toMutableList() ?: mutableListOf()
+    ignored.add(sourceRoot.projectRootRelativePath ?: return)
+    this.setProperty(ignoredRepositoriesPropertyKey, ignored.distinct())
 }
 

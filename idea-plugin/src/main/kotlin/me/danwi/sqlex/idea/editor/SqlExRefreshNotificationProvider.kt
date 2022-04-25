@@ -7,7 +7,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.EditorNotificationPanel
 import com.intellij.ui.EditorNotifications
 import me.danwi.sqlex.idea.listener.SqlExRepositoryEventListener
-import me.danwi.sqlex.idea.service.SqlExRepositoryService
+import me.danwi.sqlex.idea.repositroy.SqlExRepositoryService
 import me.danwi.sqlex.idea.util.extension.isSqlExConfig
 import me.danwi.sqlex.idea.util.extension.sqlexRepositoryService
 
@@ -38,11 +38,6 @@ class SqlExRefreshNotificationProvider(private val project: Project) :
     override fun validChanged(repositoryService: SqlExRepositoryService, isValid: Boolean) {
         EditorNotifications.getInstance(project).updateAllNotifications()
     }
-
-    override fun autoRefreshChanged(repositoryService: SqlExRepositoryService, autoRefresh: Boolean) {
-        EditorNotifications.getInstance(project).updateAllNotifications()
-    }
-
     override fun createNotificationPanel(file: VirtualFile, fileEditor: FileEditor): EditorNotificationPanel? {
         val sqlExRepositoryService = file.sqlexRepositoryService ?: return null
 
@@ -70,18 +65,6 @@ class SqlExRefreshNotificationProvider(private val project: Project) :
         } else if (file.isSqlExConfig) {
             panel.createActionLabel("强制重建索引") {
                 file.sqlexRepositoryService?.refresh()
-            }
-        }
-
-        if (file.isSqlExConfig) {
-            if (sqlExRepositoryService.autoRefresh) {
-                panel.createActionLabel("关闭自动索引") {
-                    file.sqlexRepositoryService?.autoRefresh = false
-                }
-            } else {
-                panel.createActionLabel("开启自动索引") {
-                    file.sqlexRepositoryService?.autoRefresh = true
-                }
             }
         }
 

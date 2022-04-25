@@ -24,4 +24,7 @@ object SqlExIcons {
 
     @JvmField
     val ShowSourceAction = IconUtil.addText(IconX16, "Java")
+
+    @JvmField
+    val ToolWindow = IconUtil.desaturate(IconX13)
 }

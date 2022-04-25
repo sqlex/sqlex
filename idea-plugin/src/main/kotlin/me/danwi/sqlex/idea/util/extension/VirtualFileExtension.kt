@@ -3,13 +3,15 @@ package me.danwi.sqlex.idea.util.extension
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectLocator
+import com.intellij.openapi.roots.ModuleRootModificationUtil
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import me.danwi.sqlex.idea.config.SqlExConfigFileType
-import me.danwi.sqlex.idea.service.SqlExRepositoryService
+import me.danwi.sqlex.idea.repositroy.SqlExRepositoryService
+import me.danwi.sqlex.idea.repositroy.sqlexRepositoryServices
 import me.danwi.sqlex.idea.sqlm.SqlExMethodFileType
 import me.danwi.sqlex.idea.sqls.SqlExSchemaFileType
 import me.danwi.sqlex.parser.util.*
@@ -47,13 +49,19 @@ val VirtualFile.module: Module?
 //获取文件所在的source root
 val VirtualFile.sourceRoot: VirtualFile?
     get() {
-        val module = this.module ?: return null
-        return module.sourceRoots.firstOrNull {
-            val thisSegments = this.path.windowsPathNormalize.split("/")
-            val itSegments = it.path.windowsPathNormalize.split("/")
-            for ((i, v) in itSegments.withIndex()) if (thisSegments[i] != v) return@firstOrNull false
-            true
+        var sourceRoot: VirtualFile? = this
+        while (sourceRoot != null) {
+            //找到有配置文件存在的目录
+            if (sourceRoot.findChild(SqlExConfigFileName)?.fileType == SqlExConfigFileType.INSTANCE) {
+                break
+            }
+            sourceRoot = sourceRoot.parent
         }
+        if (sourceRoot == null) return null
+        val thisSegments = this.path.windowsPathNormalize.split("/")
+        val itSegments = sourceRoot.path.windowsPathNormalize.split("/")
+        for ((i, v) in itSegments.withIndex()) if (thisSegments[i] != v) return null
+        return sourceRoot
     }
 
 //获取文件相对于source root的路径
@@ -105,6 +113,54 @@ val VirtualFile.sqlexRepositoryService: SqlExRepositoryService?
             ?.sqlexRepositoryServices
             ?.find { it.sourceRoot == this.sourceRoot }
     }
+
+//将VirtualFile(目录)标记为一个源码目录
+fun VirtualFile.markAsSource() {
+    if (!this.isDirectory)
+        return
+    val module = this.module ?: return
+    //已经存在
+    if (module.sourceRoots.any { it == this })
+        return
+    ModuleRootModificationUtil.updateModel(module) { model ->
+        //获取contentEntry,如果没有,则新建一个
+        val contentEntry = model.contentEntries.find { it.file.isParentOf(this) } ?: return@updateModel
+        contentEntry.addSourceFolder(this, false)
+    }
+}
+
+fun VirtualFile.unmarkSource() {
+    if (!this.isDirectory)
+        return
+    val module = this.module ?: return
+    //如果不存在
+    if (module.sourceRoots.none { it == this })
+        return
+    ModuleRootModificationUtil.updateModel(module) { model ->
+        model.contentEntries.forEach { entry ->
+            entry.sourceFolders.forEach { sourceRoot ->
+                if (entry.file == this)
+                    model.removeContentEntry(entry)
+                else if (sourceRoot.file == this)
+                    entry.removeSourceFolder(sourceRoot)
+            }
+        }
+    }
+}
+
+fun VirtualFile?.isParentOf(file: VirtualFile?): Boolean {
+    if (this?.isDirectory != true)
+        return false
+    if (file == null)
+        return false
+    var current = file
+    while (current != null) {
+        if (current == this)
+            return true
+        current = current.parent
+    }
+    return false
+}
 
 //创建一个虚拟文件
 fun createVirtualFile(path: String, content: String): VirtualFile? {

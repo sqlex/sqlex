@@ -5,7 +5,7 @@ import com.intellij.navigation.ItemPresentation
 import com.intellij.psi.PsiMethod
 import com.intellij.psi.tree.IElementType
 import icons.SqlExIcons
-import me.danwi.sqlex.idea.service.SqlExMethodPsiClassCacheKey
+import me.danwi.sqlex.idea.repositroy.SqlExMethodPsiClassCacheKey
 import me.danwi.sqlex.idea.util.extension.childrenOf
 import me.danwi.sqlex.idea.util.extension.projectRootRelativePath
 import org.antlr.intellij.adaptor.psi.IdentifierDefSubtree

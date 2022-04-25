@@ -17,6 +17,7 @@
     <depends optional="true" config-file="withSpring.xml">com.intellij.spring</depends>
 
     <!--子模块-->
+    <xi:include href="SqlExRepository.xml" xpointer="xpointer(/idea-plugin/*)"/>
     <xi:include href="SqlExConfig.xml" xpointer="xpointer(/idea-plugin/*)"/>
     <xi:include href="SqlExSchema.xml" xpointer="xpointer(/idea-plugin/*)"/>
     <xi:include href="SqlExMethod.xml" xpointer="xpointer(/idea-plugin/*)"/>

@@ -1,7 +1,7 @@
 package me.danwi.sqlex.idea.listener
 
 import com.intellij.util.messages.Topic
-import me.danwi.sqlex.idea.service.SqlExRepositoryService
+import me.danwi.sqlex.idea.repositroy.SqlExRepositoryService
 
 //RepositoryService变更监听
 interface SqlExRepositoryEventListener {
@@ -16,5 +16,4 @@ interface SqlExRepositoryEventListener {
     fun beforeRefresh(repositoryService: SqlExRepositoryService) {}
     fun afterRefresh(repositoryService: SqlExRepositoryService) {}
     fun validChanged(repositoryService: SqlExRepositoryService, isValid: Boolean) {}
-    fun autoRefreshChanged(repositoryService: SqlExRepositoryService, autoRefresh: Boolean) {}
 }

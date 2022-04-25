@@ -33,8 +33,6 @@ class SqlExPlugin implements Plugin<Project> {
             ensureAnnotationProcessor()
             //添加sqlex任务
             addSqlExTasks()
-            //idea集成
-            addSourcesToIDE()
         }
     }
 

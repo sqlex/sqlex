@@ -1,0 +1,6 @@
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="SqlEx Repository" icon="SqlExIcons.ToolWindow" anchor="bottom"
+                    factoryClass="me.danwi.sqlex.idea.repositroy.SqlExRepositoryToolWindowFactory"/>
+    </extensions>
+</idea-plugin>
