@@ -1,10 +1,10 @@
 <idea-plugin xmlns:xi="http://www.w3.org/2001/XInclude">
     <id>me.danwi.sqlex</id>
     <name>SqlEx</name>
-    <vendor email="demon@danwi.me" url="https://danwi.me">DanWi</vendor>
+    <vendor email="demon@danwi.me" url="https://sqlex.github.com">SqlEx</vendor>
 
     <description><![CDATA[
-    SqlEx开发插件,用于辅助SqlEx框架的使用,能在开发过程中做生成类的智能提示
+    SqlEx Plugin, enhance the development experience of SqlEx framework, provides autocomplete/inspection and so on.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
