@@ -1,7 +1,7 @@
-package me.danwi.sqlex.idea.listener
+package me.danwi.sqlex.idea.repositroy
 
+import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.util.messages.Topic
-import me.danwi.sqlex.idea.repositroy.SqlExRepositoryService
 
 //RepositoryService变更监听
 interface SqlExRepositoryEventListener {
@@ -16,4 +16,6 @@ interface SqlExRepositoryEventListener {
     fun beforeRefresh(repositoryService: SqlExRepositoryService) {}
     fun afterRefresh(repositoryService: SqlExRepositoryService) {}
     fun validChanged(repositoryService: SqlExRepositoryService, isValid: Boolean) {}
+    fun clearOutput(repositoryService: SqlExRepositoryService) {}
+    fun output(repositoryService: SqlExRepositoryService, text: String, type: ConsoleViewContentType) {}
 }

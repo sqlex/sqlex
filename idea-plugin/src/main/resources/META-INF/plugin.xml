@@ -29,7 +29,7 @@
         <!--内部监听-->
         <!--监听 Repository Service 的变更,实现编辑器通知-->
         <listener class="me.danwi.sqlex.idea.editor.SqlExRefreshNotificationProvider"
-                  topic="me.danwi.sqlex.idea.listener.SqlExRepositoryEventListener"/>
+                  topic="me.danwi.sqlex.idea.repositroy.SqlExRepositoryEventListener"/>
     </projectListeners>
 
     <extensions defaultExtensionNs="com.intellij">

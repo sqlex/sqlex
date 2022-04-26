@@ -1,7 +1,7 @@
 package me.danwi.sqlex.idea.repositroy
 
+import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.notification.NotificationType
-import com.intellij.notification.NotificationsManager
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.invokeAndWaitIfNeeded
@@ -15,12 +15,12 @@ import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.psi.search.FileTypeIndex
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.sql.dialects.SqlDialectMappings
 import com.intellij.sql.dialects.mysql.MysqlDialect
 import me.danwi.sqlex.idea.config.SqlExConfigFileType
-import me.danwi.sqlex.idea.listener.SqlExRepositoryEventListener
 import me.danwi.sqlex.idea.util.extension.*
 import me.danwi.sqlex.parser.RepositoryBuilder
 import me.danwi.sqlex.parser.config.createSqlExConfig
@@ -55,6 +55,9 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
 
     //根包
     var rootPackage: String = ""
+
+    //控制台输出
+    val outputs: MutableList<Pair<String, ConsoleViewContentType>> = mutableListOf()
     // endregion
 
     // region 私有变量
@@ -82,6 +85,16 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
         }
     }
 
+    private fun output(text: String, type: ConsoleViewContentType = ConsoleViewContentType.NORMAL_OUTPUT) {
+        if (type == ConsoleViewContentType.ERROR_OUTPUT) {
+            val toolWindow = ToolWindowManager.getInstance(project)
+                .getToolWindow("SqlEx Repository") ?: return
+            invokeLater { toolWindow.show() }
+        }
+        outputs.add(Pair(text, type))
+        messagePublisher.output(this, text, type)
+    }
+
     fun refresh() {
         synchronized(this) {
             if (isRefreshing) {
@@ -106,8 +119,11 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                             //需要清理的repository
                             var repositoryToClean: SqlExRepository? = null
                             try {
+                                outputs.clear()
+                                messagePublisher.clearOutput(this@SqlExRepositoryService)
                                 indicator.isIndeterminate = true
                                 indicator.text = "SqlEx: 等待任务开始"
+                                output("准备开始建立索引")
                                 indicator.checkCanceled()
 
                                 //解析配置
@@ -117,7 +133,7 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                     sourceRoot.configFile?.textContent ?: throw Exception("无法读取配置文件")
                                 val config = createSqlExConfig(configFileContent)
                                 rootPackage = config.rootPackage ?: throw Exception("配置文件中不存在根包信息")
-
+                                output("获取到根包信息: $rootPackage")
                                 indicator.checkCanceled()
 
                                 //扫描文件
@@ -151,6 +167,7 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                         file.sourceRootRelativePath ?: throw Exception("无法获取${file.name}的相对路径")
                                     indicator.text =
                                         "SqlEx: 解析Schema(${index + 1}/${sortedSchemaFiles.size}) $relativePath"
+                                    output("解析Schema: $relativePath")
                                     indicator.fraction = (index + 1) / sortedSchemaFiles.size.toDouble() / 2.0
                                     builder.addSchema(
                                         relativePath,
@@ -170,6 +187,7 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
 
                                 //同步DatabaseTools
                                 indicator.text = "SqlEx: 同步 Database Tools"
+                                output("同步 Database Tools")
 
                                 val rootPackage = config.rootPackage ?: throw Exception("无法获取SqlEx Config的根包名")
 
@@ -194,11 +212,13 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                 methodFiles.forEachIndexed { index, file ->
                                     indicator.text =
                                         "SqlEx: 解析Method(${index + 1}/${methodFiles.size}) ${file.sourceRootRelativePath}"
+                                    output("解析Method: ${file.sourceRootRelativePath}")
                                     indicator.fraction = (index + 1) / methodFiles.size.toDouble() / 2.0 + 0.5
                                     repository.updateMethodFile(file)
                                     indicator.checkCanceled()
                                 }
 
+                                output("索引建立完成")
                                 isValid = true
                             } catch (e: Exception) {
                                 //清理builder
@@ -206,22 +226,27 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                 //清理repository
                                 repositoryToClean?.close()
                                 when (e) {
-                                    is ProcessCanceledException -> project.showNotification(
-                                        "SqlEx索引更新被取消",
-                                        NotificationType.WARNING
-                                    )
-                                    is SqlExRepositorySchemaException -> project.showNotification(
-                                        "解析Schema文件 [${e.relativePath}] 错误: ${e.message}",
-                                        NotificationType.ERROR
-                                    )
-                                    is SqlExRepositoryMethodException -> project.showNotification(
-                                        "解析Method文件 [${e.relativePath}] 错误: ${e.message}",
-                                        NotificationType.ERROR
-                                    )
-                                    else -> project.showNotification(
-                                        "重建SqlEx索引时发生错误: ${e.message ?: "未知错误"}, 索引构建失败",
-                                        NotificationType.ERROR
-                                    )
+                                    is ProcessCanceledException -> {
+                                        output("\nSqlEx索引更新被取消", ConsoleViewContentType.LOG_WARNING_OUTPUT)
+                                    }
+                                    is SqlExRepositorySchemaException -> {
+                                        output(
+                                            "\n解析Schema文件 [${e.relativePath}] 错误:\n${e.message}",
+                                            ConsoleViewContentType.ERROR_OUTPUT
+                                        )
+                                    }
+                                    is SqlExRepositoryMethodException -> {
+                                        output(
+                                            "\n解析Method文件 [${e.relativePath}] 错误:\n${e.message}",
+                                            ConsoleViewContentType.ERROR_OUTPUT
+                                        )
+                                    }
+                                    else -> {
+                                        output(
+                                            "\n重建SqlEx索引时发生错误,索引构建失败:\n${e.message ?: e::class.java.simpleName}",
+                                            ConsoleViewContentType.ERROR_OUTPUT
+                                        )
+                                    }
                                 }
                             } finally {
                                 this@SqlExRepositoryService.indicator = null
@@ -283,6 +308,7 @@ val Project.allMaybeSqlExSourceRoot: List<VirtualFile>
         .getFiles(SqlExConfigFileType.INSTANCE, GlobalSearchScope.allScope(this))
         .mapNotNull { it.parent }
 
+//显示可能存在的SqlEx Repository导入通知
 fun Project.showMaybeSqlExImportNotification() {
     val imported = this.getProperty(importedRepositoriesPropertyKey) ?: listOf()
     val ignored = this.getProperty(ignoredRepositoriesPropertyKey) ?: listOf()

@@ -6,7 +6,7 @@ import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.EditorNotificationPanel
 import com.intellij.ui.EditorNotifications
-import me.danwi.sqlex.idea.listener.SqlExRepositoryEventListener
+import me.danwi.sqlex.idea.repositroy.SqlExRepositoryEventListener
 import me.danwi.sqlex.idea.repositroy.SqlExRepositoryService
 import me.danwi.sqlex.idea.util.extension.isSqlExConfig
 import me.danwi.sqlex.idea.util.extension.sqlexRepositoryService
