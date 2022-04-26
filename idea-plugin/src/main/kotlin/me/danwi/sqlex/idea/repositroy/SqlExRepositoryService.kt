@@ -310,33 +310,36 @@ val Project.allMaybeSqlExSourceRoot: List<VirtualFile>
 
 //显示可能存在的SqlEx Repository导入通知
 fun Project.showMaybeSqlExImportNotification() {
-    val imported = this.getProperty(importedRepositoriesPropertyKey) ?: listOf()
-    val ignored = this.getProperty(ignoredRepositoriesPropertyKey) ?: listOf()
-    //获取可能存在的sqlex repository
-    allMaybeSqlExSourceRoot
-        .filter { it.projectRootRelativePath != null }
-        .filter { !imported.contains(it.projectRootRelativePath) && !ignored.contains(it.projectRootRelativePath) }
-        .forEach { sourceRoot ->
-            val notification = this.createNotification("发现SqlEx源码目录(${sourceRoot.projectRootRelativePath}),是否导入?")
-            notification.addAction(object : AnAction("导入") {
-                override fun actionPerformed(event: AnActionEvent) {
-                    notification.expire()
-                    try {
-                        this@showMaybeSqlExImportNotification.importRepository(sourceRoot)
-                    } catch (e: Exception) {
-                        e.message?.let { event.project?.showNotification(it, NotificationType.WARNING) }
-                    }
+    runInThread {
+        runReadAction {
+            val imported = this.getProperty(importedRepositoriesPropertyKey) ?: listOf()
+            val ignored = this.getProperty(ignoredRepositoriesPropertyKey) ?: listOf()
+            //获取可能存在的sqlex repository
+            allMaybeSqlExSourceRoot
+                .filter { it.projectRootRelativePath != null }
+                .filter { !imported.contains(it.projectRootRelativePath) && !ignored.contains(it.projectRootRelativePath) }
+                .forEach { sourceRoot ->
+                    val notification = this.createNotification("发现SqlEx源码目录(${sourceRoot.projectRootRelativePath}),是否导入?")
+                    notification.addAction(object : AnAction("导入") {
+                        override fun actionPerformed(event: AnActionEvent) {
+                            notification.expire()
+                            try {
+                                this@showMaybeSqlExImportNotification.importRepository(sourceRoot)
+                            } catch (e: Exception) {
+                                e.message?.let { event.project?.showNotification(it, NotificationType.WARNING) }
+                            }
+                        }
+                    })
+                    notification.addAction(object : AnAction("忽略") {
+                        override fun actionPerformed(e: AnActionEvent) {
+                            notification.expire()
+                            this@showMaybeSqlExImportNotification.ignoreRepository(sourceRoot)
+                        }
+                    })
+                    notification.notify(this)
                 }
-            })
-            notification.addAction(object : AnAction("忽略") {
-                override fun actionPerformed(e: AnActionEvent) {
-                    notification.expire()
-                    this@showMaybeSqlExImportNotification.ignoreRepository(sourceRoot)
-                }
-            })
-            notification.notify(this)
         }
-
+    }
 }
 
 //同步Repository
