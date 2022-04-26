@@ -1,17 +1,8 @@
 <idea-plugin>
-    <projectListeners>
-        <listener class="me.danwi.sqlex.idea.repositroy.SqlExRepositoryToolbarProvider"
-                  topic="me.danwi.sqlex.idea.repositroy.SqlExRepositoryEventListener"/>
-    </projectListeners>
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow id="SqlEx Repository" icon="SqlExIcons.ToolWindow" anchor="bottom"
                     factoryClass="me.danwi.sqlex.idea.repositroy.SqlExRepositoryToolWindowFactory"/>
-        <editorFloatingToolbarProvider implementation="me.danwi.sqlex.idea.repositroy.SqlExRepositoryToolbarProvider"/>
+        <editorFloatingToolbarProvider implementation="me.danwi.sqlex.idea.repositroy.SqlExRepositoryImportProvider"/>
+        <editorFloatingToolbarProvider implementation="me.danwi.sqlex.idea.repositroy.SqlExRepositoryRefreshProvider"/>
     </extensions>
-    <actions>
-        <group id="me.danwi.sqlex.FloatingGroup">
-            <action id="me.danwi.sqlex.RefreshAction"
-                    class="me.danwi.sqlex.idea.repositroy.SqlExRepositoryRefreshAction"/>
-        </group>
-    </actions>
 </idea-plugin>

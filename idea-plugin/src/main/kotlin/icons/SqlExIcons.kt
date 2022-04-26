@@ -36,4 +36,11 @@ object SqlExIcons {
         layeredIcon.setIcon(IconUtil.scale(AllIcons.Actions.BuildLoadChanges, 0.8), 1, 4)
         layeredIcon
     }
+
+    val ImportAction by lazy {
+        val layeredIcon = LayeredIcon(2)
+        layeredIcon.setIcon(IconX16, 0)
+        layeredIcon.setIcon(IconUtil.scale(AllIcons.General.Add, 0.8), 1, 4)
+        layeredIcon
+    }
 }
