@@ -8,7 +8,7 @@ import java.io.File
 const val SqlExGeneratedTagFileName = "generate-by-sqlex.txt"
 
 //SqlEx Config文件拓展名
-const val SqlExConfigFileExtensionName = "yaml"
+const val SqlExConfigFileExtensionName = "sqlc"
 
 //SqlEx配置文件名
 const val SqlExConfigFileName = "sqlex.${SqlExConfigFileExtensionName}"

@@ -15,7 +15,7 @@
         <fileType name="SqlEx Config"
                   implementationClass="me.danwi.sqlex.idea.config.SqlExConfigFileType"
                   fieldName="INSTANCE"
-                  language="yaml" extensions="yaml"/>
+                  language="yaml" extensions="sqlc"/>
         <!--新建文件模版-->
         <internalFileTemplate id="SqlEx.Config" name="SqlEx Config" order="first"/>
         <!--配置中注入java语言,converters配置等-->
