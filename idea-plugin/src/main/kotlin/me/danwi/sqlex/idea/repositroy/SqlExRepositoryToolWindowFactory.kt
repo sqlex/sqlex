@@ -1,6 +1,7 @@
 package me.danwi.sqlex.idea.repositroy
 
 import com.intellij.icons.AllIcons
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -22,6 +23,7 @@ import com.intellij.util.ui.components.BorderLayoutPanel
 import me.danwi.sqlex.idea.config.SqlExConfigFileType
 import me.danwi.sqlex.idea.listener.SqlExRepositoryEventListener
 import me.danwi.sqlex.idea.util.extension.projectRootRelativePath
+import me.danwi.sqlex.idea.util.extension.showNotification
 import javax.swing.BorderFactory
 import javax.swing.JComponent
 import javax.swing.SwingConstants
@@ -90,11 +92,15 @@ class SqlExRepositoryToolWindowFactory : ToolWindowFactory {
         actions.addSeparator()
         actions.add(object : AnAction(AllIcons.General.Add) {
             override fun actionPerformed(event: AnActionEvent) {
-                val chooseConfigFile = FileChooser.chooseFile(
-                    FileChooserDescriptorFactory.createSingleFileDescriptor(SqlExConfigFileType.INSTANCE),
-                    project, LocalFileSystem.getInstance().findFileByPath(project?.basePath ?: return)
-                ) ?: return
-                project?.importRepository(chooseConfigFile.parent)
+                try {
+                    val chooseConfigFile = FileChooser.chooseFile(
+                        FileChooserDescriptorFactory.createSingleFileDescriptor(SqlExConfigFileType.INSTANCE),
+                        project, LocalFileSystem.getInstance().findFileByPath(project?.basePath ?: return)
+                    ) ?: return
+                    project?.importRepository(chooseConfigFile.parent)
+                } catch (e: Exception) {
+                    e.message?.let { event.project?.showNotification(it, NotificationType.WARNING) }
+                }
             }
         })
         actions.add(object : AnAction(AllIcons.General.Remove) {

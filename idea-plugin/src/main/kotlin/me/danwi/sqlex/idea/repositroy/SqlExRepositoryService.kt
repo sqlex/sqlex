@@ -293,9 +293,13 @@ fun Project.showMaybeSqlExImportNotification() {
         .forEach { sourceRoot ->
             val notification = this.createNotification("发现SqlEx源码目录(${sourceRoot.projectRootRelativePath}),是否导入?")
             notification.addAction(object : AnAction("导入") {
-                override fun actionPerformed(e: AnActionEvent) {
+                override fun actionPerformed(event: AnActionEvent) {
                     notification.expire()
-                    this@showMaybeSqlExImportNotification.importRepository(sourceRoot)
+                    try {
+                        this@showMaybeSqlExImportNotification.importRepository(sourceRoot)
+                    } catch (e: Exception) {
+                        e.message?.let { event.project?.showNotification(it, NotificationType.WARNING) }
+                    }
                 }
             })
             notification.addAction(object : AnAction("忽略") {
