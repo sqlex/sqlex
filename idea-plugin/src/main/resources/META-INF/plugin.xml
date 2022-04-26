@@ -26,10 +26,6 @@
         <!--监听Source Root变更-->
         <listener class="me.danwi.sqlex.idea.listener.impl.SqlExModuleRootListener"
                   topic="com.intellij.openapi.roots.ModuleRootListener"/>
-        <!--内部监听-->
-        <!--监听 Repository Service 的变更,实现编辑器通知-->
-        <listener class="me.danwi.sqlex.idea.editor.SqlExRefreshNotificationProvider"
-                  topic="me.danwi.sqlex.idea.repositroy.SqlExRepositoryEventListener"/>
     </projectListeners>
 
     <extensions defaultExtensionNs="com.intellij">
@@ -37,9 +33,6 @@
         <postStartupActivity implementation="me.danwi.sqlex.idea.SqlExStartupActivity"/>
         <!--SqlEx通知组-->
         <notificationGroup id="SqlEx Notification Group" displayType="BALLOON" isLogByDefault="true"/>
-        <!--schema同步通知面板-->
-        <editorNotificationProvider
-                implementation="me.danwi.sqlex.idea.editor.SqlExRefreshNotificationProvider"/>
 
         <localInspection language="JAVA" groupName="SqlEx" level="ERROR" enabledByDefault="true"
                          displayName="Java converter implement"
