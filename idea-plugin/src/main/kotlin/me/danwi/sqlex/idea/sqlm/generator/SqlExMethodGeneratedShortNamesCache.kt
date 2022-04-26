@@ -7,7 +7,7 @@ import com.intellij.psi.PsiMethod
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.PsiShortNamesCache
 import com.intellij.util.Processor
-import me.danwi.sqlex.idea.util.extension.sqlexRepositoryServices
+import me.danwi.sqlex.idea.repositroy.sqlexRepositoryServices
 
 class SqlExMethodGeneratedShortNamesCache(private val project: Project) : PsiShortNamesCache() {
     override fun getClassesByName(name: String, scope: GlobalSearchScope): Array<PsiClass> {

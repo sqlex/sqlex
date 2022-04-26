@@ -6,7 +6,7 @@ import com.intellij.spring.contexts.model.LocalModel
 import com.intellij.spring.model.CommonSpringBean
 import com.intellij.spring.model.custom.CustomLocalComponentsDiscoverer
 import com.intellij.spring.model.jam.stereotype.CustomSpringComponent
-import me.danwi.sqlex.idea.service.SqlExMethodPsiClassCacheKey
+import me.danwi.sqlex.idea.repositroy.SqlExMethodPsiClassCacheKey
 import me.danwi.sqlex.idea.sqlm.SqlExMethodFileType
 import java.util.Collections
 

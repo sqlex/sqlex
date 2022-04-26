@@ -1,0 +1,35 @@
+<idea-plugin>
+    <projectListeners>
+        <!--监听配置文件的变更-->
+        <listener class="me.danwi.sqlex.idea.listener.impl.SqlExConfigChangeListener"
+                  topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
+    </projectListeners>
+
+    <extensions defaultExtensionNs="JavaScript">
+        <!--配置文件schema定义-->
+        <JsonSchema.ProviderFactory implementation="me.danwi.sqlex.idea.config.SqlExConfigJsonSchemaProviderFactory"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!--配置文件-->
+        <fileType name="SqlEx Config"
+                  implementationClass="me.danwi.sqlex.idea.config.SqlExConfigFileType"
+                  fieldName="INSTANCE"
+                  language="yaml" extensions="sqlc"/>
+        <!--新建文件模版-->
+        <internalFileTemplate id="SqlEx.Config" name="SqlEx Config" order="first"/>
+        <!--配置中注入java语言,converters配置等-->
+        <multiHostInjector implementation="me.danwi.sqlex.idea.config.SqlExConfigJavaInjector"/>
+        <!--配置中提供inlay hint信息,比如converter的from->to-->
+        <codeInsight.inlayProvider language="yaml"
+                                   implementationClass="me.danwi.sqlex.idea.config.SqlExConfigInlayHintsProvider"/>
+        <!--感知转换器实现是否正确-->
+        <localInspection language="yaml"
+                         groupName="SqlEx"
+                         displayName="Invalid converters config"
+                         level="ERROR"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.config.SqlExConfigConvertersInspection"
+        />
+    </extensions>
+</idea-plugin>

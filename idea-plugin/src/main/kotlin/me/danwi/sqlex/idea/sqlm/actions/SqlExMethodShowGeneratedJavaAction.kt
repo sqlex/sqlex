@@ -15,6 +15,7 @@ import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiFileFactory
 import com.intellij.psi.codeStyle.CodeStyleManager
+import com.intellij.ui.ScreenUtil
 import com.intellij.ui.popup.PopupPositionManager
 import com.intellij.util.DocumentUtil
 import me.danwi.sqlex.idea.config.SqlExConfigFileType
@@ -81,6 +82,7 @@ class SqlExMethodShowGeneratedJavaAction : AnAction() {
 
 private class GeneratedJavaFileViewComponent(project: Project, javaFile: PsiFile) : JPanel(BorderLayout()) {
     private val editor: EditorEx
+    private var isEditorReleased: Boolean = false
 
     init {
         //新建编辑器和文档
@@ -102,7 +104,9 @@ private class GeneratedJavaFileViewComponent(project: Project, javaFile: PsiFile
 
     override fun removeNotify() {
         super.removeNotify()
-
-        EditorFactory.getInstance().releaseEditor(editor)
+        if (ScreenUtil.isStandardAddRemoveNotify(this) && !isEditorReleased) {
+            isEditorReleased = true
+            EditorFactory.getInstance().releaseEditor(editor)
+        }
     }
 }

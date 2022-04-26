@@ -1,4 +1,4 @@
-package me.danwi.sqlex.idea.service
+package me.danwi.sqlex.idea.repositroy
 
 import com.intellij.ide.highlighter.JavaFileType
 import com.intellij.openapi.project.Project

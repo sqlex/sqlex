@@ -6,7 +6,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.ResolveScopeEnlarger
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.SearchScope
-import me.danwi.sqlex.idea.service.SqlExMethodGeneratedCacheKey
+import me.danwi.sqlex.idea.repositroy.SqlExMethodGeneratedCacheKey
 
 class SqlExMethodResolveScopeEnlarger : ResolveScopeEnlarger() {
     override fun getAdditionalResolveScope(file: VirtualFile, project: Project): SearchScope? {

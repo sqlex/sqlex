@@ -5,7 +5,7 @@ import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElementFinder
 import com.intellij.psi.PsiPackage
 import com.intellij.psi.search.GlobalSearchScope
-import me.danwi.sqlex.idea.util.extension.sqlexRepositoryServices
+import me.danwi.sqlex.idea.repositroy.sqlexRepositoryServices
 
 class SqlExMethodGeneratedElementFinder(private val project: Project) : PsiElementFinder() {
     override fun findClasses(qualifiedName: String, scope: GlobalSearchScope): Array<PsiClass> {

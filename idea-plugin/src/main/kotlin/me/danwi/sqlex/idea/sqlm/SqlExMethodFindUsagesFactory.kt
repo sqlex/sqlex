@@ -6,7 +6,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiReference
 import com.intellij.psi.search.SearchScope
 import com.intellij.psi.search.searches.ReferencesSearch
-import me.danwi.sqlex.idea.service.SqlExMethodPsiClassCacheKey
+import me.danwi.sqlex.idea.repositroy.SqlExMethodPsiClassCacheKey
 import me.danwi.sqlex.idea.sqlm.psi.MethodNameSubtree
 import me.danwi.sqlex.idea.sqlm.psi.MethodSubtree
 import me.danwi.sqlex.idea.util.extension.parentOf

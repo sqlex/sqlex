@@ -22,10 +22,7 @@ class SqlExSchemaChangeListener(private val project: Project) : BulkFileListener
             }
             return@filter true
         }.forEach {
-            val service = it.file?.sqlexRepositoryService ?: return@forEach
-            service.isValid = false
-            if (service.autoRefresh)
-                service.refresh()
+            it.file?.sqlexRepositoryService?.isValid = false
         }
     }
 }

@@ -6,7 +6,7 @@ import com.intellij.psi.PsiClassType
 import com.intellij.psi.util.PsiTypesUtil
 import me.danwi.sqlex.common.ParameterTypes.ParameterConverterInterfaceQualifiedName
 import me.danwi.sqlex.common.ParameterTypes.PreSupportedTypes
-import me.danwi.sqlex.idea.service.SqlExMethodFileCacheKey
+import me.danwi.sqlex.idea.repositroy.SqlExMethodFileCacheKey
 
 //获取全限定包名
 val PsiClass.qualifiedPackageName: String?
