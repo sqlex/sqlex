@@ -1,5 +1,6 @@
 package me.danwi.sqlex.core.invoke.method;
 
+import me.danwi.sqlex.core.ExceptionTranslator;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.transaction.TransactionManager;
@@ -17,8 +18,8 @@ import java.util.List;
 public class SelectMethodProxy extends BaseMethodProxy {
     private final BeanMapper beanMapper;
 
-    public SelectMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry) {
-        super(method, transactionManager, registry);
+    public SelectMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry, ExceptionTranslator translator) {
+        super(method, transactionManager, registry, translator);
         //新建bean mapper
         Class<?> beanType = getBeanType(method);
         if (beanType == null)

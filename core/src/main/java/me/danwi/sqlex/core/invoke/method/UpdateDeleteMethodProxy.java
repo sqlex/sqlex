@@ -1,5 +1,6 @@
 package me.danwi.sqlex.core.invoke.method;
 
+import me.danwi.sqlex.core.ExceptionTranslator;
 import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.transaction.TransactionManager;
 
@@ -10,8 +11,8 @@ import java.sql.SQLException;
 import java.util.List;
 
 public class UpdateDeleteMethodProxy extends BaseMethodProxy {
-    public UpdateDeleteMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry) {
-        super(method, transactionManager, registry);
+    public UpdateDeleteMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry, ExceptionTranslator translator) {
+        super(method, transactionManager, registry, translator);
     }
 
     @Override

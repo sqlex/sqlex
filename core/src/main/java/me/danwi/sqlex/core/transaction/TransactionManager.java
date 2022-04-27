@@ -1,7 +1,6 @@
 package me.danwi.sqlex.core.transaction;
 
 import java.sql.Connection;
-import java.sql.SQLException;
 
 /**
  * 事务管理器
@@ -26,9 +25,8 @@ public interface TransactionManager {
      * 使用默认事务隔离级别
      *
      * @return 新建立的事务
-     * @throws SQLException 新建事务异常
      */
-    default Transaction newTransaction() throws SQLException {
+    default Transaction newTransaction() {
         return newTransaction(getDefaultIsolationLevel());
     }
 
@@ -37,15 +35,13 @@ public interface TransactionManager {
      *
      * @param transactionIsolationLevel 事务隔离级别
      * @return 新建立的事务
-     * @throws SQLException 新建事务异常
      */
-    Transaction newTransaction(Integer transactionIsolationLevel) throws SQLException;
+    Transaction newTransaction(Integer transactionIsolationLevel);
 
     /**
      * 直接获取数据库连接(手动挡)
      *
      * @return 数据库连接
-     * @throws SQLException 新建数据库连接异常
      */
-    Connection newConnection() throws SQLException;
+    Connection newConnection();
 }

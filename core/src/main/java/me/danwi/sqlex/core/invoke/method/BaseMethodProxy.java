@@ -1,5 +1,6 @@
 package me.danwi.sqlex.core.invoke.method;
 
+import me.danwi.sqlex.core.ExceptionTranslator;
 import me.danwi.sqlex.core.annotation.SqlExInExprPosition;
 import me.danwi.sqlex.core.annotation.SqlExMarkerPosition;
 import me.danwi.sqlex.core.annotation.SqlExParameterPosition;
@@ -26,14 +27,17 @@ public abstract class BaseMethodProxy implements MethodProxy {
     private final MarkerInfo[] markerInfos;
     //参数转换器注册表
     private final ParameterConverterRegistry registry;
+    //异常翻译
+    private final ExceptionTranslator translator;
 
     private static class MarkerInfo {
         public int argIndex; //引用方法参数的位置
         public SqlExInExprPosition inExprPosition; //?是否在一个in(?)表达式中
     }
 
-    public BaseMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry) {
+    public BaseMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry, ExceptionTranslator translator) {
         this.transactionManager = transactionManager;
+        this.translator = translator;
         //获取sql
         sql = method.getAnnotation(SqlExScript.class).value();
         this.registry = registry;
@@ -224,7 +228,7 @@ public abstract class BaseMethodProxy implements MethodProxy {
     }
 
     @Override
-    public Object invoke(Object[] args) throws SQLException {
+    public Object invoke(Object[] args) {
         //获取事务
         Transaction currentTransaction = transactionManager.getCurrentTransaction();
         Connection connection;
@@ -238,10 +242,18 @@ public abstract class BaseMethodProxy implements MethodProxy {
         //调用方法
         try {
             return invoke(args, connection);
+        } catch (SQLException e) {
+            throw translator.translate(e);
         } finally {
             //不是事务中的连接主要手动关闭
-            if (currentTransaction == null)
-                connection.close();
+            if (currentTransaction == null) {
+                try {
+                    connection.close();
+                } catch (SQLException e) {
+                    //noinspection ThrowFromFinallyBlock
+                    throw translator.translate(e);
+                }
+            }
         }
     }
 

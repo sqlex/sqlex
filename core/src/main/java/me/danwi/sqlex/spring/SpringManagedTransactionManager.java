@@ -1,5 +1,6 @@
 package me.danwi.sqlex.spring;
 
+import me.danwi.sqlex.core.ExceptionTranslator;
 import me.danwi.sqlex.core.transaction.Transaction;
 import me.danwi.sqlex.core.transaction.TransactionManager;
 import org.springframework.jdbc.datasource.TransactionAwareDataSourceProxy;
@@ -13,13 +14,15 @@ import java.sql.SQLException;
  */
 public class SpringManagedTransactionManager implements TransactionManager {
     private final DataSource dataSource;
+    private final ExceptionTranslator translator;
 
-    public SpringManagedTransactionManager(DataSource dataSource) {
+    public SpringManagedTransactionManager(DataSource dataSource, ExceptionTranslator translator) {
         if (dataSource instanceof TransactionAwareDataSourceProxy) {
             this.dataSource = dataSource;
         } else {
             this.dataSource = new TransactionAwareDataSourceProxy(dataSource);
         }
+        this.translator = translator;
     }
 
     @Override
@@ -29,6 +32,7 @@ public class SpringManagedTransactionManager implements TransactionManager {
 
     @Override
     public Transaction getCurrentTransaction() {
+        //直接返回空,对于调用者来说,相当于没有事务(实际上由spring接管),会使用new connection来处理(从而获得事务连接)
         return null;
     }
 
@@ -38,7 +42,11 @@ public class SpringManagedTransactionManager implements TransactionManager {
     }
 
     @Override
-    public Connection newConnection() throws SQLException {
-        return dataSource.getConnection();
+    public Connection newConnection() {
+        try {
+            return dataSource.getConnection();
+        } catch (SQLException e) {
+            throw translator.translate(e);
+        }
     }
 }
