@@ -99,7 +99,14 @@ class Repository(
         get() = session.DDL
 
     //SqlEx Repository顶级类
-    val repositoryJavaFile: GeneratedJavaFile by lazy { GeneratedRepositoryFile(rootPackage, converters, schemas) }
+    val repositoryJavaFile: GeneratedJavaFile by lazy {
+        GeneratedRepositoryFile(
+            rootPackage,
+            converters,
+            schemas,
+            session
+        )
+    }
 
     //生成整个java文件
     fun generateJavaFile(relativePath: String, content: String): GeneratedMethodFile {

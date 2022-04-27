@@ -54,6 +54,10 @@ class Session(database: String) {
         return ffiInvoke("DatabaseAPI", "GetStatementInfo", sql)
     }
 
+    fun getSQLsOfScript(script: String): Array<String> {
+        return ffiInvoke("DatabaseAPI", "GetSQLsOfScript", script)
+    }
+
     fun close() {
         ffiCall("DatabaseAPI", "CloseSession", sessionID)
     }
