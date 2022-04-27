@@ -1,5 +1,6 @@
 package me.danwi.sqlex.core.invoke.method;
 
+import me.danwi.sqlex.core.ExceptionTranslator;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.transaction.TransactionManager;
@@ -14,8 +15,8 @@ import java.util.Arrays;
 import java.util.List;
 
 public class SelectPagedMethodProxy extends SelectMethodProxy {
-    public SelectPagedMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry) {
-        super(method, transactionManager, registry);
+    public SelectPagedMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry, ExceptionTranslator translator) {
+        super(method, transactionManager, registry, translator);
     }
 
     @Override

@@ -2,9 +2,10 @@ package me.danwi.sqlex.core;
 
 import com.mysql.cj.jdbc.MysqlConnectionPoolDataSource;
 import me.danwi.sqlex.core.annotation.SqlExRepository;
-import me.danwi.sqlex.core.exception.SqlExActionExecuteException;
 import me.danwi.sqlex.core.exception.SqlExException;
 import me.danwi.sqlex.core.exception.SqlExRepositoryNotMatchException;
+import me.danwi.sqlex.core.exception.SqlExSQLException;
+import me.danwi.sqlex.core.exception.SqlExUndeclaredException;
 import me.danwi.sqlex.core.invoke.InvocationProxy;
 import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.transaction.DefaultTransactionManager;
@@ -24,6 +25,29 @@ public class DaoFactory {
     final private TransactionManager transactionManager;
     final private ParameterConverterRegistry parameterConverterRegistry;
     final private Map<Class<?>, InvocationProxy> invocationProxyCache = new HashMap<>();
+    final private ExceptionTranslator exceptionTranslator;
+
+    /**
+     * 默认异常翻译
+     *
+     * <p>{@link SQLException}将转换成{@link me.danwi.sqlex.core.exception.SqlExSQLException}
+     *
+     * <p>{@link RuntimeException}分类异常保持不变
+     *
+     * <p>其他的Checked异常,将全部转换成{@link SqlExUndeclaredException}
+     */
+    static class DefaultExceptionTranslator implements ExceptionTranslator {
+        @Override
+        public RuntimeException translate(Exception ex) {
+            if (ex instanceof SQLException) {
+                return new SqlExSQLException((SQLException) ex);
+            } else if (ex instanceof RuntimeException) {
+                return (RuntimeException) ex;
+            } else {
+                return new SqlExUndeclaredException(ex);
+            }
+        }
+    }
 
     /**
      * 新建数据访问对象工厂实例
@@ -32,57 +56,52 @@ public class DaoFactory {
      * @param username   用户名
      * @param password   密码
      * @param repository SqlEx Repository
-     * @throws SQLException 转换器解析异常
      */
-    public DaoFactory(String url, String username, String password, Class<? extends RepositoryLike> repository) throws SQLException {
+    public DaoFactory(String url, String username, String password, Class<? extends RepositoryLike> repository) {
         MysqlConnectionPoolDataSource dataSource = new MysqlConnectionPoolDataSource();
         dataSource.setURL(url);
         dataSource.setUser(username);
         dataSource.setPassword(password);
         this.repositoryClass = repository;
-        this.transactionManager = new DefaultTransactionManager(dataSource);
+        this.exceptionTranslator = new DefaultExceptionTranslator();
+        this.transactionManager = new DefaultTransactionManager(dataSource, this.exceptionTranslator);
         this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
     }
-
 
     /**
      * 新建数据访问对象工厂实例,使用默认事务管理器
      *
      * @param dataSource 数据源
      * @param repository SqlEx Repository
-     * @throws SQLException 转换器解析异常
      */
-    public DaoFactory(DataSource dataSource, Class<? extends RepositoryLike> repository) throws SQLException {
+    public DaoFactory(DataSource dataSource, Class<? extends RepositoryLike> repository) {
         this.repositoryClass = repository;
-        this.transactionManager = new DefaultTransactionManager(dataSource);
+        this.exceptionTranslator = new DefaultExceptionTranslator();
+        this.transactionManager = new DefaultTransactionManager(dataSource, this.exceptionTranslator);
         this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
     }
 
     /**
      * 使用指定的事务管理器来新建数据访问对象工厂实例
      *
-     * @param transactionManager 事务管理器
-     * @param repository         SqlEx Repository
-     * @throws SQLException 转换器解析异常
+     * @param transactionManager  事务管理器
+     * @param repository          SqlEx Repository
+     * @param exceptionTranslator 异常翻译
      */
-    public DaoFactory(TransactionManager transactionManager, Class<? extends RepositoryLike> repository) throws SQLException {
+    public DaoFactory(TransactionManager transactionManager, Class<? extends RepositoryLike> repository, ExceptionTranslator exceptionTranslator) {
         this.repositoryClass = repository;
         this.transactionManager = transactionManager;
         this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
+        this.exceptionTranslator = exceptionTranslator;
     }
 
     /**
      * 新建事务,适合手动管理事务
      *
      * @return 事务
-     * @throws SQLException 新建事务异常
      */
-    public Transaction newTransaction() throws SQLException {
+    public Transaction newTransaction() {
         return this.transactionManager.newTransaction();
-    }
-
-    public interface Action<T> {
-        T run(Transaction transaction) throws Exception;
     }
 
     /**
@@ -92,10 +111,35 @@ public class DaoFactory {
      * @param action 函数
      * @param <T>    闭包函数的返回值
      * @return 返回闭包函数的返回值
-     * @throws SqlExActionExecuteException action运行异常
+     * @throws SqlExUndeclaredException action运行过程中的Checked异常包装
      */
-    public <T> T transaction(Action<T> action) {
+    public <T> T transaction(TransactionAction<T> action) {
         return transaction(transactionManager.getDefaultIsolationLevel(), action);
+    }
+
+    /**
+     * 以事务的方式来运行函数,函数无返回值
+     * 使用默认事务隔离级别
+     *
+     * @param action 函数
+     * @throws SqlExUndeclaredException action运行过程中的Checked异常包装
+     */
+    public void transaction(TransactionActionReturnVoid action) {
+        transaction(transactionManager.getDefaultIsolationLevel(), action);
+    }
+
+    /**
+     * 以事务的方式来运行函数,函数无返回值
+     *
+     * @param transactionIsolationLevel 事务隔离级别, 例如:{@link Connection#TRANSACTION_REPEATABLE_READ}
+     * @param action                    函数
+     * @throws SqlExUndeclaredException action运行过程中的Checked异常包装
+     */
+    public void transaction(Integer transactionIsolationLevel, TransactionActionReturnVoid action) {
+        transaction(transactionIsolationLevel, transaction -> {
+            action.run(transaction);
+            return null;
+        });
     }
 
     /**
@@ -105,9 +149,9 @@ public class DaoFactory {
      * @param transactionIsolationLevel 事务隔离级别, 例如:{@link Connection#TRANSACTION_REPEATABLE_READ}
      * @param <T>                       闭包函数的返回值
      * @return 返回闭包函数的返回值
-     * @throws SqlExActionExecuteException action运行异常
+     * @throws SqlExUndeclaredException action运行过程中的Checked异常包装
      */
-    public <T> T transaction(Integer transactionIsolationLevel, Action<T> action) {
+    public <T> T transaction(Integer transactionIsolationLevel, TransactionAction<T> action) {
         //获取当前的事务
         Transaction currentTransaction = transactionManager.getCurrentTransaction();
         //是否为顶级事务
@@ -115,28 +159,16 @@ public class DaoFactory {
         //如果当前不存在事务,则新建一个
         if (currentTransaction == null) {
             isTopLevelTransaction = true;
-            try {
-                currentTransaction = transactionManager.newTransaction(transactionIsolationLevel);
-            } catch (SQLException e) {
-                throw new SqlExException(e);
-            }
+            currentTransaction = transactionManager.newTransaction(transactionIsolationLevel);
         }
         //异常
-        SqlExException exception = null;
+        RuntimeException exception = null;
         try {
             //运行并获取到结果
             return action.run(currentTransaction);
-        } catch (SqlExException e) {
-            //已经是SqlExException,不要重复包装
-            exception = e;
-            throw exception;
-        } catch (SQLException e) {
-            //普通SQL异常
-            exception = new SqlExException(e);
-            throw exception;
         } catch (Exception e) {
-            //其他在执行action过程中的异常
-            exception = new SqlExActionExecuteException(e);
+            //异常转换
+            exception = this.exceptionTranslator.translate(e);
             throw exception;
         } finally {
             if (isTopLevelTransaction) {
@@ -145,9 +177,6 @@ public class DaoFactory {
                         currentTransaction.commit();
                     else
                         currentTransaction.rollback();
-                } catch (SQLException e) {
-                    //noinspection ThrowFromFinallyBlock
-                    throw new SqlExException(e);
                 } finally {
                     try {
                         currentTransaction.close();
@@ -190,7 +219,7 @@ public class DaoFactory {
                     if (!annotation.value().getName().equals(this.repositoryClass.getName()))
                         throw new SqlExRepositoryNotMatchException();
                     //缓存中没有再自己新建
-                    invocationProxy = new InvocationProxy(transactionManager, parameterConverterRegistry);
+                    invocationProxy = new InvocationProxy(transactionManager, parameterConverterRegistry, exceptionTranslator);
                     invocationProxyCache.put(dao, invocationProxy);
                 }
             }
