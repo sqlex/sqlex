@@ -2,11 +2,11 @@ package me.danwi.sqlex.core;
 
 import com.mysql.cj.jdbc.MysqlConnectionPoolDataSource;
 import me.danwi.sqlex.core.annotation.SqlExRepository;
-import me.danwi.sqlex.core.exception.SqlExException;
 import me.danwi.sqlex.core.exception.SqlExRepositoryNotMatchException;
 import me.danwi.sqlex.core.exception.SqlExSQLException;
 import me.danwi.sqlex.core.exception.SqlExUndeclaredException;
 import me.danwi.sqlex.core.invoke.InvocationProxy;
+import me.danwi.sqlex.core.migration.Migrator;
 import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.transaction.DefaultTransactionManager;
 import me.danwi.sqlex.core.transaction.Transaction;
@@ -26,6 +26,7 @@ public class DaoFactory {
     final private ParameterConverterRegistry parameterConverterRegistry;
     final private Map<Class<?>, InvocationProxy> invocationProxyCache = new HashMap<>();
     final private ExceptionTranslator exceptionTranslator;
+    final private Migrator migrator;
 
     /**
      * 默认异常翻译
@@ -66,6 +67,7 @@ public class DaoFactory {
         this.exceptionTranslator = new DefaultExceptionTranslator();
         this.transactionManager = new DefaultTransactionManager(dataSource, this.exceptionTranslator);
         this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
+        this.migrator = new Migrator(repository, dataSource);
     }
 
     /**
@@ -79,20 +81,23 @@ public class DaoFactory {
         this.exceptionTranslator = new DefaultExceptionTranslator();
         this.transactionManager = new DefaultTransactionManager(dataSource, this.exceptionTranslator);
         this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
+        this.migrator = new Migrator(repository, dataSource);
     }
 
     /**
      * 使用指定的事务管理器来新建数据访问对象工厂实例
      *
      * @param transactionManager  事务管理器
+     * @param dataSource          数据源
      * @param repository          SqlEx Repository
      * @param exceptionTranslator 异常翻译
      */
-    public DaoFactory(TransactionManager transactionManager, Class<? extends RepositoryLike> repository, ExceptionTranslator exceptionTranslator) {
+    public DaoFactory(TransactionManager transactionManager, DataSource dataSource, Class<? extends RepositoryLike> repository, ExceptionTranslator exceptionTranslator) {
         this.repositoryClass = repository;
         this.transactionManager = transactionManager;
         this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
         this.exceptionTranslator = exceptionTranslator;
+        this.migrator = new Migrator(repository, dataSource);
     }
 
     /**
@@ -195,6 +200,13 @@ public class DaoFactory {
      */
     public Class<?> getRepositoryClass() {
         return this.repositoryClass;
+    }
+
+    /**
+     * 迁移数据版本
+     */
+    public void migrate() {
+        migrator.migrate();
     }
 
     /**
