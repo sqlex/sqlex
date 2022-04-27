@@ -442,4 +442,28 @@ class SessionTest {
         info = session.getStatementInfo(sql)
         assertFalse(info.hasLimit)
     }
+
+    @Test
+    fun getSQLsOfScript() {
+        val session = Session("getSQLsOfScript_test")
+
+        val sqls = session.getSQLsOfScript(
+            """
+            create table person(
+                id int primary key not null,
+                name varchar(255) not null
+            );
+            
+            create table info(id int not null);
+            
+            drop table info;
+            """.trimIndent()
+        )
+
+        assertEquals("CREATE TABLE `person` (`id` INT PRIMARY KEY NOT NULL,`name` VARCHAR(255) NOT NULL)", sqls[0])
+        assertEquals("CREATE TABLE `info` (`id` INT NOT NULL)", sqls[1])
+        assertEquals("DROP TABLE `info`", sqls[2])
+
+        session.close()
+    }
 }
