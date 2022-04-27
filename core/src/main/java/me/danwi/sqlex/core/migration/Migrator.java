@@ -40,15 +40,6 @@ public class Migrator {
         }
     }
 
-    //助手方法,执行语句
-    private void execute(String sql) {
-        try (Connection connection = dataSource.getConnection()) {
-            execute(connection, sql);
-        } catch (SQLException ex) {
-            throw new SqlExMigrationException(-1, ex);
-        }
-    }
-
     /**
      * 迁移到最近版本
      *
@@ -65,8 +56,18 @@ public class Migrator {
      * @return 返回成功迁移的版本号
      */
     public int migrate(int version) {
+        /*
+            流程说明
+            迁移过程中会保持一个连接用于持有锁(锁版本表) + 版本信息的修改
+            另外每个版本的迁移在新的连接中进行
+        */
+
         //保证版本表的存在
-        execute("create table if not exists _sqlex_version_(version int not null, can_migrate bool not null)");
+        try (Connection connection = dataSource.getConnection()) {
+            execute(connection, "create table if not exists _sqlex_version_(version int not null, can_migrate bool not null)");
+        } catch (SQLException ex) {
+            throw new SqlExMigrationException(-1, ex);
+        }
 
         //专用于锁定版本信息的连接
         Connection lockConnection;
@@ -81,6 +82,8 @@ public class Migrator {
                 lockConnection.setAutoCommit(false);
                 originAutoCommit = true;
             }
+            //锁定表,如果表锁定发生异常则终止整个迁移过程
+            execute(lockConnection, "lock tables _sqlex_version_ write");
         } catch (SQLException ex) {
             throw new SqlExMigrationException(-1, ex);
         }
@@ -141,8 +144,16 @@ public class Migrator {
                 throw new SqlExMigrationException(-1, ex);
         } finally {
             try {
-                //提交
-                lockConnection.commit();
+                try {
+                    //提交
+                    lockConnection.commit();
+                } finally {
+                    //解锁表
+                    //只要上面锁定代码执行过,该语句就一定会执行
+                    //如果该语句执行错误,可能是connection closed
+                    //那样session持有的锁也就自动释放了
+                    execute(lockConnection, "unlock tables");
+                }
                 //还原原本的自动提交属性
                 if (originAutoCommit)
                     lockConnection.setAutoCommit(false);
