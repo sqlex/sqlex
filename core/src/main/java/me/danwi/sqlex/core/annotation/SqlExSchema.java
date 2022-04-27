@@ -8,5 +8,5 @@ import java.lang.annotation.*;
 public @interface SqlExSchema {
     int version();
 
-    String script();
+    String[] scripts();
 }
