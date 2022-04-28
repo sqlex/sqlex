@@ -6,6 +6,7 @@ import me.danwi.sqlex.core.RepositoryLike
 import me.danwi.sqlex.core.annotation.SqlExConverter
 import me.danwi.sqlex.core.annotation.SqlExConverterCheck
 import me.danwi.sqlex.core.annotation.SqlExSchema
+import me.danwi.sqlex.core.annotation.SqlExTableColumn
 import me.danwi.sqlex.parser.Session
 import javax.lang.model.element.Modifier
 
@@ -43,6 +44,20 @@ class GeneratedRepositoryFile(
                         .addMember("version", "\$L", version)
                     sqls.forEach { builder.addMember("scripts", "\$S", it) }
                     builder.build()
+                }
+            )
+            .addAnnotations(
+                session.allTables.flatMap { table ->
+                    session.getFields("select * from $table").map { field ->
+                        AnnotationSpec
+                            .builder(SqlExTableColumn::class.java)
+                            .addMember("tableName", "\$S", table)
+                            .addMember("columnName", "\$S", field.name)
+                            .addMember("columnType", "\$S", field.dbType)
+                            .addMember("columnLength", "\$S", field.length)
+                            .addMember("columnUnsigned", "\$S", field.unsigned)
+                            .build()
+                    }
                 }
             )
             .build()
