@@ -12,7 +12,7 @@ public class SpringDaoFactory extends DaoFactory {
                         dataSource,
                         new SpringExceptionTranslator(dataSource)
                 ),
-                dataSource, repository, new SpringExceptionTranslator(dataSource)
+                repository, new SpringExceptionTranslator(dataSource)
         );
     }
 }

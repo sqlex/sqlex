@@ -67,7 +67,7 @@ public class DaoFactory {
         this.exceptionTranslator = new DefaultExceptionTranslator();
         this.transactionManager = new DefaultTransactionManager(dataSource, this.exceptionTranslator);
         this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
-        this.migrator = new Migrator(repository, dataSource);
+        this.migrator = new Migrator(this);
     }
 
     /**
@@ -81,23 +81,22 @@ public class DaoFactory {
         this.exceptionTranslator = new DefaultExceptionTranslator();
         this.transactionManager = new DefaultTransactionManager(dataSource, this.exceptionTranslator);
         this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
-        this.migrator = new Migrator(repository, dataSource);
+        this.migrator = new Migrator(this);
     }
 
     /**
      * 使用指定的事务管理器来新建数据访问对象工厂实例
      *
      * @param transactionManager  事务管理器
-     * @param dataSource          数据源
      * @param repository          SqlEx Repository
      * @param exceptionTranslator 异常翻译
      */
-    public DaoFactory(TransactionManager transactionManager, DataSource dataSource, Class<? extends RepositoryLike> repository, ExceptionTranslator exceptionTranslator) {
+    public DaoFactory(TransactionManager transactionManager, Class<? extends RepositoryLike> repository, ExceptionTranslator exceptionTranslator) {
         this.repositoryClass = repository;
         this.transactionManager = transactionManager;
         this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
         this.exceptionTranslator = exceptionTranslator;
-        this.migrator = new Migrator(repository, dataSource);
+        this.migrator = new Migrator(this);
     }
 
     /**
@@ -191,6 +190,15 @@ public class DaoFactory {
                 }
             }
         }
+    }
+
+    /**
+     * 新建连接
+     *
+     * @return 新建的数据连接
+     */
+    public Connection newConnection() {
+        return this.transactionManager.newConnection();
     }
 
     /**

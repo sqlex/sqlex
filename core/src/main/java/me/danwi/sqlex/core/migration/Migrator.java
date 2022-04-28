@@ -1,21 +1,20 @@
 package me.danwi.sqlex.core.migration;
 
-import me.danwi.sqlex.core.RepositoryLike;
+import me.danwi.sqlex.core.DaoFactory;
 import me.danwi.sqlex.core.annotation.SqlExSchema;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.exception.SqlExMigrationException;
 
-import javax.sql.DataSource;
 import java.sql.*;
 
 public class Migrator {
-    //数据源
-    private final DataSource dataSource;
+    //factory
+    private final DaoFactory daoFactory;
     //迁移任务定义
     private final Migration[] migrations;
 
-    public Migrator(Class<? extends RepositoryLike> repository, DataSource dataSource) {
-        SqlExSchema[] schemas = repository.getAnnotationsByType(SqlExSchema.class);
+    public Migrator(DaoFactory factory) {
+        SqlExSchema[] schemas = factory.getRepositoryClass().getAnnotationsByType(SqlExSchema.class);
         migrations = new Migration[schemas.length];
 
         for (int i = 0; i < schemas.length; i++) {
@@ -28,7 +27,7 @@ public class Migrator {
             migrations[version] = new Migration(version, schema.scripts());
         }
 
-        this.dataSource = dataSource;
+        this.daoFactory = factory;
     }
 
     //助手方法,执行语句
@@ -63,7 +62,7 @@ public class Migrator {
         */
 
         //保证版本表的存在
-        try (Connection connection = dataSource.getConnection()) {
+        try (Connection connection = daoFactory.newConnection()) {
             execute(connection, "create table if not exists _sqlex_version_(version int not null, can_migrate bool not null)");
         } catch (SQLException ex) {
             throw new SqlExMigrationException(-1, ex);
@@ -76,7 +75,7 @@ public class Migrator {
 
         try {
             //获取连接
-            lockConnection = dataSource.getConnection();
+            lockConnection = daoFactory.newConnection();
             //设置连接属性
             if (lockConnection.getAutoCommit()) {
                 lockConnection.setAutoCommit(false);
@@ -165,7 +164,7 @@ public class Migrator {
 
     private void doMigrate(int version, String sql) {
         //获取连接
-        try (Connection connection = dataSource.getConnection()) {
+        try (Connection connection = daoFactory.newConnection()) {
             //执行语句
             execute(connection, sql);
         } catch (SQLException e) {
