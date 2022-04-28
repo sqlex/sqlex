@@ -17,15 +17,24 @@ public class ColumnInfo {
         this.unsigned = unsigned;
     }
 
-    @Override
-    public String toString() {
-        return "ColumnInfo{" +
-                "name='" + name + '\'' +
-                ", typeId=" + typeId +
-                ", typeName='" + typeName + '\'' +
-                ", length=" + length +
-                ", unsigned=" + unsigned +
-                '}';
+    public String getName() {
+        return name;
+    }
+
+    public int getTypeId() {
+        return typeId;
+    }
+
+    public String getTypeName() {
+        return typeName;
+    }
+
+    public long getLength() {
+        return length;
+    }
+
+    public boolean isUnsigned() {
+        return unsigned;
     }
 
     @Override
@@ -34,10 +43,5 @@ public class ColumnInfo {
         if (o == null || getClass() != o.getClass()) return false;
         ColumnInfo that = (ColumnInfo) o;
         return typeId == that.typeId && length == that.length && unsigned == that.unsigned && Objects.equals(name, that.name) && Objects.equals(typeName, that.typeName);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(name, typeId, typeName, length, unsigned);
     }
 }

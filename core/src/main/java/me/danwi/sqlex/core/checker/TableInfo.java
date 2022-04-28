@@ -12,11 +12,11 @@ public class TableInfo {
         this.columns = columns;
     }
 
-    @Override
-    public String toString() {
-        return "TableInfo{" +
-                "name='" + name + '\'' +
-                ", columns=" + columns +
-                '}';
+    public String getName() {
+        return name;
+    }
+
+    public List<ColumnInfo> getColumns() {
+        return columns;
     }
 }
