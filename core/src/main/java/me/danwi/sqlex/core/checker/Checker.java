@@ -45,7 +45,6 @@ public class Checker {
         logger.info("开始比对");
         List<TableInfo> diffTables = diff(annotationTables, databaseTables);
         if (diffTables.size() != 0) {
-            logger.info(diffTables.toString());
             throw new SqlExCheckException(diffTables);
         }
         logger.info("比对完成");
