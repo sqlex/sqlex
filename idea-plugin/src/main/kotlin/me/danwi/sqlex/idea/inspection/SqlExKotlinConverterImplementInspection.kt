@@ -6,7 +6,7 @@ import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.psi.JavaPsiFacade
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiElementVisitor
-import me.danwi.sqlex.common.ParameterTypes.ParameterConverterInterfaceName
+import me.danwi.sqlex.core.type.ParameterConverter
 import me.danwi.sqlex.idea.util.extension.*
 import org.jetbrains.kotlin.idea.util.jvmFqName
 import org.jetbrains.kotlin.psi.KtClass
@@ -24,7 +24,7 @@ class SqlExKotlinConverterImplementInspection() : LocalInspectionTool() {
                 //      二是为了获取到psi tree中的元素,方便注册问题的时候定位到元素上
                 val converterInterfaceElement = element.superTypeListEntries
                     .map { it.typeAsUserType }
-                    .find { it?.referencedName == ParameterConverterInterfaceName }
+                    .find { it?.referencedName == ParameterConverter::class.java.simpleName }
                     ?: return
 
                 //获取这个class的jvm全限定名

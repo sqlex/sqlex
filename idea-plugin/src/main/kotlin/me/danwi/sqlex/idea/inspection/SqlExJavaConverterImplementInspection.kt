@@ -6,7 +6,7 @@ import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiElementVisitor
-import me.danwi.sqlex.common.ParameterTypes.ParameterConverterInterfaceQualifiedName
+import me.danwi.sqlex.core.type.ParameterConverter
 import me.danwi.sqlex.idea.util.extension.*
 
 class SqlExJavaConverterImplementInspection : LocalInspectionTool() {
@@ -44,7 +44,7 @@ class SqlExJavaConverterImplementInspection : LocalInspectionTool() {
                             val typeParameterElements =
                                 implementList
                                     .referenceElements
-                                    .find { it.qualifiedName == ParameterConverterInterfaceQualifiedName }
+                                    .find { it.qualifiedName == ParameterConverter::class.java.name }
                                     ?.parameterList
                                     ?.typeParameterElements
                             if (typeParameterElements?.size == 2)

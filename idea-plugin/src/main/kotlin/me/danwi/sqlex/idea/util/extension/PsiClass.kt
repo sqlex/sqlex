@@ -4,8 +4,8 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiClassType
 import com.intellij.psi.util.PsiTypesUtil
-import me.danwi.sqlex.common.ParameterTypes.ParameterConverterInterfaceQualifiedName
 import me.danwi.sqlex.common.ParameterTypes.PreSupportedTypes
+import me.danwi.sqlex.core.type.ParameterConverter
 import me.danwi.sqlex.idea.repositroy.SqlExMethodFileCacheKey
 
 //获取全限定包名
@@ -22,7 +22,7 @@ val PsiClass.classType: PsiClassType
 
 //判断这个psi是否为参数转换器接口
 val PsiClass.isParameterConverterInterface: Boolean
-    inline get() = qualifiedName == ParameterConverterInterfaceQualifiedName
+    inline get() = qualifiedName == ParameterConverter::class.java.name
 
 //判断这个psi是否为合法的预支持数据类型
 val PsiClass?.isPreSupported: Boolean
