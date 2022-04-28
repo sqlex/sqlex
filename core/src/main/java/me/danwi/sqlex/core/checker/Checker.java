@@ -28,7 +28,7 @@ public class Checker {
         logger.info("获取repo表结构");
         List<TableColumn> annotationTables = new ArrayList<>();
         for (SqlExTableColumn t : this.factory.getRepositoryClass().getAnnotationsByType(SqlExTableColumn.class)) {
-            annotationTables.add(new TableColumn(t.tableName(), t.columnName(), t.columnType(), Long.parseLong(t.columnLength()), Boolean.parseBoolean(t.columnUnsigned())));
+            annotationTables.add(new TableColumn(t.tableName(), t.columnName(), t.columnTypeName(), Long.parseLong(t.columnLength()), Boolean.parseBoolean(t.columnUnsigned())));
         }
         logger.info("获取数据库表结构");
         List<TableColumn> databaseTables;

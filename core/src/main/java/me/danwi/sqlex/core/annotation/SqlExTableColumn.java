@@ -10,7 +10,9 @@ public @interface SqlExTableColumn {
 
     String columnName();
 
-    String columnType();
+    String columnTypeId();
+
+    String columnTypeName();
 
     String columnLength();
 
