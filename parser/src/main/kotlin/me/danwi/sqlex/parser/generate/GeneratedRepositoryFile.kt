@@ -6,7 +6,7 @@ import me.danwi.sqlex.core.RepositoryLike
 import me.danwi.sqlex.core.annotation.SqlExConverter
 import me.danwi.sqlex.core.annotation.SqlExConverterCheck
 import me.danwi.sqlex.core.annotation.SqlExSchema
-import me.danwi.sqlex.core.annotation.SqlExTableColumn
+import me.danwi.sqlex.core.annotation.SqlExTableInfo
 import me.danwi.sqlex.parser.Session
 import javax.lang.model.element.Modifier
 
@@ -47,18 +47,18 @@ class GeneratedRepositoryFile(
                 }
             )
             .addAnnotations(
-                session.allTables.flatMap { table ->
-                    session.getFields("select * from $table").map { field ->
-                        AnnotationSpec
-                            .builder(SqlExTableColumn::class.java)
-                            .addMember("tableName", "\$S", table)
-                            .addMember("columnName", "\$S", field.name)
-                            .addMember("columnTypeId", "\$S", field.typeId)
-                            .addMember("columnTypeName", "\$S", field.typeName)
-                            .addMember("columnLength", "\$S", field.length)
-                            .addMember("columnUnsigned", "\$S", field.unsigned)
-                            .build()
+                session.allTables.map { table ->
+                    val builder = AnnotationSpec
+                        .builder(SqlExTableInfo::class.java)
+                        .addMember("name", "\$S", table)
+                    session.getFields("select * from $table").forEach {
+                        builder.addMember("columnNames", "\$S", it.name)
+                            .addMember("columnTypeIds", "\$S", it.typeId)
+                            .addMember("columnTypeNames", "\$S", it.typeName)
+                            .addMember("columnLengths", "\$S", it.length)
+                            .addMember("columnUnsigneds", "\$S", it.unsigned)
                     }
+                    builder.build()
                 }
             )
             .build()

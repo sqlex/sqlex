@@ -1,18 +1,26 @@
 package me.danwi.sqlex.core.exception;
 
+import me.danwi.sqlex.core.checker.TableInfo;
+
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * 真实数据库 与 SqlEx Repository 不一致
+ * 数据库检查异常
  */
 public class SqlExCheckException extends SqlExException {
-    public SqlExCheckException() {
-        super("真实数据库 与 SqlEx Repository 不一致");
-    }
-
-    public SqlExCheckException(String message) {
-        super(message);
-    }
+    private List<TableInfo> tables = new ArrayList<>();
 
     public SqlExCheckException(String message, Exception cause) {
         super(message, cause);
+    }
+
+    public SqlExCheckException(List<TableInfo> tables) {
+        super("数据库与SqlEx Repository不一致");
+        this.tables = tables;
+    }
+
+    public List<TableInfo> getTables() {
+        return tables;
     }
 }
