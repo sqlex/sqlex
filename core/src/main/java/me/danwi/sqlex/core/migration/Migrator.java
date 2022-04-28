@@ -63,7 +63,7 @@ public class Migrator {
             迁移过程中会保持一个连接用于持有锁(锁版本表) + 版本信息的修改
             另外每个版本的迁移在新的连接中进行
         */
-        logger.info("准备将数据库迁移到 {} 版本", version);
+        logger.info("准备将数据库({})迁移到 {} 版本", daoFactory.getRepositoryClass().getPackage().getName(), version);
         //保证版本表的存在
         try (Connection connection = daoFactory.newConnection()) {
             execute(connection, "create table if not exists _sqlex_version_(version int not null, can_migrate bool not null)");
@@ -161,7 +161,7 @@ public class Migrator {
                     //如果该语句执行错误,可能是connection closed
                     //那样session持有的锁也就自动释放了
                     execute(lockConnection, "unlock tables");
-                    logger.info("数据库版本迁移完成,释放全局锁");
+                    logger.info("数据库({})版本迁移完成,释放全局锁", daoFactory.getRepositoryClass().getPackage().getName());
                 }
                 //还原原本的自动提交属性
                 if (originAutoCommit)
