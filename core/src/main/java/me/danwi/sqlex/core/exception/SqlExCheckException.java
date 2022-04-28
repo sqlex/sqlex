@@ -9,14 +9,14 @@ import java.util.List;
  * 数据库检查异常
  */
 public class SqlExCheckException extends SqlExException {
-    private List<TableInfo> tables = new ArrayList<>();
+    private final List<TableInfo> tables;
 
-    public SqlExCheckException(String message, Exception cause) {
-        super(message, cause);
+    public SqlExCheckException(Exception cause) {
+        super(cause);
+        this.tables = new ArrayList<>();
     }
 
     public SqlExCheckException(List<TableInfo> tables) {
-        super("数据库与SqlEx Repository不一致");
         this.tables = tables;
     }
 

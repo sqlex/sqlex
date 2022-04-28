@@ -41,12 +41,7 @@ public class Checker {
             annotationTables.add(new TableInfo(t.name(), columns));
         }
         logger.info("获取数据库表结构");
-        List<TableInfo> databaseTables;
-        try {
-            databaseTables = getDatabaseTables();
-        } catch (Exception e) {
-            throw new SqlExCheckException("获取数据库表信息失败", e);
-        }
+        List<TableInfo> databaseTables = getDatabaseTables();
         logger.info("开始比对");
         List<TableInfo> diffTables = diff(annotationTables, databaseTables);
         if (diffTables.size() != 0) {
@@ -87,30 +82,32 @@ public class Checker {
      *
      * @return 表信息数组
      */
-    private List<TableInfo> getDatabaseTables() throws SQLException {
-        Connection conn = this.factory.newConnection();
-        DatabaseMetaData databaseMetaData = conn.getMetaData();
-        //获取所有的表名
-        ResultSet tableResultSet = databaseMetaData.getTables(conn.getCatalog(), null, null, null);
-        List<TableInfo> tables = new ArrayList<>();
-        while (tableResultSet.next()) {
-            //表名
-            String tableName = tableResultSet.getString("TABLE_NAME");
-            //列信息
-            ResultSet columnResultSet = databaseMetaData.getColumns(conn.getCatalog(), null, tableName, null);
-            List<ColumnInfo> columns = new ArrayList<>();
-            while (columnResultSet.next()) {
-                columns.add(new ColumnInfo(
-                                columnResultSet.getString("COLUMN_NAME"),
-                                columnResultSet.getInt("DATA_TYPE"),
-                                MysqlType.getByJdbcType(columnResultSet.getInt("DATA_TYPE")).getName().toLowerCase(),
-                                columnResultSet.getInt("COLUMN_SIZE"),
-                                columnResultSet.getString("TYPE_NAME").contains("UNSIGNED")
-                        )
-                );
+    private List<TableInfo> getDatabaseTables() {
+        try (Connection conn = this.factory.newConnection()) {
+            DatabaseMetaData databaseMetaData = conn.getMetaData();
+            //获取所有的表名
+            ResultSet tableResultSet = databaseMetaData.getTables(conn.getCatalog(), null, null, null);
+            List<TableInfo> tables = new ArrayList<>();
+            while (tableResultSet.next()) {
+                //表名
+                String tableName = tableResultSet.getString("TABLE_NAME");
+                //列信息
+                ResultSet columnResultSet = databaseMetaData.getColumns(conn.getCatalog(), null, tableName, null);
+                List<ColumnInfo> columns = new ArrayList<>();
+                while (columnResultSet.next()) {
+                    columns.add(new ColumnInfo(
+                            columnResultSet.getString("COLUMN_NAME"),
+                            columnResultSet.getInt("DATA_TYPE"),
+                            MysqlType.getByJdbcType(columnResultSet.getInt("DATA_TYPE")).getName().toLowerCase(),
+                            columnResultSet.getInt("COLUMN_SIZE"),
+                            columnResultSet.getString("TYPE_NAME").contains("UNSIGNED")
+                    ));
+                }
+                tables.add(new TableInfo(tableName, columns));
             }
-            tables.add(new TableInfo(tableName, columns));
+            return tables;
+        } catch (SQLException e) {
+            throw new SqlExCheckException(e);
         }
-        return tables;
     }
 }
