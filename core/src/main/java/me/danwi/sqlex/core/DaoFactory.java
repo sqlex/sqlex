@@ -2,6 +2,7 @@ package me.danwi.sqlex.core;
 
 import com.mysql.cj.jdbc.MysqlConnectionPoolDataSource;
 import me.danwi.sqlex.core.annotation.SqlExRepository;
+import me.danwi.sqlex.core.checker.Checker;
 import me.danwi.sqlex.core.exception.SqlExRepositoryNotMatchException;
 import me.danwi.sqlex.core.exception.SqlExSQLException;
 import me.danwi.sqlex.core.exception.SqlExUndeclaredException;
@@ -27,6 +28,7 @@ public class DaoFactory {
     final private Map<Class<?>, InvocationProxy> invocationProxyCache = new HashMap<>();
     final private ExceptionTranslator exceptionTranslator;
     final private Migrator migrator;
+    final private Checker checker;
 
     /**
      * 默认异常翻译
@@ -68,6 +70,7 @@ public class DaoFactory {
         this.transactionManager = new DefaultTransactionManager(dataSource, this.exceptionTranslator);
         this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
         this.migrator = new Migrator(this);
+        this.checker = new Checker(this);
     }
 
     /**
@@ -82,6 +85,7 @@ public class DaoFactory {
         this.transactionManager = new DefaultTransactionManager(dataSource, this.exceptionTranslator);
         this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
         this.migrator = new Migrator(this);
+        this.checker = new Checker(this);
     }
 
     /**
@@ -97,6 +101,7 @@ public class DaoFactory {
         this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
         this.exceptionTranslator = exceptionTranslator;
         this.migrator = new Migrator(this);
+        this.checker = new Checker(this);
     }
 
     /**
@@ -215,6 +220,13 @@ public class DaoFactory {
      */
     public void migrate() {
         migrator.migrate();
+    }
+
+    /**
+     * 检查数据结构
+     */
+    public void check() {
+        checker.check();
     }
 
     /**
