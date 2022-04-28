@@ -2,6 +2,10 @@ package me.danwi.sqlex.parser.generate
 
 import com.squareup.javapoet.AnnotationSpec
 import com.squareup.javapoet.TypeSpec
+import me.danwi.sqlex.core.RepositoryLike
+import me.danwi.sqlex.core.annotation.SqlExConverter
+import me.danwi.sqlex.core.annotation.SqlExConverterCheck
+import me.danwi.sqlex.core.annotation.SqlExSchema
 import me.danwi.sqlex.parser.Session
 import javax.lang.model.element.Modifier
 
@@ -16,15 +20,15 @@ class GeneratedRepositoryFile(
     override fun generate(): TypeSpec {
         return TypeSpec.interfaceBuilder(RepositoryClassName)
             .addModifiers(Modifier.PUBLIC)
-            .addSuperinterface(CorePackageName.getClassName("RepositoryLike"))
+            .addSuperinterface(RepositoryLike::class.java)
             .addAnnotation(
-                AnnotationSpec.builder(CoreAnnotationsPackageName.getClassName("SqlExConverterCheck"))
+                AnnotationSpec.builder(SqlExConverterCheck::class.java)
                     .build()
             )
             .addAnnotations(
                 converters.mapIndexed { order, converter ->
                     AnnotationSpec
-                        .builder(CoreAnnotationsPackageName.getClassName("SqlExConverter"))
+                        .builder(SqlExConverter::class.java)
                         .addMember("order", "\$L", order)
                         .addMember("converter", "\$L.class", converter)
                         .build()
@@ -35,7 +39,7 @@ class GeneratedRepositoryFile(
                     //将script解析为单个语句
                     val sqls = session.getSQLsOfScript(script)
                     val builder = AnnotationSpec
-                        .builder(CoreAnnotationsPackageName.getClassName("SqlExSchema"))
+                        .builder(SqlExSchema::class.java)
                         .addMember("version", "\$L", version)
                     sqls.forEach { builder.addMember("scripts", "\$S", it) }
                     builder.build()

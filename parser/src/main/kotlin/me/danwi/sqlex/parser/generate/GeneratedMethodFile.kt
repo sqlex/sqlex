@@ -9,6 +9,19 @@ import com.squareup.javapoet.ParameterizedTypeName
 import com.squareup.javapoet.TypeName
 import com.squareup.javapoet.TypeSpec
 import me.danwi.sqlex.common.Paged
+import me.danwi.sqlex.core.annotation.SqlExDelete
+import me.danwi.sqlex.core.annotation.SqlExInExprPosition
+import me.danwi.sqlex.core.annotation.SqlExInsert
+import me.danwi.sqlex.core.annotation.SqlExMarkerPosition
+import me.danwi.sqlex.core.annotation.SqlExOneRow
+import me.danwi.sqlex.core.annotation.SqlExPaged
+import me.danwi.sqlex.core.annotation.SqlExParameterCheck
+import me.danwi.sqlex.core.annotation.SqlExParameterPosition
+import me.danwi.sqlex.core.annotation.SqlExRepository
+import me.danwi.sqlex.core.annotation.SqlExScript
+import me.danwi.sqlex.core.annotation.SqlExSelect
+import me.danwi.sqlex.core.annotation.SqlExUpdate
+import me.danwi.sqlex.core.type.PagedResult
 import me.danwi.sqlex.parser.*
 import me.danwi.sqlex.parser.exception.SqlExRepositoryMethodException
 import me.danwi.sqlex.parser.util.*
@@ -81,7 +94,7 @@ class GeneratedMethodFile(
             .addAnnotation(
                 //所属的repository
                 AnnotationSpec
-                    .builder(CoreAnnotationsPackageName.getClassName("SqlExRepository"))
+                    .builder(SqlExRepository::class.java)
                     .addMember("value", "\$T.class", ClassName.get(rootPackage, RepositoryClassName))
                     .build()
             )
@@ -122,7 +135,7 @@ class GeneratedMethodFile(
         //构建方法
         val methodSpec = MethodSpec.methodBuilder(methodName)
             .addModifiers(Modifier.PUBLIC, Modifier.ABSTRACT)
-            .addAnnotation(CoreAnnotationsPackageName.getClassName("SqlExSelect"))
+            .addAnnotation(SqlExSelect::class.java)
         //是否为分页方法
         val isPaged = method.paged() != null
         //生成注解
@@ -148,12 +161,12 @@ class GeneratedMethodFile(
             if (isPaged)
                 throw Exception("单行查询不能声明为分页方法")
             returnTypeName = resultTypeName
-            methodSpec.addAnnotation(CoreAnnotationsPackageName.getClassName("SqlExOneRow"))
+            methodSpec.addAnnotation(SqlExOneRow::class.java)
         }
         //是否为分页
         if (isPaged) {
-            returnTypeName = ParameterizedTypeName.get(CoreTypesPackageName.getClassName("PagedResult"), resultTypeName)
-            methodSpec.addAnnotation(CoreAnnotationsPackageName.getClassName("SqlExPaged"))
+            returnTypeName = ParameterizedTypeName.get(ClassName.get(PagedResult::class.java), resultTypeName)
+            methodSpec.addAnnotation(SqlExPaged::class.java)
         }
         //添加返回值
         methodSpec.returns(returnTypeName)
@@ -170,7 +183,7 @@ class GeneratedMethodFile(
         //构建方法
         val methodSpec = MethodSpec.methodBuilder(methodName)
             .addModifiers(Modifier.PUBLIC, Modifier.ABSTRACT)
-            .addAnnotation(CoreAnnotationsPackageName.getClassName("SqlExInsert"))
+            .addAnnotation(SqlExInsert::class.java)
         //生成注解
         methodSpec.addAnnotations(
             generateAnnotation(
@@ -196,7 +209,7 @@ class GeneratedMethodFile(
         //构建方法
         val methodSpec = MethodSpec.methodBuilder(methodName)
             .addModifiers(Modifier.PUBLIC, Modifier.ABSTRACT)
-            .addAnnotation(CoreAnnotationsPackageName.getClassName("SqlExUpdate"))
+            .addAnnotation(SqlExUpdate::class.java)
         //生成注解
         methodSpec.addAnnotations(
             generateAnnotation(
@@ -222,7 +235,7 @@ class GeneratedMethodFile(
         //构建方法
         val methodSpec = MethodSpec.methodBuilder(methodName)
             .addModifiers(Modifier.PUBLIC, Modifier.ABSTRACT)
-            .addAnnotation(CoreAnnotationsPackageName.getClassName("SqlExDelete"))
+            .addAnnotation(SqlExDelete::class.java)
         //生成注解
         methodSpec.addAnnotations(
             generateAnnotation(
@@ -263,24 +276,24 @@ class GeneratedMethodFile(
         //参数检查
         annotationSpecs.add(
             AnnotationSpec
-                .builder(CoreAnnotationsPackageName.getClassName("SqlExParameterCheck"))
+                .builder(SqlExParameterCheck::class.java)
                 .build()
         )
         //SQL脚本
         annotationSpecs.add(
             AnnotationSpec
-                .builder(CoreAnnotationsPackageName.getClassName("SqlExScript"))
+                .builder(SqlExScript::class.java)
                 .addMember("value", "\$S", namedParameterSQL.sql)
                 .build()
         )
         //SQL参数在方法参数列表中的索引
         val parameterPositionAnnotationSpec = AnnotationSpec
-            .builder(CoreAnnotationsPackageName.getClassName("SqlExParameterPosition"))
+            .builder(SqlExParameterPosition::class.java)
         parameterPosition.forEach { parameterPositionAnnotationSpec.addMember("value", "\$L", it) }
         annotationSpecs.add(parameterPositionAnnotationSpec.build())
         //SQL参数?在SQL字符串中的索引
         val markerPositionAnnotationSpec = AnnotationSpec
-            .builder(CoreAnnotationsPackageName.getClassName("SqlExMarkerPosition"))
+            .builder(SqlExMarkerPosition::class.java)
         namedParameterSQL.parameters.forEach { markerPositionAnnotationSpec.addMember("value", "\$L", it.position) }
         annotationSpecs.add(markerPositionAnnotationSpec.build())
         //in (?)的位置
@@ -288,7 +301,7 @@ class GeneratedMethodFile(
             statementInfo.inExprPositions
                 .map {
                     AnnotationSpec
-                        .builder(CoreAnnotationsPackageName.getClassName("SqlExInExprPosition"))
+                        .builder(SqlExInExprPosition::class.java)
                         .addMember("not", "\$L", it.not)
                         .addMember("marker", "\$L", it.marker)
                         .addMember("start", "\$L", it.start)

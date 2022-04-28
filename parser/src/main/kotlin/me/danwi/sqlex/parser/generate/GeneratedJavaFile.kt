@@ -6,14 +6,11 @@ import com.squareup.javapoet.JavaFile
 import com.squareup.javapoet.MethodSpec
 import com.squareup.javapoet.TypeName
 import com.squareup.javapoet.TypeSpec
+import me.danwi.sqlex.core.annotation.SqlExGenerated
 import me.danwi.sqlex.parser.exception.SqlExRepositoryMethodException
 import me.danwi.sqlex.parser.util.packageNameToRelativePath
 import me.danwi.sqlex.parser.util.pascalName
 import javax.lang.model.element.Modifier
-
-val CorePackageName = PackageName("me.danwi.sqlex.core")
-val CoreAnnotationsPackageName = PackageName("me.danwi.sqlex.core.annotation")
-val CoreTypesPackageName = PackageName("me.danwi.sqlex.core.type")
 
 class PackageName(private val packageName: String) {
     fun getClassName(className: String): ClassName {
@@ -33,7 +30,7 @@ abstract class GeneratedJavaFile(val packageName: String, val className: String)
         try {
             val type = this.generate().toBuilder().addAnnotation(
                 AnnotationSpec
-                    .builder(CoreAnnotationsPackageName.getClassName("SqlExGenerated"))
+                    .builder(SqlExGenerated::class.java)
                     .build()
             ).build()
             return@lazy JavaFile.builder(packageName, type).indent("    ").build().toString()

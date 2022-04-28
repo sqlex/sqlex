@@ -77,12 +77,7 @@ allprojects {
             publishing {
                 publications {
                     Java(MavenPublication) {
-                        if (pluginManager.hasPlugin("com.github.johnrengelman.shadow")) {
-                            artifact shadowJar
-                            artifact javadocJar
-                            artifact sourcesJar
-                        } else
-                            from components.java
+                        from components.java
                         pom {
                             name = project.name
                             description = "sqlex ${project.name} component"

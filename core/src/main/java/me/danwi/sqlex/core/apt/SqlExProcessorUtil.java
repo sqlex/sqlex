@@ -2,6 +2,7 @@ package me.danwi.sqlex.core.apt;
 
 import me.danwi.sqlex.common.ParameterTypes;
 import me.danwi.sqlex.core.annotation.SqlExConverter;
+import me.danwi.sqlex.core.type.ParameterConverter;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.*;
@@ -75,7 +76,7 @@ public class SqlExProcessorUtil {
         //获取其实现的ParameterConverter接口
         List<DeclaredType> declaredTypes = element.getInterfaces().stream()
                 .map(it -> {
-                    if (getQualifiedName(it).contentEquals(ParameterTypes.ParameterConverterInterfaceQualifiedName) && it instanceof DeclaredType) {
+                    if (getQualifiedName(it).contentEquals(ParameterConverter.class.getName()) && it instanceof DeclaredType) {
                         return (DeclaredType) it;
                     }
                     return null;

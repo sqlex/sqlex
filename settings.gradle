@@ -1,6 +1,5 @@
 rootProject.name = 'sqlex'
 
-include 'common'
 include 'core'
 include 'idea-plugin'
 include 'parser'
