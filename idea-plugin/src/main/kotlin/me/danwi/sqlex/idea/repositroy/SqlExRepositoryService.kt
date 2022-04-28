@@ -1,6 +1,7 @@
 package me.danwi.sqlex.idea.repositroy
 
 import com.intellij.execution.ui.ConsoleViewContentType
+import com.intellij.notification.Notification
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -308,10 +309,19 @@ val Project.allMaybeSqlExSourceRoot: List<VirtualFile>
         .getFiles(SqlExConfigFileType.INSTANCE, GlobalSearchScope.allScope(this))
         .mapNotNull { it.parent }
 
+//导入通知缓存key
+private val importNotificationKey = Key<MutableList<Notification>>("me.danwi.sqlex.ImportNotification")
+
 //显示可能存在的SqlEx Repository导入通知
 fun Project.showMaybeSqlExImportNotification() {
     runInThread {
         runReadAction {
+            //删除所有存在的通知
+            val notifications = getUserData(importNotificationKey) ?: mutableListOf()
+            putUserData(importNotificationKey, notifications)
+            notifications.forEach { it.expire() }
+            notifications.clear()
+            //创建通知
             val imported = this.getProperty(importedRepositoriesPropertyKey) ?: listOf()
             val ignored = this.getProperty(ignoredRepositoriesPropertyKey) ?: listOf()
             //获取可能存在的sqlex repository
@@ -319,7 +329,8 @@ fun Project.showMaybeSqlExImportNotification() {
                 .filter { it.projectRootRelativePath != null }
                 .filter { !imported.contains(it.projectRootRelativePath) && !ignored.contains(it.projectRootRelativePath) }
                 .forEach { sourceRoot ->
-                    val notification = this.createNotification("发现SqlEx源码目录(${sourceRoot.projectRootRelativePath}),是否导入?")
+                    val notification =
+                        this.createNotification("发现SqlEx源码目录(${sourceRoot.projectRootRelativePath}),是否导入?")
                     notification.addAction(object : AnAction("导入") {
                         override fun actionPerformed(event: AnActionEvent) {
                             notification.expire()
@@ -337,6 +348,7 @@ fun Project.showMaybeSqlExImportNotification() {
                         }
                     })
                     notification.notify(this)
+                    notifications.add(notification)
                 }
         }
     }

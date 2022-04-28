@@ -1,10 +1,4 @@
 <idea-plugin>
-    <projectListeners>
-        <!--监听配置文件的变更-->
-        <listener class="me.danwi.sqlex.idea.listener.impl.SqlExConfigChangeListener"
-                  topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
-    </projectListeners>
-
     <extensions defaultExtensionNs="JavaScript">
         <!--配置文件schema定义-->
         <JsonSchema.ProviderFactory implementation="me.danwi.sqlex.idea.config.SqlExConfigJsonSchemaProviderFactory"/>

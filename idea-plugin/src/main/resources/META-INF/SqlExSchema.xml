@@ -1,9 +1,4 @@
 <idea-plugin>
-    <projectListeners>
-        <listener class="me.danwi.sqlex.idea.listener.impl.SqlExSchemaChangeListener"
-                  topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
-    </projectListeners>
-
     <extensions defaultExtensionNs="com.intellij">
         <!--模式定义文件-->
         <fileType name="SqlEx Schema"

@@ -1,13 +1,12 @@
-package me.danwi.sqlex.idea.listener.impl
+package me.danwi.sqlex.idea.repositroy.listener
 
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.*
 import me.danwi.sqlex.idea.util.extension.isSqlExSchema
 import me.danwi.sqlex.idea.util.extension.sqlexRepositoryService
 import me.danwi.sqlex.parser.util.isSqlExSchemaFilePath
 
-class SqlExSchemaChangeListener(private val project: Project) : BulkFileListener {
+class SqlExSchemaChangeListener : BulkFileListener {
     override fun after(events: MutableList<out VFileEvent>) {
         events.filter {
             (it is VFileCopyEvent && it.newChildName.isSqlExSchemaFilePath)
