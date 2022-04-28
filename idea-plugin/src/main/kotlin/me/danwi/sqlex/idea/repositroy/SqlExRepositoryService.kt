@@ -76,6 +76,8 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
     //任务指示器
     private var indicator: ProgressIndicator? = null
 
+    //是否已经关闭
+    private var isClosed = false
     //endregion
 
     init {
@@ -205,7 +207,7 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                 indicator.checkCanceled()
 
                                 //设置源码目录
-                                sourceRoot.markAsSource()
+                                syncSourceRoot()
 
                                 //解析method文件
                                 indicator.text = "SqlEx: 解析Method"
@@ -264,9 +266,23 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
         this.indicator?.cancel()
     }
 
+    fun syncSourceRoot() {
+        synchronized(this) {
+            if (isClosed)
+                this.sourceRoot.unmarkSource()
+            else
+                this.sourceRoot.markAsSource()
+        }
+    }
+
     fun close() {
+        synchronized(this) {
+            if (isClosed)
+                return
+            isClosed = true
+        }
         stopRefresh()
-        sourceRoot.unmarkSource()
+        syncSourceRoot()
         val dataSource = project.findDataSource(sourceRoot)
         if (dataSource != null)
             project.removeDataSource(dataSource, sourceRoot)

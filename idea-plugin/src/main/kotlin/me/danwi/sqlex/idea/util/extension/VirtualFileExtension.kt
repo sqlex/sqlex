@@ -116,33 +116,37 @@ val VirtualFile.sqlexRepositoryService: SqlExRepositoryService?
 
 //将VirtualFile(目录)标记为一个源码目录
 fun VirtualFile.markAsSource() {
-    if (!this.isDirectory)
-        return
-    val module = this.module ?: return
-    //已经存在
-    if (module.sourceRoots.any { it == this })
-        return
-    ModuleRootModificationUtil.updateModel(module) { model ->
-        //获取contentEntry,如果没有,则新建一个
-        val contentEntry = model.contentEntries.find { it.file.isParentOf(this) } ?: return@updateModel
-        contentEntry.addSourceFolder(this, false)
+    invokeLater {
+        if (!this.isDirectory)
+            return@invokeLater
+        val module = this.module ?: return@invokeLater
+        //已经存在
+        if (module.sourceRoots.any { it == this })
+            return@invokeLater
+        ModuleRootModificationUtil.updateModel(module) { model ->
+            //获取contentEntry,如果没有,则新建一个
+            val contentEntry = model.contentEntries.find { it.file.isParentOf(this) } ?: return@updateModel
+            contentEntry.addSourceFolder(this, false)
+        }
     }
 }
 
 fun VirtualFile.unmarkSource() {
-    if (!this.isDirectory)
-        return
-    val module = this.module ?: return
-    //如果不存在
-    if (module.sourceRoots.none { it == this })
-        return
-    ModuleRootModificationUtil.updateModel(module) { model ->
-        model.contentEntries.forEach { entry ->
-            entry.sourceFolders.forEach { sourceRoot ->
-                if (entry.file == this)
-                    model.removeContentEntry(entry)
-                else if (sourceRoot.file == this)
-                    entry.removeSourceFolder(sourceRoot)
+    invokeLater {
+        if (!this.isDirectory)
+            return@invokeLater
+        val module = this.module ?: return@invokeLater
+        //如果不存在
+        if (module.sourceRoots.none { it == this })
+            return@invokeLater
+        ModuleRootModificationUtil.updateModel(module) { model ->
+            model.contentEntries.forEach { entry ->
+                entry.sourceFolders.forEach { sourceRoot ->
+                    if (entry.file == this)
+                        model.removeContentEntry(entry)
+                    else if (sourceRoot.file == this)
+                        entry.removeSourceFolder(sourceRoot)
+                }
             }
         }
     }
