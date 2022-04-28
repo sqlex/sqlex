@@ -4,10 +4,13 @@ import me.danwi.sqlex.core.DaoFactory;
 import me.danwi.sqlex.core.annotation.SqlExSchema;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.exception.SqlExMigrationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.*;
 
 public class Migrator {
+    private final Logger logger = LoggerFactory.getLogger(getClass());
     //factory
     private final DaoFactory daoFactory;
     //迁移任务定义
@@ -60,7 +63,7 @@ public class Migrator {
             迁移过程中会保持一个连接用于持有锁(锁版本表) + 版本信息的修改
             另外每个版本的迁移在新的连接中进行
         */
-
+        logger.info("准备将数据库({})迁移到 {} 版本", daoFactory.getRepositoryClass().getPackage().getName(), version);
         //保证版本表的存在
         try (Connection connection = daoFactory.newConnection()) {
             execute(connection, "create table if not exists _sqlex_version_(version int not null, can_migrate bool not null)");
@@ -83,6 +86,7 @@ public class Migrator {
             }
             //锁定表,如果表锁定发生异常则终止整个迁移过程
             execute(lockConnection, "lock tables _sqlex_version_ write");
+            logger.info("获取到全局锁,准备开始迁移");
         } catch (SQLException ex) {
             throw new SqlExMigrationException(-1, ex);
         }
@@ -113,8 +117,11 @@ public class Migrator {
 
             //开始迁移
             //版本号相等,无需迁移
-            if (version == migratedVersion)
+            if (version == migratedVersion) {
+                logger.info("数据库当前版本已经是 {},无需迁移", migratedVersion);
                 return migratedVersion;
+            }
+            logger.info("当前数据库版本 {}, 版本差异 {}", migratedVersion, version - migratedVersion);
             //检查版本范围
             if (version <= migratedVersion || version >= migrations.length)
                 throw new SqlExMigrationException("错误的版本号,当前版本范围" + migratedVersion + "<version<=" + (migrations.length - 1));
@@ -122,11 +129,13 @@ public class Migrator {
             execute(lockConnection, "update _sqlex_version_ set can_migrate=false");
             //挨个版本迁移
             for (int currentVersion = migratedVersion + 1; currentVersion <= version; currentVersion++) {
+                logger.info("+ 正在执行 {} 版本的迁移任务", currentVersion);
                 Migration migration = migrations[currentVersion];
                 String[] sqls = migration.getScripts();
                 for (String sql : sqls) {
                     doMigrate(currentVersion, sql);
                 }
+                logger.info("+ {} 版本迁移成功", currentVersion);
             }
             //迁移完成,更新版本号,更新状态信息
             execute(lockConnection, "update _sqlex_version_ set can_migrate=true,version=" + version);
@@ -152,6 +161,7 @@ public class Migrator {
                     //如果该语句执行错误,可能是connection closed
                     //那样session持有的锁也就自动释放了
                     execute(lockConnection, "unlock tables");
+                    logger.info("数据库({})版本迁移完成,释放全局锁", daoFactory.getRepositoryClass().getPackage().getName());
                 }
                 //还原原本的自动提交属性
                 if (originAutoCommit)
@@ -165,6 +175,7 @@ public class Migrator {
     private void doMigrate(int version, String sql) {
         //获取连接
         try (Connection connection = daoFactory.newConnection()) {
+            logger.info("| \t{}", sql);
             //执行语句
             execute(connection, sql);
         } catch (SQLException e) {
