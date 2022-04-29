@@ -56,6 +56,7 @@ public class Checker {
      */
     private List<TableInfo> diff(List<TableInfo> sourceTables, List<TableInfo> targetTables) {
         List<TableInfo> diffTables = new ArrayList<>();
+        sourceTable:
         for (TableInfo source : sourceTables) {
             for (TableInfo target : targetTables) {
                 if (Objects.equals(source.name, target.name)) {
@@ -63,7 +64,10 @@ public class Checker {
                     for (ColumnInfo sc : source.columns) {
                         for (ColumnInfo tc : target.columns) {
                             if (Objects.equals(sc.name, tc.name)) {
-                                if (!(sc.typeId == tc.typeId && sc.length == tc.length)) {
+                                //repository的tinyint(1) 等同于 数据库的bit(1)
+                                if (sc.typeId == JDBCType.TINYINT && sc.length == 1 && tc.typeId == JDBCType.BIT && tc.length == 1)
+                                    continue;
+                                if (!(sc.typeId == tc.typeId)) {
                                     diffColumns.add(sc);
                                 }
                             }
@@ -72,8 +76,10 @@ public class Checker {
                     if (diffColumns.size() > 0) {
                         diffTables.add(new TableInfo(source.name, diffColumns));
                     }
+                    continue sourceTable;
                 }
             }
+            diffTables.add(source);
         }
 
         return diffTables;
