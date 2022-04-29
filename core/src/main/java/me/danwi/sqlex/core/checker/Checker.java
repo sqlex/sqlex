@@ -29,10 +29,10 @@ public class Checker {
             for (int i = 0; i < t.columnNames().length; i++) {
                 columns.add(new ColumnInfo(
                         t.columnNames()[i],
-                        JDBCType.valueOf(Integer.parseInt(t.columnTypeIds()[i])),
+                        JDBCType.valueOf(t.columnTypeIds()[i]),
                         t.columnTypeNames()[i],
-                        Long.parseLong(t.columnLengths()[i]),
-                        Boolean.parseBoolean(t.columnUnsigneds()[i])
+                        t.columnLengths()[i],
+                        t.columnUnsigneds()[i]
                 ));
             }
             annotationTables.add(new TableInfo(t.name(), columns));

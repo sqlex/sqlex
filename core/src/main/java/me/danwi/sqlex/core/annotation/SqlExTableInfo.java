@@ -5,17 +5,16 @@ import java.lang.annotation.*;
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @Repeatable(SqlExTableInfos.class)
-
 public @interface SqlExTableInfo {
     String name();
 
     String[] columnNames();
 
-    String[] columnTypeIds();
+    int[] columnTypeIds();
 
     String[] columnTypeNames();
 
-    String[] columnLengths();
+    long[] columnLengths();
 
-    String[] columnUnsigneds();
+    boolean[] columnUnsigneds();
 }

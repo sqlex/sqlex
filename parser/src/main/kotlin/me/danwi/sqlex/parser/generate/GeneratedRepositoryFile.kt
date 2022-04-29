@@ -55,10 +55,10 @@ class GeneratedRepositoryFile(
                         .addMember("name", "\$S", table)
                     session.getFields("select * from $table").forEach {
                         builder.addMember("columnNames", "\$S", it.name)
-                            .addMember("columnTypeIds", "\$S", getJDBCType(it).vendorTypeNumber)
+                            .addMember("columnTypeIds", "\$L", getJDBCType(it).vendorTypeNumber)
                             .addMember("columnTypeNames", "\$S", it.dbType)
-                            .addMember("columnLengths", "\$S", it.length)
-                            .addMember("columnUnsigneds", "\$S", it.unsigned)
+                            .addMember("columnLengths", "\$LL", it.length)
+                            .addMember("columnUnsigneds", "\$L", it.unsigned)
                     }
                     builder.build()
                 }
