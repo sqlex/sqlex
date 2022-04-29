@@ -105,7 +105,7 @@ public abstract class BaseMethodProxy implements MethodProxy {
         } else if (arg instanceof BigDecimal) {
             statement.setBigDecimal(index, (BigDecimal) arg);
             return;
-        } else if (arg instanceof byte[]) {
+        } else if (arg instanceof byte[]) { //TODO: 尚未确认
             statement.setBytes(index, (byte[]) arg);
             return;
         } else if (arg instanceof Blob) {
@@ -121,8 +121,18 @@ public abstract class BaseMethodProxy implements MethodProxy {
             statement.setTimestamp(index, (java.sql.Timestamp) arg);
             return;
         } else if (arg instanceof java.util.Date) {
-            statement.setTimestamp(index, new Timestamp(((java.util.Date) arg).getTime()));
+            statement.setTimestamp(index, new java.sql.Timestamp(((java.util.Date) arg).getTime()));
             return;
+        } else if (arg instanceof java.time.LocalDate ||
+                arg instanceof java.time.LocalTime ||
+                arg instanceof java.time.LocalDateTime ||
+                arg instanceof java.time.OffsetTime ||
+                arg instanceof java.time.OffsetDateTime ||
+                arg instanceof java.time.ZonedDateTime
+        ) {
+            statement.setObject(index, arg);
+        } else if (arg instanceof java.time.Instant) {
+            statement.setTimestamp(index, Timestamp.from((java.time.Instant) arg));
         } else {
             ParameterConverter<Object, Object> converter = registry.getConverterFor(arg);
             if (converter != null) {
