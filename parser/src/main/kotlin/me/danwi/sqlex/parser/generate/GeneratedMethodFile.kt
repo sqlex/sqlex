@@ -365,17 +365,17 @@ class GeneratedMethodFile(
         } else if (field.dbType == "double") { //double
             return ClassName.bestGuess("Double")
         } else if (field.dbType == "decimal") { //decimal
-            return ClassName.bestGuess("java.math.BigDecimal")
+            return ClassName.get(java.math.BigDecimal::class.java)
         } else if (field.dbType == "date") { //date
-            return ClassName.bestGuess("java.sql.Date")
+            return ClassName.get(java.time.LocalDate::class.java)
         } else if (field.dbType == "datetime") { //datetime
-            return ClassName.bestGuess("java.sql.Timestamp")
+            return ClassName.get(java.time.LocalDateTime::class.java)
         } else if (field.dbType == "timestamp") { //timestamp
-            return ClassName.bestGuess("java.sql.Timestamp")
+            return ClassName.get(java.time.LocalDateTime::class.java)
         } else if (field.dbType == "time") { //time
-            return ClassName.bestGuess("java.sql.Time")
+            return ClassName.get(java.time.LocalTime::class.java)
         } else if (field.dbType == "year") { //year
-            return ClassName.bestGuess("java.sql.Date")
+            return ClassName.get(java.time.LocalDate::class.java)
         } else if (listOf("char", "varchar").contains(field.dbType)) { //char, varchar
             return if (field.binary) ArrayTypeName.of(ClassName.BYTE) else ClassName.bestGuess("String")
         } else if (listOf(

@@ -134,14 +134,14 @@ public class BeanMapper {
                     case "java.lang.String":
                         value = resultSet.getString(colIndex);
                         break;
-                    case "java.sql.Date":
-                        value = resultSet.getDate(colIndex);
+                    case "java.time.LocalDate":
+                        value = resultSet.getObject(colIndex, java.time.LocalDate.class);
                         break;
-                    case "java.sql.Time":
-                        value = resultSet.getTime(colIndex);
+                    case "java.time.LocalTime":
+                        value = resultSet.getObject(colIndex, java.time.LocalTime.class);
                         break;
-                    case "java.sql.Timestamp":
-                        value = resultSet.getTimestamp(colIndex);
+                    case "java.time.LocalDateTime":
+                        value = resultSet.getObject(colIndex, java.time.LocalDateTime.class);
                         break;
                     default:
                         throw new SqlExImpossibleException("结果类中包含不支持的数据类型: " + propertyInfo.dataTypeName);
