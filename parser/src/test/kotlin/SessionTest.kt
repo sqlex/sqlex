@@ -133,32 +133,27 @@ class SessionTest {
         assertEquals(5, fields.size)
 
         assertEquals("id", fields[0].name)
-        assertEquals(4, fields[0].typeId)
-        assertEquals("int", fields[0].typeName)
+        assertEquals("int", fields[0].dbType)
         assertEquals(11, fields[0].length)
         assertFalse(fields[0].unsigned)
 
         assertEquals("name", fields[1].name)
-        assertEquals(12, fields[1].typeId)
-        assertEquals("varchar", fields[1].typeName)
+        assertEquals("varchar", fields[1].dbType)
         assertEquals(255, fields[1].length)
         assertFalse(fields[1].binary)
 
         assertEquals("departmentID", fields[2].name)
-        assertEquals("int", fields[2].typeName)
-        assertEquals(4, fields[2].typeId)
+        assertEquals("int", fields[2].dbType)
         assertEquals(11, fields[2].length)
         assertFalse(fields[2].unsigned)
 
         assertEquals("age", fields[3].name)
-        assertEquals("int", fields[3].typeName)
-        assertEquals(4, fields[3].typeId)
+        assertEquals("int", fields[3].dbType)
         assertEquals(10, fields[3].length)
         assertTrue(fields[3].unsigned)
 
         assertEquals("status", fields[4].name)
-        assertEquals(1, fields[4].typeId)
-        assertEquals("binary", fields[4].typeName)
+        assertEquals("binary", fields[4].dbType)
         assertEquals(255, fields[4].length)
         assertTrue(fields[4].binary)
 
@@ -175,11 +170,11 @@ class SessionTest {
         assertEquals(2, fields.size)
 
         assertEquals("name", fields[0].name)
-        assertEquals("varchar", fields[0].typeName)
+        assertEquals("varchar", fields[0].dbType)
         assertEquals(255, fields[0].length)
 
         assertEquals("amount", fields[1].name)
-        assertEquals("bigint", fields[1].typeName)
+        assertEquals("bigint", fields[1].dbType)
         assertEquals(21, fields[1].length)
 
         session.close()

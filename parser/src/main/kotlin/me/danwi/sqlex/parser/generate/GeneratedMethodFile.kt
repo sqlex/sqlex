@@ -349,34 +349,34 @@ class GeneratedMethodFile(
     }
 
     private fun getJavaType(field: Field): TypeName {
-        if (field.typeName == "bit") { //bit(n)
+        if (field.dbType == "bit") { //bit(n)
             return if (field.length == 1L) ClassName.bestGuess("Boolean") else ArrayTypeName.of(ClassName.BYTE)
-        } else if (field.typeName == "tinyint") { //tinyint(n) 或者 bool, boolean
+        } else if (field.dbType == "tinyint") { //tinyint(n) 或者 bool, boolean
             //TODO: tinyInt1isBit为false时, Integer; 为true时, Boolean且size是1. 默认为false
             return ClassName.bestGuess("Integer")
-        } else if (listOf("smallint", "mediumint").contains(field.typeName)) { //smallint, mediumint(不管是否unsigned)
+        } else if (listOf("smallint", "mediumint").contains(field.dbType)) { //smallint, mediumint(不管是否unsigned)
             return ClassName.bestGuess("Integer")
-        } else if (listOf("int", "integer").contains(field.typeName)) { //int, integer(unsigned时, java.lang.Long)
+        } else if (listOf("int", "integer").contains(field.dbType)) { //int, integer(unsigned时, java.lang.Long)
             return if (field.unsigned) ClassName.bestGuess("Long") else ClassName.bestGuess("Integer")
-        } else if (field.typeName == "bigint") { //bigint(unsigned时, java.math.BigInteger)
+        } else if (field.dbType == "bigint") { //bigint(unsigned时, java.math.BigInteger)
             return if (field.unsigned) ClassName.bestGuess("Long") else ClassName.bestGuess("java.math.BigInteger")
-        } else if (field.typeName == "float") { //float
+        } else if (field.dbType == "float") { //float
             return ClassName.bestGuess("Float")
-        } else if (field.typeName == "double") { //double
+        } else if (field.dbType == "double") { //double
             return ClassName.bestGuess("Double")
-        } else if (field.typeName == "decimal") { //decimal
+        } else if (field.dbType == "decimal") { //decimal
             return ClassName.bestGuess("java.math.BigDecimal")
-        } else if (field.typeName == "date") { //date
+        } else if (field.dbType == "date") { //date
             return ClassName.bestGuess("java.sql.Date")
-        } else if (field.typeName == "datetime") { //datetime
+        } else if (field.dbType == "datetime") { //datetime
             return ClassName.bestGuess("java.sql.Timestamp")
-        } else if (field.typeName == "timestamp") { //timestamp
+        } else if (field.dbType == "timestamp") { //timestamp
             return ClassName.bestGuess("java.sql.Timestamp")
-        } else if (field.typeName == "time") { //time
+        } else if (field.dbType == "time") { //time
             return ClassName.bestGuess("java.sql.Time")
-        } else if (field.typeName == "year") { //year
+        } else if (field.dbType == "year") { //year
             return ClassName.bestGuess("java.sql.Date")
-        } else if (listOf("char", "varchar").contains(field.typeName)) { //char, varchar
+        } else if (listOf("char", "varchar").contains(field.dbType)) { //char, varchar
             return if (field.binary) ArrayTypeName.of(ClassName.BYTE) else ClassName.bestGuess("String")
         } else if (listOf(
                 "binary",
@@ -385,7 +385,7 @@ class GeneratedMethodFile(
                 "blob",
                 "mediumblob",
                 "longblob"
-            ).contains(field.typeName)
+            ).contains(field.dbType)
         ) { //binary, varbinary, tinyblob, blob, mediumblob, longblob
             return ArrayTypeName.of(ClassName.BYTE)
         } else if (listOf(
@@ -395,13 +395,13 @@ class GeneratedMethodFile(
                 "longtext",
                 "enum",
                 "set"
-            ).contains(field.typeName)
+            ).contains(field.dbType)
         ) { //tinytext, text, mediumtext, longtext
             return ClassName.bestGuess("String")
         } else {
             //return "Object"
             //内测阶段直接抛出异常, 便于排错
-            throw Exception("${field.typeName} 映射失败!!!")
+            throw Exception("${field.dbType} 映射失败!!!")
         }
     }
 }

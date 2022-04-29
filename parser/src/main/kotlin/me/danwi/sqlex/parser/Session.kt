@@ -5,8 +5,7 @@ import me.danwi.sqlex.parser.ffi.ffiInvoke
 
 class Field {
     lateinit var name: String
-    var typeId: Int = 0
-    lateinit var typeName: String
+    lateinit var dbType: String
     var length: Long = -1
     var unsigned: Boolean = false
     var binary: Boolean = false

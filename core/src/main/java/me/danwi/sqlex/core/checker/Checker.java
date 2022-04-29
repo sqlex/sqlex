@@ -59,16 +59,22 @@ public class Checker {
      */
     private List<TableInfo> diff(List<TableInfo> sourceTables, List<TableInfo> targetTables) {
         List<TableInfo> diffTables = new ArrayList<>();
-        table:
         for (TableInfo source : sourceTables) {
             for (TableInfo target : targetTables) {
                 if (Objects.equals(source.name, target.name)) {
-                    List<ColumnInfo> diff = new ArrayList<>(source.columns);
-                    diff.removeAll(target.columns);
-                    if (diff.size() > 0) {
-                        diffTables.add(new TableInfo(source.name, diff));
+                    List<ColumnInfo> diffColumns = new ArrayList<>();
+                    for (ColumnInfo sc : source.columns) {
+                        for (ColumnInfo tc : target.columns) {
+                            if (Objects.equals(sc.name, tc.name)) {
+                                if (!(sc.typeId == tc.typeId && sc.length == tc.length)) {
+                                    diffColumns.add(sc);
+                                }
+                            }
+                        }
                     }
-                    continue table;
+                    if (diffColumns.size() > 0) {
+                        diffTables.add(new TableInfo(source.name, diffColumns));
+                    }
                 }
             }
         }
