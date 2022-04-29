@@ -8,7 +8,6 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiElementVisitor
 import me.danwi.sqlex.core.type.ParameterConverter
 import me.danwi.sqlex.idea.util.extension.*
-import org.jetbrains.kotlin.idea.util.jvmFqName
 import org.jetbrains.kotlin.psi.KtClass
 
 class SqlExKotlinConverterImplementInspection() : LocalInspectionTool() {
@@ -28,11 +27,11 @@ class SqlExKotlinConverterImplementInspection() : LocalInspectionTool() {
                     ?: return
 
                 //获取这个class的jvm全限定名
-                val qualifiedName = element.jvmFqName ?: return
+                val qualifiedName = element.fqName ?: return
 
                 //获取到他的psiClass
                 val psiClass = JavaPsiFacade.getInstance(element.project)
-                    .findClass(qualifiedName, element.resolveScope)
+                    .findClass(qualifiedName.asString(), element.resolveScope)
                     ?: return
 
                 //判断其是否为一个ParameterConverter的实现

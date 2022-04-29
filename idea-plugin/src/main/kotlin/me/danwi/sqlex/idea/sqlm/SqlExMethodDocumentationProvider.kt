@@ -1,15 +1,12 @@
 package me.danwi.sqlex.idea.sqlm
 
 import com.intellij.lang.documentation.DocumentationProvider
-import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.editor.richcopy.HtmlSyntaxInfoUtil
 import com.intellij.openapi.util.Key
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiJavaCodeReferenceElement
 import com.intellij.psi.PsiMethod
-import com.intellij.sql.psi.SqlLanguage
 import me.danwi.sqlex.idea.sqlm.psi.MethodSubtree
 import me.danwi.sqlex.idea.util.extension.childrenOf
 import me.danwi.sqlex.idea.util.extension.parentOf
@@ -27,13 +24,13 @@ open class SqlExMethodDocumentationProvider : DocumentationProvider {
         return resolveResult
             .map { it.element }
             .filterIsInstance<PsiMethod>()
-            .firstNotNullOfOrNull {
+            .mapNotNull {
                 it.containingClass
                     ?.sqlexMethodFile
                     ?.psiFile
                     ?.childrenOf<MethodSubtree>()
                     ?.find { m -> m.methodName?.methodName == it.name }
-            }
+            }.firstOrNull()
     }
 
 
@@ -55,26 +52,12 @@ open class SqlExMethodDocumentationProvider : DocumentationProvider {
     }
 
     override fun generateDoc(element: PsiElement?, originalElement: PsiElement?): String? {
-        val sql = element?.getUserData(sqlCacheKey) ?: return null
-        val stringBuilder = StringBuilder()
-
-        HtmlSyntaxInfoUtil.appendStyledSpan(
-            stringBuilder,
-            DefaultLanguageHighlighterColors.LINE_COMMENT,
-            "SQL:",
-            1.0.toFloat()
-        )
-
-        stringBuilder.append("<br/>")
-
-        HtmlSyntaxInfoUtil.appendHighlightedByLexerAndEncodedAsHtmlCodeSnippet(
-            stringBuilder,
-            element.project,
-            SqlLanguage.INSTANCE,
-            sql,
-            true,
-            1.0.toFloat()
-        )
-        return stringBuilder.toString()
+        val sql = element?.getUserData(sqlCacheKey)?.trim() ?: return null
+        //language=HTML
+        return """
+           <pre>
+           $sql
+           </pre>
+        """.trimIndent()
     }
 }

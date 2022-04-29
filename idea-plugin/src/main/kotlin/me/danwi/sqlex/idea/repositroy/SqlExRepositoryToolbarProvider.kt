@@ -4,6 +4,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.editor.toolbar.floating.AbstractFloatingToolbarProvider
 import com.intellij.openapi.editor.toolbar.floating.FloatingToolbarComponent
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFile
 import icons.SqlExIcons
@@ -16,7 +17,8 @@ abstract class SqlExRepositoryBaseProvider(groupId: String) : AbstractFloatingTo
     override fun register(dataContext: DataContext, component: FloatingToolbarComponent, parentDisposable: Disposable) {
         super.register(dataContext, component, parentDisposable)
         val project = dataContext.getData(CommonDataKeys.PROJECT) ?: return
-        val file = dataContext.getData(CommonDataKeys.VIRTUAL_FILE) ?: return
+        val document = dataContext.getData(CommonDataKeys.EDITOR)?.document ?: return
+        val file = FileDocumentManager.getInstance().getFile(document) ?: return
 
         val connect = project.messageBus.connect()
         connect.subscribe(SqlExRepositoryEventListener.REPOSITORY_SERVICE_TOPIC, object : SqlExRepositoryEventListener {

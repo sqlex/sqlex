@@ -1,6 +1,7 @@
 package me.danwi.sqlex.idea.util.extension
 
 import com.intellij.openapi.application.invokeAndWaitIfNeeded
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.sql.database.SqlDataSourceImpl
 import com.intellij.sql.dialects.SqlDialectMappings
@@ -19,39 +20,39 @@ var SqlDataSourceImpl.sqlexName: String
         this.name = "$SQLEX_DATABASE_TOOL_NAME_PREFIX $value"
     }
 
-var SqlDataSourceImpl.sqlexSourceRootPath: String?
-    get() = project.getProperty(dataSourceSourceRootPropertyKey.child(this.uniqueId))
-    set(value) {
-        val propertyKey = dataSourceSourceRootPropertyKey.child(this.uniqueId)
-        if (value == null)
-            project.unsetProperty(propertyKey)
-        else
-            project.setProperty(propertyKey, value)
-    }
+fun SqlDataSourceImpl.getSqlExSourceRootPath(project: Project): String? {
+    return project.getProperty(dataSourceSourceRootPropertyKey.child(this.uniqueId))
+}
 
-var SqlDataSourceImpl.ddlFile: VirtualFile?
-    get() = this.sqlFiles.map { it.virtualFile }.firstOrNull()
-    set(value) {
-        invokeAndWaitIfNeeded {
-            //建立映射
-            SqlDialectMappings.getInstance(project).setMapping(value, MysqlDialect.INSTANCE)
-            this.setFiles(arrayOf(value))
+fun SqlDataSourceImpl.setSqlExSourceRootPath(project: Project, path: String?) {
+    val propertyKey = dataSourceSourceRootPropertyKey.child(this.uniqueId)
+    if (path == null)
+        project.unsetProperty(propertyKey)
+    else
+        project.setProperty(propertyKey, path)
+}
+
+fun SqlDataSourceImpl.setDDLFile(project: Project, file: VirtualFile?) {
+    invokeAndWaitIfNeeded {
+        //建立映射
+        SqlDialectMappings.getInstance(project).setMapping(file, MysqlDialect.INSTANCE)
+        this.setFiles(arrayOf(file))
+    }
+}
+
+fun SqlDataSourceImpl.setDDL(project: Project, ddl: String?) {
+    invokeAndWaitIfNeeded {
+        val sqlDialectMappings = SqlDialectMappings.getInstance(project)
+        //删除旧的文件
+        sqlFiles.forEach {
+            sqlDialectMappings.setMapping(it.virtualFile, null)
+            runWriteAction { it.virtualFile.delete(this) }
         }
-    }
-
-var SqlDataSourceImpl.ddl: String?
-    get() = this.ddlFile?.textContent
-    set(value) {
-        invokeAndWaitIfNeeded {
-            val sqlDialectMappings = SqlDialectMappings.getInstance(project)
-            //删除旧的文件
-            sqlFiles.forEach {
-                sqlDialectMappings.setMapping(it.virtualFile, null)
-                runWriteAction { it.virtualFile.delete(this) }
-            }
-            this.ddlFile = createVirtualFile(
+        this.setDDLFile(
+            project, createVirtualFile(
                 Paths.get(project.pluginTempDir.toString(), "ddls", uniqueId, "${sqlexName}.sql").toString(),
-                value ?: ""
+                ddl ?: ""
             )
-        }
+        )
     }
+}
