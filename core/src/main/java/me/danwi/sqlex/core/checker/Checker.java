@@ -7,10 +7,7 @@ import me.danwi.sqlex.core.exception.SqlExCheckException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -32,7 +29,7 @@ public class Checker {
             for (int i = 0; i < t.columnNames().length; i++) {
                 columns.add(new ColumnInfo(
                         t.columnNames()[i],
-                        Integer.parseInt(t.columnTypeIds()[i]),
+                        JDBCType.valueOf(Integer.parseInt(t.columnTypeIds()[i])),
                         t.columnTypeNames()[i],
                         Long.parseLong(t.columnLengths()[i]),
                         Boolean.parseBoolean(t.columnUnsigneds()[i])
@@ -102,7 +99,7 @@ public class Checker {
                 while (columnResultSet.next()) {
                     columns.add(new ColumnInfo(
                             columnResultSet.getString("COLUMN_NAME"),
-                            columnResultSet.getInt("DATA_TYPE"),
+                            JDBCType.valueOf(columnResultSet.getInt("DATA_TYPE")),
                             MysqlType.getByJdbcType(columnResultSet.getInt("DATA_TYPE")).getName().toLowerCase(),
                             columnResultSet.getInt("COLUMN_SIZE"),
                             columnResultSet.getString("TYPE_NAME").contains("UNSIGNED")

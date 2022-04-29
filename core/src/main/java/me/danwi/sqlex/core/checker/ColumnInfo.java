@@ -1,15 +1,16 @@
 package me.danwi.sqlex.core.checker;
 
+import java.sql.JDBCType;
 import java.util.Objects;
 
 public class ColumnInfo {
     String name;
-    int typeId;
+    JDBCType typeId;
     String typeName;
     long length;
     boolean unsigned;
 
-    public ColumnInfo(String name, int typeId, String typeName, long length, boolean unsigned) {
+    public ColumnInfo(String name, JDBCType typeId, String typeName, long length, boolean unsigned) {
         this.name = name;
         this.typeId = typeId;
         this.typeName = typeName;
@@ -21,7 +22,7 @@ public class ColumnInfo {
         return name;
     }
 
-    public int getTypeId() {
+    public JDBCType getTypeId() {
         return typeId;
     }
 

@@ -7,7 +7,9 @@ import me.danwi.sqlex.core.annotation.SqlExConverter
 import me.danwi.sqlex.core.annotation.SqlExConverterCheck
 import me.danwi.sqlex.core.annotation.SqlExSchema
 import me.danwi.sqlex.core.annotation.SqlExTableInfo
+import me.danwi.sqlex.parser.Field
 import me.danwi.sqlex.parser.Session
+import java.sql.JDBCType
 import javax.lang.model.element.Modifier
 
 const val RepositoryClassName = "Repository"
@@ -53,7 +55,7 @@ class GeneratedRepositoryFile(
                         .addMember("name", "\$S", table)
                     session.getFields("select * from $table").forEach {
                         builder.addMember("columnNames", "\$S", it.name)
-                            .addMember("columnTypeIds", "\$S", getJavaType(it.dbType, it.unsigned))
+                            .addMember("columnTypeIds", "\$S", getJDBCType(it).vendorTypeNumber)
                             .addMember("columnTypeNames", "\$S", it.dbType)
                             .addMember("columnLengths", "\$S", it.length)
                             .addMember("columnUnsigneds", "\$S", it.unsigned)
@@ -64,32 +66,44 @@ class GeneratedRepositoryFile(
             .build()
     }
 
-    private fun getJavaType(mysqlType: String, isBinary: Boolean): Int {
-        return when (mysqlType) {
-            "tinyint" -> -7
-            "smallint" -> 5
-            "int" -> 4
-            "float" -> 7
-            "double" -> 8
-            "null" -> 0
-            "decimal" -> 3
-            "timestamp", "datetime" -> 93
-            "bigint" -> -5
-            "mediumint" -> 4
-            // mysql.TypeNewDate
-            "date" -> 91
-            "time" -> 92
-            "year" -> 12
-            "enum" -> 4
-            "set" -> -7
-            "tinytext" -> -3
-            "mediumtext", "longtext", "text" -> -4
-            "var_string", "varchar" -> if (isBinary) -3 else 12
-            "char" -> if (isBinary) -2 else 1
-            "geometry" -> -2
-            "bit" -> -7
-            "json" -> 12
-            else -> 12
+    private fun getJDBCType(field: Field): JDBCType {
+        return when (field.dbType) {
+            "bit" -> JDBCType.BIT
+            "tinyint" -> JDBCType.TINYINT
+            "smallint" -> JDBCType.SMALLINT
+            "mediumint" -> JDBCType.INTEGER
+            "int" -> JDBCType.INTEGER
+            "bigint" -> JDBCType.BIGINT
+            "float" -> JDBCType.REAL
+            "double" -> JDBCType.DOUBLE
+            "decimal" -> JDBCType.DECIMAL
+            "date" -> JDBCType.DATE
+            "datetime" -> JDBCType.TIMESTAMP
+            "timestamp" -> JDBCType.TIMESTAMP
+            "time" -> JDBCType.TIME
+            "year" -> JDBCType.DATE
+            "char" -> if (field.binary) JDBCType.BINARY else JDBCType.CHAR
+            "varchar" -> if (field.binary) JDBCType.VARBINARY else JDBCType.VARCHAR
+            "binary" -> JDBCType.BINARY
+            "varbinary" -> JDBCType.VARBINARY
+            "tinyblob" -> JDBCType.VARBINARY
+            "tinytext" -> JDBCType.VARCHAR
+            "blob" -> JDBCType.LONGVARBINARY
+            "text" -> JDBCType.LONGVARCHAR
+            "mediumblob" -> JDBCType.LONGVARBINARY
+            "mediumtext" -> JDBCType.LONGVARCHAR
+            "longblob" -> JDBCType.LONGVARBINARY
+            "longtext" -> JDBCType.LONGVARCHAR
+            "json" -> JDBCType.LONGVARCHAR
+            "geometry" -> JDBCType.BINARY
+            "enum" -> JDBCType.CHAR
+            "set" -> JDBCType.CHAR
+            "null" -> JDBCType.NULL
+            else -> {
+                //JDBCType.VARCHAR
+                //内测阶段直接抛出异常, 便于排错
+                throw Exception("${field.dbType} 映射失败!!!")
+            }
         }
     }
 }
