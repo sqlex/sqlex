@@ -52,12 +52,8 @@ open class SqlExMethodDocumentationProvider : DocumentationProvider {
     }
 
     override fun generateDoc(element: PsiElement?, originalElement: PsiElement?): String? {
-        val sql = element?.getUserData(sqlCacheKey)?.trim() ?: return null
+        val sql = element?.getUserData(sqlCacheKey)?.trimIndent()?.trim() ?: return null
         //language=HTML
-        return """
-           <pre>
-           $sql
-           </pre>
-        """.trimIndent()
+        return "<pre>$sql</pre>"
     }
 }
