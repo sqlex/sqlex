@@ -2,6 +2,7 @@ package me.danwi.sqlex.core.migration;
 
 import me.danwi.sqlex.core.DaoFactory;
 import me.danwi.sqlex.core.annotation.SqlExSchema;
+import me.danwi.sqlex.core.exception.SqlExException;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.exception.SqlExMigrationException;
 import org.slf4j.Logger;
@@ -38,7 +39,7 @@ public class Migrator {
         try (Statement statement = connection.createStatement()) {
             statement.execute(sql);
         } catch (SQLException ex) {
-            throw new SqlExMigrationException(-1, ex);
+            throw new SqlExMigrationException(ex);
         }
     }
 
@@ -68,7 +69,7 @@ public class Migrator {
         try (Connection connection = daoFactory.newConnection()) {
             execute(connection, "create table if not exists _sqlex_version_(version int not null, can_migrate bool not null)");
         } catch (SQLException ex) {
-            throw new SqlExMigrationException(-1, ex);
+            throw new SqlExMigrationException(ex);
         }
 
         //专用于锁定版本信息的连接
@@ -88,7 +89,7 @@ public class Migrator {
             execute(lockConnection, "lock tables _sqlex_version_ write");
             logger.info("获取到全局锁,准备开始迁移");
         } catch (SQLException ex) {
-            throw new SqlExMigrationException(-1, ex);
+            throw new SqlExMigrationException(ex);
         }
 
         try {
@@ -149,7 +150,7 @@ public class Migrator {
             if (ex instanceof SqlExMigrationException)
                 throw (SqlExMigrationException) ex;
             else
-                throw new SqlExMigrationException(-1, ex);
+                throw new SqlExMigrationException(ex);
         } finally {
             try {
                 try {
@@ -177,7 +178,11 @@ public class Migrator {
         try (Connection connection = daoFactory.newConnection()) {
             logger.info("| \t{}", sql);
             //执行语句
-            execute(connection, sql);
+            try (Statement statement = connection.createStatement()) {
+                statement.execute(sql);
+            }
+        } catch (SqlExException e) {
+            throw new SqlExMigrationException(version, e.getCause());
         } catch (SQLException e) {
             throw new SqlExMigrationException(version, e);
         }

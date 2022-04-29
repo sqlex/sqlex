@@ -10,7 +10,11 @@ public class SqlExMigrationException extends SqlExException {
         super(message);
     }
 
-    public SqlExMigrationException(int version, Exception cause) {
+    public SqlExMigrationException(Throwable cause) {
+        super(cause);
+    }
+
+    public SqlExMigrationException(int version, Throwable cause) {
         super(cause);
         this.version = version;
     }
