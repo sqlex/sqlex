@@ -67,7 +67,7 @@ public class Checker {
                                 //repository的tinyint(1) 等同于 数据库的bit(1)
                                 if (sc.typeId == JDBCType.TINYINT && sc.length == 1 && tc.typeId == JDBCType.BIT && tc.length == 1)
                                     continue;
-                                if (!(sc.typeId == tc.typeId)) {
+                                if (!(sc.typeId == tc.typeId) || MysqlType.isSigned(MysqlType.getByJdbcType(sc.typeId.getVendorTypeNumber())) && sc.unsigned != tc.unsigned) {
                                     diffColumns.add(sc);
                                 }
                             }
