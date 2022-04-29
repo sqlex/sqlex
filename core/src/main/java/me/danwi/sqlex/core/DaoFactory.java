@@ -216,6 +216,15 @@ public class DaoFactory {
     }
 
     /**
+     * 获取异常转换/翻译器
+     *
+     * @return 异常转换/翻译器
+     */
+    public ExceptionTranslator getExceptionTranslator() {
+        return exceptionTranslator;
+    }
+
+    /**
      * 迁移数据版本
      */
     public void migrate() {
