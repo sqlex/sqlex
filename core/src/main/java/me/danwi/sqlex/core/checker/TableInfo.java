@@ -19,4 +19,15 @@ public class TableInfo {
     public List<ColumnInfo> getColumns() {
         return columns;
     }
+
+    @Override
+    public String toString() {
+        StringBuilder builder = new StringBuilder();
+        builder.append(name).append(" {\n");
+        for (ColumnInfo column : columns) {
+            builder.append("\t").append(column.toString()).append("\n");
+        }
+        builder.append("}");
+        return builder.toString();
+    }
 }

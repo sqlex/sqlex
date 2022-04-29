@@ -39,10 +39,7 @@ public class ColumnInfo {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ColumnInfo that = (ColumnInfo) o;
-        return typeId == that.typeId && length == that.length && unsigned == that.unsigned && Objects.equals(name, that.name) && Objects.equals(typeName, that.typeName);
+    public String toString() {
+        return name + " " + typeName;
     }
 }
