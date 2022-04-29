@@ -2,25 +2,24 @@ package me.danwi.sqlex.core.exception;
 
 import me.danwi.sqlex.core.checker.TableInfo;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
  * 数据库检查异常
  */
 public class SqlExCheckException extends SqlExException {
-    private final List<TableInfo> tables;
-
-    public SqlExCheckException(Exception cause) {
-        super(cause);
-        this.tables = new ArrayList<>();
-    }
+    private final List<TableInfo> missed;
 
     public SqlExCheckException(List<TableInfo> tables) {
-        this.tables = tables;
+        this.missed = tables;
     }
 
-    public List<TableInfo> getTables() {
-        return tables;
+    /**
+     * 目标数据库缺失的表及字段
+     *
+     * @return 表和字段
+     */
+    public List<TableInfo> getMissed() {
+        return missed;
     }
 }

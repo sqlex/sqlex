@@ -23,16 +23,17 @@ public class Checker {
     }
 
     public void check() {
-        logger.info("获取({})表结构", factory.getRepositoryClass().getPackage().getName());
+        logger.info("准备比对数据库结构一致性");
+        logger.info("获取SqlEx Repository({})定义结构", factory.getRepositoryClass().getPackage().getName());
         List<TableInfo> repositoryTables = getRepositoryTables();
-        logger.info("获取数据库表结构");
+        logger.info("获取目标数据库结构");
         List<TableInfo> databaseTables = getDatabaseTables();
-        logger.info("开始比对");
+        logger.info("计算结构差异");
         List<TableInfo> diffTables = diff(repositoryTables, databaseTables);
         if (diffTables.size() != 0) {
             throw new SqlExCheckException(diffTables);
         }
-        logger.info("比对完成");
+        logger.info("结构一致性比对完成,无差异");
     }
 
     private List<TableInfo> diff(List<TableInfo> source, List<TableInfo> target) {
@@ -50,8 +51,7 @@ public class Checker {
                     if (targetColumn != null && sourceColumn.typeId == JDBCType.TINYINT && sourceColumn.length == 1 && targetColumn.typeId == JDBCType.BIT && targetColumn.length == 1) {
                         return;
                     }
-                    if (targetColumn == null || sourceColumn.typeId != targetColumn.typeId
-                    ) {
+                    if (targetColumn == null || sourceColumn.typeId != targetColumn.typeId) {
                         diffColumns.add(sourceColumn);
                     }
                 });
@@ -103,7 +103,7 @@ public class Checker {
             }
             return tables;
         } catch (SQLException e) {
-            throw new SqlExCheckException(e);
+            throw factory.getExceptionTranslator().translate(e);
         }
     }
 
