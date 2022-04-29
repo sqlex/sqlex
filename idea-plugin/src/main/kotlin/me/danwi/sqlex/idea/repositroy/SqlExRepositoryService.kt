@@ -32,7 +32,6 @@ import me.danwi.sqlex.parser.util.schemaFileVersion
 import java.nio.file.Paths
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
-import kotlin.io.path.absolutePathString
 
 class SqlExRepositoryService(val sourceRoot: VirtualFile) {
     // region 公有变量
@@ -202,7 +201,7 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                     dataSource = project.addDataSource(rootPackage, sourceRoot)
                                 //设置关键信息
                                 dataSource.sqlexName = rootPackage
-                                dataSource.ddl = ddlScript
+                                dataSource.setDDL(project, ddlScript)
 
                                 indicator.checkCanceled()
 
@@ -391,8 +390,11 @@ fun Project.syncRepositoryService() {
         val projectPath = this.basePath ?: throw Exception("无法获取项目的根目录")
         //获取导入的repository配置
         val sourceRoot = this.getProperty(importedRepositoriesPropertyKey)
-            ?.mapNotNull { localFileSystem.refreshAndFindFileByPath(Paths.get(projectPath, it).absolutePathString()) }
-            ?: return
+            ?.mapNotNull {
+                localFileSystem.refreshAndFindFileByPath(
+                    Paths.get(projectPath, it).toAbsolutePath().toString()
+                )
+            } ?: return
         //新建service
         sourceRoot.forEach {
             val module = it.module ?: return@forEach

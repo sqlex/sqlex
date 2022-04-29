@@ -14,9 +14,6 @@
         <internalFileTemplate id="SqlEx.Config" name="SqlEx Config" order="first"/>
         <!--配置中注入java语言,converters配置等-->
         <multiHostInjector implementation="me.danwi.sqlex.idea.config.SqlExConfigJavaInjector"/>
-        <!--配置中提供inlay hint信息,比如converter的from->to-->
-        <codeInsight.inlayProvider language="yaml"
-                                   implementationClass="me.danwi.sqlex.idea.config.SqlExConfigInlayHintsProvider"/>
         <!--感知转换器实现是否正确-->
         <localInspection language="yaml"
                          groupName="SqlEx"

@@ -41,11 +41,14 @@ fun Project.addDataSource(name: String, sourceRoot: VirtualFile): SqlDataSourceI
         //获取数据源管理器
         val dataSourceManager = SqlDataSourceManager.getInstance(this)
         //创建数据源
-        val dataSource = dataSourceManager.createEmpty()
+        val dataSource = SqlDataSourceImpl("", this, null)
         dataSource.sqlexName = name
         dataSource.comment = "SqlEx schema of [ ${sourceRoot.projectRootRelativePath} ]"
-        dataSource.sqlexSourceRootPath = sourceRoot.projectRootRelativePath ?: throw Exception("无法获取source root相对路径")
-        dataSource.ddl = "" //暂时以空白作为内容
+        dataSource.setSqlExSourceRootPath(
+            this,
+            sourceRoot.projectRootRelativePath ?: throw Exception("无法获取source root相对路径")
+        )
+        dataSource.setDDL(this, "")  //暂时以空白作为内容
         //添加数据源
         dataSourceManager.addDataSource(dataSource)
         //设置解析路径
@@ -75,14 +78,14 @@ fun Project.removeDataSource(dataSource: SqlDataSourceImpl, sourceRoot: VirtualF
         if (sourceRoot != null)
             SqlResolveMappings.getInstance(this).setMapping(sourceRoot, null)
         //删除source root属性数据
-        dataSource.sqlexSourceRootPath = null
+        dataSource.setSqlExSourceRootPath(this, null)
         dataSourceManager.removeDataSource(dataSource)
     }
 }
 
 fun Project.findDataSource(sourceRoot: VirtualFile): SqlDataSourceImpl? {
     return this.allSqlExDataSources.find {
-        it.sqlexSourceRootPath == sourceRoot.projectRootRelativePath
+        it.getSqlExSourceRootPath(this) == sourceRoot.projectRootRelativePath
     }
 }
 

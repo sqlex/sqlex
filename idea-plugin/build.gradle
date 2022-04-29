@@ -15,9 +15,14 @@ intellij {
     def ideaPathProperty = localProperties.get('idea.path')
     if (ideaPathProperty == null) {
         type = 'IU'
-        version = '2021.3'
+        version = '2021.1'
     } else {
         localPath = ideaPathProperty
+    }
+
+    patchPluginXml {
+        sinceBuild = "211"
+        untilBuild = "221.*"
     }
 
     pluginName = 'sqlex'

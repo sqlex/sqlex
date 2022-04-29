@@ -132,7 +132,7 @@ class SqlExRepositoryToolWindow(private val project: Project) : Disposable {
 
         val actionToolbar = actionManager.createActionToolbar("SqlEx.Repository", actions, true)
         actionToolbar.setOrientation(SwingConstants.VERTICAL)
-        actionToolbar.targetComponent = target
+        actionToolbar.setTargetComponent(target)
 
         return actionToolbar.component
     }
