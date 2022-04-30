@@ -190,14 +190,8 @@ jobs:
   plugin-verify:
     needs:
       - native-linux
-      - native-windows
-      - native-darwin
 
-    strategy:
-      matrix:
-        os: [ 'ubuntu-latest', 'windows-latest', 'macos-latest' ]
-
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
@@ -216,18 +210,6 @@ jobs:
         with:
           name: linux-shared-library
           path: parser/src/main/resources/native/linux/
-
-      - name: Download windows shared library
-        uses: actions/download-artifact@v3
-        with:
-          name: windows-shared-library
-          path: parser/src/main/resources/native/windows/
-
-      - name: Download darwin shared library
-        uses: actions/download-artifact@v3
-        with:
-          name: darwin-shared-library
-          path: parser/src/main/resources/native/darwin/
 
       - name: Execute Gradle test
         run: ./gradlew runPluginVerifier
