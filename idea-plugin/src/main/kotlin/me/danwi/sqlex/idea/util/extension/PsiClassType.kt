@@ -4,7 +4,7 @@ import com.intellij.psi.PsiClassType
 
 //获取psi type的泛型参数
 fun PsiClassType.genericArgument(index: Int): PsiClassType? {
-    val genericArguments = this.typeArguments().toList()
+    val genericArguments = this.parameters
     if (genericArguments.size <= index)
         return null
     val genericType = genericArguments[index]
