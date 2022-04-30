@@ -1,7 +1,6 @@
 package me.danwi.sqlex.parser.util
 
 import me.danwi.sqlex.parser.exception.SqlExParserException
-import org.apache.commons.text.StringEscapeUtils
 import java.io.File
 
 //SqlEx生成目录下的标记文件
@@ -163,7 +162,3 @@ val String.namedParameterSQL: NamedParameterSQL
         }
         return NamedParameterSQL(parsedQuery.toString(), orderedParameters.map { NamedParameter(it.first, it.second) })
     }
-
-//转义
-val String.literal: String
-    inline get() = StringEscapeUtils.escapeJava(this)

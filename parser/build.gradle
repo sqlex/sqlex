@@ -35,12 +35,13 @@ compileTestKotlin.dependsOn generateTestGrammarSource
 dependencies {
     api project(":core")
     implementation "org.jetbrains.kotlin:kotlin-stdlib"
-    implementation "net.java.dev.jna:jna:5.10.0"
+    implementation 'net.java.dev.jna:jna:5.11.0'
     implementation "com.google.code.gson:gson:2.9.0"
     implementation "org.yaml:snakeyaml:1.30"
-    implementation 'org.apache.commons:commons-text:1.9'
     implementation 'com.squareup:javapoet:1.13.0'
-    antlr("org.antlr:antlr4:4.9.3")
+    antlr('org.antlr:antlr4:4.10.1') {
+        exclude group: 'com.ibm.icu', module: 'icu4j'
+    }
 
     testImplementation "org.junit.jupiter:junit-jupiter-api:5.8.2"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.8.2"
