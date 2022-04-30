@@ -254,6 +254,13 @@ class GeneratedMethodFile(
     private fun generateResultClass(resultClassName: String, sql: String): TypeSpec {
         val typeSpecBuilder = TypeSpec.classBuilder(resultClassName)
             .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+        //获取字段
+        val fields = session.getFields(sql)
+        //判断列名是否重复
+        val duplicateFieldNames = fields.groupingBy { it.name }.eachCount().filter { it.value > 1 }
+        if (duplicateFieldNames.isNotEmpty()) {
+            throw Exception("重复的列名 ${duplicateFieldNames.map { "'${it.key}'" }.joinToString(", ")}")
+        }
         //给实体添加getter/setter
         session.getFields(sql)
             .map { Pair(it.name, getJavaType(it)) }
