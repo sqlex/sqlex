@@ -5,6 +5,7 @@ import com.squareup.javapoet.TypeSpec
 import me.danwi.sqlex.core.RepositoryLike
 import me.danwi.sqlex.core.annotation.SqlExConverter
 import me.danwi.sqlex.core.annotation.SqlExConverterCheck
+import me.danwi.sqlex.core.annotation.SqlExMethods
 import me.danwi.sqlex.core.annotation.SqlExSchema
 import me.danwi.sqlex.core.annotation.SqlExTableInfo
 import me.danwi.sqlex.parser.Field
@@ -18,9 +19,12 @@ class GeneratedRepositoryFile(
     rootPackage: String,
     private val converters: List<String>,
     private val schemas: List<String>,
+    private val methodClassNames: List<String>,
     private val session: Session,
 ) : GeneratedJavaFile(rootPackage, RepositoryClassName) {
     override fun generate(): TypeSpec {
+        val methodAnnotationSpecBuilder = AnnotationSpec.builder(SqlExMethods::class.java)
+        methodClassNames.forEach { methodAnnotationSpecBuilder.addMember("value", "\$L.class", it) }
         return TypeSpec.interfaceBuilder(RepositoryClassName)
             .addModifiers(Modifier.PUBLIC)
             .addSuperinterface(RepositoryLike::class.java)
@@ -63,6 +67,7 @@ class GeneratedRepositoryFile(
                     builder.build()
                 }
             )
+            .addAnnotation(methodAnnotationSpecBuilder.build())
             .build()
     }
 
