@@ -27,8 +27,15 @@ class SqlExMethodComponentDiscoverer : CustomLocalComponentsDiscoverer() {
         //通过SqlExMethods注解,找到挂在其上的所有SqlExMethod类
         val daoClasses = repositoryClasses
             .mapNotNull { it.getAnnotation(SqlExMethods::class.java.name)?.findAttributeValue("value") }
-            .filterIsInstance<PsiArrayInitializerMemberValue>()
-            .flatMap { it.initializers.toList() }
+            .flatMap {
+                when (it) {
+                    //单个类例如@SqlExMethods(XxxDao.class)
+                    is PsiClassObjectAccessExpression -> return@flatMap listOf(it)
+                    //多个类例如@SqlExMethods({XxxDao.class,XxxDao2.class})
+                    is PsiArrayInitializerMemberValue -> return@flatMap it.initializers.toList()
+                    else -> return@flatMap listOf()
+                }
+            }
             .filterIsInstance<PsiClassObjectAccessExpression>()
             .mapNotNull { it.operand.type.psiClass }
         //构造自定义的Spring组件,返回
