@@ -1,6 +1,7 @@
 package me.danwi.sqlex.parser.generate
 
 import com.squareup.javapoet.*
+import me.danwi.sqlex.common.ColumnNameRegex
 import me.danwi.sqlex.common.Paged
 import me.danwi.sqlex.core.annotation.*
 import me.danwi.sqlex.core.type.PagedResult
@@ -242,6 +243,12 @@ class GeneratedMethodFile(
         val duplicateFieldNames = fields.groupingBy { it.name }.eachCount().filter { it.value > 1 }
         if (duplicateFieldNames.isNotEmpty()) {
             throw Exception("重复的列名 ${duplicateFieldNames.map { "'${it.key}'" }.joinToString(", ")}")
+        }
+        //判断列名是否非法
+        val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
+        val invalidFieldNames = fields.map { it.name }.filter { !regex.containsMatchIn(it) }
+        if (invalidFieldNames.isNotEmpty()) {
+            throw Exception("非法的列名 ${invalidFieldNames.joinToString(", ")}")
         }
         //给实体添加getter/setter
         session.getFields(sql)
