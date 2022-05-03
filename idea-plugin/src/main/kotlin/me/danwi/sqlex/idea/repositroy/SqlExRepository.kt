@@ -21,6 +21,9 @@ class SqlExRepository(private val project: Project, private val repository: Repo
     private val javaClassCache = mutableMapOf<String, PsiClass>()
     private val psiManager = PsiManager.getInstance(project)
 
+    val session
+        get() = repository.getSession()
+
     init {
         //生成顶级Repository的psi class
         val javaClass = generateJavaPsiClass(repository.repositoryJavaFile)
