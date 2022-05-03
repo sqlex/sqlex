@@ -4,40 +4,40 @@ import com.intellij.codeInspection.LocalInspectionTool
 import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiElementVisitor
-import com.intellij.sql.psi.*
-import com.intellij.sql.psi.impl.SqlReferenceExpressionImpl
 import me.danwi.sqlex.common.ColumnNameRegex
-import me.danwi.sqlex.idea.util.extension.childrenOf
+import me.danwi.sqlex.idea.sqlm.psi.MethodSubtree
+import me.danwi.sqlex.idea.util.extension.sqlexRepositoryService
+import me.danwi.sqlex.parser.StatementType
 
 class SqlExMethodSelectColumnInspection : LocalInspectionTool() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): PsiElementVisitor {
         return object : PsiElementVisitor() {
             override fun visitElement(element: PsiElement) {
-                if (element !is SqlSelectClause) return
-                //函数调用, 建议重命名
-                element
-                    .children
-                    .filterIsInstance<SqlFunctionCallExpression>()
-                    .map { holder.registerProblem(it, "请使用 AS 重命名") }
-                //多表 *, 建议指定列
-                if (element.parent.childrenOf<SqlJoinExpression>().isNotEmpty()) {
-                    element.children.filterIsInstance<SqlReferenceExpressionImpl>().filter { it.text.endsWith(".*") }
-                        .map { holder.registerProblem(it, "多表查询请明确指定列") }
+                //找到方法
+                if (element !is MethodSubtree) return
+                //获取sql元素
+                val sqlSubtree = element.sql ?: return
+                //获取sql文本
+                val sql = sqlSubtree.text ?: return
+                //获取session
+                val session = element.containingFile.virtualFile.sqlexRepositoryService?.repository?.session ?: return
+                //判断是否是select
+                if (session.getStatementInfo(sql).type != StatementType.Select) return
+                //获取列名
+                val fields = session.getFields(sql)
+                //判断列名是否重复
+                val duplicateFieldNames = fields.groupingBy { it.name }.eachCount().filter { it.value > 1 }
+                if (duplicateFieldNames.isNotEmpty()) {
+                    holder.registerProblem(
+                        sqlSubtree,
+                        "存在重复的列名 ${duplicateFieldNames.map { "'${it.key}'" }.joinToString(", ")}"
+                    )
                 }
-                val duplicate = HashMap<String, PsiElement>()
+                //判断列名是否非法
                 val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
-                element.children.forEach {
-                    if (it is SqlReferenceExpressionImpl || it is SqlAsExpression) {
-                        it.children.filterIsInstance<SqlIdentifier>().firstOrNull()?.let { e ->
-                            //列名重复
-                            if (null == duplicate[e.text]) duplicate[e.text] = it
-                            else holder.registerProblem(it, "列名重复")
-                            //列名非法
-                            if (regex.containsMatchIn(it.text)) {
-                                holder.registerProblem(it, "非法的列名")
-                            }
-                        }
-                    }
+                val invalidFieldNames = fields.map { it.name }.filter { !regex.containsMatchIn(it) }
+                if (invalidFieldNames.isNotEmpty()) {
+                    holder.registerProblem(sqlSubtree, "存在非法的列名 ${invalidFieldNames.joinToString(", ")}")
                 }
             }
         }
