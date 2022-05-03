@@ -95,8 +95,10 @@ class Repository(
     private val rootPackage = config.rootPackage ?: throw SqlExRepositoryException("无法获取根包信息")
     private val converters = config.converters
 
-    val DDL: String
-        get() = session.DDL
+    //获取session
+    fun getSession(): Session {
+        return session
+    }
 
     //SqlEx Repository顶级类
     val repositoryJavaFile: GeneratedJavaFile by lazy {
