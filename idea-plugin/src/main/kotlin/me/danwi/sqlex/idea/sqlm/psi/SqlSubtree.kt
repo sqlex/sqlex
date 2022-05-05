@@ -45,17 +45,25 @@ class SqlSubtree(node: ASTNode, idElementType: IElementType) : IdentifierDefSubt
 
     val fields: Array<Field>?
         get() {
-            if (statementInfo?.type != StatementType.Select) return null
-            val session = this.containingFile.virtualFile.sqlexRepositoryService?.repository?.session ?: return null
-            val sql = this.text ?: return null
-            return this.getUserData(fieldsCacheKey) ?: session.getFields(sql)
+            try {
+                if (statementInfo?.type != StatementType.Select) return null
+                val session = this.containingFile.virtualFile.sqlexRepositoryService?.repository?.session ?: return null
+                val sql = this.text ?: return null
+                return this.getUserData(fieldsCacheKey) ?: session.getFields(sql)
+            } catch (_: Exception) {
+                return null
+            }
         }
 
     val statementInfo: StatementInfo?
         get() {
-            val session = this.containingFile.virtualFile.sqlexRepositoryService?.repository?.session ?: return null
-            val sql = this.text ?: return null
-            return this.getUserData(statementInfoCacheKey) ?: session.getStatementInfo(sql)
+            try {
+                val session = this.containingFile.virtualFile.sqlexRepositoryService?.repository?.session ?: return null
+                val sql = this.text ?: return null
+                return this.getUserData(statementInfoCacheKey) ?: session.getStatementInfo(sql)
+            } catch (_: Exception) {
+                return null
+            }
         }
 
     override fun subtreeChanged() {

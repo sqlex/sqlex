@@ -79,12 +79,6 @@
                          level="ERROR"
                          enabledByDefault="true"
                          implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodPagedParameterInspection"/>
-        <localInspection language="SqlExMethod"
-                         groupName="SqlEx"
-                         displayName="Select columns"
-                         level="ERROR"
-                         enabledByDefault="true"
-                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodSelectColumnInspection"/>
 
         <localInspection language="SQL"
                          groupName="SqlEx"
@@ -104,6 +98,12 @@
                          level="ERROR"
                          enabledByDefault="true"
                          implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodPagedLimitInspection"/>
+        <localInspection language="SQL"
+                         groupName="SqlEx"
+                         displayName="Select columns"
+                         level="ERROR"
+                         enabledByDefault="true"
+                         implementationClass="me.danwi.sqlex.idea.sqlm.inspection.SqlExMethodSelectColumnInspection"/>
 
         <!--定义color-->
         <additionalTextAttributes scheme="Default" file="colorSchemes/SqlExMethodDefault.xml"/>
