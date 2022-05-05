@@ -251,7 +251,7 @@ class GeneratedMethodFile(
             throw Exception("非法的列名 ${invalidFieldNames.joinToString(", ")}")
         }
         //给实体添加getter/setter
-        session.getFields(sql)
+        fields
             .map { Pair(it.name, getJavaType(it)) }
             .forEach { typeSpecBuilder.addGetterAndSetter(it.first, it.second) }
         return typeSpecBuilder.build()
