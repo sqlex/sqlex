@@ -26,13 +26,6 @@ class SqlExMethodSelectColumnInspection : LocalInspectionTool() {
                 //获取sql文本
                 val sqlSubtree = methodSubtree.sql ?: return
                 try {
-                    //获取列名
-                    val fields = sqlSubtree.fields ?: return
-                    //判断列名是否重复
-                    val duplicateFieldNames = fields.groupingBy { it.name }.eachCount().filter { it.value > 1 }
-                    //判断列名是否非法
-                    val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
-                    val invalidFieldNames = fields.map { it.name }.filter { !regex.containsMatchIn(it) }
                     //计算column偏移量
                     val expressions = element.expressions
                     if (expressions.isEmpty())
@@ -42,13 +35,21 @@ class SqlExMethodSelectColumnInspection : LocalInspectionTool() {
                     if (endOffset < startOffset)
                         return
                     val textRange = TextRange(startOffset, endOffset)
+                    //获取列名
+                    val fields = sqlSubtree.fields ?: return
+                    //判断列名是否重复
+                    val duplicateFieldNames = fields.groupingBy { it.name }.eachCount().filter { it.value > 1 }
                     if (duplicateFieldNames.isNotEmpty()) {
                         holder.registerProblem(
                             element,
                             textRange,
                             "存在重复的列名 ${duplicateFieldNames.map { "'${it.key}'" }.joinToString(", ")}"
                         )
-                    } else if (invalidFieldNames.isNotEmpty()) {
+                    }
+                    //判断列名是否非法
+                    val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
+                    val invalidFieldNames = fields.map { it.name }.filter { !regex.containsMatchIn(it) }
+                    if (invalidFieldNames.isNotEmpty()) {
                         holder.registerProblem(element, textRange, "存在非法的列名 ${invalidFieldNames.joinToString(", ")}")
                     }
                 } catch (_: Exception) {
