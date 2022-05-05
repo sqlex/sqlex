@@ -16,13 +16,13 @@ val SqlExMethodGeneratedCacheKey = Key<Boolean>("me.danwi.sqlex.SqlExMethodGener
 val SqlExMethodFileCacheKey = Key<VirtualFile>("me.danwi.sqlex.SqlExMethodFileCache")
 val SqlExMethodPsiClassCacheKey = Key<PsiClass>("me.danwi.sqlex.SqlExMethodPsiClassCache")
 
-class SqlExRepository(private val project: Project, private val repository: Repository) {
+class SqlExRepository(private val project: Project, val repository: Repository) {
     private val javaFileCache = mutableMapOf<String, GeneratedJavaFile>()
     private val javaClassCache = mutableMapOf<String, PsiClass>()
     private val psiManager = PsiManager.getInstance(project)
 
     val session
-        get() = repository.getSession()
+        get() = repository.session
 
     init {
         //生成顶级Repository的psi class
