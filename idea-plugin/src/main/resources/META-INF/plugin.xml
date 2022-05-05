@@ -4,7 +4,15 @@
     <vendor email="demon@danwi.me" url="https://sqlex.github.com">SqlEx</vendor>
 
     <description><![CDATA[
-    SqlEx Plugin, enhance the development experience of SqlEx framework, provides autocomplete/inspection and so on.
+    Adds support for the <a href="https://sqlex.github.com">sqlex</a> framework(A data access framework).
+    The following features are available:
+    <ul>
+        <li>Coding assistance(auao completion, formatting, highlighting...)</li>
+        <li>Navigation between java and sqlm, provide symbol information</li>
+        <li>Integration with Java/Kotlin/Spring</li>
+        <li>Error inspection(such as incorrect grammar)</li>
+    </ul>
+    For more information, please see <a href="https://sqlex.github.com">sqlex official site</a>.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
