@@ -16,30 +16,43 @@ val SqlExMethodGeneratedCacheKey = Key<Boolean>("me.danwi.sqlex.SqlExMethodGener
 val SqlExMethodFileCacheKey = Key<VirtualFile>("me.danwi.sqlex.SqlExMethodFileCache")
 val SqlExMethodPsiClassCacheKey = Key<PsiClass>("me.danwi.sqlex.SqlExMethodPsiClassCache")
 
-class SqlExRepository(private val project: Project, val repository: Repository) {
-    private val javaFileCache = mutableMapOf<String, GeneratedJavaFile>()
-    private val javaClassCache = mutableMapOf<String, PsiClass>()
-    private val psiManager = PsiManager.getInstance(project)
-
+class SqlExRepository(private val project: Project, private val repository: Repository) {
     val session
         get() = repository.session
 
-    init {
-        //生成顶级Repository的psi class
-        val javaClass = generateJavaPsiClass(repository.repositoryJavaFile)
-        //存入缓存
-        javaClassCache["FAKE:${repository.repositoryJavaFile.relativePath}"] = javaClass
-    }
+    private var repositoryJavaFile: GeneratedJavaFile? = null
+    private var repositoryJavaClass: PsiClass? = null
+
+    private val methodJavaFileCache = mutableMapOf<String, GeneratedJavaFile>()
+    private val methodJavaClassCache = mutableMapOf<String, PsiClass>()
+    private val psiManager = PsiManager.getInstance(project)
+
+    private val repositoryJavaFileCache: GeneratedJavaFile
+        get() {
+            val file = repositoryJavaFile
+                ?: repository.generateRepositoryClassFile(methodJavaFileCache.values.map { it.qualifiedName })
+            if (repositoryJavaFile == null)
+                repositoryJavaFile = file
+            return file
+        }
+
+    private val repositoryJavaClassCache: PsiClass
+        get() {
+            val psiClass = repositoryJavaClass ?: generateJavaPsiClass(repositoryJavaFileCache)
+            if (repositoryJavaClass == null)
+                repositoryJavaClass = psiClass
+            return psiClass
+        }
 
     val allJavaClassCache: List<PsiClass>
         get() {
-            val classes = javaClassCache.values
+            val classes = methodJavaClassCache.values
             val innerClass = classes.flatMap { it.innerClasses.toList() }
-            return (classes + innerClass)
+            return (classes + innerClass + repositoryJavaClassCache)
         }
 
     private fun generateJavaFile(file: VirtualFile): GeneratedJavaFile {
-        return repository.generateJavaFile(
+        return repository.generateMethodClassFile(
             file.sourceRootRelativePath ?: throw Exception("无法获取文件${file.name}的相对路径"),
             file.textContent ?: throw Exception("无法读取文件${file.name}的内容")
         )
@@ -71,16 +84,22 @@ class SqlExRepository(private val project: Project, val repository: Repository) 
         javaClass.putUserData(SqlExMethodFileCacheKey, file)
         file.putUserData(SqlExMethodPsiClassCacheKey, javaClass)
         //存入缓存
-        javaClassCache[file.path] = javaClass
-        //移除源码缓存
-        javaFileCache.remove(file.path)
+        methodJavaFileCache[file.path] = javaFile
+        methodJavaClassCache[file.path] = javaClass
+        //移除repository缓存
+        repositoryJavaFile = null
+        repositoryJavaClass = null
         //更新psi缓存
         invokeLater { runWriteAction { psiManager.dropPsiCaches() } }
     }
 
     fun removeMethodFile(filePath: String) {
-        javaClassCache.remove(filePath)
-        javaFileCache.remove(filePath)
+        //移除method缓存
+        methodJavaClassCache.remove(filePath)
+        methodJavaFileCache.remove(filePath)
+        //移除repository缓存
+        repositoryJavaFile = null
+        repositoryJavaClass = null
         //更新缓存
         invokeLater { runWriteAction { psiManager.dropPsiCaches() } }
     }
@@ -90,8 +109,8 @@ class SqlExRepository(private val project: Project, val repository: Repository) 
     }
 
     fun close() {
-        javaFileCache.clear()
-        javaClassCache.clear()
+        methodJavaFileCache.clear()
+        methodJavaClassCache.clear()
         repository.close()
         invokeLater { runWriteAction { psiManager.dropPsiCaches() } }
     }
@@ -100,18 +119,15 @@ class SqlExRepository(private val project: Project, val repository: Repository) 
     fun findJavaSource(file: VirtualFile?): GeneratedJavaFile? {
         //如果是配置文件,则返回顶级Repository的源码
         if (file.isSqlExConfig)
-            return repository.repositoryJavaFile
+            return repositoryJavaFileCache
         //其他则返回方法的源码
         val path = file?.path ?: return null
-        if (!javaFileCache.contains(path)) {
-            javaFileCache[path] = generateJavaFile(file)
-        }
-        return javaFileCache[path]
+        return methodJavaFileCache[path]
     }
 
     //获取该包下所有的类(不包括内部类)
     fun findClasses(qualifiedPackage: String): List<PsiClass> {
-        return javaClassCache.values
+        return methodJavaClassCache.values
             .filter { it.qualifiedPackageName == qualifiedPackage }
     }
 
