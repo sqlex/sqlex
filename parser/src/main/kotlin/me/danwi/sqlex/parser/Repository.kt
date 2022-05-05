@@ -87,15 +87,12 @@ class RepositoryBuilder(private val config: SqlExConfig) {
 
 class Repository(
     private val databaseName: String,
-    private val session: Session,
+    val session: Session,
     private val config: SqlExConfig,
     private val schemas: List<String>
 ) {
     private val rootPackage = config.rootPackage ?: throw SqlExRepositoryException("无法获取根包信息")
     private val converters = config.converters
-
-    val DDL: String
-        get() = session.DDL
 
     //生成SqlEx Repository顶级类
     fun generateRepositoryClassFile(methodClassNames: List<String>): GeneratedRepositoryFile {

@@ -1,26 +1,9 @@
 package me.danwi.sqlex.parser.generate
 
-import com.squareup.javapoet.AnnotationSpec
-import com.squareup.javapoet.ArrayTypeName
-import com.squareup.javapoet.ClassName
-import com.squareup.javapoet.MethodSpec
-import com.squareup.javapoet.ParameterSpec
-import com.squareup.javapoet.ParameterizedTypeName
-import com.squareup.javapoet.TypeName
-import com.squareup.javapoet.TypeSpec
+import com.squareup.javapoet.*
+import me.danwi.sqlex.common.ColumnNameRegex
 import me.danwi.sqlex.common.Paged
-import me.danwi.sqlex.core.annotation.SqlExDelete
-import me.danwi.sqlex.core.annotation.SqlExInExprPosition
-import me.danwi.sqlex.core.annotation.SqlExInsert
-import me.danwi.sqlex.core.annotation.SqlExMarkerPosition
-import me.danwi.sqlex.core.annotation.SqlExOneRow
-import me.danwi.sqlex.core.annotation.SqlExPaged
-import me.danwi.sqlex.core.annotation.SqlExParameterCheck
-import me.danwi.sqlex.core.annotation.SqlExParameterPosition
-import me.danwi.sqlex.core.annotation.SqlExRepository
-import me.danwi.sqlex.core.annotation.SqlExScript
-import me.danwi.sqlex.core.annotation.SqlExSelect
-import me.danwi.sqlex.core.annotation.SqlExUpdate
+import me.danwi.sqlex.core.annotation.*
 import me.danwi.sqlex.core.type.PagedResult
 import me.danwi.sqlex.parser.*
 import me.danwi.sqlex.parser.exception.SqlExRepositoryMethodException
@@ -254,8 +237,21 @@ class GeneratedMethodFile(
     private fun generateResultClass(resultClassName: String, sql: String): TypeSpec {
         val typeSpecBuilder = TypeSpec.classBuilder(resultClassName)
             .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+        //获取字段
+        val fields = session.getFields(sql)
+        //判断列名是否重复
+        val duplicateFieldNames = fields.groupingBy { it.name }.eachCount().filter { it.value > 1 }
+        if (duplicateFieldNames.isNotEmpty()) {
+            throw Exception("重复的列名 ${duplicateFieldNames.map { "'${it.key}'" }.joinToString(", ")}")
+        }
+        //判断列名是否非法
+        val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
+        val invalidFieldNames = fields.map { it.name }.filter { !regex.containsMatchIn(it) }
+        if (invalidFieldNames.isNotEmpty()) {
+            throw Exception("非法的列名 ${invalidFieldNames.joinToString(", ")}")
+        }
         //给实体添加getter/setter
-        session.getFields(sql)
+        fields
             .map { Pair(it.name, getJavaType(it)) }
             .forEach { typeSpecBuilder.addGetterAndSetter(it.first, it.second) }
         return typeSpecBuilder.build()

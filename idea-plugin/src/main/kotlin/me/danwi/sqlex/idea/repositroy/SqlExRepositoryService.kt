@@ -180,7 +180,7 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                 indicator.isIndeterminate = true
                                 //构建SqlEx仓库
                                 val parserRepository = builder.build()
-                                val ddlScript = parserRepository.DDL
+                                val ddlScript = parserRepository.session.DDL
                                 val repository = SqlExRepository(project, parserRepository)
                                 repositoryToClean = repository
                                 this@SqlExRepositoryService.repository = repository
