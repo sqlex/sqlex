@@ -1,6 +1,7 @@
 package me.danwi.sqlex.idea.repositroy
 
 import com.intellij.ide.highlighter.JavaFileType
+import com.intellij.openapi.application.invokeAndWaitIfNeeded
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
@@ -73,6 +74,11 @@ class SqlExRepository(private val project: Project, private val repository: Repo
         } ?: throw Exception("无法生成java class")
     }
 
+    //清除Psi缓存
+    private fun clearPsiCache() {
+        invokeAndWaitIfNeeded { runWriteAction { psiManager.dropPsiCaches() } }
+    }
+
     fun updateMethodFile(file: VirtualFile?) {
         if (file == null)
             return
@@ -90,7 +96,7 @@ class SqlExRepository(private val project: Project, private val repository: Repo
         repositoryJavaFile = null
         repositoryJavaClass = null
         //更新psi缓存
-        invokeLater { runWriteAction { psiManager.dropPsiCaches() } }
+        clearPsiCache()
     }
 
     fun removeMethodFile(filePath: String) {
@@ -101,7 +107,7 @@ class SqlExRepository(private val project: Project, private val repository: Repo
         repositoryJavaFile = null
         repositoryJavaClass = null
         //更新缓存
-        invokeLater { runWriteAction { psiManager.dropPsiCaches() } }
+        clearPsiCache()
     }
 
     fun removeMethodFile(file: VirtualFile?) {
@@ -112,7 +118,7 @@ class SqlExRepository(private val project: Project, private val repository: Repo
         methodJavaFileCache.clear()
         methodJavaClassCache.clear()
         repository.close()
-        invokeLater { runWriteAction { psiManager.dropPsiCaches() } }
+        clearPsiCache()
     }
 
     //获取文件对应的java源码
