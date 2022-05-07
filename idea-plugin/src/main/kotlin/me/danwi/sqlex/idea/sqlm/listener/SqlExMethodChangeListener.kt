@@ -1,4 +1,4 @@
-package me.danwi.sqlex.idea.listener.impl
+package me.danwi.sqlex.idea.sqlm.listener
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.newvfs.BulkFileListener

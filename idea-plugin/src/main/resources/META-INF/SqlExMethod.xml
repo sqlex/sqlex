@@ -1,6 +1,6 @@
 <idea-plugin>
     <projectListeners>
-        <listener class="me.danwi.sqlex.idea.listener.impl.SqlExMethodChangeListener"
+        <listener class="me.danwi.sqlex.idea.sqlm.listener.SqlExMethodChangeListener"
                   topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
     </projectListeners>
     <extensions defaultExtensionNs="com.intellij">
