@@ -1,4 +1,4 @@
-package me.danwi.sqlex.idea.listener.impl
+package me.danwi.sqlex.idea.repositroy.listener
 
 import com.intellij.openapi.roots.ModuleRootEvent
 import com.intellij.openapi.roots.ModuleRootListener

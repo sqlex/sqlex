@@ -30,12 +30,6 @@
     <xi:include href="SqlExSchema.xml" xpointer="xpointer(/idea-plugin/*)"/>
     <xi:include href="SqlExMethod.xml" xpointer="xpointer(/idea-plugin/*)"/>
 
-    <projectListeners>
-        <!--监听Source Root变更-->
-        <listener class="me.danwi.sqlex.idea.listener.impl.SqlExModuleRootListener"
-                  topic="com.intellij.openapi.roots.ModuleRootListener"/>
-    </projectListeners>
-
     <extensions defaultExtensionNs="com.intellij">
         <!--启动Activity-->
         <postStartupActivity implementation="me.danwi.sqlex.idea.SqlExStartupActivity"/>

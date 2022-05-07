@@ -1,5 +1,8 @@
 <idea-plugin>
     <projectListeners>
+        <!--监听Source Root变更-->
+        <listener class="me.danwi.sqlex.idea.repositroy.listener.SqlExModuleRootListener"
+                  topic="com.intellij.openapi.roots.ModuleRootListener"/>
         <!--配置文件变更-->
         <listener class="me.danwi.sqlex.idea.repositroy.listener.SqlExConfigChangeListener"
                   topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
