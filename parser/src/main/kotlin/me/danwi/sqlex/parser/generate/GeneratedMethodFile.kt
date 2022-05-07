@@ -240,13 +240,13 @@ class GeneratedMethodFile(
         //获取字段
         val fields = session.getFields(sql)
         //判断列名是否重复
-        val duplicateFieldNames = fields.groupingBy { it.name }.eachCount().filter { it.value > 1 }
+        val duplicateFieldNames = fields.groupingBy { it.name.pascalName }.eachCount().filter { it.value > 1 }
         if (duplicateFieldNames.isNotEmpty()) {
             throw Exception("重复的列名 ${duplicateFieldNames.map { "'${it.key}'" }.joinToString(", ")}")
         }
         //判断列名是否非法
         val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
-        val invalidFieldNames = fields.map { it.name }.filter { !regex.containsMatchIn(it) }
+        val invalidFieldNames = fields.map { it.name.pascalName }.filter { !regex.matches(it) }
         if (invalidFieldNames.isNotEmpty()) {
             throw Exception("非法的列名 ${invalidFieldNames.joinToString(", ")}")
         }
@@ -403,21 +403,23 @@ class GeneratedMethodFile(
 }
 
 //给实体类添加数据列getter/setter
-fun TypeSpec.Builder.addColumnGetterAndSetter(name: String, type: TypeName): TypeSpec.Builder {
-    this.addField(type, "_${name}", Modifier.PRIVATE)
+fun TypeSpec.Builder.addColumnGetterAndSetter(columnName: String, type: TypeName): TypeSpec.Builder {
+    this.addField(type, "_${columnName.pascalName}", Modifier.PRIVATE)
     this.addMethod(
-        MethodSpec.methodBuilder("get${name.pascalName}")
+        MethodSpec.methodBuilder("get${columnName.pascalName}")
             .addModifiers(Modifier.PUBLIC)
-            .addStatement("return this._${name}")
+            .addStatement("return this._${columnName.pascalName}")
             .returns(type)
             .build()
     )
     this.addMethod(
-        MethodSpec.methodBuilder("set${name.pascalName}")
-            .addAnnotation(AnnotationSpec.builder(SqlExColumnName::class.java).addMember("value", "\$S", name).build())
+        MethodSpec.methodBuilder("set${columnName.pascalName}")
+            .addAnnotation(
+                AnnotationSpec.builder(SqlExColumnName::class.java).addMember("value", "\$S", columnName).build()
+            )
             .addModifiers(Modifier.PUBLIC)
             .addParameter(type, "value")
-            .addStatement("this._${name} = value")
+            .addStatement("this._${columnName.pascalName} = value")
             .build()
     )
     return this
