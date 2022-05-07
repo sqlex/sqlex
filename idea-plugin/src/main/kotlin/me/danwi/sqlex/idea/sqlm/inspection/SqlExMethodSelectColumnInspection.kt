@@ -12,7 +12,7 @@ import com.intellij.sql.psi.SqlSelectClause
 import me.danwi.sqlex.common.ColumnNameRegex
 import me.danwi.sqlex.idea.util.extension.containingSqlExMethod
 import me.danwi.sqlex.idea.util.extension.parentOf
-
+import me.danwi.sqlex.parser.util.pascalName
 
 class SqlExMethodSelectColumnInspection : LocalInspectionTool() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): PsiElementVisitor {
@@ -38,7 +38,8 @@ class SqlExMethodSelectColumnInspection : LocalInspectionTool() {
                     //获取列名
                     val fields = sqlSubtree.fields ?: return
                     //判断列名是否重复
-                    val duplicateFieldNames = fields.groupingBy { it.name }.eachCount().filter { it.value > 1 }
+                    val duplicateFieldNames =
+                        fields.groupingBy { it.name.pascalName }.eachCount().filter { it.value > 1 }
                     if (duplicateFieldNames.isNotEmpty()) {
                         holder.registerProblem(
                             element,
@@ -48,7 +49,7 @@ class SqlExMethodSelectColumnInspection : LocalInspectionTool() {
                     }
                     //判断列名是否非法
                     val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
-                    val invalidFieldNames = fields.map { it.name }.filter { !regex.containsMatchIn(it) }
+                    val invalidFieldNames = fields.map { it.name.pascalName }.filter { !regex.matches(it) }
                     if (invalidFieldNames.isNotEmpty()) {
                         holder.registerProblem(element, textRange, "存在非法的列名 ${invalidFieldNames.joinToString(", ")}")
                     }
