@@ -65,7 +65,7 @@ public class BeanMapper {
                         throw new SqlExImpossibleException("无法获取实体类(" + beanClass.getName() + ")的属性");
                     }
                     //解析bean的属性(不填充column index的值)
-                    propertyInfo = (PropertyInfo[]) Arrays.stream(propertyDescriptors)
+                    propertyInfo = Arrays.stream(propertyDescriptors)
                             .map(p -> {
                                 Method writeMethod = p.getWriteMethod();
                                 if (writeMethod != null) {
@@ -76,7 +76,7 @@ public class BeanMapper {
                                 return null;
                             })
                             .filter(Objects::nonNull)
-                            .toArray();
+                            .toArray(PropertyInfo[]::new);
                     //获取result set的元数据
                     ResultSetMetaData metaData = resultSet.getMetaData();
                     //填充columnIndex的值,从而建立和result set的对应关系
