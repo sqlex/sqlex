@@ -118,11 +118,10 @@ public class BeanMapper {
             } catch (Exception e) {
                 throw new SqlExImpossibleException("无法创建实体类(" + beanClass.getName() + ")的实例");
             }
-
-            for (int index = 0; index < propertyInfos.length; index++) {
-                PropertyInfo propertyInfo = propertyInfos[index];
+            //填充实体类的属性值
+            for (PropertyInfo propertyInfo : propertyInfos) {
                 //对应的列索引
-                int colIndex = index + 1;
+                int colIndex = propertyInfo.columnIndex;
                 //从result set获取的值
                 Object value;
                 switch (propertyInfo.dataTypeName) {
