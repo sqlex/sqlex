@@ -253,7 +253,7 @@ class GeneratedMethodFile(
         //给实体添加getter/setter
         fields
             .map { Pair(it.name, getJavaType(it)) }
-            .forEach { typeSpecBuilder.addGetterAndSetter(it.first, it.second) }
+            .forEach { typeSpecBuilder.addColumnGetterAndSetter(it.first, it.second) }
         return typeSpecBuilder.build()
     }
 
@@ -400,4 +400,25 @@ class GeneratedMethodFile(
             throw Exception("${field.dbType} 映射失败!!!")
         }
     }
+}
+
+//给实体类添加数据列getter/setter
+fun TypeSpec.Builder.addColumnGetterAndSetter(name: String, type: TypeName): TypeSpec.Builder {
+    this.addField(type, "_${name}", Modifier.PRIVATE)
+    this.addMethod(
+        MethodSpec.methodBuilder("get${name.pascalName}")
+            .addModifiers(Modifier.PUBLIC)
+            .addStatement("return this._${name}")
+            .returns(type)
+            .build()
+    )
+    this.addMethod(
+        MethodSpec.methodBuilder("set${name.pascalName}")
+            .addAnnotation(AnnotationSpec.builder(SqlExColumnName::class.java).addMember("value", "\$S", name).build())
+            .addModifiers(Modifier.PUBLIC)
+            .addParameter(type, "value")
+            .addStatement("this._${name} = value")
+            .build()
+    )
+    return this
 }
