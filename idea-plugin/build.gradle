@@ -30,3 +30,8 @@ intellij {
     plugins = ['yaml', 'java', 'DatabaseTools', 'Kotlin', 'Spring']
 }
 
+if (localProperties.getProperty("idea.token") != null && localProperties.release) {
+    publishPlugin {
+        token = localProperties.getProperty("idea.token")
+    }
+}
