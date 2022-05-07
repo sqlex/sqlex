@@ -33,6 +33,9 @@ import java.nio.file.Paths
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
+//全局刷新锁
+private val globalRepositoryServiceRefreshLocker = ReentrantLock()
+
 class SqlExRepositoryService(val sourceRoot: VirtualFile) {
     // region 公有变量
 
@@ -111,151 +114,154 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                     true
                 ) {
                     override fun run(indicator: ProgressIndicator) {
-                        //开始刷新
-                        messagePublisher.beforeRefresh(this@SqlExRepositoryService)
                         refreshLocker.withLock {
+                            //开始刷新
+                            messagePublisher.beforeRefresh(this@SqlExRepositoryService)
                             //暴露任务指示器
                             this@SqlExRepositoryService.indicator = indicator
-                            //需要清理的builder
-                            var builderToClean: RepositoryBuilder? = null
-                            //需要清理的repository
-                            var repositoryToClean: SqlExRepository? = null
-                            try {
-                                outputs.clear()
-                                messagePublisher.clearOutput(this@SqlExRepositoryService)
-                                indicator.isIndeterminate = true
-                                indicator.text = "SqlEx: 等待任务开始"
-                                output("准备开始建立索引")
-                                indicator.checkCanceled()
-
-                                //解析配置
-                                indicator.isIndeterminate = true
-                                indicator.text = "SqlEx: 解析配置"
-                                val configFileContent =
-                                    sourceRoot.configFile?.textContent ?: throw Exception("无法读取配置文件")
-                                val config = createSqlExConfig(configFileContent)
-                                rootPackage = config.rootPackage ?: throw Exception("配置文件中不存在根包信息")
-                                output("获取到根包信息: $rootPackage")
-                                indicator.checkCanceled()
-
-                                //扫描文件
-                                indicator.text = "SqlEx: 扫描文件"
-                                val schemaFiles = mutableListOf<VirtualFile>()
-                                val methodFiles = mutableListOf<VirtualFile>()
-                                VfsUtilCore.processFilesRecursively(sourceRoot) {
+                            outputs.clear()
+                            messagePublisher.clearOutput(this@SqlExRepositoryService)
+                            indicator.isIndeterminate = true
+                            indicator.text = "SqlEx: 等待任务开始"
+                            output("准备开始建立索引")
+                            //全局刷新锁
+                            globalRepositoryServiceRefreshLocker.withLock {
+                                //需要清理的builder
+                                var builderToClean: RepositoryBuilder? = null
+                                //需要清理的repository
+                                var repositoryToClean: SqlExRepository? = null
+                                try {
                                     indicator.checkCanceled()
-                                    if (it.isSqlExSchema)
-                                        schemaFiles.add(it)
-                                    else if (it.isSqlExMethod)
-                                        methodFiles.add(it)
-                                    true
-                                }
-                                //排序
-                                val sortedSchemaFiles = schemaFiles
-                                    .map { Pair(it.name.schemaFileVersion, it) }
-                                    .filter { it.first !== null }
-                                    .sortedBy { it.first }
-                                    .map { it.second }
 
-                                indicator.checkCanceled()
-
-                                //解析schema文件
-                                indicator.text = "SqlEx: 解析Schema"
-                                indicator.isIndeterminate = false
-                                val builder = RepositoryBuilder(config)
-                                builderToClean = builder
-                                sortedSchemaFiles.forEachIndexed { index, file ->
-                                    val relativePath =
-                                        file.sourceRootRelativePath ?: throw Exception("无法获取${file.name}的相对路径")
-                                    indicator.text =
-                                        "SqlEx: 解析Schema(${index + 1}/${sortedSchemaFiles.size}) $relativePath"
-                                    output("解析Schema: $relativePath")
-                                    indicator.fraction = (index + 1) / sortedSchemaFiles.size.toDouble() / 2.0
-                                    builder.addSchema(
-                                        relativePath,
-                                        file.textContent ?: throw Exception("无法读取${file.name}的文件内容")
-                                    )
+                                    //解析配置
+                                    indicator.isIndeterminate = true
+                                    indicator.text = "SqlEx: 解析配置"
+                                    val configFileContent =
+                                        sourceRoot.configFile?.textContent ?: throw Exception("无法读取配置文件")
+                                    val config = createSqlExConfig(configFileContent)
+                                    rootPackage = config.rootPackage ?: throw Exception("配置文件中不存在根包信息")
+                                    output("获取到根包信息: $rootPackage")
                                     indicator.checkCanceled()
-                                }
-                                indicator.isIndeterminate = true
-                                //构建SqlEx仓库
-                                val parserRepository = builder.build()
-                                val ddlScript = parserRepository.session.DDL
-                                val repository = SqlExRepository(project, parserRepository)
-                                repositoryToClean = repository
-                                this@SqlExRepositoryService.repository = repository
 
-                                indicator.checkCanceled()
+                                    //扫描文件
+                                    indicator.text = "SqlEx: 扫描文件"
+                                    val schemaFiles = mutableListOf<VirtualFile>()
+                                    val methodFiles = mutableListOf<VirtualFile>()
+                                    VfsUtilCore.processFilesRecursively(sourceRoot) {
+                                        indicator.checkCanceled()
+                                        if (it.isSqlExSchema)
+                                            schemaFiles.add(it)
+                                        else if (it.isSqlExMethod)
+                                            methodFiles.add(it)
+                                        true
+                                    }
+                                    //排序
+                                    val sortedSchemaFiles = schemaFiles
+                                        .map { Pair(it.name.schemaFileVersion, it) }
+                                        .filter { it.first !== null }
+                                        .sortedBy { it.first }
+                                        .map { it.second }
 
-                                //同步DatabaseTools
-                                indicator.text = "SqlEx: 同步 Database Tools"
-                                output("同步 Database Tools")
-
-                                val rootPackage = config.rootPackage ?: throw Exception("无法获取SqlEx Config的根包名")
-
-                                //同步数据源
-                                //在现存的数据源中查找
-                                var dataSource = project.findDataSource(sourceRoot)
-                                //如果现有的数据源没有,则新建一个
-                                if (dataSource == null)
-                                    dataSource = project.addDataSource(rootPackage, sourceRoot)
-                                //设置关键信息
-                                dataSource.sqlexName = rootPackage
-                                dataSource.setDDL(project, ddlScript)
-
-                                indicator.checkCanceled()
-
-                                //设置源码目录
-                                syncSourceRoot()
-
-                                //解析method文件
-                                indicator.text = "SqlEx: 解析Method"
-                                indicator.isIndeterminate = false
-                                methodFiles.forEachIndexed { index, file ->
-                                    indicator.text =
-                                        "SqlEx: 解析Method(${index + 1}/${methodFiles.size}) ${file.sourceRootRelativePath}"
-                                    output("解析Method: ${file.sourceRootRelativePath}")
-                                    indicator.fraction = (index + 1) / methodFiles.size.toDouble() / 2.0 + 0.5
-                                    repository.updateMethodFile(file)
                                     indicator.checkCanceled()
-                                }
 
-                                output("索引建立完成")
-                                isValid = true
-                            } catch (e: Exception) {
-                                //清理builder
-                                builderToClean?.close()
-                                //清理repository
-                                repositoryToClean?.close()
-                                when (e) {
-                                    is ProcessCanceledException -> {
-                                        output("\nSqlEx索引更新被取消", ConsoleViewContentType.LOG_WARNING_OUTPUT)
-                                    }
-                                    is SqlExRepositorySchemaException -> {
-                                        output(
-                                            "\n解析Schema文件 [${e.relativePath}] 错误:\n${e.message}",
-                                            ConsoleViewContentType.ERROR_OUTPUT
+                                    //解析schema文件
+                                    indicator.text = "SqlEx: 解析Schema"
+                                    indicator.isIndeterminate = false
+                                    val builder = RepositoryBuilder(config)
+                                    builderToClean = builder
+                                    sortedSchemaFiles.forEachIndexed { index, file ->
+                                        val relativePath =
+                                            file.sourceRootRelativePath ?: throw Exception("无法获取${file.name}的相对路径")
+                                        indicator.text =
+                                            "SqlEx: 解析Schema(${index + 1}/${sortedSchemaFiles.size}) $relativePath"
+                                        output("解析Schema: $relativePath")
+                                        indicator.fraction = (index + 1) / sortedSchemaFiles.size.toDouble() / 2.0
+                                        builder.addSchema(
+                                            relativePath,
+                                            file.textContent ?: throw Exception("无法读取${file.name}的文件内容")
                                         )
+                                        indicator.checkCanceled()
                                     }
-                                    is SqlExRepositoryMethodException -> {
-                                        output(
-                                            "\n解析Method文件 [${e.relativePath}] 错误:\n${e.message}",
-                                            ConsoleViewContentType.ERROR_OUTPUT
-                                        )
+                                    indicator.isIndeterminate = true
+                                    //构建SqlEx仓库
+                                    val parserRepository = builder.build()
+                                    val ddlScript = parserRepository.session.DDL
+                                    val repository = SqlExRepository(project, parserRepository)
+                                    repositoryToClean = repository
+                                    this@SqlExRepositoryService.repository = repository
+
+                                    indicator.checkCanceled()
+
+                                    //同步DatabaseTools
+                                    indicator.text = "SqlEx: 同步 Database Tools"
+                                    output("同步 Database Tools")
+
+                                    val rootPackage = config.rootPackage ?: throw Exception("无法获取SqlEx Config的根包名")
+
+                                    //同步数据源
+                                    //在现存的数据源中查找
+                                    var dataSource = project.findDataSource(sourceRoot)
+                                    //如果现有的数据源没有,则新建一个
+                                    if (dataSource == null)
+                                        dataSource = project.addDataSource(rootPackage, sourceRoot)
+                                    //设置关键信息
+                                    dataSource.sqlexName = rootPackage
+                                    dataSource.setDDL(project, ddlScript)
+
+                                    indicator.checkCanceled()
+
+                                    //设置源码目录
+                                    syncSourceRoot()
+
+                                    //解析method文件
+                                    indicator.text = "SqlEx: 解析Method"
+                                    indicator.isIndeterminate = false
+                                    methodFiles.forEachIndexed { index, file ->
+                                        indicator.text =
+                                            "SqlEx: 解析Method(${index + 1}/${methodFiles.size}) ${file.sourceRootRelativePath}"
+                                        output("解析Method: ${file.sourceRootRelativePath}")
+                                        indicator.fraction = (index + 1) / methodFiles.size.toDouble() / 2.0 + 0.5
+                                        repository.updateMethodFile(file)
+                                        indicator.checkCanceled()
                                     }
-                                    else -> {
-                                        output(
-                                            "\n重建SqlEx索引时发生错误,索引构建失败:\n${e.message ?: e::class.java.simpleName}",
-                                            ConsoleViewContentType.ERROR_OUTPUT
-                                        )
+
+                                    output("索引建立完成")
+                                    isValid = true
+                                } catch (e: Exception) {
+                                    //清理builder
+                                    builderToClean?.close()
+                                    //清理repository
+                                    repositoryToClean?.close()
+                                    when (e) {
+                                        is ProcessCanceledException -> {
+                                            output("\nSqlEx索引更新被取消", ConsoleViewContentType.LOG_WARNING_OUTPUT)
+                                        }
+                                        is SqlExRepositorySchemaException -> {
+                                            output(
+                                                "\n解析Schema文件 [${e.relativePath}] 错误:\n${e.message}",
+                                                ConsoleViewContentType.ERROR_OUTPUT
+                                            )
+                                        }
+                                        is SqlExRepositoryMethodException -> {
+                                            output(
+                                                "\n解析Method文件 [${e.relativePath}] 错误:\n${e.message}",
+                                                ConsoleViewContentType.ERROR_OUTPUT
+                                            )
+                                        }
+                                        else -> {
+                                            output(
+                                                "\n重建SqlEx索引时发生错误,索引构建失败:\n${e.message ?: e::class.java.simpleName}",
+                                                ConsoleViewContentType.ERROR_OUTPUT
+                                            )
+                                        }
                                     }
+                                } finally {
+                                    this@SqlExRepositoryService.indicator = null
                                 }
-                            } finally {
-                                this@SqlExRepositoryService.indicator = null
                             }
+                            //完成刷新
+                            messagePublisher.afterRefresh(this@SqlExRepositoryService)
                         }
-                        //完成刷新
-                        messagePublisher.afterRefresh(this@SqlExRepositoryService)
                     }
                 })
         }
