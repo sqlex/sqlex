@@ -250,19 +250,16 @@ class GeneratedMethodFile(
     private fun generateResultClass(resultClassName: String, fields: Array<Field>): TypeSpec {
         val typeSpecBuilder = TypeSpec.classBuilder(resultClassName)
             .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-        //结果列大于1, 才进行列名检查
-        if (fields.size > 1) {
-            //判断列名是否重复
-            val duplicateFieldNames = fields.groupingBy { it.name.pascalName }.eachCount().filter { it.value > 1 }
-            if (duplicateFieldNames.isNotEmpty()) {
-                throw Exception("重复的列名 ${duplicateFieldNames.map { "'${it.key}'" }.joinToString(", ")}")
-            }
-            //判断列名是否非法
-            val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
-            val invalidFieldNames = fields.map { it.name.pascalName }.filter { !regex.matches(it) }
-            if (invalidFieldNames.isNotEmpty()) {
-                throw Exception("非法的列名 ${invalidFieldNames.joinToString(", ")}")
-            }
+        //判断列名是否重复
+        val duplicateFieldNames = fields.groupingBy { it.name.pascalName }.eachCount().filter { it.value > 1 }
+        if (duplicateFieldNames.isNotEmpty()) {
+            throw Exception("重复的列名 ${duplicateFieldNames.map { "'${it.key}'" }.joinToString(", ")}")
+        }
+        //判断列名是否非法
+        val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
+        val invalidFieldNames = fields.map { it.name.pascalName }.filter { !regex.matches(it) }
+        if (invalidFieldNames.isNotEmpty()) {
+            throw Exception("非法的列名 ${invalidFieldNames.joinToString(", ")}")
         }
         //给实体添加getter/setter
         fields
