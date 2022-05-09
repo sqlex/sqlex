@@ -37,26 +37,25 @@ class SqlExMethodSelectColumnInspection : LocalInspectionTool() {
                     val textRange = TextRange(startOffset, endOffset)
                     //获取列名
                     val fields = sqlSubtree.fields ?: return
-                    //列名数量大于1才进行检查
-                    if (fields.size > 1) {
-                        //判断列名是否重复
-                        val duplicateFieldNames =
-                            fields.groupingBy { it.name.pascalName }.eachCount().filter { it.value > 1 }
-                        if (duplicateFieldNames.isNotEmpty()) {
-                            holder.registerProblem(
-                                element,
-                                textRange,
-                                "存在重复的列名 ${duplicateFieldNames.map { "'${it.key}'" }.joinToString(", ")}"
-                            )
-                        }
-                        //判断列名是否非法
-                        val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
-                        val invalidFieldNames = fields.map { it.name.pascalName }.filter { !regex.matches(it) }
-                        if (invalidFieldNames.isNotEmpty()) {
-                            holder.registerProblem(
-                                element, textRange, "存在非法的列名 ${invalidFieldNames.joinToString(", ")}"
-                            )
-                        }
+                    //列名数量小于2, 直接返回
+                    if (fields.size < 2) return
+                    //判断列名是否重复
+                    val duplicateFieldNames =
+                        fields.groupingBy { it.name.pascalName }.eachCount().filter { it.value > 1 }
+                    if (duplicateFieldNames.isNotEmpty()) {
+                        holder.registerProblem(
+                            element,
+                            textRange,
+                            "存在重复的列名 ${duplicateFieldNames.map { "'${it.key}'" }.joinToString(", ")}"
+                        )
+                    }
+                    //判断列名是否非法
+                    val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
+                    val invalidFieldNames = fields.map { it.name.pascalName }.filter { !regex.matches(it) }
+                    if (invalidFieldNames.isNotEmpty()) {
+                        holder.registerProblem(
+                            element, textRange, "存在非法的列名 ${invalidFieldNames.joinToString(", ")}"
+                        )
                     }
                 } catch (_: Exception) {
                 }
