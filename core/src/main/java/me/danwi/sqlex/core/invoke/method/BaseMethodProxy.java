@@ -131,8 +131,10 @@ public abstract class BaseMethodProxy implements MethodProxy {
                 arg instanceof java.time.ZonedDateTime
         ) {
             statement.setObject(index, arg);
+            return;
         } else if (arg instanceof java.time.Instant) {
             statement.setTimestamp(index, Timestamp.from((java.time.Instant) arg));
+            return;
         } else {
             ParameterConverter<Object, Object> converter = registry.getConverterFor(arg);
             if (converter != null) {
