@@ -1,7 +1,11 @@
 package me.danwi.sqlex.core.invoke.method;
 
 import me.danwi.sqlex.core.ExceptionTranslator;
+import me.danwi.sqlex.core.annotation.SqlExOneColumn;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
+import me.danwi.sqlex.core.invoke.mapper.BeanMapper;
+import me.danwi.sqlex.core.invoke.mapper.BasicTypeMapper;
+import me.danwi.sqlex.core.invoke.mapper.RowMapper;
 import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.transaction.TransactionManager;
 
@@ -16,19 +20,27 @@ import java.util.List;
 
 
 public class SelectMethodProxy extends BaseMethodProxy {
-    private final BeanMapper beanMapper;
+    private final RowMapper rowMapper;
 
     public SelectMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry, ExceptionTranslator translator) {
         super(method, transactionManager, registry, translator);
-        //新建bean mapper
-        Class<?> beanType = getBeanType(method);
-        if (beanType == null)
+        //获取返回值中实体/类型
+        Class<?> entityType = getEntityType(method);
+        if (entityType == null)
             throw new SqlExImpossibleException("无法确定返回值类型");
-        beanMapper = new BeanMapper(beanType);
+        //新建row mapper
+        //判断是否为单列
+        if (method.getAnnotation(SqlExOneColumn.class) != null) {
+            //基本支持的类型
+            rowMapper = new BasicTypeMapper(entityType);
+        } else {
+            //构造类型
+            rowMapper = new BeanMapper(entityType);
+        }
     }
 
-    //获取方法返回值中实体bean的类型
-    protected Class<?> getBeanType(Method method) {
+    //获取方法返回值中实体/类型
+    protected Class<?> getEntityType(Method method) {
         //获取返回值类型,List<T>,PageResult<T>
         Type genericReturnType = method.getGenericReturnType();
         if (genericReturnType instanceof ParameterizedType) {
@@ -41,8 +53,8 @@ public class SelectMethodProxy extends BaseMethodProxy {
         return null;
     }
 
-    protected BeanMapper getBeanMapper() {
-        return beanMapper;
+    protected RowMapper getRowMapper() {
+        return rowMapper;
     }
 
     @Override
@@ -54,7 +66,7 @@ public class SelectMethodProxy extends BaseMethodProxy {
             setParameters(statement, reorderArgs);
             //获取到返回值
             try (ResultSet rs = statement.executeQuery()) {
-                return getBeanMapper().fetch(rs);
+                return getRowMapper().fetch(rs);
             }
         }
     }

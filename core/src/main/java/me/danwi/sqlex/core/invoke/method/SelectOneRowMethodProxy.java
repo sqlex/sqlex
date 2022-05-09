@@ -15,7 +15,7 @@ public class SelectOneRowMethodProxy extends SelectMethodProxy {
     }
 
     @Override
-    protected Class<?> getBeanType(Method method) {
+    protected Class<?> getEntityType(Method method) {
         return method.getReturnType();
     }
 

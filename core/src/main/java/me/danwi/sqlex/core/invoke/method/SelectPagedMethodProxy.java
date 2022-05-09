@@ -52,7 +52,7 @@ public class SelectPagedMethodProxy extends SelectMethodProxy {
             setParameters(statement, reorderArgs);
             //获取到返回值
             try (ResultSet rs = statement.executeQuery()) {
-                result = getBeanMapper().fetch(rs);
+                result = getRowMapper().fetch(rs);
             }
         }
 

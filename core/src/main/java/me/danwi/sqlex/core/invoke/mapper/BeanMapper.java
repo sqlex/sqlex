@@ -1,4 +1,4 @@
-package me.danwi.sqlex.core.invoke.method;
+package me.danwi.sqlex.core.invoke.mapper;
 
 import me.danwi.sqlex.core.annotation.SqlExColumnName;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
@@ -8,7 +8,6 @@ import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -17,7 +16,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 
-public class BeanMapper {
+public class BeanMapper extends RowMapper {
     //实体类
     private final Class<?> beanClass;
     //实体类构造函数
@@ -25,7 +24,7 @@ public class BeanMapper {
     //实体类属性信息缓存
     private PropertyInfo[] beanPropertyInfoCaches;
 
-    BeanMapper(Class<?> bean) {
+    public BeanMapper(Class<?> bean) {
         beanClass = bean;
         try {
             beanConstructor = beanClass.getDeclaredConstructor();
@@ -102,7 +101,7 @@ public class BeanMapper {
     }
 
 
-    //从结果集中获取实体 TODO: 部分数据类型没有补全
+    //从结果集中获取实体
     public List<?> fetch(ResultSet resultSet) throws SQLException {
         //结果列表
         LinkedList<Object> resultList = new LinkedList<>();
@@ -123,47 +122,7 @@ public class BeanMapper {
                 //对应的列索引
                 int colIndex = propertyInfo.columnIndex;
                 //从result set获取的值
-                Object value;
-                switch (propertyInfo.dataTypeName) {
-                    case "java.lang.Boolean":
-                        value = resultSet.getBoolean(colIndex);
-                        break;
-                    case "java.lang.Integer":
-                        value = resultSet.getInt(colIndex);
-                        break;
-                    case "java.lang.Long":
-                        value = resultSet.getLong(colIndex);
-                        break;
-                    case "java.lang.Float":
-                        value = resultSet.getFloat(colIndex);
-                        break;
-                    case "java.lang.Double":
-                        value = resultSet.getDouble(colIndex);
-                        break;
-                    case "java.math.BigDecimal":
-                        value = resultSet.getBigDecimal(colIndex);
-                        break;
-                    case "java.math.BigInteger":
-                        BigDecimal decimal = resultSet.getBigDecimal(colIndex);
-                        value = (decimal == null ? null : decimal.toBigInteger());
-                        break;
-                    case "java.lang.String":
-                        value = resultSet.getString(colIndex);
-                        break;
-                    case "java.time.LocalDate":
-                        value = resultSet.getObject(colIndex, java.time.LocalDate.class);
-                        break;
-                    case "java.time.LocalTime":
-                        value = resultSet.getObject(colIndex, java.time.LocalTime.class);
-                        break;
-                    case "java.time.LocalDateTime":
-                        value = resultSet.getObject(colIndex, java.time.LocalDateTime.class);
-                        break;
-                    default:
-                        throw new SqlExImpossibleException("结果类中包含不支持的数据类型: " + propertyInfo.dataTypeName);
-                }
-                if (resultSet.wasNull())
-                    value = null;
+                Object value = fetchColumn(resultSet, colIndex, propertyInfo.dataTypeName);
                 //写入数据
                 try {
                     propertyInfo.writeMethod.invoke(beanInstance, value);
