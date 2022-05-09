@@ -378,7 +378,7 @@ class GeneratedMethodFile(
         } else if (field.dbType == "datetime") { //datetime
             return ClassName.get(java.time.LocalDateTime::class.java)
         } else if (field.dbType == "timestamp") { //timestamp
-            return ClassName.get(java.time.LocalDateTime::class.java)
+            return ClassName.get(java.time.OffsetDateTime::class.java)
         } else if (field.dbType == "time") { //time
             return ClassName.get(java.time.LocalTime::class.java)
         } else if (field.dbType == "year") { //year

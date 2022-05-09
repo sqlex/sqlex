@@ -49,6 +49,9 @@ public abstract class RowMapper {
             case "java.time.LocalDateTime":
                 value = resultSet.getObject(colIndex, java.time.LocalDateTime.class);
                 break;
+            case "java.time.OffsetDateTime":
+                value = resultSet.getObject(colIndex, java.time.OffsetDateTime.class);
+                break;
             default:
                 throw new SqlExImpossibleException("结果类中包含不支持的数据类型: " + dataTypeName);
         }

@@ -4,7 +4,7 @@ import me.danwi.sqlex.core.DaoFactory;
 import org.springframework.beans.factory.FactoryBean;
 
 public class SqlExFactoryBean<T> implements FactoryBean<T> {
-    private Class<T> daoInterface;
+    final private Class<T> daoInterface;
 
     private DaoFactory factory;
 
