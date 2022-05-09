@@ -132,22 +132,35 @@ class GeneratedMethodFile(
         //生成参数
         methodSpec.addParameters(generateParameter(methodName, method.paramList(), namedParameterSQL, isPaged))
         //返回值
-        //生成结果类
-        val resultClassName = method.returnType()?.text ?: "${methodName.pascalName}Result"
-        val resultClassSpec = generateResultClass(resultClassName, namedParameterSQL.sql)
-        innerClasses.add(resultClassSpec)
-        val resultTypeName = ClassName.get(packageName, className, resultClassName)
+        //获取字段
+        val fields = session.getFields(namedParameterSQL.sql)
+        //判断是否为单列返回值
+        val resultTypeName = if (fields.size == 1) {
+            //如果是单列则将这一列对应的java类型作为结果类型
+            methodSpec.addAnnotation(SqlExOneColumn::class.java)
+            getJavaType(fields[0])
+        } else {
+            //如果是多列,则生成对应的实体类
+            val resultClassName = method.returnType()?.text ?: "${methodName.pascalName}Result"
+            val resultClassSpec = generateResultClass(resultClassName, fields)
+            //把实体类添加到内部类
+            innerClasses.add(resultClassSpec)
+            ClassName.get(packageName, className, resultClassName)
+        }
+        //默认为一个结果类型的集合
         var returnTypeName: TypeName = ParameterizedTypeName.get(ClassName.get(List::class.java), resultTypeName)
         //是否为单行查询
         if (statementInfo.hasLimit && statementInfo.limitRows.toInt() == 1) {
             //单行,判断是否有paged
             if (isPaged)
                 throw Exception("单行查询不能声明为分页方法")
+            //如果是单行,返回值直接就是结果类型
             returnTypeName = resultTypeName
             methodSpec.addAnnotation(SqlExOneRow::class.java)
         }
         //是否为分页
         if (isPaged) {
+            //如果是分页,则用分页类型包装起来
             returnTypeName = ParameterizedTypeName.get(ClassName.get(PagedResult::class.java), resultTypeName)
             methodSpec.addAnnotation(SqlExPaged::class.java)
         }
@@ -234,11 +247,9 @@ class GeneratedMethodFile(
         return methodSpec.build()
     }
 
-    private fun generateResultClass(resultClassName: String, sql: String): TypeSpec {
+    private fun generateResultClass(resultClassName: String, fields: Array<Field>): TypeSpec {
         val typeSpecBuilder = TypeSpec.classBuilder(resultClassName)
             .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-        //获取字段
-        val fields = session.getFields(sql)
         //判断列名是否重复
         val duplicateFieldNames = fields.groupingBy { it.name.pascalName }.eachCount().filter { it.value > 1 }
         if (duplicateFieldNames.isNotEmpty()) {
