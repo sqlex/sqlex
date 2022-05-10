@@ -367,8 +367,8 @@ jobs:
           GRADLE_KEY: ${{ secrets.GRADLE_KEY }}
           GRADLE_SECRET: ${{ secrets.GRADLE_SECRET }}
         run: |
-          echo gradle.key="GRADLE_KEY" >> local.properties
-          echo gradle.secret="GRADLE_SECRET" >> local.properties
+          echo gradle.key="$GRADLE_KEY" >> local.properties
+          echo gradle.secret="$GRADLE_SECRET" >> local.properties
 
       - name: Publish to Gradle plugin repository
         env:
