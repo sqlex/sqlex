@@ -6,7 +6,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":core"))
+    api(project(":core"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
     implementation("net.java.dev.jna:jna:5.11.0")
     implementation("com.google.code.gson:gson:2.9.0")
