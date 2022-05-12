@@ -22,7 +22,7 @@ gradlePlugin {
             id = "me.danwi.sqlex"
             implementationClass = "me.danwi.sqlex.gradle.SqlExPlugin"
             displayName = 'Gradle SqlEx plugin'
-            description = "SqlEx compile plugin"
+            description = "Adds support for sqlex framework, compile sqlex repository to java code"
         }
     }
 }
