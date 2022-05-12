@@ -1,11 +1,11 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    id("java-gradle-plugin")
-    id("groovy")
+    `java-gradle-plugin`
+    groovy
     kotlin("jvm")
+    `maven-publish`
     id("com.gradle.plugin-publish") version "1.0.0-rc-1"
-    id("maven-publish")
 }
 
 dependencies {

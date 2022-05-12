@@ -1,8 +1,8 @@
 plugins {
-    id("java")
-    id("antlr")
+    java
+    antlr
     kotlin("jvm")
-    id("maven-publish")
+    `maven-publish`
 }
 
 dependencies {
