@@ -11,8 +11,7 @@ import me.danwi.sqlex.core.type.ParameterConverter;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public abstract class BaseMethodProxy implements MethodProxy {
@@ -69,11 +68,6 @@ public abstract class BaseMethodProxy implements MethodProxy {
 
             markerInfos[index] = markerInfo;
         }
-    }
-
-    //替换字符串
-    private String replace(String str, int start, int end, String newStr) {
-        return str.substring(0, start) + newStr + str.substring(end);
     }
 
     //设置单个参数 TODO: 部分数据类型没有补全
@@ -196,6 +190,18 @@ public abstract class BaseMethodProxy implements MethodProxy {
         return reorderArgs;
     }
 
+    private static class RewriteInfo {
+        public int start;
+        public int end;
+        public String content;
+
+        public RewriteInfo(int start, int end, String content) {
+            this.start = start;
+            this.end = end;
+            this.content = content;
+        }
+    }
+
     /**
      * 根据方法调用时的参数来重写SQL
      *
@@ -203,7 +209,8 @@ public abstract class BaseMethodProxy implements MethodProxy {
      * @return 被重写的SQL
      */
     protected String rewriteSQL(Object[] methodArgs) {
-        String rewrittenSQL = this.sql;
+        List<RewriteInfo> rewriteInfos = new LinkedList<>();
+        //构造重写信息
         for (MarkerInfo markerInfo : markerInfos) {
             //获取到方法调用时的参数
             Object methodArg = methodArgs[markerInfo.argIndex];
@@ -213,24 +220,34 @@ public abstract class BaseMethodProxy implements MethodProxy {
                 //如果参数为空
                 if (methodArg == null) {
                     //替换in语句
-                    rewrittenSQL = replace(
-                            rewrittenSQL,
-                            markerInfo.inExprPosition.start(), markerInfo.inExprPosition.end(),
-                            markerInfo.inExprPosition.not() ? "1=1" : "1=2"
+                    rewriteInfos.add(
+                            new RewriteInfo(
+                                    markerInfo.inExprPosition.start(),
+                                    markerInfo.inExprPosition.end(),
+                                    markerInfo.inExprPosition.not() ? "1=1" : "1=2"
+                            )
                     );
                 } else if (methodArg instanceof List) {
                     List<?> listArg = (List<?>) methodArg;
                     if (listArg.size() == 0) {
                         //形同null
-                        rewrittenSQL = replace(
-                                rewrittenSQL,
-                                markerInfo.inExprPosition.start(), markerInfo.inExprPosition.end(),
-                                markerInfo.inExprPosition.not() ? "1=1" : "1=2"
+                        rewriteInfos.add(
+                                new RewriteInfo(
+                                        markerInfo.inExprPosition.start(),
+                                        markerInfo.inExprPosition.end(),
+                                        markerInfo.inExprPosition.not() ? "1=1" : "1=2"
+                                )
                         );
                     } else {
                         //拓展?为多个?
                         String markerPart = listArg.stream().map(it -> "?").collect(Collectors.joining(","));
-                        rewrittenSQL = replace(rewrittenSQL, markerInfo.inExprPosition.marker(), markerInfo.inExprPosition.marker() + 1, markerPart);
+                        rewriteInfos.add(
+                                new RewriteInfo(
+                                        markerInfo.inExprPosition.marker(),
+                                        markerInfo.inExprPosition.marker() + 1,
+                                        markerPart
+                                )
+                        );
                     }
                 }
             }
@@ -239,14 +256,34 @@ public abstract class BaseMethodProxy implements MethodProxy {
             if (markerInfo.isNullExprPosition != null) {
                 boolean argIsNull = methodArg == null;
                 boolean sqlIsNull = !markerInfo.isNullExprPosition.not();
-                rewrittenSQL = replace(
-                        rewrittenSQL,
-                        markerInfo.isNullExprPosition.start(), markerInfo.isNullExprPosition.end(),
-                        argIsNull == sqlIsNull ? "1=1" : "1=2"
+                rewriteInfos.add(
+                        new RewriteInfo(
+                                markerInfo.isNullExprPosition.start(),
+                                markerInfo.isNullExprPosition.end(),
+                                argIsNull == sqlIsNull ? "1=1" : "1=2"
+                        )
                 );
             }
         }
-        return rewrittenSQL;
+        //处理重写信息 TODO: 还需要计算重写有没有重叠部分,不过在这种编译那边不会出现这种情况
+        StringBuilder rewrittenSQL = new StringBuilder(this.sql);
+        while (!rewriteInfos.isEmpty()) {
+            //取得第一个
+            RewriteInfo rewriteInfo = rewriteInfos.remove(0);
+            //替换字符串内容
+            rewrittenSQL.replace(rewriteInfo.start, rewriteInfo.end, rewriteInfo.content);
+            //计算尺寸的增长
+            int sizeGrow = rewriteInfo.content.length() - (rewriteInfo.end - rewriteInfo.start);
+            //由于改变了原有的字符串,现在需要重新计算接下来的位置信息
+            rewriteInfos.forEach(info -> {
+                if (info.start >= rewriteInfo.end) {
+                    info.start += sizeGrow;
+                    info.end += sizeGrow;
+                }
+            });
+        }
+        //返回重写后的结果
+        return rewrittenSQL.toString();
     }
 
     /**
