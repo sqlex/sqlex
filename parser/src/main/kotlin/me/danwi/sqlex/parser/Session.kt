@@ -17,9 +17,12 @@ enum class StatementType { Select, Insert, Update, Delete, Other }
 
 class InExprPosition(val not: Boolean, val marker: Int, val start: Int, val end: Int)
 
+class IsNullExprPosition(val not: Boolean, val marker: Int, val start: Int, val end: Int)
+
 class StatementInfo(
     val type: StatementType,
     val inExprPositions: Array<InExprPosition>,
+    val isNullExprPositions: Array<IsNullExprPosition>,
     val hasLimit: Boolean,
     val limitRows: ULong,
 )

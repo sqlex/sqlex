@@ -1,10 +1,7 @@
 package me.danwi.sqlex.core.invoke.method;
 
 import me.danwi.sqlex.core.ExceptionTranslator;
-import me.danwi.sqlex.core.annotation.SqlExInExprPosition;
-import me.danwi.sqlex.core.annotation.SqlExMarkerPosition;
-import me.danwi.sqlex.core.annotation.SqlExParameterPosition;
-import me.danwi.sqlex.core.annotation.SqlExScript;
+import me.danwi.sqlex.core.annotation.*;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.transaction.Transaction;
@@ -33,6 +30,7 @@ public abstract class BaseMethodProxy implements MethodProxy {
     private static class MarkerInfo {
         public int argIndex; //引用方法参数的位置
         public SqlExInExprPosition inExprPosition; //?是否在一个in(?)表达式中
+        public SqlExIsNullExprPosition isNullExprPosition; //?是否在? is null表达式中
     }
 
     public BaseMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry, ExceptionTranslator translator) {
@@ -46,6 +44,7 @@ public abstract class BaseMethodProxy implements MethodProxy {
         int[] markerPositions = method.getAnnotation(SqlExMarkerPosition.class).value();
         int[] parameterPositions = method.getAnnotation(SqlExParameterPosition.class).value();
         SqlExInExprPosition[] inExprPositions = method.getAnnotationsByType(SqlExInExprPosition.class);
+        SqlExIsNullExprPosition[] isNullExprPositions = method.getAnnotationsByType(SqlExIsNullExprPosition.class);
         markerInfos = new MarkerInfo[markerPositions.length];
         for (int index = 0; index < markerPositions.length; index++) {
             MarkerInfo markerInfo = new MarkerInfo();
@@ -55,6 +54,13 @@ public abstract class BaseMethodProxy implements MethodProxy {
             for (SqlExInExprPosition inExprPosition : inExprPositions) {
                 if (inExprPosition.marker() == sqlIndex) {
                     markerInfo.inExprPosition = inExprPosition;
+                    break;
+                }
+            }
+            //这个?是否在is null表达式中
+            for (SqlExIsNullExprPosition isNullExprPosition : isNullExprPositions) {
+                if (isNullExprPosition.marker() == sqlIndex) {
+                    markerInfo.isNullExprPosition = isNullExprPosition;
                     break;
                 }
             }
@@ -179,6 +185,11 @@ public abstract class BaseMethodProxy implements MethodProxy {
                 continue;
             }
 
+            //如果参数在is null中,其直接会被作为常量折叠,所以不用传入
+            if (markerInfo.isNullExprPosition != null) {
+                continue;
+            }
+
             //其他情况,直接添加为参数即可
             reorderArgs.add(methodArg);
         }
@@ -194,10 +205,11 @@ public abstract class BaseMethodProxy implements MethodProxy {
     protected String rewriteSQL(Object[] methodArgs) {
         String rewrittenSQL = this.sql;
         for (MarkerInfo markerInfo : markerInfos) {
+            //获取到方法调用时的参数
+            Object methodArg = methodArgs[markerInfo.argIndex];
+
             //是否在一个in当中
             if (markerInfo.inExprPosition != null) {
-                //获取到方法调用时的参数
-                Object methodArg = methodArgs[markerInfo.argIndex];
                 //如果参数为空
                 if (methodArg == null) {
                     //替换in语句
@@ -221,6 +233,17 @@ public abstract class BaseMethodProxy implements MethodProxy {
                         rewrittenSQL = replace(rewrittenSQL, markerInfo.inExprPosition.marker(), markerInfo.inExprPosition.marker() + 1, markerPart);
                     }
                 }
+            }
+
+            //是否在is null当中
+            if (markerInfo.isNullExprPosition != null) {
+                boolean argIsNull = methodArg == null;
+                boolean sqlIsNull = !markerInfo.isNullExprPosition.not();
+                rewrittenSQL = replace(
+                        rewrittenSQL,
+                        markerInfo.isNullExprPosition.start(), markerInfo.isNullExprPosition.end(),
+                        argIsNull == sqlIsNull ? "1=1" : "1=2"
+                );
             }
         }
         return rewrittenSQL;
