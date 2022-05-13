@@ -347,6 +347,64 @@ class SessionTest {
     }
 
     @Test
+    fun getIsNullExprPositions() {
+        var session = Session("getIsNullExprPositions_test")
+
+        //language=MySQL
+        session.execute(
+            """
+            create table person(
+                id int auto_increment primary key,
+                name varchar(255) not null,
+                age int not null
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            create table department(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column departmentID int not null
+        """.trimIndent()
+        )
+        session.close()
+
+        //重开session
+        session = Session("getIsNullExprPositions_test")
+
+        var sql = "select * from person where (? is null or name = ?)"
+
+        var positions = session.getStatementInfo(sql).isNullExprPositions
+        assertEquals(1, positions.size)
+        assertFalse(positions[0].not)
+        assertEquals('?', sql[positions[0].marker])
+        assertEquals("? is null", sql.substring(positions[0].start, positions[0].end))
+
+        sql = "select * from person where (? is not null or name = ?)"
+
+        positions = session.getStatementInfo(sql).isNullExprPositions
+        assertEquals(1, positions.size)
+        assertTrue(positions[0].not)
+        assertEquals('?', sql[positions[0].marker])
+        assertEquals("? is not null", sql.substring(positions[0].start, positions[0].end))
+
+        sql = "select * from person where (name is null or name = ?)"
+
+        positions = session.getStatementInfo(sql).isNullExprPositions
+        assertEquals(0, positions.size)
+
+        session.close()
+    }
+
+    @Test
     fun getLimitRows() {
         var session = Session("getLimitRows_test")
 
