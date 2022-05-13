@@ -218,7 +218,7 @@ public abstract class BaseMethodProxy implements MethodProxy {
                     } else {
                         //拓展?为多个?
                         String markerPart = listArg.stream().map(it -> "?").collect(Collectors.joining(","));
-                        rewrittenSQL = replace(rewrittenSQL, markerInfo.inExprPosition.start(), markerInfo.inExprPosition.end(), markerPart);
+                        rewrittenSQL = replace(rewrittenSQL, markerInfo.inExprPosition.marker(), markerInfo.inExprPosition.marker() + 1, markerPart);
                     }
                 }
             }
