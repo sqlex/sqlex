@@ -13,8 +13,8 @@ dependencies {
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
 intellij {
-    if (ext.has("idea.path")) {
-        localPath.set(ext["idea.path"].toString())
+    if (project.ext.has("idea.path")) {
+        localPath.set(project.ext["idea.path"].toString())
     } else {
         type.set("IU")
         version.set("2021.1")
