@@ -316,6 +316,19 @@ class GeneratedMethodFile(
                         .build()
                 }
         )
+        //? is null的位置
+        annotationSpecs.addAll(
+            statementInfo.isNullExprPositions
+                .map {
+                    AnnotationSpec
+                        .builder(SqlExIsNullExprPosition::class.java)
+                        .addMember("not", "\$L", it.not)
+                        .addMember("marker", "\$L", it.marker)
+                        .addMember("start", "\$L", it.start)
+                        .addMember("end", "\$L", it.end)
+                        .build()
+                }
+        )
         return annotationSpecs
     }
 
