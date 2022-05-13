@@ -41,6 +41,37 @@ pluginBundle {
     tags = listOf("sqlex", "orm", "dbhelper")
 }
 
+//gradle插件上传到中央仓库做特殊处理
+afterEvaluate {
+    publishing.publications.filterIsInstance<MavenPublication>().forEach {
+        it.apply {
+            pom {
+                name.set("Gradle SqlEx plugin")
+                description.set("Adds support for sqlex framework, compile sqlex repository to java code")
+                url.set("https://github.com/sqlex")
+                scm {
+                    connection.set("scm:git:https://github.com/sqlex/sqlex.git")
+                    developerConnection.set("scm:git:https://github.com/sqlex/sqlex.git")
+                    url.set("https://github.com/sqlex")
+                }
+                licenses {
+                    license {
+                        name.set("The Apache License, Version 2.0")
+                        url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                    }
+                }
+                developers {
+                    developer {
+                        id.set("sqlex")
+                        name.set("sqlex")
+                        email.set("demon@danwi.me")
+                    }
+                }
+            }
+        }
+    }
+}
+
 //设置gradle上传的密钥
 if (ext.has("gradle.key")) {
     tasks.create("setupPluginUpload") {
@@ -49,17 +80,5 @@ if (ext.has("gradle.key")) {
     }
     tasks.publishPlugins {
         dependsOn(tasks["setupPluginUpload"])
-    }
-}
-
-//禁止当前构建被上传到maven中央仓库,因为其已经上传到gradle的插件仓库,see https://github.com/gradle-nexus/publish-plugin/issues/143
-gradle.taskGraph.whenReady {
-    tasks.withType<PublishToMavenRepository> {
-        if (repository == null)
-            logger.info("Task `{}` had null repository", path)
-        else if (repository.name == "sonatype") {
-            logger.lifecycle("Disabling task `{}` because it publishes to Sonatype", path)
-            enabled = false
-        }
     }
 }
