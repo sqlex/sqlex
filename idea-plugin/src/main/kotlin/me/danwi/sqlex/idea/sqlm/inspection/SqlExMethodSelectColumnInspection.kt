@@ -41,7 +41,7 @@ class SqlExMethodSelectColumnInspection : LocalInspectionTool() {
                     if (fields.size < 2) return
                     //判断列名是否重复
                     val duplicateFieldNames =
-                        fields.groupingBy { it.name.pascalName }.eachCount().filter { it.value > 1 }
+                        fields.groupingBy { it.name }.eachCount().filter { it.value > 1 }
                     if (duplicateFieldNames.isNotEmpty()) {
                         holder.registerProblem(
                             element,
@@ -51,7 +51,7 @@ class SqlExMethodSelectColumnInspection : LocalInspectionTool() {
                     }
                     //判断列名是否非法
                     val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
-                    val invalidFieldNames = fields.map { it.name.pascalName }.filter { !regex.matches(it) }
+                    val invalidFieldNames = fields.map { it.name }.filter { !regex.matches(it) }
                     if (invalidFieldNames.isNotEmpty()) {
                         holder.registerProblem(
                             element, textRange, "存在非法的列名 ${invalidFieldNames.joinToString(", ")}"

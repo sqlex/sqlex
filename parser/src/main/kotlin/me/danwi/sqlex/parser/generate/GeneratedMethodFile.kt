@@ -251,13 +251,13 @@ class GeneratedMethodFile(
         val typeSpecBuilder = TypeSpec.classBuilder(resultClassName)
             .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
         //判断列名是否重复
-        val duplicateFieldNames = fields.groupingBy { it.name.pascalName }.eachCount().filter { it.value > 1 }
+        val duplicateFieldNames = fields.groupingBy { it.name }.eachCount().filter { it.value > 1 }
         if (duplicateFieldNames.isNotEmpty()) {
             throw Exception("重复的列名 ${duplicateFieldNames.map { "'${it.key}'" }.joinToString(", ")}")
         }
         //判断列名是否非法
         val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
-        val invalidFieldNames = fields.map { it.name.pascalName }.filter { !regex.matches(it) }
+        val invalidFieldNames = fields.map { it.name }.filter { !regex.matches(it) }
         if (invalidFieldNames.isNotEmpty()) {
             throw Exception("非法的列名 ${invalidFieldNames.joinToString(", ")}")
         }
