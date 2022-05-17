@@ -132,8 +132,10 @@ class GeneratedMethodFile(
         //生成参数
         methodSpec.addParameters(generateParameter(methodName, method.paramList(), namedParameterSQL, isPaged))
         //返回值
+        //解析计划
+        val planInfo = session.getPlanInfo(namedParameterSQL.sql)
         //获取字段
-        val fields = session.getFields(namedParameterSQL.sql)
+        val fields = planInfo.fields
         //判断是否为单列返回值
         val resultTypeName = if (fields.size == 1) {
             //如果是单列则将这一列对应的java类型作为结果类型
@@ -150,7 +152,7 @@ class GeneratedMethodFile(
         //默认为一个结果类型的集合
         var returnTypeName: TypeName = ParameterizedTypeName.get(ClassName.get(List::class.java), resultTypeName)
         //是否为单行查询
-        if (statementInfo.hasLimit && statementInfo.limitRows.toInt() == 1) {
+        if (planInfo.maxOneRow) {
             //单行,判断是否有paged
             if (isPaged)
                 throw Exception("单行查询不能声明为分页方法")

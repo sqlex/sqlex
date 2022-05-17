@@ -129,7 +129,7 @@ class SessionTest {
         //TODO:重新开session,需要处理一下golang那边的BUG
         session = Session("getFields_test")
 
-        var fields = session.getFields("select * from person")
+        var fields = session.getPlanInfo("select * from person").fields
         assertEquals(5, fields.size)
 
         assertEquals("id", fields[0].name)
@@ -159,14 +159,14 @@ class SessionTest {
 
 
         //language=MySQL
-        fields = session.getFields(
+        fields = session.getPlanInfo(
             """
             select department.name as name, count(1) as amount from person
                 left join department on person.departmentID=department.id
             group by department.name
             order by amount
         """.trimIndent()
-        )
+        ).fields
         assertEquals(2, fields.size)
 
         assertEquals("name", fields[0].name)
@@ -178,6 +178,50 @@ class SessionTest {
         assertEquals(21, fields[1].length)
 
         session.close()
+    }
+
+    @Test
+    fun getMaxOneRow() {
+        var session = Session("getMaxOneRow_test")
+
+        //language=MySQL
+        session.execute(
+            """
+            create table person(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            create table department(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column departmentID int not null
+        """.trimIndent()
+        )
+        session.close()
+
+        //重开session
+        session = Session("getMaxOneRow_test")
+
+        assertTrue(session.getPlanInfo("select 1").maxOneRow)
+        assertTrue(session.getPlanInfo("select * from person limit 1").maxOneRow)
+        assertTrue(session.getPlanInfo("select * from person where id = ?").maxOneRow)
+        assertTrue(session.getPlanInfo("select count(*) from person where name like ?").maxOneRow)
+        assertTrue(session.getPlanInfo("select sum(id) from person").maxOneRow)
+
+        assertFalse(session.getPlanInfo("select * from person").maxOneRow)
+        assertFalse(session.getPlanInfo("select name, count(*) from person group by name").maxOneRow)
+
     }
 
     @Test

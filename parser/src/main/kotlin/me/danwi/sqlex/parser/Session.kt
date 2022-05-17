@@ -13,6 +13,11 @@ class Field {
     lateinit var elements: Array<String>
 }
 
+class PlanInfo(
+    val fields: Array<Field>,
+    val maxOneRow: Boolean
+)
+
 enum class StatementType { Select, Insert, Update, Delete, Other }
 
 class InExprPosition(val not: Boolean, val marker: Int, val start: Int, val end: Int)
@@ -49,8 +54,8 @@ class Session(database: String) {
         return ffiInvoke("DatabaseAPI", "GetTableDDL", sessionID, table)
     }
 
-    fun getFields(sql: String): Array<Field> {
-        return ffiInvoke("DatabaseAPI", "GetFields", sessionID, sql)
+    fun getPlanInfo(sql: String): PlanInfo {
+        return ffiInvoke("DatabaseAPI", "GetPlanInfo", sessionID, sql)
     }
 
     fun getStatementInfo(sql: String): StatementInfo {
