@@ -152,7 +152,7 @@ class GeneratedMethodFile(
         //默认为一个结果类型的集合
         var returnTypeName: TypeName = ParameterizedTypeName.get(ClassName.get(List::class.java), resultTypeName)
         //是否为单行查询
-        if (statementInfo.hasLimit && statementInfo.limitRows.toInt() == 1) {
+        if (planInfo.maxOneRow) {
             //单行,判断是否有paged
             if (isPaged)
                 throw Exception("单行查询不能声明为分页方法")
