@@ -253,15 +253,17 @@ class GeneratedMethodFile(
         val typeSpecBuilder = TypeSpec.classBuilder(resultClassName)
             .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
         //判断列名是否重复
-        val duplicateFieldNames = fields.groupingBy { it.name.pascalName }.eachCount().filter { it.value > 1 }
+        val duplicateFieldNames =
+            fields.groupBy(keySelector = { it.name.pascalName }, valueTransform = { it.name })
+                .filter { it.value.size > 1 }.values
         if (duplicateFieldNames.isNotEmpty()) {
-            throw Exception("重复的列名 ${duplicateFieldNames.map { "'${it.key}'" }.joinToString(", ")}")
+            throw Exception("重复的列名 ${duplicateFieldNames.joinToString(", ")}")
         }
         //判断列名是否非法
         val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
-        val invalidFieldNames = fields.map { it.name.pascalName }.filter { !regex.matches(it) }
+        val invalidFieldNames = fields.filter { !regex.matches(it.name.pascalName) }
         if (invalidFieldNames.isNotEmpty()) {
-            throw Exception("非法的列名 ${invalidFieldNames.joinToString(", ")}")
+            throw Exception("非法的列名 ${invalidFieldNames.joinToString(", ") { it.name }}")
         }
         //给实体添加getter/setter
         fields

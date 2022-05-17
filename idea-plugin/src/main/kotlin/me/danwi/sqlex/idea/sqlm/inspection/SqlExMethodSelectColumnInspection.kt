@@ -41,20 +41,21 @@ class SqlExMethodSelectColumnInspection : LocalInspectionTool() {
                     if (fields.size < 2) return
                     //判断列名是否重复
                     val duplicateFieldNames =
-                        fields.groupingBy { it.name.pascalName }.eachCount().filter { it.value > 1 }
+                        fields.groupBy(keySelector = { it.name.pascalName }, valueTransform = { it.name })
+                            .filter { it.value.size > 1 }.values
                     if (duplicateFieldNames.isNotEmpty()) {
                         holder.registerProblem(
                             element,
                             textRange,
-                            "存在重复的列名 ${duplicateFieldNames.map { "'${it.key}'" }.joinToString(", ")}"
+                            "存在重复的列名 ${duplicateFieldNames.joinToString(", ")}"
                         )
                     }
                     //判断列名是否非法
                     val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
-                    val invalidFieldNames = fields.map { it.name.pascalName }.filter { !regex.matches(it) }
+                    val invalidFieldNames = fields.filter { !regex.matches(it.name.pascalName) }
                     if (invalidFieldNames.isNotEmpty()) {
                         holder.registerProblem(
-                            element, textRange, "存在非法的列名 ${invalidFieldNames.joinToString(", ")}"
+                            element, textRange, "存在非法的列名 ${invalidFieldNames.joinToString(", ") { it.name }}"
                         )
                     }
                 } catch (_: Exception) {
