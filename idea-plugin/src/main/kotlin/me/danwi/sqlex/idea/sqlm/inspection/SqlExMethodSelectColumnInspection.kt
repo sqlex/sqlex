@@ -36,7 +36,7 @@ class SqlExMethodSelectColumnInspection : LocalInspectionTool() {
                         return
                     val textRange = TextRange(startOffset, endOffset)
                     //获取列名
-                    val fields = sqlSubtree.fields ?: return
+                    val fields = sqlSubtree.planInfo?.fields ?: return
                     //列名数量小于2, 直接返回
                     if (fields.size < 2) return
                     //判断列名是否重复
