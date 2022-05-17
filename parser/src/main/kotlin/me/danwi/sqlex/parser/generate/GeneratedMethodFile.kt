@@ -132,8 +132,10 @@ class GeneratedMethodFile(
         //生成参数
         methodSpec.addParameters(generateParameter(methodName, method.paramList(), namedParameterSQL, isPaged))
         //返回值
+        //解析计划
+        val planInfo = session.getPlanInfo(namedParameterSQL.sql)
         //获取字段
-        val fields = session.getFields(namedParameterSQL.sql)
+        val fields = planInfo.fields
         //判断是否为单列返回值
         val resultTypeName = if (fields.size == 1) {
             //如果是单列则将这一列对应的java类型作为结果类型
