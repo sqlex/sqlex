@@ -50,7 +50,7 @@ fun SqlDataSourceImpl.setDDL(project: Project, ddl: String?) {
         }
         this.setDDLFile(
             project, createVirtualFile(
-                Paths.get(project.pluginTempDir.toString(), "ddls", uniqueId, "${sqlexName}.sql").toString(),
+                Paths.get(project.storeDir.toString(), "ddls", uniqueId, "${sqlexName}.sql").toString(),
                 ddl ?: ""
             )
         )

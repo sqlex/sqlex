@@ -7,7 +7,6 @@ import com.intellij.ide.util.PropertiesComponent
 import com.intellij.notification.Notification
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
-import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.application.invokeAndWaitIfNeeded
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.module.ModuleManager
@@ -27,9 +26,9 @@ import java.nio.file.Paths
 val Project.modules: Array<Module>
     inline get() = ModuleManager.getInstance(this).modules
 
-//获取project的临时目录
-val Project.pluginTempDir: Path
-    inline get() = Paths.get(PathManager.getTempPath(), "sqlex", this.locationHash)
+//获取基于项目的存储目录
+val Project.storeDir: Path
+    inline get() = Paths.get(this.basePath ?: throw Exception("无法获取项目根目录"), Project.DIRECTORY_STORE_FOLDER, "sqlex")
 
 val Project.allSqlExDataSources: List<SqlDataSourceImpl>
     get() = SqlDataSourceManager.getInstance(this)
@@ -72,7 +71,12 @@ fun Project.removeDataSource(dataSource: SqlDataSourceImpl, sourceRoot: VirtualF
         //删除文件
         dataSource.sqlFiles.forEach {
             sqlDialectMappings.setMapping(it.virtualFile, null)
-            runWriteAction { it.virtualFile.delete(this) }
+            runWriteAction {
+                it.virtualFile.delete(this)
+                //如果父目录为空,则删除,以免留下垃圾目录
+                if (it.virtualFile.parent.children.isEmpty())
+                    it.virtualFile.parent.delete(this)
+            }
         }
         //设置解析路径
         if (sourceRoot != null)
