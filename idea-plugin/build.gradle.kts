@@ -1,7 +1,7 @@
 plugins {
     java
     kotlin("jvm")
-    id("org.jetbrains.intellij") version "1.5.2"
+    id("org.jetbrains.intellij") version "1.6.0"
 }
 
 dependencies {
@@ -25,7 +25,7 @@ intellij {
 
 tasks.patchPluginXml {
     sinceBuild.set("211")
-    untilBuild.set("221.*")
+    untilBuild.set("222.*")
 }
 
 if (ext.has("idea.token") && ext["release"] == true) {
