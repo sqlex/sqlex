@@ -37,8 +37,7 @@ class RootSubtree(node: ASTNode, idElementType: IElementType) : IdentifierDefSub
         //root下的第一个元素
         val firstChildAnchor = children.firstOrNull()
         //换行元素
-        val whiteElement =
-            PsiParserFacade.SERVICE.getInstance(project).createWhiteSpaceFromText("\n")
+        val whiteElement = project.getService(PsiParserFacade::class.java).createWhiteSpaceFromText("\n")
         if (lastImportAnchor != null) {
             //如果最后一个import存在,则添加到它后面
             //先添加一个换行
