@@ -1,5 +1,6 @@
 package me.danwi.sqlex.idea.repositroy
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
@@ -10,7 +11,8 @@ class SqlExRepositoryToolWindowFactory : ToolWindowFactory {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val repositoryToolWindow = SqlExRepositoryToolWindow(project)
         val toolWindowContent = repositoryToolWindow.initAndGetContent()
-        val content = ContentFactory.SERVICE.getInstance().createContent(toolWindowContent, "", false)
+        val content = ApplicationManager.getApplication().getService(ContentFactory::class.java)
+            .createContent(toolWindowContent, "", false)
         toolWindow.contentManager.addContent(content)
         Disposer.register(content, repositoryToolWindow)
     }
