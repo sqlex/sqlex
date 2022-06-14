@@ -9,6 +9,7 @@ dependencies {
 
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
     implementation("org.antlr:antlr4-intellij-adaptor:0.1")
+    implementation("com.google.googlejavaformat:google-java-format:1.15.0")
 }
 
 // See https://github.com/JetBrains/gradle-intellij-plugin/
