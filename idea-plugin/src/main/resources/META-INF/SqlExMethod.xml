@@ -25,6 +25,8 @@
                            implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodBraceMatcher"/>
         <lang.formatter language="SqlExMethod"
                         implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodFormattingModelBuilder"/>
+        <lang.foldingBuilder language="SqlExMethod"
+                             implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodFoldingBuilder"/>
         <!--智能提示相关-->
         <multiHostInjector implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodSQLInjector"/>
         <completion.contributor language="SqlExMethod"
