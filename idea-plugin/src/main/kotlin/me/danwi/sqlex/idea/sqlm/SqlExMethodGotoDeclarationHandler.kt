@@ -6,8 +6,7 @@ import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiJavaCodeReferenceElement
 import com.intellij.psi.PsiMethod
-import me.danwi.sqlex.idea.sqlm.psi.MethodSubtree
-import me.danwi.sqlex.idea.util.extension.childrenOf
+import me.danwi.sqlex.idea.util.extension.methodSubtree
 import me.danwi.sqlex.idea.util.extension.parentOf
 import me.danwi.sqlex.idea.util.extension.psiFile
 import me.danwi.sqlex.idea.util.extension.sqlexMethodFile
@@ -29,12 +28,7 @@ class SqlExMethodGotoDeclarationHandler : GotoDeclarationHandler {
         val methodTargets = resolveResult
             .map { it.element }
             .filterIsInstance<PsiMethod>()
-            .mapNotNull {
-                val psiClass = it.containingClass ?: return@mapNotNull null
-                val psiFile = psiClass.sqlexMethodFile?.psiFile ?: return@mapNotNull null
-                return@mapNotNull psiFile.childrenOf<MethodSubtree>()
-                    .find { m -> m.methodName?.methodName == it.name }
-            }
+            .mapNotNull { it.methodSubtree }
 
         //处理类
         val classTargets = resolveResult
