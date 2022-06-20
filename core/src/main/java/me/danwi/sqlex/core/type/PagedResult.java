@@ -5,6 +5,8 @@ import java.util.Collections;
 import java.util.List;
 
 public class PagedResult<T> {
+
+    private long totalPage;
     private long pageSize;
     private long pageNo;
     private long total;
@@ -15,6 +17,11 @@ public class PagedResult<T> {
         this.pageNo = pageNo;
         this.total = total;
         this.data = data == null ? Collections.emptyList() : data;
+        this.totalPage = (total + pageSize - 1) / pageSize;
+    }
+
+    public long getTotalPage() {
+        return totalPage;
     }
 
     public long getPageSize() {
