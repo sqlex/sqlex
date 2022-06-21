@@ -8,10 +8,7 @@ import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiJavaCodeReferenceElement
 import com.intellij.psi.PsiMethod
 import me.danwi.sqlex.idea.sqlm.psi.MethodSubtree
-import me.danwi.sqlex.idea.util.extension.childrenOf
-import me.danwi.sqlex.idea.util.extension.parentOf
-import me.danwi.sqlex.idea.util.extension.psiFile
-import me.danwi.sqlex.idea.util.extension.sqlexMethodFile
+import me.danwi.sqlex.idea.util.extension.*
 
 private val sqlCacheKey = Key<String>("me.danwi.sqlex.document.SqlCacheKey")
 
@@ -24,13 +21,8 @@ open class SqlExMethodDocumentationProvider : DocumentationProvider {
         return resolveResult
             .map { it.element }
             .filterIsInstance<PsiMethod>()
-            .mapNotNull {
-                it.containingClass
-                    ?.sqlexMethodFile
-                    ?.psiFile
-                    ?.childrenOf<MethodSubtree>()
-                    ?.find { m -> m.methodName?.methodName == it.name }
-            }.firstOrNull()
+            .mapNotNull { it.methodSubtree }
+            .firstOrNull()
     }
 
 

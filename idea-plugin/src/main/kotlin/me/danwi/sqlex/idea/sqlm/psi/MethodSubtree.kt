@@ -47,7 +47,8 @@ class MethodItemPresentation(private val element: MethodSubtree) : ItemPresentat
     override fun getPresentableText(): String {
         val methodName = element.methodName?.methodName ?: "未命名方法"
         val params = element.paramList?.params ?: listOf()
-        return "${methodName}(${params.joinToString(", ") { "${it.paramName?.text ?: "_"}:${it.paramType?.text ?: "_"}${if (it.isCollectionParam) "*" else ""}" }})"
+        val returnType = if (element.returnType?.typeName != null) element.returnType?.typeName + " " else ""
+        return "${returnType}${methodName}(${params.joinToString(", ") { "${it.paramName?.text ?: "_"}:${it.paramType?.text ?: "_"}${if (it.isCollectionParam) "*" else ""}" }})"
     }
 
     override fun getIcon(unused: Boolean): Icon {
