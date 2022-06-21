@@ -221,7 +221,14 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                             "SqlEx: 解析Method(${index + 1}/${methodFiles.size}) ${file.sourceRootRelativePath}"
                                         output("解析Method: ${file.sourceRootRelativePath}")
                                         indicator.fraction = (index + 1) / methodFiles.size.toDouble() / 2.0 + 0.5
-                                        repository.updateMethodFile(file)
+                                        try {
+                                            repository.updateMethodFile(file)
+                                        } catch (e: SqlExRepositoryMethodException) {
+                                            output(
+                                                "\n解析Method文件 [${e.relativePath}] 错误:\n${e.message}\n",
+                                                ConsoleViewContentType.ERROR_OUTPUT
+                                            )
+                                        }
                                         indicator.checkCanceled()
                                     }
 
@@ -239,12 +246,6 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                         is SqlExRepositorySchemaException -> {
                                             output(
                                                 "\n解析Schema文件 [${e.relativePath}] 错误:\n${e.message}",
-                                                ConsoleViewContentType.ERROR_OUTPUT
-                                            )
-                                        }
-                                        is SqlExRepositoryMethodException -> {
-                                            output(
-                                                "\n解析Method文件 [${e.relativePath}] 错误:\n${e.message}",
                                                 ConsoleViewContentType.ERROR_OUTPUT
                                             )
                                         }
