@@ -2,6 +2,8 @@
     <projectListeners>
         <listener class="me.danwi.sqlex.idea.sqlm.listener.SqlExMethodChangeListener"
                   topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
+        <listener class="me.danwi.sqlex.idea.sqlm.listener.SqlExDatabaseSessionListener"
+                  topic="com.intellij.database.console.session.DatabaseSessionStateListener"/>
     </projectListeners>
     <extensions defaultExtensionNs="com.intellij">
         <!--方法定义文件-->
@@ -46,6 +48,9 @@
         <gotoDeclarationHandler implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodGotoDeclarationHandler"/>
         <lang.documentationProvider language="JAVA"
                                     implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodDocumentationProvider"/>
+
+        <!--与数据库工具交互-->
+        <editorNotificationProvider implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodDebugModeNotificationProvider"/>
 
         <!--错误感知-->
         <localInspection language="SqlExMethod"
