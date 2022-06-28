@@ -23,7 +23,7 @@ public class InsertMethodProxy extends BaseMethodProxy {
             List<Object> reorderArgs = reorderArgs(args);
             setParameters(statement, reorderArgs);
             //TODO: 这里暂时返回的是插入的行数,以后要修改成last inserted id
-            return statement.executeLargeUpdate();
+            return statement.executeUpdate();
         }
     }
 }
