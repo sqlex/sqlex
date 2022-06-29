@@ -22,7 +22,11 @@ public class UpdateDeleteMethodProxy extends BaseMethodProxy {
             //设置预处理语句参数
             List<Object> reorderArgs = reorderArgs(args);
             setParameters(statement, reorderArgs);
-            return statement.executeLargeUpdate();
+            try {
+                return statement.executeLargeUpdate();
+            } catch (UnsupportedOperationException e) {
+                return (long) statement.executeUpdate();
+            }
         }
     }
 }
