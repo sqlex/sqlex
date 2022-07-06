@@ -57,7 +57,7 @@ class GeneratedRepositoryFile(
                     val builder = AnnotationSpec
                         .builder(SqlExTableInfo::class.java)
                         .addMember("name", "\$S", table)
-                    session.getPlanInfo("select * from $table").fields.forEach {
+                    session.getColumns(table).forEach {
                         builder.addMember("columnNames", "\$S", it.name)
                             .addMember("columnTypeIds", "\$L", getJDBCType(it).vendorTypeNumber)
                             .addMember("columnTypeNames", "\$S", it.dbType)
