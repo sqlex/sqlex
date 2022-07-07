@@ -1,6 +1,5 @@
 import me.danwi.sqlex.parser.Session
 import me.danwi.sqlex.parser.StatementType
-import me.danwi.sqlex.parser.exception.SqlExFFIException
 import me.danwi.sqlex.parser.exception.SqlExFFIInvokeException
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
