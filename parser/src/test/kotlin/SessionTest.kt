@@ -1,6 +1,7 @@
 import me.danwi.sqlex.parser.Session
 import me.danwi.sqlex.parser.StatementType
 import me.danwi.sqlex.parser.exception.SqlExFFIException
+import me.danwi.sqlex.parser.exception.SqlExFFIInvokeException
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -376,20 +377,20 @@ class SessionTest {
         //TODO:重新开session,需要处理一下golang那边的BUG
         session = Session("valid_test")
         //insert语句
-        assertThrowsExactly(SqlExFFIException::class.java) { session.getPlanInfo("insert into person values('')") }
-        assertThrows(SqlExFFIException::class.java) { session.getPlanInfo("insert into person(names) values('')") }
-        assertThrows(SqlExFFIException::class.java) { session.getPlanInfo("insert into person(names) values(?)") }
+        assertThrowsExactly(SqlExFFIInvokeException::class.java) { session.getPlanInfo("insert into person values('')") }
+        assertThrowsExactly(SqlExFFIInvokeException::class.java) { session.getPlanInfo("insert into person(names) values('')") }
+        assertThrowsExactly(SqlExFFIInvokeException::class.java) { session.getPlanInfo("insert into person(names) values(?)") }
         assertDoesNotThrow { session.getPlanInfo("insert into person values(null, '', '1')") }
         assertDoesNotThrow { session.getPlanInfo("insert into person values(null, '', 1)") }
         assertDoesNotThrow { session.getPlanInfo("insert into person(name) values('')") }
         assertDoesNotThrow { session.getPlanInfo("insert into person(name) values(?)") }
         //update语句
-        assertThrows(SqlExFFIException::class.java) { session.getPlanInfo("update person set names = ''") }
-        assertThrows(SqlExFFIException::class.java) { session.getPlanInfo("update person set names = '' where id = 1") }
+        assertThrowsExactly(SqlExFFIInvokeException::class.java) { session.getPlanInfo("update person set names = ''") }
+        assertThrowsExactly(SqlExFFIInvokeException::class.java) { session.getPlanInfo("update person set names = '' where id = 1") }
         assertDoesNotThrow { session.getPlanInfo("update person set name = '' where id = ''") }
         //delete语句
-        assertThrows(SqlExFFIException::class.java) { session.getPlanInfo("delete from person where names = ''") }
-        assertThrows(SqlExFFIException::class.java) { session.getPlanInfo("delete from person where names = ?") }
+        assertThrowsExactly(SqlExFFIInvokeException::class.java) { session.getPlanInfo("delete from person where names = ''") }
+        assertThrowsExactly(SqlExFFIInvokeException::class.java) { session.getPlanInfo("delete from person where names = ?") }
         assertDoesNotThrow { session.getPlanInfo("delete from person") }
         assertDoesNotThrow { session.getPlanInfo("delete from person where name = ''") }
         assertDoesNotThrow { session.getPlanInfo("delete from person where name = ? ") }
