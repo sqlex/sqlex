@@ -95,12 +95,14 @@ class GeneratedMethodFile(
         val namedParameterSQL = sqlText.namedParameterSQL
         //获取到SQL语句信息
         val statementInfo = session.getStatementInfo(namedParameterSQL.sql)
+        //获取计划信息
+        val planInfo = session.getPlanInfo(namedParameterSQL.sql)
         //只有select中才能使用paged
         if (method.paged() != null && statementInfo.type != StatementType.Select)
             throw Exception("只有Select方法才能标记为分页方法")
         //根据类型来生成不同的方法
         return when (statementInfo.type) {
-            StatementType.Select -> generateSelectMethod(method, namedParameterSQL, statementInfo)
+            StatementType.Select -> generateSelectMethod(method, namedParameterSQL, statementInfo, planInfo)
             StatementType.Insert -> generateInsertMethod(method, namedParameterSQL, statementInfo)
             StatementType.Update -> generateUpdateMethod(method, namedParameterSQL, statementInfo)
             StatementType.Delete -> generateDeleteMethod(method, namedParameterSQL, statementInfo)
@@ -111,7 +113,8 @@ class GeneratedMethodFile(
     private fun generateSelectMethod(
         method: SqlExMethodLanguageParser.MethodContext,
         namedParameterSQL: NamedParameterSQL,
-        statementInfo: StatementInfo
+        statementInfo: StatementInfo,
+        planInfo: PlanInfo
     ): MethodSpec {
         //获取到方法名
         val methodName = method.methodName().text
@@ -131,9 +134,6 @@ class GeneratedMethodFile(
         )
         //生成参数
         methodSpec.addParameters(generateParameter(methodName, method.paramList(), namedParameterSQL, isPaged))
-        //返回值
-        //解析计划
-        val planInfo = session.getPlanInfo(namedParameterSQL.sql)
         //获取字段
         val fields = planInfo.fields
         //判断是否为单列返回值

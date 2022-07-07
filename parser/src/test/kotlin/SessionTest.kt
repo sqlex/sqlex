@@ -1,5 +1,6 @@
 import me.danwi.sqlex.parser.Session
 import me.danwi.sqlex.parser.StatementType
+import me.danwi.sqlex.parser.exception.SqlExFFIInvokeException
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -83,6 +84,183 @@ class SessionTest {
         )
 
         session.close()
+    }
+
+    @Test
+    fun allTables() {
+        var session = Session("allTables_test")
+        //language=MySQL
+        session.execute(
+            """
+            create table person(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            create table department(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column departmentID int not null
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column age int unsigned not null
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column status char(255) charset binary not null
+        """.trimIndent()
+        )
+        session.close()
+
+        //TODO:重新开session,需要处理一下golang那边的BUG
+        session = Session("allTables_test")
+
+        assertEquals(session.allTables.size, 2)
+        assertArrayEquals(session.allTables, arrayOf("department", "person"))
+    }
+
+    @Test
+    fun getColumns() {
+        var session = Session("getColumns_test")
+        //language=MySQL
+        session.execute(
+            """
+            create table person(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            create table department(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column departmentID int not null
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column age int unsigned not null
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column status char(255) charset binary not null
+        """.trimIndent()
+        )
+        session.close()
+
+        //TODO:重新开session,需要处理一下golang那边的BUG
+        session = Session("getColumns_test")
+
+        var fields = session.getColumns("person")
+        assertEquals(5, fields.size)
+
+        assertEquals("id", fields[0].name)
+        assertEquals("int", fields[0].dbType)
+        assertEquals(11, fields[0].length)
+        assertFalse(fields[0].unsigned)
+        assertTrue(fields[0].isPrimaryKey)
+        assertFalse(fields[0].isPartOfMultipleKey)
+        assertTrue(fields[0].isAutoIncrement)
+        assertFalse(fields[0].isUnique)
+        assertTrue(fields[0].notNull)
+        assertTrue(fields[0].hasDefaultVale)
+
+        assertEquals("name", fields[1].name)
+        assertEquals("varchar", fields[1].dbType)
+        assertEquals(255, fields[1].length)
+        assertFalse(fields[1].binary)
+        assertFalse(fields[1].isPrimaryKey)
+        assertFalse(fields[1].isPartOfMultipleKey)
+        assertFalse(fields[1].isAutoIncrement)
+        assertFalse(fields[1].isUnique)
+        assertTrue(fields[1].notNull)
+        assertFalse(fields[1].hasDefaultVale)
+
+        assertEquals("departmentID", fields[2].name)
+        assertEquals("int", fields[2].dbType)
+        assertEquals(11, fields[2].length)
+        assertFalse(fields[2].unsigned)
+        assertFalse(fields[1].isPrimaryKey)
+        assertFalse(fields[1].isPartOfMultipleKey)
+        assertFalse(fields[1].isAutoIncrement)
+        assertFalse(fields[1].isUnique)
+        assertTrue(fields[1].notNull)
+        assertFalse(fields[1].hasDefaultVale)
+
+        assertEquals("age", fields[3].name)
+        assertEquals("int", fields[3].dbType)
+        assertEquals(10, fields[3].length)
+        assertTrue(fields[3].unsigned)
+        assertFalse(fields[1].isPrimaryKey)
+        assertFalse(fields[1].isPartOfMultipleKey)
+        assertFalse(fields[1].isAutoIncrement)
+        assertFalse(fields[1].isUnique)
+        assertTrue(fields[1].notNull)
+        assertFalse(fields[1].hasDefaultVale)
+
+        assertEquals("status", fields[4].name)
+        assertEquals("binary", fields[4].dbType)
+        assertEquals(255, fields[4].length)
+        assertTrue(fields[4].binary)
+        assertFalse(fields[1].isPrimaryKey)
+        assertFalse(fields[1].isPartOfMultipleKey)
+        assertFalse(fields[1].isAutoIncrement)
+        assertFalse(fields[1].isUnique)
+        assertTrue(fields[1].notNull)
+        assertFalse(fields[1].hasDefaultVale)
+
+        //department表
+        fields = session.getColumns("department")
+        assertEquals(2, fields.size)
+
+        assertEquals("id", fields[0].name)
+        assertEquals("int", fields[0].dbType)
+        assertEquals(11, fields[0].length)
+        assertFalse(fields[0].unsigned)
+        assertTrue(fields[0].isPrimaryKey)
+        assertFalse(fields[0].isPartOfMultipleKey)
+        assertTrue(fields[0].isAutoIncrement)
+        assertFalse(fields[0].isUnique)
+        assertTrue(fields[0].notNull)
+        assertTrue(fields[0].hasDefaultVale)
+
+        assertEquals("name", fields[1].name)
+        assertEquals("varchar", fields[1].dbType)
+        assertEquals(255, fields[1].length)
+        assertFalse(fields[1].binary)
+        assertFalse(fields[1].isPrimaryKey)
+        assertFalse(fields[1].isPartOfMultipleKey)
+        assertFalse(fields[1].isAutoIncrement)
+        assertFalse(fields[1].isUnique)
+        assertTrue(fields[1].notNull)
+        assertFalse(fields[1].hasDefaultVale)
     }
 
     @Test
@@ -176,6 +354,45 @@ class SessionTest {
         assertEquals("amount", fields[1].name)
         assertEquals("bigint", fields[1].dbType)
         assertEquals(21, fields[1].length)
+
+        session.close()
+    }
+
+    @Test
+    fun valid() {
+        var session = Session("valid_test")
+        //language=MySQL
+        session.execute(
+            """
+            create table person(
+                id int auto_increment primary key,
+                name varchar(255) not null,
+                age int unsigned not null
+            )
+        """.trimIndent()
+        )
+        session.close()
+
+        //TODO:重新开session,需要处理一下golang那边的BUG
+        session = Session("valid_test")
+        //insert语句
+        assertThrowsExactly(SqlExFFIInvokeException::class.java) { session.getPlanInfo("insert into person values('')") }
+        assertThrowsExactly(SqlExFFIInvokeException::class.java) { session.getPlanInfo("insert into person(names) values('')") }
+        assertThrowsExactly(SqlExFFIInvokeException::class.java) { session.getPlanInfo("insert into person(names) values(?)") }
+        assertDoesNotThrow { session.getPlanInfo("insert into person values(null, '', '1')") }
+        assertDoesNotThrow { session.getPlanInfo("insert into person values(null, '', 1)") }
+        assertDoesNotThrow { session.getPlanInfo("insert into person(name) values('')") }
+        assertDoesNotThrow { session.getPlanInfo("insert into person(name) values(?)") }
+        //update语句
+        assertThrowsExactly(SqlExFFIInvokeException::class.java) { session.getPlanInfo("update person set names = ''") }
+        assertThrowsExactly(SqlExFFIInvokeException::class.java) { session.getPlanInfo("update person set names = '' where id = 1") }
+        assertDoesNotThrow { session.getPlanInfo("update person set name = '' where id = ''") }
+        //delete语句
+        assertThrowsExactly(SqlExFFIInvokeException::class.java) { session.getPlanInfo("delete from person where names = ''") }
+        assertThrowsExactly(SqlExFFIInvokeException::class.java) { session.getPlanInfo("delete from person where names = ?") }
+        assertDoesNotThrow { session.getPlanInfo("delete from person") }
+        assertDoesNotThrow { session.getPlanInfo("delete from person where name = ''") }
+        assertDoesNotThrow { session.getPlanInfo("delete from person where name = ? ") }
 
         session.close()
     }

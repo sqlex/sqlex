@@ -11,6 +11,25 @@ class Field {
     var binary: Boolean = false
     var decimal: Long = -1
     lateinit var elements: Array<String>
+
+    //下面是列包含的属性
+    //是否为主键
+    var isPrimaryKey = false
+
+    //是否是联合主键的一部分
+    var isPartOfMultipleKey = false
+
+    //是否为自增
+    var isAutoIncrement = false
+
+    //是否唯一
+    var isUnique = false
+
+    //是否不能为空
+    var notNull = false
+
+    //是否含有默认值
+    var hasDefaultVale = false
 }
 
 class PlanInfo(
@@ -52,6 +71,10 @@ class Session(database: String) {
 
     fun getTableDDL(table: String): String {
         return ffiInvoke("DatabaseAPI", "GetTableDDL", sessionID, table)
+    }
+
+    fun getColumns(table: String): Array<Field> {
+        return ffiInvoke("DatabaseAPI", "GetColumns", sessionID, table)
     }
 
     fun getPlanInfo(sql: String): PlanInfo {
