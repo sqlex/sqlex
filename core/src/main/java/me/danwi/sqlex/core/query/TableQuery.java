@@ -16,7 +16,7 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
      * @param exp 排序表达式
      * @return this
      */
-    TableQuery<T> order(Expression exp) {
+    public TableQuery<T> order(Expression exp) {
         return order(exp, Order.Asc);
     }
 
@@ -27,7 +27,7 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
      * @param order 顺序
      * @return this
      */
-    TableQuery<T> order(Expression exp, Order order) {
+    public TableQuery<T> order(Expression exp, Order order) {
         throw new UnsupportedOperationException();
     }
 
@@ -37,7 +37,7 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
      * @param number 跳过的记录数
      * @return this
      */
-    TableQuery<T> skip(long number) {
+    public TableQuery<T> skip(long number) {
         skip = number;
         return this;
     }
@@ -48,7 +48,7 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
      * @param number 记录数量
      * @return this
      */
-    TableQuery<T> take(long number) {
+    public TableQuery<T> take(long number) {
         take = number;
         return this;
     }
@@ -58,7 +58,7 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
      *
      * @return this
      */
-    TableQuery<T> forUpdate() {
+    public TableQuery<T> forUpdate() {
         forUpdate = true;
         return this;
     }
@@ -68,7 +68,7 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
      *
      * @return 行数
      */
-    long count() {
+    public long count() {
         throw new UnsupportedOperationException();
     }
 
@@ -77,7 +77,7 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
      *
      * @return 结果
      */
-    List<T> find() {
+    public List<T> find() {
         throw new UnsupportedOperationException();
     }
 
@@ -86,7 +86,7 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
      *
      * @return 第一条数据
      */
-    T findOne() {
+    public T findOne() {
         List<T> results = this.take(1).find();
         if (results.size() > 0)
             return results.get(0);
@@ -100,7 +100,7 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
      * @param pageNo   页码
      * @return 分页结果
      */
-    PagedResult<T> page(long pageSize, long pageNo) {
+    public PagedResult<T> page(long pageSize, long pageNo) {
         long total = this.count();
         List<T> data = this.find();
         return new PagedResult<>(pageSize, pageNo, total, data);

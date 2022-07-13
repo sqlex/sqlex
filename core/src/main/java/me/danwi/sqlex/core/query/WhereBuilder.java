@@ -14,7 +14,7 @@ public class WhereBuilder<T> {
      * @param exp 条件表达式
      * @return this
      */
-    T where(Expression exp) {
+    public T where(Expression exp) {
         if (whereCondition == null)
             whereCondition = exp;
         else
@@ -28,7 +28,7 @@ public class WhereBuilder<T> {
      * @param supplier 条件提供者
      * @return this
      */
-    T where(Supplier<Expression> supplier) {
+    public T where(Supplier<Expression> supplier) {
         return where(supplier.get());
     }
 }

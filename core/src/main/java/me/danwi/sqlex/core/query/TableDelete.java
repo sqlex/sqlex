@@ -6,7 +6,7 @@ public class TableDelete extends WhereBuilder<TableDelete> {
      *
      * @return 删除的行数
      */
-    long execute() {
+    public long execute() {
         throw new UnsupportedOperationException();
     }
 }

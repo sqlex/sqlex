@@ -6,7 +6,7 @@ public class TableUpdate<T> extends WhereBuilder<T> {
      *
      * @return 更新的行数
      */
-    long execute() {
+    public long execute() {
         throw new UnsupportedOperationException();
     }
 }
