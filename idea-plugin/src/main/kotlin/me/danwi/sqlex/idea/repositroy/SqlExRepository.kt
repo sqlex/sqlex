@@ -52,13 +52,6 @@ class SqlExRepository(private val project: Project, private val repository: Repo
             return (classes + innerClass + repositoryJavaClassCache)
         }
 
-    private fun generateJavaFile(file: VirtualFile): GeneratedJavaFile {
-        return repository.generateMethodClassFile(
-            file.sourceRootRelativePath ?: throw Exception("无法获取文件${file.name}的相对路径"),
-            file.textContent ?: throw Exception("无法读取文件${file.name}的内容")
-        )
-    }
-
     private fun generateJavaPsiClass(generatedJavaSourceFile: GeneratedJavaFile): PsiClass {
         return runReadAction {
             val psiFile = PsiFileFactory.getInstance(project)
@@ -83,7 +76,10 @@ class SqlExRepository(private val project: Project, private val repository: Repo
         if (file == null)
             return
         //生成java源码
-        val javaFile = generateJavaFile(file)
+        val javaFile = repository.generateMethodClassFile(
+            file.sourceRootRelativePath ?: throw Exception("无法获取文件${file.name}的相对路径"),
+            file.textContent ?: throw Exception("无法读取文件${file.name}的内容")
+        )
         //生成psi class
         val javaClass = generateJavaPsiClass(javaFile)
         //放入virtual file缓存
