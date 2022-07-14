@@ -45,11 +45,28 @@ class SqlExRepository(private val project: Project, private val repository: Repo
             return psiClass
         }
 
+    private val entityJavaClassCaches by lazy {
+        repository
+            .generateEntityClassFiles()
+            .map { generateJavaPsiClass(it) }
+    }
+
+    private val tableJavaClassCaches by lazy {
+        repository
+            .generateTableClassFiles()
+            .map { generateJavaPsiClass(it) }
+    }
+
     val allJavaClassCache: List<PsiClass>
         get() {
-            val classes = methodJavaClassCache.values
+            val classes =
+                entityJavaClassCaches + tableJavaClassCaches + methodJavaClassCache.values + repositoryJavaClassCache
             val innerClass = classes.flatMap { it.innerClasses.toList() }
-            return (classes + innerClass + repositoryJavaClassCache)
+            return classes + innerClass
+        }
+    private val allTopLevelJavaClassCache: List<PsiClass>
+        get() {
+            return entityJavaClassCaches + tableJavaClassCaches + methodJavaClassCache.values + repositoryJavaClassCache
         }
 
     private fun generateJavaPsiClass(generatedJavaSourceFile: GeneratedJavaFile): PsiClass {
@@ -129,13 +146,13 @@ class SqlExRepository(private val project: Project, private val repository: Repo
 
     //获取该包下所有的类(不包括内部类)
     fun findClasses(qualifiedPackage: String): List<PsiClass> {
-        return methodJavaClassCache.values
+        return allTopLevelJavaClassCache
             .filter { it.qualifiedPackageName == qualifiedPackage }
     }
 
     //通过全限定名查找类
     fun findClass(qualifierName: String): PsiClass? {
-        return allJavaClassCache.firstOrNull { it.qualifiedName == qualifierName }
+        return allTopLevelJavaClassCache.firstOrNull { it.qualifiedName == qualifierName }
     }
 
     //通过类名查找类
