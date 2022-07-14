@@ -1,4 +1,4 @@
-package me.danwi.sqlex.idea.sqlm.generator
+package me.danwi.sqlex.idea.interpreter
 
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.project.Project
@@ -6,17 +6,17 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.ResolveScopeEnlarger
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.SearchScope
-import me.danwi.sqlex.idea.repositroy.SqlExMethodGeneratedCacheKey
+import me.danwi.sqlex.idea.repositroy.SqlExGeneratedCacheKey
 
 class SqlExMethodResolveScopeEnlarger : ResolveScopeEnlarger() {
     override fun getAdditionalResolveScope(file: VirtualFile, project: Project): SearchScope? {
-        return SqlExMethodCustomSearchScope()
+        return SqlExCustomSearchScope()
     }
 }
 
-class SqlExMethodCustomSearchScope : GlobalSearchScope() {
+class SqlExCustomSearchScope : GlobalSearchScope() {
     override fun contains(file: VirtualFile): Boolean {
-        return file.getUserData(SqlExMethodGeneratedCacheKey) == true
+        return file.getUserData(SqlExGeneratedCacheKey) == true
     }
 
     override fun isSearchInModuleContent(module: Module): Boolean {

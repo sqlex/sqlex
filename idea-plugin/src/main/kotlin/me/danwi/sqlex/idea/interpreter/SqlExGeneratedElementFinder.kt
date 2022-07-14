@@ -1,4 +1,4 @@
-package me.danwi.sqlex.idea.sqlm.generator
+package me.danwi.sqlex.idea.interpreter
 
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiClass
@@ -7,7 +7,7 @@ import com.intellij.psi.PsiPackage
 import com.intellij.psi.search.GlobalSearchScope
 import me.danwi.sqlex.idea.repositroy.sqlexRepositoryServices
 
-class SqlExMethodGeneratedElementFinder(private val project: Project) : PsiElementFinder() {
+class SqlExGeneratedElementFinder(private val project: Project) : PsiElementFinder() {
     override fun findClasses(qualifiedName: String, scope: GlobalSearchScope): Array<PsiClass> {
         return project.sqlexRepositoryServices
             .filter { scope.contains(it.sourceRoot) }

@@ -1,4 +1,4 @@
-package me.danwi.sqlex.idea.sqlm.generator
+package me.danwi.sqlex.idea.interpreter
 
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiClass
@@ -9,7 +9,7 @@ import com.intellij.psi.search.PsiShortNamesCache
 import com.intellij.util.Processor
 import me.danwi.sqlex.idea.repositroy.sqlexRepositoryServices
 
-class SqlExMethodGeneratedShortNamesCache(private val project: Project) : PsiShortNamesCache() {
+class SqlExGeneratedShortNamesCache(private val project: Project) : PsiShortNamesCache() {
     override fun getClassesByName(name: String, scope: GlobalSearchScope): Array<PsiClass> {
         return project.sqlexRepositoryServices
             .filter { scope.contains(it.sourceRoot) }

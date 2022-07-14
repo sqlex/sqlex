@@ -13,7 +13,7 @@ import me.danwi.sqlex.idea.util.extension.*
 import me.danwi.sqlex.parser.Repository
 import me.danwi.sqlex.parser.generate.GeneratedJavaFile
 
-val SqlExMethodGeneratedCacheKey = Key<Boolean>("me.danwi.sqlex.SqlExMethodGeneratedCache")
+val SqlExGeneratedCacheKey = Key<Boolean>("me.danwi.sqlex.SqlExGeneratedCache")
 val SqlExMethodFileCacheKey = Key<VirtualFile>("me.danwi.sqlex.SqlExMethodFileCache")
 val SqlExMethodPsiClassCacheKey = Key<PsiClass>("me.danwi.sqlex.SqlExMethodPsiClassCache")
 
@@ -62,7 +62,7 @@ class SqlExRepository(private val project: Project, private val repository: Repo
                 ) as PsiJavaFile
             //生成的virtual file可能不存在,需要通过view provider获取
             val generatedVirtualFile = psiFile.virtualFile ?: psiFile.viewProvider.virtualFile
-            generatedVirtualFile.putUserData(SqlExMethodGeneratedCacheKey, true)
+            generatedVirtualFile.putUserData(SqlExGeneratedCacheKey, true)
             psiFile.classes.firstOrNull()
         } ?: throw Exception("无法生成java class")
     }
