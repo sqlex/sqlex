@@ -2,7 +2,13 @@ package me.danwi.sqlex.parser.generate
 
 import com.squareup.javapoet.*
 import me.danwi.sqlex.common.Paged
-import me.danwi.sqlex.core.annotation.*
+import me.danwi.sqlex.core.annotation.SqlExRepository
+import me.danwi.sqlex.core.annotation.method.*
+import me.danwi.sqlex.core.annotation.method.parameter.*
+import me.danwi.sqlex.core.annotation.method.type.SqlExDelete
+import me.danwi.sqlex.core.annotation.method.type.SqlExInsert
+import me.danwi.sqlex.core.annotation.method.type.SqlExSelect
+import me.danwi.sqlex.core.annotation.method.type.SqlExUpdate
 import me.danwi.sqlex.core.type.PagedResult
 import me.danwi.sqlex.parser.*
 import me.danwi.sqlex.parser.exception.SqlExRepositoryMethodException

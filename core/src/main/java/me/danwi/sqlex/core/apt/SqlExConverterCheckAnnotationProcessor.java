@@ -1,6 +1,6 @@
 package me.danwi.sqlex.core.apt;
 
-import me.danwi.sqlex.core.annotation.SqlExConverterCheck;
+import me.danwi.sqlex.core.annotation.repository.SqlExConverterCheck;
 
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Messager;

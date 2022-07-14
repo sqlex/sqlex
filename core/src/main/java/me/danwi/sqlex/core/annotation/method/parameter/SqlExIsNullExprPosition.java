@@ -1,11 +1,11 @@
-package me.danwi.sqlex.core.annotation;
+package me.danwi.sqlex.core.annotation.method.parameter;
 
 import java.lang.annotation.*;
 
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-@Repeatable(SqlExInExprPositions.class)
-public @interface SqlExInExprPosition {
+@Repeatable(SqlExIsNullExprPositions.class)
+public @interface SqlExIsNullExprPosition {
     boolean not();
 
     int marker();
@@ -14,4 +14,3 @@ public @interface SqlExInExprPosition {
 
     int end();
 }
-

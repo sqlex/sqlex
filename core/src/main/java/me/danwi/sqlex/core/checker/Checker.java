@@ -2,7 +2,7 @@ package me.danwi.sqlex.core.checker;
 
 import com.mysql.cj.MysqlType;
 import me.danwi.sqlex.core.DaoFactory;
-import me.danwi.sqlex.core.annotation.SqlExTableInfo;
+import me.danwi.sqlex.core.annotation.repository.SqlExTableInfo;
 import me.danwi.sqlex.core.exception.SqlExCheckException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -1,7 +1,12 @@
 package me.danwi.sqlex.core.invoke;
 
 import me.danwi.sqlex.core.ExceptionTranslator;
-import me.danwi.sqlex.core.annotation.*;
+import me.danwi.sqlex.core.annotation.method.SqlExOneRow;
+import me.danwi.sqlex.core.annotation.method.SqlExPaged;
+import me.danwi.sqlex.core.annotation.method.type.SqlExDelete;
+import me.danwi.sqlex.core.annotation.method.type.SqlExInsert;
+import me.danwi.sqlex.core.annotation.method.type.SqlExSelect;
+import me.danwi.sqlex.core.annotation.method.type.SqlExUpdate;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.invoke.method.*;
 import me.danwi.sqlex.core.repository.ParameterConverterRegistry;

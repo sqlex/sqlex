@@ -1,4 +1,4 @@
-package me.danwi.sqlex.core.annotation;
+package me.danwi.sqlex.core.annotation.method;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -7,6 +7,6 @@ import java.lang.annotation.Target;
 
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface SqlExMarkerPosition {
-    int[] value() default {};
+public @interface SqlExScript {
+    String value();
 }

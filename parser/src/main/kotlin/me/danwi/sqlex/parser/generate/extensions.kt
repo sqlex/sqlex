@@ -2,7 +2,7 @@ package me.danwi.sqlex.parser.generate
 
 import com.squareup.javapoet.*
 import me.danwi.sqlex.common.ColumnNameRegex
-import me.danwi.sqlex.core.annotation.SqlExColumnName
+import me.danwi.sqlex.core.annotation.entity.SqlExColumnName
 import me.danwi.sqlex.parser.Field
 import me.danwi.sqlex.parser.util.pascalName
 import java.math.BigDecimal

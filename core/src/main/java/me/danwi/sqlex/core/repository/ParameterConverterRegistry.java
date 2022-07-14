@@ -1,7 +1,7 @@
 package me.danwi.sqlex.core.repository;
 
 import me.danwi.sqlex.core.RepositoryLike;
-import me.danwi.sqlex.core.annotation.SqlExConverter;
+import me.danwi.sqlex.core.annotation.repository.SqlExConverter;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.type.ParameterConverter;
 

@@ -1,7 +1,7 @@
 package me.danwi.sqlex.core.invoke.method;
 
 import me.danwi.sqlex.core.ExceptionTranslator;
-import me.danwi.sqlex.core.annotation.SqlExOneColumn;
+import me.danwi.sqlex.core.annotation.method.SqlExOneColumn;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.invoke.mapper.BeanMapper;
 import me.danwi.sqlex.core.invoke.mapper.BasicTypeMapper;

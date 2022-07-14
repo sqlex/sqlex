@@ -1,4 +1,4 @@
-package me.danwi.sqlex.core.annotation;
+package me.danwi.sqlex.core.annotation.repository;
 
 import java.lang.annotation.*;
 

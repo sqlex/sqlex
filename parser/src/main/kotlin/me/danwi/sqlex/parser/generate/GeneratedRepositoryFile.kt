@@ -3,7 +3,7 @@ package me.danwi.sqlex.parser.generate
 import com.squareup.javapoet.AnnotationSpec
 import com.squareup.javapoet.TypeSpec
 import me.danwi.sqlex.core.RepositoryLike
-import me.danwi.sqlex.core.annotation.*
+import me.danwi.sqlex.core.annotation.repository.*
 import me.danwi.sqlex.parser.Session
 import javax.lang.model.element.Modifier
 
