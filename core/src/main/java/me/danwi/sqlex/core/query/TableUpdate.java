@@ -7,14 +7,11 @@ import java.util.Map;
 
 public class TableUpdate<T> extends WhereBuilder<T> {
     private final TransactionManager transactionManager;
-    private final Class<?> entityClass;
-
     //设置的值
     protected Map<String, Object> values = new HashMap<>();
 
-    public TableUpdate(TransactionManager transactionManager, Class<?> entityClass) {
+    public TableUpdate(TransactionManager transactionManager) {
         this.transactionManager = transactionManager;
-        this.entityClass = entityClass;
     }
 
     /**

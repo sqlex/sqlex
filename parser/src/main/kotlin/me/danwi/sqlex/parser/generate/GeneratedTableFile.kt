@@ -104,7 +104,7 @@ class GeneratedTableFile(
             MethodSpec.constructorBuilder()
                 .addModifiers(Modifier.PUBLIC)
                 .addParameter(ClassName.get(TransactionManager::class.java), "transactionManager")
-                .addCode("super(transactionManager, \$T.class);\n", entityTypeName)
+                .addCode("super(transactionManager);\n")
                 .build()
         )
         //添加set方法
