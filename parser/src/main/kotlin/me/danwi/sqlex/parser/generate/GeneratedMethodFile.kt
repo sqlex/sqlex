@@ -1,7 +1,6 @@
 package me.danwi.sqlex.parser.generate
 
 import com.squareup.javapoet.*
-import me.danwi.sqlex.common.ColumnNameRegex
 import me.danwi.sqlex.common.Paged
 import me.danwi.sqlex.core.annotation.*
 import me.danwi.sqlex.core.type.PagedResult
@@ -144,7 +143,7 @@ class GeneratedMethodFile(
         } else {
             //如果是多列,则生成对应的实体类
             val resultClassName = method.returnType()?.text ?: "${methodName.pascalName}Result"
-            val resultClassSpec = fields.toEntityClass(resultClassName)
+            val resultClassSpec = fields.toEntityClass(resultClassName, true)
             //把实体类添加到内部类
             innerClasses.add(resultClassSpec)
             ClassName.get(packageName, className, resultClassName)

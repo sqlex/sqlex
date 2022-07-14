@@ -121,9 +121,10 @@ val Field.JdbcType: JDBCType
 /**
  * 将字段数组转换成实体类
  */
-fun Array<Field>.toEntityClass(className: String): TypeSpec {
-    val typeSpecBuilder = TypeSpec.classBuilder(className)
-        .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+fun Array<Field>.toEntityClass(className: String, isStatic: Boolean = false): TypeSpec {
+    val typeSpecBuilder = TypeSpec.classBuilder(className).addModifiers(Modifier.PUBLIC)
+    if (isStatic)
+        typeSpecBuilder.addModifiers(Modifier.STATIC)
     //判断列名是否重复
     val duplicateFieldNames =
         this.groupBy(keySelector = { it.name.pascalName }, valueTransform = { it.name })
