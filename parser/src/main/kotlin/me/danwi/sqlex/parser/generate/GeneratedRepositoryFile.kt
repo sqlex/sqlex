@@ -3,14 +3,8 @@ package me.danwi.sqlex.parser.generate
 import com.squareup.javapoet.AnnotationSpec
 import com.squareup.javapoet.TypeSpec
 import me.danwi.sqlex.core.RepositoryLike
-import me.danwi.sqlex.core.annotation.SqlExConverter
-import me.danwi.sqlex.core.annotation.SqlExConverterCheck
-import me.danwi.sqlex.core.annotation.SqlExMethods
-import me.danwi.sqlex.core.annotation.SqlExSchema
-import me.danwi.sqlex.core.annotation.SqlExTableInfo
-import me.danwi.sqlex.parser.Field
+import me.danwi.sqlex.core.annotation.*
 import me.danwi.sqlex.parser.Session
-import java.sql.JDBCType
 import javax.lang.model.element.Modifier
 
 const val RepositoryClassName = "Repository"
@@ -59,7 +53,7 @@ class GeneratedRepositoryFile(
                         .addMember("name", "\$S", table)
                     session.getColumns(table).forEach {
                         builder.addMember("columnNames", "\$S", it.name)
-                            .addMember("columnTypeIds", "\$L", getJDBCType(it).vendorTypeNumber)
+                            .addMember("columnTypeIds", "\$L", it.JDBCType.vendorTypeNumber)
                             .addMember("columnTypeNames", "\$S", it.dbType)
                             .addMember("columnLengths", "\$LL", it.length)
                             .addMember("columnUnsigneds", "\$L", it.unsigned)
@@ -69,46 +63,5 @@ class GeneratedRepositoryFile(
             )
             .addAnnotation(methodAnnotationSpecBuilder.build())
             .build()
-    }
-
-    private fun getJDBCType(field: Field): JDBCType {
-        return when (field.dbType) {
-            "bit" -> JDBCType.BIT
-            "tinyint" -> JDBCType.TINYINT
-            "smallint" -> JDBCType.SMALLINT
-            "mediumint" -> JDBCType.INTEGER
-            "int" -> JDBCType.INTEGER
-            "bigint" -> JDBCType.BIGINT
-            "float" -> JDBCType.REAL
-            "double" -> JDBCType.DOUBLE
-            "decimal" -> JDBCType.DECIMAL
-            "date" -> JDBCType.DATE
-            "datetime" -> JDBCType.TIMESTAMP
-            "timestamp" -> JDBCType.TIMESTAMP
-            "time" -> JDBCType.TIME
-            "year" -> JDBCType.DATE
-            "char" -> if (field.binary) JDBCType.BINARY else JDBCType.CHAR
-            "varchar" -> if (field.binary) JDBCType.VARBINARY else JDBCType.VARCHAR
-            "binary" -> JDBCType.BINARY
-            "varbinary" -> JDBCType.VARBINARY
-            "tinyblob" -> JDBCType.VARBINARY
-            "tinytext" -> JDBCType.VARCHAR
-            "blob" -> JDBCType.LONGVARBINARY
-            "text" -> JDBCType.LONGVARCHAR
-            "mediumblob" -> JDBCType.LONGVARBINARY
-            "mediumtext" -> JDBCType.LONGVARCHAR
-            "longblob" -> JDBCType.LONGVARBINARY
-            "longtext" -> JDBCType.LONGVARCHAR
-            "json" -> JDBCType.LONGVARCHAR
-            "geometry" -> JDBCType.BINARY
-            "enum" -> JDBCType.CHAR
-            "set" -> JDBCType.CHAR
-            "null" -> JDBCType.NULL
-            else -> {
-                //JDBCType.VARCHAR
-                //内测阶段直接抛出异常, 便于排错
-                throw Exception("${field.dbType} 映射失败!!!")
-            }
-        }
     }
 }
