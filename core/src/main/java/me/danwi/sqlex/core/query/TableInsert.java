@@ -17,7 +17,7 @@ public class TableInsert<T> {
      * @param person 需要插入的实体
      * @return 插入后的实体
      */
-    T save(T person) {
+    public T save(T person) {
         throw new UnsupportedOperationException();
     }
 }
