@@ -152,7 +152,7 @@ class SqlExRepository(private val project: Project, private val repository: Repo
 
     //通过全限定名查找类
     fun findClass(qualifierName: String): PsiClass? {
-        return allTopLevelJavaClassCache.firstOrNull { it.qualifiedName == qualifierName }
+        return allJavaClassCache.firstOrNull { it.qualifiedName == qualifierName }
     }
 
     //通过类名查找类
