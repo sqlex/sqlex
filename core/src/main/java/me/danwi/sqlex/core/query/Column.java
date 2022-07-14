@@ -1,8 +1,10 @@
-package me.danwi.sqlex.core.query.expression;
+package me.danwi.sqlex.core.query;
+
+import me.danwi.sqlex.core.query.expression.Expression;
 
 import java.sql.JDBCType;
 
-public class ColumnExpression implements Expression {
+public class Column implements Expression {
     public static class MetaData {
         private final String tableName;
         private final String columnName;
@@ -93,11 +95,11 @@ public class ColumnExpression implements Expression {
 
     private final MetaData metaData;
 
-    public ColumnExpression(String tableName, String columnName,
-                            String typeName, JDBCType jdbcType, long length,
-                            boolean unsigned, boolean binary, long decimal,
-                            boolean isPrimaryKey, boolean isAutoIncrement, boolean isUnique,
-                            boolean isNotNull, boolean hasDefaultValue) {
+    public Column(String tableName, String columnName,
+                  String typeName, JDBCType jdbcType, long length,
+                  boolean unsigned, boolean binary, long decimal,
+                  boolean isPrimaryKey, boolean isAutoIncrement, boolean isUnique,
+                  boolean isNotNull, boolean hasDefaultValue) {
         metaData = new MetaData(tableName, columnName,
                 typeName, jdbcType, length,
                 unsigned, binary, decimal,

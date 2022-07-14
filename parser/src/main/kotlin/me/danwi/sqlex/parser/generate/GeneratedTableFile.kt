@@ -6,7 +6,7 @@ import me.danwi.sqlex.core.query.TableDelete
 import me.danwi.sqlex.core.query.TableInsert
 import me.danwi.sqlex.core.query.TableQuery
 import me.danwi.sqlex.core.query.TableUpdate
-import me.danwi.sqlex.core.query.expression.ColumnExpression
+import me.danwi.sqlex.core.query.Column
 import me.danwi.sqlex.core.transaction.TransactionManager
 import me.danwi.sqlex.parser.Field
 import me.danwi.sqlex.parser.Session
@@ -64,12 +64,12 @@ class GeneratedTableFile(
 
     private fun generateColumnExpression(columns: Array<Field>): List<FieldSpec> {
         return columns.map {
-            FieldSpec.builder(ClassName.get(ColumnExpression::class.java), it.name.pascalName)
+            FieldSpec.builder(ClassName.get(Column::class.java), it.name.pascalName)
                 .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
                 .initializer(
                     CodeBlock.of(
                         "new \$T(\$S,\$S, \$S,\$L,\$L, \$L,\$L,\$L, \$L,\$L,\$L, \$L,\$L)",
-                        ClassName.get(ColumnExpression::class.java),
+                        ClassName.get(Column::class.java),
                         tableName, it.name,
                         it.dbType, "java.sql.JDBCType.${it.JdbcType.name}", it.length,
                         it.unsigned, it.binary, it.decimal,
