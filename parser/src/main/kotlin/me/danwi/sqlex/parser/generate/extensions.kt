@@ -1,9 +1,10 @@
 package me.danwi.sqlex.parser.generate
 
-import com.squareup.javapoet.ArrayTypeName
-import com.squareup.javapoet.ClassName
-import com.squareup.javapoet.TypeName
+import com.squareup.javapoet.*
+import me.danwi.sqlex.common.ColumnNameRegex
+import me.danwi.sqlex.core.annotation.SqlExColumnName
 import me.danwi.sqlex.parser.Field
+import me.danwi.sqlex.parser.util.pascalName
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.sql.JDBCType
@@ -11,6 +12,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.OffsetDateTime
+import javax.lang.model.element.Modifier
 
 /**
  * 获取字段对应的Java类型
@@ -115,3 +117,54 @@ val Field.JdbcType: JDBCType
             throw Exception("${this.dbType} 映射失败!!!")
         }
     }
+
+/**
+ * 将字段数组转换成实体类
+ */
+fun Array<Field>.toEntityClass(className: String): TypeSpec {
+    val typeSpecBuilder = TypeSpec.classBuilder(className)
+        .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+    //判断列名是否重复
+    val duplicateFieldNames =
+        this.groupBy(keySelector = { it.name.pascalName }, valueTransform = { it.name })
+            .filter { it.value.size > 1 }.values
+    if (duplicateFieldNames.isNotEmpty()) {
+        throw Exception("重复的列名 ${duplicateFieldNames.joinToString(", ")}")
+    }
+    //判断列名是否非法
+    val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
+    val invalidFieldNames = this.filter { !regex.matches(it.name.pascalName) }
+    if (invalidFieldNames.isNotEmpty()) {
+        throw Exception("非法的列名 ${invalidFieldNames.joinToString(", ") { it.name }}")
+    }
+    //给实体添加getter/setter
+    this
+        .map { Pair(it.name, it.JavaType) }
+        .forEach { typeSpecBuilder.addColumnGetterAndSetter(it.first, it.second) }
+    return typeSpecBuilder.build()
+}
+
+/**
+ * 给实体类添加数据列getter/setter
+ */
+fun TypeSpec.Builder.addColumnGetterAndSetter(columnName: String, type: TypeName): TypeSpec.Builder {
+    this.addField(type, "_${columnName.pascalName}", Modifier.PRIVATE)
+    this.addMethod(
+        MethodSpec.methodBuilder("get${columnName.pascalName}")
+            .addModifiers(Modifier.PUBLIC)
+            .addStatement("return this._${columnName.pascalName}")
+            .returns(type)
+            .build()
+    )
+    this.addMethod(
+        MethodSpec.methodBuilder("set${columnName.pascalName}")
+            .addAnnotation(
+                AnnotationSpec.builder(SqlExColumnName::class.java).addMember("value", "\$S", columnName).build()
+            )
+            .addModifiers(Modifier.PUBLIC)
+            .addParameter(type, "value")
+            .addStatement("this._${columnName.pascalName} = value")
+            .build()
+    )
+    return this
+}
