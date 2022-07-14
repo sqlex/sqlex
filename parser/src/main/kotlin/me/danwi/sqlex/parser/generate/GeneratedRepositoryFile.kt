@@ -13,10 +13,13 @@ class GeneratedRepositoryFile(
     rootPackage: String,
     private val converters: List<String>,
     private val schemas: List<String>,
+    private val tableClassNames: List<String>,
     private val methodClassNames: List<String>,
     private val session: Session,
 ) : GeneratedJavaFile(rootPackage, RepositoryClassName) {
     override fun generate(): TypeSpec {
+        val tableAnnotationSpecBuilder = AnnotationSpec.builder(SqlExTables::class.java)
+        tableClassNames.forEach { tableAnnotationSpecBuilder.addMember("value", "\$L.class", it) }
         val methodAnnotationSpecBuilder = AnnotationSpec.builder(SqlExMethods::class.java)
         methodClassNames.forEach { methodAnnotationSpecBuilder.addMember("value", "\$L.class", it) }
         return TypeSpec.interfaceBuilder(RepositoryClassName)
@@ -61,6 +64,7 @@ class GeneratedRepositoryFile(
                     builder.build()
                 }
             )
+            .addAnnotation(tableAnnotationSpecBuilder.build())
             .addAnnotation(methodAnnotationSpecBuilder.build())
             .build()
     }

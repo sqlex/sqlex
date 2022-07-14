@@ -97,11 +97,15 @@ class Repository(
     private val converters = config.converters
 
     //生成SqlEx Repository顶级类
-    fun generateRepositoryClassFile(methodClassNames: List<String>): GeneratedRepositoryFile {
+    fun generateRepositoryClassFile(
+        tableClassNames: List<String>,
+        methodClassNames: List<String>
+    ): GeneratedRepositoryFile {
         return GeneratedRepositoryFile(
             rootPackage,
             converters,
             schemas,
+            tableClassNames,
             methodClassNames,
             session
         )
@@ -164,10 +168,10 @@ fun generateRepositorySource(sourceRoot: File, outputDir: File) {
             tagFile.writeText("this directory is auto generate by sqlex, DO NOT change anything in it")
         }
         //生成所有的表实体类和表操作类
-        val entityAndTableFiles = repository.generateEntityAndTableClassFiles()
-        val entitySourceFiles = entityAndTableFiles.map { it.first }
+        val entityAndTableJavaFiles = repository.generateEntityAndTableClassFiles()
+        val entityJavaFiles = entityAndTableJavaFiles.map { it.first }
         //写入生成的实体类文件
-        entitySourceFiles.forEach {
+        entityJavaFiles.forEach {
             val sourceFile = Paths.get(outputDir.absolutePath, it.relativePath).toFile()
             sourceFile.parentFile.mkdirs()
             if (sourceFile.exists())
@@ -175,9 +179,9 @@ fun generateRepositorySource(sourceRoot: File, outputDir: File) {
             sourceFile.writeText(it.source)
         }
         //生成所有的表操作类
-        val tableSourceFiles = entityAndTableFiles.map { it.second }
+        val tableJavaFiles = entityAndTableJavaFiles.map { it.second }
         //写入生成的操作类文件
-        tableSourceFiles.forEach {
+        tableJavaFiles.forEach {
             val sourceFile = Paths.get(outputDir.absolutePath, it.relativePath).toFile()
             sourceFile.parentFile.mkdirs()
             if (sourceFile.exists())
@@ -195,7 +199,10 @@ fun generateRepositorySource(sourceRoot: File, outputDir: File) {
             }
         //生成顶级Repository类文件
         val repositoryJavaFile =
-            repository.generateRepositoryClassFile(methodJavaFiles.map { it.qualifiedName }.toList())
+            repository.generateRepositoryClassFile(
+                tableJavaFiles.map { it.qualifiedName },
+                methodJavaFiles.map { it.qualifiedName }.toList()
+            )
         val repositorySourceFile = Paths.get(outputDir.absolutePath, repositoryJavaFile.relativePath).toFile()
         repositorySourceFile.parentFile.mkdirs()
         if (repositorySourceFile.exists())

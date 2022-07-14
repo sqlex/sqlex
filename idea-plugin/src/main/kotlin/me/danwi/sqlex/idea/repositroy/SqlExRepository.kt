@@ -28,10 +28,24 @@ class SqlExRepository(private val project: Project, private val repository: Repo
     private val methodJavaClassCache = mutableMapOf<String, PsiClass>()
     private val psiManager = PsiManager.getInstance(project)
 
+    private val entityJavaClassCaches by lazy {
+        repository
+            .generateEntityAndTableClassFiles()
+            .map { generateJavaPsiClass(it.first) }
+    }
+
+    private val tableJavaClassCaches by lazy {
+        repository
+            .generateEntityAndTableClassFiles()
+            .map { generateJavaPsiClass(it.second) }
+    }
+
     private val repositoryJavaFileCache: GeneratedJavaFile
         get() {
             val file = repositoryJavaFile
-                ?: repository.generateRepositoryClassFile(methodJavaFileCache.values.map { it.qualifiedName })
+                ?: repository.generateRepositoryClassFile(
+                    tableJavaClassCaches.mapNotNull { it.qualifiedName },
+                    methodJavaFileCache.values.map { it.qualifiedName })
             if (repositoryJavaFile == null)
                 repositoryJavaFile = file
             return file
@@ -44,18 +58,6 @@ class SqlExRepository(private val project: Project, private val repository: Repo
                 repositoryJavaClass = psiClass
             return psiClass
         }
-
-    private val entityJavaClassCaches by lazy {
-        repository
-            .generateEntityAndTableClassFiles()
-            .map { generateJavaPsiClass(it.first) }
-    }
-
-    private val tableJavaClassCaches by lazy {
-        repository
-            .generateEntityAndTableClassFiles()
-            .map { generateJavaPsiClass(it.second) }
-    }
 
     val allJavaClassCache: List<PsiClass>
         get() {
