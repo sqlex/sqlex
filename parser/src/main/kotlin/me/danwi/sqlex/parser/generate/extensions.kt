@@ -4,7 +4,13 @@ import com.squareup.javapoet.ArrayTypeName
 import com.squareup.javapoet.ClassName
 import com.squareup.javapoet.TypeName
 import me.danwi.sqlex.parser.Field
+import java.math.BigDecimal
+import java.math.BigInteger
 import java.sql.JDBCType
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.OffsetDateTime
 
 /**
  * 获取字段对应的Java类型
@@ -12,34 +18,34 @@ import java.sql.JDBCType
 val Field.JavaType: TypeName
     inline get() {
         if (this.dbType == "bit") { //bit(n)
-            return if (this.length == 1L) ClassName.bestGuess("Boolean") else ArrayTypeName.of(ClassName.BYTE)
+            return if (this.length == 1L) ClassName.BOOLEAN.box() else ArrayTypeName.of(ClassName.BYTE)
         } else if (this.dbType == "tinyint") { //tinyint(n) 或者 bool, boolean
             //TODO: tinyInt1isBit为false时, Integer; 为true时, Boolean且size是1. 默认为false
-            return ClassName.bestGuess("Integer")
+            return ClassName.INT.box()
         } else if (listOf("smallint", "mediumint").contains(this.dbType)) { //smallint, mediumint(不管是否unsigned)
-            return ClassName.bestGuess("Integer")
+            return ClassName.INT.box()
         } else if (listOf("int", "integer").contains(this.dbType)) { //int, integer(unsigned时, java.lang.Long)
-            return if (this.unsigned) ClassName.bestGuess("Long") else ClassName.bestGuess("Integer")
+            return if (this.unsigned) ClassName.LONG.box() else ClassName.INT.box()
         } else if (this.dbType == "bigint") { //bigint(unsigned时, java.math.BigInteger)
-            return if (this.unsigned) ClassName.bestGuess("Long") else ClassName.bestGuess("java.math.BigInteger")
+            return if (this.unsigned) ClassName.LONG.box() else ClassName.get(BigInteger::class.java)
         } else if (this.dbType == "float") { //float
-            return ClassName.bestGuess("Float")
+            return ClassName.FLOAT.box()
         } else if (this.dbType == "double") { //double
-            return ClassName.bestGuess("Double")
+            return ClassName.DOUBLE.box()
         } else if (this.dbType == "decimal") { //decimal
-            return ClassName.get(java.math.BigDecimal::class.java)
+            return ClassName.get(BigDecimal::class.java)
         } else if (this.dbType == "date") { //date
-            return ClassName.get(java.time.LocalDate::class.java)
+            return ClassName.get(LocalDate::class.java)
         } else if (this.dbType == "datetime") { //datetime
-            return ClassName.get(java.time.LocalDateTime::class.java)
+            return ClassName.get(LocalDateTime::class.java)
         } else if (this.dbType == "timestamp") { //timestamp
-            return ClassName.get(java.time.OffsetDateTime::class.java)
+            return ClassName.get(OffsetDateTime::class.java)
         } else if (this.dbType == "time") { //time
-            return ClassName.get(java.time.LocalTime::class.java)
+            return ClassName.get(LocalTime::class.java)
         } else if (this.dbType == "year") { //year
-            return ClassName.get(java.time.LocalDate::class.java)
+            return ClassName.get(LocalDate::class.java)
         } else if (listOf("char", "varchar").contains(this.dbType)) { //char, varchar
-            return if (this.binary) ArrayTypeName.of(ClassName.BYTE) else ClassName.bestGuess("String")
+            return if (this.binary) ArrayTypeName.of(ClassName.BYTE) else ClassName.get(java.lang.String::class.java)
         } else if (listOf(
                 "binary",
                 "varbinary",
@@ -59,7 +65,7 @@ val Field.JavaType: TypeName
                 "set"
             ).contains(this.dbType)
         ) { //tinytext, text, mediumtext, longtext
-            return ClassName.bestGuess("String")
+            return ClassName.get(java.lang.String::class.java)
         } else {
             //return "Object"
             //内测阶段直接抛出异常, 便于排错
@@ -70,39 +76,39 @@ val Field.JavaType: TypeName
 /**
  * 获取字段对应的JDBC类型
  */
-val Field.JDBCType: JDBCType
+val Field.JdbcType: JDBCType
     inline get() = when (this.dbType) {
-        "bit" -> java.sql.JDBCType.BIT
-        "tinyint" -> java.sql.JDBCType.TINYINT
-        "smallint" -> java.sql.JDBCType.SMALLINT
-        "mediumint" -> java.sql.JDBCType.INTEGER
-        "int" -> java.sql.JDBCType.INTEGER
-        "bigint" -> java.sql.JDBCType.BIGINT
-        "float" -> java.sql.JDBCType.REAL
-        "double" -> java.sql.JDBCType.DOUBLE
-        "decimal" -> java.sql.JDBCType.DECIMAL
-        "date" -> java.sql.JDBCType.DATE
-        "datetime" -> java.sql.JDBCType.TIMESTAMP
-        "timestamp" -> java.sql.JDBCType.TIMESTAMP
-        "time" -> java.sql.JDBCType.TIME
-        "year" -> java.sql.JDBCType.DATE
-        "char" -> if (this.binary) java.sql.JDBCType.BINARY else java.sql.JDBCType.CHAR
-        "varchar" -> if (this.binary) java.sql.JDBCType.VARBINARY else java.sql.JDBCType.VARCHAR
-        "binary" -> java.sql.JDBCType.BINARY
-        "varbinary" -> java.sql.JDBCType.VARBINARY
-        "tinyblob" -> java.sql.JDBCType.VARBINARY
-        "tinytext" -> java.sql.JDBCType.VARCHAR
-        "blob" -> java.sql.JDBCType.LONGVARBINARY
-        "text" -> java.sql.JDBCType.LONGVARCHAR
-        "mediumblob" -> java.sql.JDBCType.LONGVARBINARY
-        "mediumtext" -> java.sql.JDBCType.LONGVARCHAR
-        "longblob" -> java.sql.JDBCType.LONGVARBINARY
-        "longtext" -> java.sql.JDBCType.LONGVARCHAR
-        "json" -> java.sql.JDBCType.LONGVARCHAR
-        "geometry" -> java.sql.JDBCType.BINARY
-        "enum" -> java.sql.JDBCType.CHAR
-        "set" -> java.sql.JDBCType.CHAR
-        "null" -> java.sql.JDBCType.NULL
+        "bit" -> JDBCType.BIT
+        "tinyint" -> JDBCType.TINYINT
+        "smallint" -> JDBCType.SMALLINT
+        "mediumint" -> JDBCType.INTEGER
+        "int" -> JDBCType.INTEGER
+        "bigint" -> JDBCType.BIGINT
+        "float" -> JDBCType.REAL
+        "double" -> JDBCType.DOUBLE
+        "decimal" -> JDBCType.DECIMAL
+        "date" -> JDBCType.DATE
+        "datetime" -> JDBCType.TIMESTAMP
+        "timestamp" -> JDBCType.TIMESTAMP
+        "time" -> JDBCType.TIME
+        "year" -> JDBCType.DATE
+        "char" -> if (this.binary) JDBCType.BINARY else JDBCType.CHAR
+        "varchar" -> if (this.binary) JDBCType.VARBINARY else JDBCType.VARCHAR
+        "binary" -> JDBCType.BINARY
+        "varbinary" -> JDBCType.VARBINARY
+        "tinyblob" -> JDBCType.VARBINARY
+        "tinytext" -> JDBCType.VARCHAR
+        "blob" -> JDBCType.LONGVARBINARY
+        "text" -> JDBCType.LONGVARCHAR
+        "mediumblob" -> JDBCType.LONGVARBINARY
+        "mediumtext" -> JDBCType.LONGVARCHAR
+        "longblob" -> JDBCType.LONGVARBINARY
+        "longtext" -> JDBCType.LONGVARCHAR
+        "json" -> JDBCType.LONGVARCHAR
+        "geometry" -> JDBCType.BINARY
+        "enum" -> JDBCType.CHAR
+        "set" -> JDBCType.CHAR
+        "null" -> JDBCType.NULL
         else -> {
             //JDBCType.VARCHAR
             //内测阶段直接抛出异常, 便于排错
