@@ -1,11 +1,7 @@
 package me.danwi.sqlex.parser.generate
 
-import com.squareup.javapoet.ClassName
-import com.squareup.javapoet.CodeBlock
-import com.squareup.javapoet.FieldSpec
-import com.squareup.javapoet.MethodSpec
-import com.squareup.javapoet.ParameterizedTypeName
-import com.squareup.javapoet.TypeSpec
+import com.squareup.javapoet.*
+import me.danwi.sqlex.core.annotation.SqlExRepository
 import me.danwi.sqlex.core.query.TableDelete
 import me.danwi.sqlex.core.query.TableInsert
 import me.danwi.sqlex.core.query.TableQuery
@@ -18,7 +14,7 @@ import me.danwi.sqlex.parser.util.pascalName
 import javax.lang.model.element.Modifier
 
 class GeneratedTableFile(
-    rootPackage: String,
+    private val rootPackage: String,
     private val tableName: String,
     entityQualifiedName: String,
     private val session: Session
@@ -33,6 +29,13 @@ class GeneratedTableFile(
     override fun generate(): TypeSpec {
         val typeSpecBuilder = TypeSpec.classBuilder(className).addModifiers(Modifier.PUBLIC)
             .superclass(ParameterizedTypeName.get(ClassName.get(TableInsert::class.java), entityTypeName))
+            .addAnnotation(
+                //所属的repository
+                AnnotationSpec
+                    .builder(SqlExRepository::class.java)
+                    .addMember("value", "\$T.class", ClassName.get(rootPackage, RepositoryClassName))
+                    .build()
+            )
 
         //添加字段
         typeSpecBuilder.addField(
