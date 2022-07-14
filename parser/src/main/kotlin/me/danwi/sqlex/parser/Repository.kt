@@ -107,14 +107,13 @@ class Repository(
         )
     }
 
-    //生成所有表的实体类
-    fun generateEntityClassFiles(): List<GeneratedEntityFile> {
-        return session.allTables.map { GeneratedEntityFile(rootPackage, it, session) }
-    }
-
-    //生成所有表的的操作类
-    fun generateTableClassFiles(): List<GeneratedTableFile> {
-        return session.allTables.map { GeneratedTableFile(rootPackage, it, session) }
+    //生成所有表的实体类/表操作类
+    fun generateEntityAndTableClassFiles(): List<Pair<GeneratedEntityFile, GeneratedTableFile>> {
+        return session.allTables.map {
+            val entityFile = GeneratedEntityFile(rootPackage, it, session)
+            val tableFile = GeneratedTableFile(rootPackage, it, entityFile.qualifiedName, session)
+            Pair(entityFile, tableFile)
+        }
     }
 
     //生成SqlEx Method类
@@ -164,8 +163,9 @@ fun generateRepositorySource(sourceRoot: File, outputDir: File) {
             tagFile.parentFile.mkdirs()
             tagFile.writeText("this directory is auto generate by sqlex, DO NOT change anything in it")
         }
-        //生成所有的表实体类
-        val entitySourceFiles = repository.generateEntityClassFiles()
+        //生成所有的表实体类和表操作类
+        val entityAndTableFiles = repository.generateEntityAndTableClassFiles()
+        val entitySourceFiles = entityAndTableFiles.map { it.first }
         //写入生成的实体类文件
         entitySourceFiles.forEach {
             val sourceFile = Paths.get(outputDir.absolutePath, it.relativePath).toFile()
@@ -175,7 +175,7 @@ fun generateRepositorySource(sourceRoot: File, outputDir: File) {
             sourceFile.writeText(it.source)
         }
         //生成所有的表操作类
-        val tableSourceFiles = repository.generateTableClassFiles()
+        val tableSourceFiles = entityAndTableFiles.map { it.second }
         //写入生成的操作类文件
         tableSourceFiles.forEach {
             val sourceFile = Paths.get(outputDir.absolutePath, it.relativePath).toFile()

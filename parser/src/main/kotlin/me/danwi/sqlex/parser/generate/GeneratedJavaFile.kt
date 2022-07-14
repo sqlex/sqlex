@@ -7,6 +7,9 @@ import me.danwi.sqlex.core.annotation.SqlExGenerated
 import me.danwi.sqlex.parser.exception.SqlExRepositoryMethodException
 import me.danwi.sqlex.parser.util.packageNameToRelativePath
 
+//让javapoet不要省略package
+const val DoNotHidePackagePrefix = "sqlex.no.not.hide.package."
+
 abstract class GeneratedJavaFile(val packageName: String, val className: String) {
     val qualifiedName: String
         get() = "$packageName.$className"
@@ -22,7 +25,8 @@ abstract class GeneratedJavaFile(val packageName: String, val className: String)
                     .builder(SqlExGenerated::class.java)
                     .build()
             ).build()
-            return@lazy JavaFile.builder(packageName, type).indent("    ").build().toString()
+            return@lazy JavaFile.builder(packageName, type).indent("    ").build()
+                .toString().replace(DoNotHidePackagePrefix, "")
         } catch (e: Exception) {
             throw SqlExRepositoryMethodException(
                 relativePath,

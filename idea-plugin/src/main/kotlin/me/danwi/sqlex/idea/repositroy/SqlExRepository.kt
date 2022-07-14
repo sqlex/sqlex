@@ -47,14 +47,14 @@ class SqlExRepository(private val project: Project, private val repository: Repo
 
     private val entityJavaClassCaches by lazy {
         repository
-            .generateEntityClassFiles()
-            .map { generateJavaPsiClass(it) }
+            .generateEntityAndTableClassFiles()
+            .map { generateJavaPsiClass(it.first) }
     }
 
     private val tableJavaClassCaches by lazy {
         repository
-            .generateTableClassFiles()
-            .map { generateJavaPsiClass(it) }
+            .generateEntityAndTableClassFiles()
+            .map { generateJavaPsiClass(it.second) }
     }
 
     val allJavaClassCache: List<PsiClass>

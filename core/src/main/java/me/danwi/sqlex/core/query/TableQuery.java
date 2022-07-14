@@ -1,14 +1,22 @@
 package me.danwi.sqlex.core.query;
 
 import me.danwi.sqlex.core.query.expression.Expression;
+import me.danwi.sqlex.core.transaction.TransactionManager;
 import me.danwi.sqlex.core.type.PagedResult;
 
 import java.util.List;
 
 public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
+    private final TransactionManager transactionManager;
+    private final Class<T> entityClass;
     private boolean forUpdate = false;
     private Long skip;
     private Long take;
+
+    public TableQuery(TransactionManager transactionManager, Class<T> entityClass) {
+        this.transactionManager = transactionManager;
+        this.entityClass = entityClass;
+    }
 
     /**
      * 排序,默认升序
