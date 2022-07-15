@@ -38,6 +38,10 @@ public interface Expression {
         return new BinaryExpression("=", this, right);
     }
 
+    default BinaryExpression ne(Expression right) {
+        return new BinaryExpression("<>", this, right);
+    }
+
     default BinaryExpression gt(Expression right) {
         return new BinaryExpression(">", this, right);
     }
