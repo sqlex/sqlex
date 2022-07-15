@@ -22,7 +22,7 @@ public class TableInsert<T> {
     private final TransactionManager transactionManager;
     private final ParameterSetter parameterSetter;
     private final ExceptionTranslator translator;
-    
+
     public TableInsert(String tableName, TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator) {
         this.tableName = tableName;
         this.transactionManager = transactionManager;
@@ -31,12 +31,26 @@ public class TableInsert<T> {
     }
 
     /**
-     * 新建行(插入),返回插入后的实体对象(包含自动填充字段的值)
+     * 没有选项
+     */
+    public static int NONE_OPTIONS = 0;
+    /**
+     * 如果值为NULL,则表示该值为设置
+     */
+    public static int NULL_IS_NONE = 1;
+    /**
+     * 返回生成主键 TODO
+     */
+    public static int RETURN_GENERATE_KEY = 1 << 1;
+
+    /**
+     * 新建行(插入)
      *
-     * @param entity 需要插入的实体
+     * @param entity  需要插入的实体
+     * @param options 选项
      * @return 插入后的实体
      */
-    public T save(T entity) {
+    public T save(T entity, int options) {
         //列名
         List<String> columnNames = new LinkedList<>();
         //参数
@@ -51,8 +65,12 @@ public class TableInsert<T> {
                     //判断其是否为数据列
                     SqlExColumnName columnNameAnnotation = readMethod.getAnnotation(SqlExColumnName.class);
                     if (columnNameAnnotation != null) {
+                        Object value = readMethod.invoke(entity);
+                        //如果是null,且设置了忽略null值的插入,则忽略该列
+                        if ((options & NULL_IS_NONE) == NULL_IS_NONE && value == null)
+                            continue;
                         columnNames.add(columnNameAnnotation.value());
-                        parameters.add(readMethod.invoke(entity));
+                        parameters.add(value);
                     }
                 }
             }
@@ -99,5 +117,25 @@ public class TableInsert<T> {
                 }
             }
         }
+    }
+
+    /**
+     * 新建行(插入)
+     *
+     * @param entity 需要插入的实体
+     * @return 插入后的实体
+     */
+    public T save(T entity) {
+        return save(entity, NONE_OPTIONS);
+    }
+
+    /**
+     * 新建行(插入),忽略为null的属性
+     *
+     * @param entity 需要参数的实体
+     * @return 插入后的实体
+     */
+    public T saveWithoutNull(T entity) {
+        return save(entity, NULL_IS_NONE);
     }
 }
