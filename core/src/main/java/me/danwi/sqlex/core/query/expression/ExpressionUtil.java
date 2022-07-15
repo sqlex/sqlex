@@ -1,5 +1,7 @@
 package me.danwi.sqlex.core.query.expression;
 
+import me.danwi.sqlex.core.query.SQLParameterBind;
+
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -7,24 +9,6 @@ import java.util.stream.Collectors;
  * 表达式辅助类
  */
 public class ExpressionUtil {
-    public static class ExpressionBindResult {
-        private final String SQL;
-        private final List<Object> parameters;
-
-        public ExpressionBindResult(String sql, List<Object> parameters) {
-            SQL = sql;
-            this.parameters = parameters;
-        }
-
-        public String getSQL() {
-            return SQL;
-        }
-
-        public List<Object> getParameters() {
-            return parameters;
-        }
-    }
-
     private static final ThreadLocal<Map<String, Object>> parameterContext = new ThreadLocal<>();
 
     /**
@@ -56,7 +40,7 @@ public class ExpressionUtil {
      * @param expression 表达式树
      * @return 参数bind信息
      */
-    public static ExpressionBindResult toSQL(Expression expression) {
+    public static SQLParameterBind toSQL(Expression expression) {
         try {
             String sql = expression.toSQL();
             //获取参数上下文信息
@@ -75,7 +59,7 @@ public class ExpressionUtil {
                     parameters.add(placeholder.getValue());
                 }
             }
-            return new ExpressionBindResult(sql, parameters);
+            return new SQLParameterBind(sql, parameters);
         } finally {
             //移除上下文
             ExpressionUtil.parameterContext.remove();

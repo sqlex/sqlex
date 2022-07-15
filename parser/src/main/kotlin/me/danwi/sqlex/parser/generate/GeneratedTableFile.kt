@@ -181,9 +181,8 @@ class GeneratedTableFile(
                 )
             )
             .addCode(
-                "return new \$T<>(this.transactionManager, this.parameterSetter, this.translator, \$T.class);",
-                TableQuery::class.java,
-                entityTypeName
+                "return new \$T<>(\$S, this.transactionManager, this.parameterSetter, this.translator, \$T.class);",
+                TableQuery::class.java, tableName, entityTypeName
             )
             .build()
     }
