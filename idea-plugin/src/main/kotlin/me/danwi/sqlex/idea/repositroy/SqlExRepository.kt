@@ -13,7 +13,7 @@ import me.danwi.sqlex.idea.util.extension.*
 import me.danwi.sqlex.parser.Repository
 import me.danwi.sqlex.parser.generate.GeneratedJavaFile
 
-val SqlExMethodGeneratedCacheKey = Key<Boolean>("me.danwi.sqlex.SqlExMethodGeneratedCache")
+val SqlExGeneratedCacheKey = Key<Boolean>("me.danwi.sqlex.SqlExGeneratedCache")
 val SqlExMethodFileCacheKey = Key<VirtualFile>("me.danwi.sqlex.SqlExMethodFileCache")
 val SqlExMethodPsiClassCacheKey = Key<PsiClass>("me.danwi.sqlex.SqlExMethodPsiClassCache")
 
@@ -28,10 +28,24 @@ class SqlExRepository(private val project: Project, private val repository: Repo
     private val methodJavaClassCache = mutableMapOf<String, PsiClass>()
     private val psiManager = PsiManager.getInstance(project)
 
+    private val entityJavaClassCaches by lazy {
+        repository
+            .generateEntityAndTableClassFiles()
+            .map { generateJavaPsiClass(it.first) }
+    }
+
+    private val tableJavaClassCaches by lazy {
+        repository
+            .generateEntityAndTableClassFiles()
+            .map { generateJavaPsiClass(it.second) }
+    }
+
     private val repositoryJavaFileCache: GeneratedJavaFile
         get() {
             val file = repositoryJavaFile
-                ?: repository.generateRepositoryClassFile(methodJavaFileCache.values.map { it.qualifiedName })
+                ?: repository.generateRepositoryClassFile(
+                    tableJavaClassCaches.mapNotNull { it.qualifiedName },
+                    methodJavaFileCache.values.map { it.qualifiedName })
             if (repositoryJavaFile == null)
                 repositoryJavaFile = file
             return file
@@ -47,17 +61,15 @@ class SqlExRepository(private val project: Project, private val repository: Repo
 
     val allJavaClassCache: List<PsiClass>
         get() {
-            val classes = methodJavaClassCache.values
+            val classes =
+                entityJavaClassCaches + tableJavaClassCaches + methodJavaClassCache.values + repositoryJavaClassCache
             val innerClass = classes.flatMap { it.innerClasses.toList() }
-            return (classes + innerClass + repositoryJavaClassCache)
+            return classes + innerClass
         }
-
-    private fun generateJavaFile(file: VirtualFile): GeneratedJavaFile {
-        return repository.generateMethodClassFile(
-            file.sourceRootRelativePath ?: throw Exception("无法获取文件${file.name}的相对路径"),
-            file.textContent ?: throw Exception("无法读取文件${file.name}的内容")
-        )
-    }
+    private val allTopLevelJavaClassCache: List<PsiClass>
+        get() {
+            return entityJavaClassCaches + tableJavaClassCaches + methodJavaClassCache.values + repositoryJavaClassCache
+        }
 
     private fun generateJavaPsiClass(generatedJavaSourceFile: GeneratedJavaFile): PsiClass {
         return runReadAction {
@@ -69,7 +81,7 @@ class SqlExRepository(private val project: Project, private val repository: Repo
                 ) as PsiJavaFile
             //生成的virtual file可能不存在,需要通过view provider获取
             val generatedVirtualFile = psiFile.virtualFile ?: psiFile.viewProvider.virtualFile
-            generatedVirtualFile.putUserData(SqlExMethodGeneratedCacheKey, true)
+            generatedVirtualFile.putUserData(SqlExGeneratedCacheKey, true)
             psiFile.classes.firstOrNull()
         } ?: throw Exception("无法生成java class")
     }
@@ -83,7 +95,10 @@ class SqlExRepository(private val project: Project, private val repository: Repo
         if (file == null)
             return
         //生成java源码
-        val javaFile = generateJavaFile(file)
+        val javaFile = repository.generateMethodClassFile(
+            file.sourceRootRelativePath ?: throw Exception("无法获取文件${file.name}的相对路径"),
+            file.textContent ?: throw Exception("无法读取文件${file.name}的内容")
+        )
         //生成psi class
         val javaClass = generateJavaPsiClass(javaFile)
         //放入virtual file缓存
@@ -133,7 +148,7 @@ class SqlExRepository(private val project: Project, private val repository: Repo
 
     //获取该包下所有的类(不包括内部类)
     fun findClasses(qualifiedPackage: String): List<PsiClass> {
-        return methodJavaClassCache.values
+        return allTopLevelJavaClassCache
             .filter { it.qualifiedPackageName == qualifiedPackage }
     }
 

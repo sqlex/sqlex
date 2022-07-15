@@ -1,7 +1,7 @@
 package me.danwi.sqlex.core.migration;
 
 import me.danwi.sqlex.core.DaoFactory;
-import me.danwi.sqlex.core.annotation.SqlExSchema;
+import me.danwi.sqlex.core.annotation.repository.SqlExSchema;
 import me.danwi.sqlex.core.exception.SqlExException;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.exception.SqlExMigrationException;

@@ -1,9 +1,14 @@
 package me.danwi.sqlex.parser.generate
 
 import com.squareup.javapoet.*
-import me.danwi.sqlex.common.ColumnNameRegex
 import me.danwi.sqlex.common.Paged
-import me.danwi.sqlex.core.annotation.*
+import me.danwi.sqlex.core.annotation.SqlExRepository
+import me.danwi.sqlex.core.annotation.method.*
+import me.danwi.sqlex.core.annotation.method.parameter.*
+import me.danwi.sqlex.core.annotation.method.type.SqlExDelete
+import me.danwi.sqlex.core.annotation.method.type.SqlExInsert
+import me.danwi.sqlex.core.annotation.method.type.SqlExSelect
+import me.danwi.sqlex.core.annotation.method.type.SqlExUpdate
 import me.danwi.sqlex.core.type.PagedResult
 import me.danwi.sqlex.parser.*
 import me.danwi.sqlex.parser.exception.SqlExRepositoryMethodException
@@ -140,11 +145,11 @@ class GeneratedMethodFile(
         val resultTypeName = if (fields.size == 1) {
             //如果是单列则将这一列对应的java类型作为结果类型
             methodSpec.addAnnotation(SqlExOneColumn::class.java)
-            getJavaType(fields[0])
+            fields[0].JavaType
         } else {
             //如果是多列,则生成对应的实体类
             val resultClassName = method.returnType()?.text ?: "${methodName.pascalName}Result"
-            val resultClassSpec = generateResultClass(resultClassName, fields)
+            val resultClassSpec = fields.toEntityClass(resultClassName, true)
             //把实体类添加到内部类
             innerClasses.add(resultClassSpec)
             ClassName.get(packageName, className, resultClassName)
@@ -249,29 +254,6 @@ class GeneratedMethodFile(
         return methodSpec.build()
     }
 
-    private fun generateResultClass(resultClassName: String, fields: Array<Field>): TypeSpec {
-        val typeSpecBuilder = TypeSpec.classBuilder(resultClassName)
-            .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-        //判断列名是否重复
-        val duplicateFieldNames =
-            fields.groupBy(keySelector = { it.name.pascalName }, valueTransform = { it.name })
-                .filter { it.value.size > 1 }.values
-        if (duplicateFieldNames.isNotEmpty()) {
-            throw Exception("重复的列名 ${duplicateFieldNames.joinToString(", ")}")
-        }
-        //判断列名是否非法
-        val regex = ColumnNameRegex.ColumnNameRegex.toRegex()
-        val invalidFieldNames = fields.filter { !regex.matches(it.name.pascalName) }
-        if (invalidFieldNames.isNotEmpty()) {
-            throw Exception("非法的列名 ${invalidFieldNames.joinToString(", ") { it.name }}")
-        }
-        //给实体添加getter/setter
-        fields
-            .map { Pair(it.name, getJavaType(it)) }
-            .forEach { typeSpecBuilder.addColumnGetterAndSetter(it.first, it.second) }
-        return typeSpecBuilder.build()
-    }
-
     private fun generateAnnotation(
         paramList: SqlExMethodLanguageParser.ParamListContext?,
         namedParameterSQL: NamedParameterSQL,
@@ -371,84 +353,4 @@ class GeneratedMethodFile(
         //返回参数
         return parametersInMethod.map { ParameterSpec.builder(it.second, it.first).build() }
     }
-
-    private fun getJavaType(field: Field): TypeName {
-        if (field.dbType == "bit") { //bit(n)
-            return if (field.length == 1L) ClassName.bestGuess("Boolean") else ArrayTypeName.of(ClassName.BYTE)
-        } else if (field.dbType == "tinyint") { //tinyint(n) 或者 bool, boolean
-            //TODO: tinyInt1isBit为false时, Integer; 为true时, Boolean且size是1. 默认为false
-            return ClassName.bestGuess("Integer")
-        } else if (listOf("smallint", "mediumint").contains(field.dbType)) { //smallint, mediumint(不管是否unsigned)
-            return ClassName.bestGuess("Integer")
-        } else if (listOf("int", "integer").contains(field.dbType)) { //int, integer(unsigned时, java.lang.Long)
-            return if (field.unsigned) ClassName.bestGuess("Long") else ClassName.bestGuess("Integer")
-        } else if (field.dbType == "bigint") { //bigint(unsigned时, java.math.BigInteger)
-            return if (field.unsigned) ClassName.bestGuess("Long") else ClassName.bestGuess("java.math.BigInteger")
-        } else if (field.dbType == "float") { //float
-            return ClassName.bestGuess("Float")
-        } else if (field.dbType == "double") { //double
-            return ClassName.bestGuess("Double")
-        } else if (field.dbType == "decimal") { //decimal
-            return ClassName.get(java.math.BigDecimal::class.java)
-        } else if (field.dbType == "date") { //date
-            return ClassName.get(java.time.LocalDate::class.java)
-        } else if (field.dbType == "datetime") { //datetime
-            return ClassName.get(java.time.LocalDateTime::class.java)
-        } else if (field.dbType == "timestamp") { //timestamp
-            return ClassName.get(java.time.OffsetDateTime::class.java)
-        } else if (field.dbType == "time") { //time
-            return ClassName.get(java.time.LocalTime::class.java)
-        } else if (field.dbType == "year") { //year
-            return ClassName.get(java.time.LocalDate::class.java)
-        } else if (listOf("char", "varchar").contains(field.dbType)) { //char, varchar
-            return if (field.binary) ArrayTypeName.of(ClassName.BYTE) else ClassName.bestGuess("String")
-        } else if (listOf(
-                "binary",
-                "varbinary",
-                "tinyblob",
-                "blob",
-                "mediumblob",
-                "longblob"
-            ).contains(field.dbType)
-        ) { //binary, varbinary, tinyblob, blob, mediumblob, longblob
-            return ArrayTypeName.of(ClassName.BYTE)
-        } else if (listOf(
-                "tinytext",
-                "text",
-                "mediumtext",
-                "longtext",
-                "enum",
-                "set"
-            ).contains(field.dbType)
-        ) { //tinytext, text, mediumtext, longtext
-            return ClassName.bestGuess("String")
-        } else {
-            //return "Object"
-            //内测阶段直接抛出异常, 便于排错
-            throw Exception("${field.dbType} 映射失败!!!")
-        }
-    }
-}
-
-//给实体类添加数据列getter/setter
-fun TypeSpec.Builder.addColumnGetterAndSetter(columnName: String, type: TypeName): TypeSpec.Builder {
-    this.addField(type, "_${columnName.pascalName}", Modifier.PRIVATE)
-    this.addMethod(
-        MethodSpec.methodBuilder("get${columnName.pascalName}")
-            .addModifiers(Modifier.PUBLIC)
-            .addStatement("return this._${columnName.pascalName}")
-            .returns(type)
-            .build()
-    )
-    this.addMethod(
-        MethodSpec.methodBuilder("set${columnName.pascalName}")
-            .addAnnotation(
-                AnnotationSpec.builder(SqlExColumnName::class.java).addMember("value", "\$S", columnName).build()
-            )
-            .addModifiers(Modifier.PUBLIC)
-            .addParameter(type, "value")
-            .addStatement("this._${columnName.pascalName} = value")
-            .build()
-    )
-    return this
 }

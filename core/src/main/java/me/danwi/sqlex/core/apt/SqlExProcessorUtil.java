@@ -1,7 +1,7 @@
 package me.danwi.sqlex.core.apt;
 
 import me.danwi.sqlex.common.ParameterTypes;
-import me.danwi.sqlex.core.annotation.SqlExConverter;
+import me.danwi.sqlex.core.annotation.repository.SqlExConverter;
 import me.danwi.sqlex.core.type.ParameterConverter;
 
 import javax.annotation.processing.ProcessingEnvironment;

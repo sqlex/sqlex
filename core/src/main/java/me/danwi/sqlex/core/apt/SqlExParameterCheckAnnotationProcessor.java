@@ -1,8 +1,8 @@
 package me.danwi.sqlex.core.apt;
 
 import me.danwi.sqlex.common.Paged;
-import me.danwi.sqlex.core.annotation.SqlExPaged;
-import me.danwi.sqlex.core.annotation.SqlExParameterCheck;
+import me.danwi.sqlex.core.annotation.method.SqlExPaged;
+import me.danwi.sqlex.core.annotation.method.parameter.SqlExParameterCheck;
 import me.danwi.sqlex.core.annotation.SqlExRepository;
 
 import javax.annotation.processing.AbstractProcessor;

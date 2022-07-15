@@ -1,7 +1,7 @@
 package me.danwi.sqlex.core.invoke.method;
 
 import me.danwi.sqlex.core.ExceptionTranslator;
-import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
+import me.danwi.sqlex.core.jdbc.ParameterSetter;
 import me.danwi.sqlex.core.transaction.TransactionManager;
 
 import java.lang.reflect.Method;
@@ -10,8 +10,8 @@ import java.sql.SQLException;
 import java.util.List;
 
 public class SelectOneRowMethodProxy extends SelectMethodProxy {
-    public SelectOneRowMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry, ExceptionTranslator translator) {
-        super(method, transactionManager, registry, translator);
+    public SelectOneRowMethodProxy(Method method, TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator) {
+        super(method, transactionManager, parameterSetter, translator);
     }
 
     @Override

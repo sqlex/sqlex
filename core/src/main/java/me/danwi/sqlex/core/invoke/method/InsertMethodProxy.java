@@ -1,7 +1,7 @@
 package me.danwi.sqlex.core.invoke.method;
 
 import me.danwi.sqlex.core.ExceptionTranslator;
-import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
+import me.danwi.sqlex.core.jdbc.ParameterSetter;
 import me.danwi.sqlex.core.transaction.TransactionManager;
 
 import java.lang.reflect.Method;
@@ -11,8 +11,8 @@ import java.sql.SQLException;
 import java.util.List;
 
 public class InsertMethodProxy extends BaseMethodProxy {
-    public InsertMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry, ExceptionTranslator translator) {
-        super(method, transactionManager, registry, translator);
+    public InsertMethodProxy(Method method, TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator) {
+        super(method, transactionManager, parameterSetter, translator);
     }
 
     @Override
@@ -21,7 +21,7 @@ public class InsertMethodProxy extends BaseMethodProxy {
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             //设置预处理语句参数
             List<Object> reorderArgs = reorderArgs(args);
-            setParameters(statement, reorderArgs);
+            parameterSetter.setParameters(statement, reorderArgs);
             //TODO: 这里暂时返回的是插入的行数,以后要修改成last inserted id
             try {
                 return statement.executeLargeUpdate();

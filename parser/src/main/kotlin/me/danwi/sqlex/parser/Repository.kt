@@ -5,8 +5,10 @@ import me.danwi.sqlex.parser.config.createSqlExConfig
 import me.danwi.sqlex.parser.exception.SqlExRepositoryException
 import me.danwi.sqlex.parser.exception.SqlExRepositoryGenerateException
 import me.danwi.sqlex.parser.exception.SqlExRepositorySchemaException
+import me.danwi.sqlex.parser.generate.GeneratedEntityFile
 import me.danwi.sqlex.parser.generate.GeneratedMethodFile
 import me.danwi.sqlex.parser.generate.GeneratedRepositoryFile
+import me.danwi.sqlex.parser.generate.GeneratedTableFile
 import me.danwi.sqlex.parser.util.*
 import java.io.File
 import java.nio.file.Paths
@@ -95,14 +97,27 @@ class Repository(
     private val converters = config.converters
 
     //生成SqlEx Repository顶级类
-    fun generateRepositoryClassFile(methodClassNames: List<String>): GeneratedRepositoryFile {
+    fun generateRepositoryClassFile(
+        tableClassNames: List<String>,
+        methodClassNames: List<String>
+    ): GeneratedRepositoryFile {
         return GeneratedRepositoryFile(
             rootPackage,
             converters,
             schemas,
+            tableClassNames,
             methodClassNames,
             session
         )
+    }
+
+    //生成所有表的实体类/表操作类
+    fun generateEntityAndTableClassFiles(): List<Pair<GeneratedEntityFile, GeneratedTableFile>> {
+        return session.allTables.map {
+            val entityFile = GeneratedEntityFile(rootPackage, it, session)
+            val tableFile = GeneratedTableFile(rootPackage, it, entityFile.qualifiedName, session)
+            Pair(entityFile, tableFile)
+        }
     }
 
     //生成SqlEx Method类
@@ -152,6 +167,27 @@ fun generateRepositorySource(sourceRoot: File, outputDir: File) {
             tagFile.parentFile.mkdirs()
             tagFile.writeText("this directory is auto generate by sqlex, DO NOT change anything in it")
         }
+        //生成所有的表实体类和表操作类
+        val entityAndTableJavaFiles = repository.generateEntityAndTableClassFiles()
+        val entityJavaFiles = entityAndTableJavaFiles.map { it.first }
+        //写入生成的实体类文件
+        entityJavaFiles.forEach {
+            val sourceFile = Paths.get(outputDir.absolutePath, it.relativePath).toFile()
+            sourceFile.parentFile.mkdirs()
+            if (sourceFile.exists())
+                throw SqlExRepositoryGenerateException(sourceFile.absolutePath, "重复源码生成")
+            sourceFile.writeText(it.source)
+        }
+        //生成所有的表操作类
+        val tableJavaFiles = entityAndTableJavaFiles.map { it.second }
+        //写入生成的操作类文件
+        tableJavaFiles.forEach {
+            val sourceFile = Paths.get(outputDir.absolutePath, it.relativePath).toFile()
+            sourceFile.parentFile.mkdirs()
+            if (sourceFile.exists())
+                throw SqlExRepositoryGenerateException(sourceFile.absolutePath, "重复源码生成")
+            sourceFile.writeText(it.source)
+        }
         //获取到所有的sqlm文件
         val methodJavaFiles = files
             .filter { it.isFile && it.absolutePath.isSqlExMethodFilePath }
@@ -163,7 +199,10 @@ fun generateRepositorySource(sourceRoot: File, outputDir: File) {
             }
         //生成顶级Repository类文件
         val repositoryJavaFile =
-            repository.generateRepositoryClassFile(methodJavaFiles.map { it.qualifiedName }.toList())
+            repository.generateRepositoryClassFile(
+                tableJavaFiles.map { it.qualifiedName },
+                methodJavaFiles.map { it.qualifiedName }.toList()
+            )
         val repositorySourceFile = Paths.get(outputDir.absolutePath, repositoryJavaFile.relativePath).toFile()
         repositorySourceFile.parentFile.mkdirs()
         if (repositorySourceFile.exists())

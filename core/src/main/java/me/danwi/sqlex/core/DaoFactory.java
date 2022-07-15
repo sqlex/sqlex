@@ -3,18 +3,21 @@ package me.danwi.sqlex.core;
 import com.mysql.cj.jdbc.MysqlConnectionPoolDataSource;
 import me.danwi.sqlex.core.annotation.SqlExRepository;
 import me.danwi.sqlex.core.checker.Checker;
+import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.exception.SqlExRepositoryNotMatchException;
 import me.danwi.sqlex.core.exception.SqlExSQLException;
 import me.danwi.sqlex.core.exception.SqlExUndeclaredException;
 import me.danwi.sqlex.core.invoke.InvocationProxy;
+import me.danwi.sqlex.core.jdbc.ParameterSetter;
 import me.danwi.sqlex.core.migration.Migrator;
-import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.transaction.DefaultTransactionManager;
 import me.danwi.sqlex.core.transaction.Transaction;
 import me.danwi.sqlex.core.transaction.TransactionManager;
 
 import javax.sql.DataSource;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -24,7 +27,7 @@ import java.util.Map;
 public class DaoFactory {
     final private Class<?> repositoryClass;
     final private TransactionManager transactionManager;
-    final private ParameterConverterRegistry parameterConverterRegistry;
+    final private ParameterSetter parameterSetter;
     final private Map<Class<?>, InvocationProxy> invocationProxyCache = new HashMap<>();
     final private ExceptionTranslator exceptionTranslator;
     final private Migrator migrator;
@@ -68,7 +71,7 @@ public class DaoFactory {
         this.repositoryClass = repository;
         this.exceptionTranslator = new DefaultExceptionTranslator();
         this.transactionManager = new DefaultTransactionManager(dataSource, this.exceptionTranslator);
-        this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
+        this.parameterSetter = ParameterSetter.fromRepository(repository);
         this.migrator = new Migrator(this);
         this.checker = new Checker(this);
     }
@@ -83,7 +86,7 @@ public class DaoFactory {
         this.repositoryClass = repository;
         this.exceptionTranslator = new DefaultExceptionTranslator();
         this.transactionManager = new DefaultTransactionManager(dataSource, this.exceptionTranslator);
-        this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
+        this.parameterSetter = ParameterSetter.fromRepository(repository);
         this.migrator = new Migrator(this);
         this.checker = new Checker(this);
     }
@@ -98,7 +101,7 @@ public class DaoFactory {
     public DaoFactory(TransactionManager transactionManager, Class<? extends RepositoryLike> repository, ExceptionTranslator exceptionTranslator) {
         this.repositoryClass = repository;
         this.transactionManager = transactionManager;
-        this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
+        this.parameterSetter = ParameterSetter.fromRepository(repository);
         this.exceptionTranslator = exceptionTranslator;
         this.migrator = new Migrator(this);
         this.checker = new Checker(this);
@@ -239,6 +242,23 @@ public class DaoFactory {
     }
 
     /**
+     * 获取数据访问对象/表操作对象的实例
+     *
+     * @param clazz 数据访问对象/表操作对象Class
+     * @param <T>   数据访问对象/表操作对象类型
+     * @return 数据访问对象/表操作对象实例
+     * @throws SqlExRepositoryNotMatchException 给定的类型不属于Factory管理的Repository
+     */
+    public <T> T getInstance(Class<T> clazz) {
+        //TODO: 目前是通过是否为接口来判断,需要改成注解判断(生成代码时添加不同的注解,用于表明类型)
+        if (clazz.isInterface()) {
+            return getDaoInstance(clazz);
+        } else {
+            return getTableInstance(clazz);
+        }
+    }
+
+    /**
      * 获取数据访问对象的实例
      *
      * @param dao 数据访问对象Class
@@ -246,7 +266,7 @@ public class DaoFactory {
      * @return 数据访问对象实例
      * @throws SqlExRepositoryNotMatchException 给定的Dao接口不属于Factory管理的Repository
      */
-    public <D> D getInstance(Class<D> dao) {
+    private <D> D getDaoInstance(Class<D> dao) {
         //尝试从缓存中获取
         InvocationProxy invocationProxy = invocationProxyCache.get(dao);
         if (invocationProxy == null) {
@@ -260,7 +280,7 @@ public class DaoFactory {
                     if (!annotation.value().getName().equals(this.repositoryClass.getName()))
                         throw new SqlExRepositoryNotMatchException();
                     //缓存中没有再自己新建
-                    invocationProxy = new InvocationProxy(transactionManager, parameterConverterRegistry, exceptionTranslator);
+                    invocationProxy = new InvocationProxy(transactionManager, parameterSetter, exceptionTranslator);
                     invocationProxyCache.put(dao, invocationProxy);
                 }
             }
@@ -272,5 +292,31 @@ public class DaoFactory {
                 new Class[]{dao},
                 invocationProxy
         );
+    }
+
+    /**
+     * 获取表操作对象的示例
+     *
+     * @param table 表操作对象Class
+     * @param <T>   表操作对象类型
+     * @return 表操作对象实例
+     * @throws SqlExRepositoryNotMatchException 给定的表实例类不属于Factory管理的Repository
+     */
+    private <T> T getTableInstance(Class<T> table) {
+        //检查这个Table类是否属于repository
+        SqlExRepository annotation = table.getAnnotation(SqlExRepository.class);
+        if (annotation == null)
+            throw new SqlExRepositoryNotMatchException();
+        if (!annotation.value().getName().equals(this.repositoryClass.getName()))
+            throw new SqlExRepositoryNotMatchException();
+        //缓存中没有再自己新建
+        try {
+            Constructor<T> constructor = table.getConstructor(TransactionManager.class, ParameterSetter.class, ExceptionTranslator.class);
+            return constructor.newInstance(this.transactionManager, this.parameterSetter, this.exceptionTranslator);
+        } catch (NoSuchMethodException | IllegalAccessException | InstantiationException |
+                 InvocationTargetException e) {
+            //代码是自己生成的,不可能出现错误
+            throw new SqlExImpossibleException("无法实例化表操作对象", e);
+        }
     }
 }

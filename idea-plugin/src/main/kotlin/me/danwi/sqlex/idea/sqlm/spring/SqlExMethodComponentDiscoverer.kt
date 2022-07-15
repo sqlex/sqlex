@@ -7,7 +7,7 @@ import com.intellij.spring.contexts.model.LocalModel
 import com.intellij.spring.model.CommonSpringBean
 import com.intellij.spring.model.custom.CustomLocalComponentsDiscoverer
 import com.intellij.spring.model.jam.stereotype.CustomSpringComponent
-import me.danwi.sqlex.core.annotation.SqlExMethods
+import me.danwi.sqlex.core.annotation.repository.SqlExMethods
 import me.danwi.sqlex.idea.util.extension.psiClass
 import me.danwi.sqlex.spring.ImportSqlEx
 import java.util.*

@@ -1,6 +1,6 @@
 package me.danwi.sqlex.spring;
 
-import me.danwi.sqlex.core.annotation.SqlExMethods;
+import me.danwi.sqlex.core.annotation.repository.SqlExMethods;
 import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.config.RuntimeBeanReference;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
