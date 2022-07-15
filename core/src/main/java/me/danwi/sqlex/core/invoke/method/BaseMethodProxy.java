@@ -6,16 +6,16 @@ import me.danwi.sqlex.core.annotation.method.parameter.SqlExInExprPosition;
 import me.danwi.sqlex.core.annotation.method.parameter.SqlExIsNullExprPosition;
 import me.danwi.sqlex.core.annotation.method.parameter.SqlExMarkerPosition;
 import me.danwi.sqlex.core.annotation.method.parameter.SqlExParameterPosition;
-import me.danwi.sqlex.core.exception.SqlExImpossibleException;
-import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
+import me.danwi.sqlex.core.jdbc.ParameterSetter;
 import me.danwi.sqlex.core.transaction.Transaction;
 import me.danwi.sqlex.core.transaction.TransactionManager;
-import me.danwi.sqlex.core.type.ParameterConverter;
 
 import java.lang.reflect.Method;
-import java.math.BigDecimal;
-import java.sql.*;
-import java.util.*;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public abstract class BaseMethodProxy implements MethodProxy {
@@ -26,7 +26,7 @@ public abstract class BaseMethodProxy implements MethodProxy {
     //预处理参数信息
     private final MarkerInfo[] markerInfos;
     //参数转换器注册表
-    private final ParameterConverterRegistry registry;
+    protected final ParameterSetter parameterSetter;
     //异常翻译
     private final ExceptionTranslator translator;
 
@@ -36,12 +36,12 @@ public abstract class BaseMethodProxy implements MethodProxy {
         public SqlExIsNullExprPosition isNullExprPosition; //?是否在? is null表达式中
     }
 
-    public BaseMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry, ExceptionTranslator translator) {
+    public BaseMethodProxy(Method method, TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator) {
         this.transactionManager = transactionManager;
         this.translator = translator;
         //获取sql
         sql = method.getAnnotation(SqlExScript.class).value();
-        this.registry = registry;
+        this.parameterSetter = parameterSetter;
 
         //填充marker信息
         int[] markerPositions = method.getAnnotation(SqlExMarkerPosition.class).value();
@@ -72,82 +72,6 @@ public abstract class BaseMethodProxy implements MethodProxy {
 
             markerInfos[index] = markerInfo;
         }
-    }
-
-    //设置单个参数 TODO: 部分数据类型没有补全
-    private void setParameter(PreparedStatement statement, int index, Object arg) throws SQLException {
-        if (arg == null) {
-            statement.setNull(index, Types.NULL);
-            return;
-        } else if (arg instanceof Boolean) {
-            statement.setBoolean(index, (Boolean) arg);
-            return;
-        } else if (arg instanceof Byte) {
-            statement.setByte(index, (Byte) arg);
-            return;
-        } else if (arg instanceof Short) {
-            statement.setShort(index, (Short) arg);
-            return;
-        } else if (arg instanceof Integer) {
-            statement.setInt(index, (Integer) arg);
-            return;
-        } else if (arg instanceof Long) {
-            statement.setLong(index, (Long) arg);
-            return;
-        } else if (arg instanceof Float) {
-            statement.setFloat(index, (Float) arg);
-            return;
-        } else if (arg instanceof Double) {
-            statement.setDouble(index, (Double) arg);
-            return;
-        } else if (arg instanceof Character) {
-            statement.setString(index, arg.toString());
-            return;
-        } else if (arg instanceof String) {
-            statement.setString(index, (String) arg);
-            return;
-        } else if (arg instanceof BigDecimal) {
-            statement.setBigDecimal(index, (BigDecimal) arg);
-            return;
-        } else if (arg instanceof byte[]) { //TODO: 尚未确认
-            statement.setBytes(index, (byte[]) arg);
-            return;
-        } else if (arg instanceof Blob) {
-            statement.setBlob(index, (Blob) arg);
-            return;
-        } else if (arg instanceof java.sql.Date) {
-            statement.setDate(index, (java.sql.Date) arg);
-            return;
-        } else if (arg instanceof java.sql.Time) {
-            statement.setTime(index, (java.sql.Time) arg);
-            return;
-        } else if (arg instanceof java.sql.Timestamp) {
-            statement.setTimestamp(index, (java.sql.Timestamp) arg);
-            return;
-        } else if (arg instanceof java.util.Date) {
-            statement.setTimestamp(index, new java.sql.Timestamp(((java.util.Date) arg).getTime()));
-            return;
-        } else if (arg instanceof java.time.LocalDate ||
-                arg instanceof java.time.LocalTime ||
-                arg instanceof java.time.LocalDateTime ||
-                arg instanceof java.time.OffsetTime ||
-                arg instanceof java.time.OffsetDateTime ||
-                arg instanceof java.time.ZonedDateTime
-        ) {
-            statement.setObject(index, arg);
-            return;
-        } else if (arg instanceof java.time.Instant) {
-            statement.setTimestamp(index, Timestamp.from((java.time.Instant) arg));
-            return;
-        } else {
-            ParameterConverter<Object, Object> converter = registry.getConverterFor(arg);
-            if (converter != null) {
-                Object convertedArg = converter.convert(arg);
-                setParameter(statement, index, convertedArg);
-                return;
-            }
-        }
-        throw new SqlExImpossibleException("不支持的参数数据类型");
     }
 
     /**
@@ -288,19 +212,6 @@ public abstract class BaseMethodProxy implements MethodProxy {
         }
         //返回重写后的结果
         return rewrittenSQL.toString();
-    }
-
-    /**
-     * 将参数设置到预处理语句
-     *
-     * @param statement 预处理语句
-     * @param args      参数
-     * @throws SQLException SQL异常
-     */
-    protected void setParameters(PreparedStatement statement, List<Object> args) throws SQLException {
-        for (int i = 0; i < args.size(); i++) {
-            setParameter(statement, i + 1, args.get(i));
-        }
     }
 
     @Override

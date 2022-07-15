@@ -7,8 +7,8 @@ import me.danwi.sqlex.core.exception.SqlExRepositoryNotMatchException;
 import me.danwi.sqlex.core.exception.SqlExSQLException;
 import me.danwi.sqlex.core.exception.SqlExUndeclaredException;
 import me.danwi.sqlex.core.invoke.InvocationProxy;
+import me.danwi.sqlex.core.jdbc.ParameterSetter;
 import me.danwi.sqlex.core.migration.Migrator;
-import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
 import me.danwi.sqlex.core.transaction.DefaultTransactionManager;
 import me.danwi.sqlex.core.transaction.Transaction;
 import me.danwi.sqlex.core.transaction.TransactionManager;
@@ -24,7 +24,7 @@ import java.util.Map;
 public class DaoFactory {
     final private Class<?> repositoryClass;
     final private TransactionManager transactionManager;
-    final private ParameterConverterRegistry parameterConverterRegistry;
+    final private ParameterSetter parameterSetter;
     final private Map<Class<?>, InvocationProxy> invocationProxyCache = new HashMap<>();
     final private ExceptionTranslator exceptionTranslator;
     final private Migrator migrator;
@@ -68,7 +68,7 @@ public class DaoFactory {
         this.repositoryClass = repository;
         this.exceptionTranslator = new DefaultExceptionTranslator();
         this.transactionManager = new DefaultTransactionManager(dataSource, this.exceptionTranslator);
-        this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
+        this.parameterSetter = ParameterSetter.fromRepository(repository);
         this.migrator = new Migrator(this);
         this.checker = new Checker(this);
     }
@@ -83,7 +83,7 @@ public class DaoFactory {
         this.repositoryClass = repository;
         this.exceptionTranslator = new DefaultExceptionTranslator();
         this.transactionManager = new DefaultTransactionManager(dataSource, this.exceptionTranslator);
-        this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
+        this.parameterSetter = ParameterSetter.fromRepository(repository);
         this.migrator = new Migrator(this);
         this.checker = new Checker(this);
     }
@@ -98,7 +98,7 @@ public class DaoFactory {
     public DaoFactory(TransactionManager transactionManager, Class<? extends RepositoryLike> repository, ExceptionTranslator exceptionTranslator) {
         this.repositoryClass = repository;
         this.transactionManager = transactionManager;
-        this.parameterConverterRegistry = ParameterConverterRegistry.fromRepository(repository);
+        this.parameterSetter = ParameterSetter.fromRepository(repository);
         this.exceptionTranslator = exceptionTranslator;
         this.migrator = new Migrator(this);
         this.checker = new Checker(this);
@@ -260,7 +260,7 @@ public class DaoFactory {
                     if (!annotation.value().getName().equals(this.repositoryClass.getName()))
                         throw new SqlExRepositoryNotMatchException();
                     //缓存中没有再自己新建
-                    invocationProxy = new InvocationProxy(transactionManager, parameterConverterRegistry, exceptionTranslator);
+                    invocationProxy = new InvocationProxy(transactionManager, parameterSetter, exceptionTranslator);
                     invocationProxyCache.put(dao, invocationProxy);
                 }
             }

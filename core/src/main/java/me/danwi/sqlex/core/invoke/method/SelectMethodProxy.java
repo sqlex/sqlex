@@ -6,7 +6,7 @@ import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.invoke.mapper.BeanMapper;
 import me.danwi.sqlex.core.invoke.mapper.BasicTypeMapper;
 import me.danwi.sqlex.core.invoke.mapper.RowMapper;
-import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
+import me.danwi.sqlex.core.jdbc.ParameterSetter;
 import me.danwi.sqlex.core.transaction.TransactionManager;
 
 import java.lang.reflect.Method;
@@ -22,8 +22,8 @@ import java.util.List;
 public class SelectMethodProxy extends BaseMethodProxy {
     private final RowMapper rowMapper;
 
-    public SelectMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry, ExceptionTranslator translator) {
-        super(method, transactionManager, registry, translator);
+    public SelectMethodProxy(Method method, TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator) {
+        super(method, transactionManager, parameterSetter, translator);
         //获取返回值中实体/类型
         Class<?> entityType = getEntityType(method);
         if (entityType == null)
@@ -63,7 +63,7 @@ public class SelectMethodProxy extends BaseMethodProxy {
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             //设置预处理语句参数
             List<Object> reorderArgs = reorderArgs(args);
-            setParameters(statement, reorderArgs);
+            parameterSetter.setParameters(statement, reorderArgs);
             //获取到返回值
             try (ResultSet rs = statement.executeQuery()) {
                 return getRowMapper().fetch(rs);

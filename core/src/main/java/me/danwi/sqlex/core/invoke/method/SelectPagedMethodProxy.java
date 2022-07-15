@@ -2,7 +2,7 @@ package me.danwi.sqlex.core.invoke.method;
 
 import me.danwi.sqlex.core.ExceptionTranslator;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
-import me.danwi.sqlex.core.repository.ParameterConverterRegistry;
+import me.danwi.sqlex.core.jdbc.ParameterSetter;
 import me.danwi.sqlex.core.transaction.TransactionManager;
 import me.danwi.sqlex.core.type.PagedResult;
 
@@ -15,8 +15,8 @@ import java.util.Arrays;
 import java.util.List;
 
 public class SelectPagedMethodProxy extends SelectMethodProxy {
-    public SelectPagedMethodProxy(Method method, TransactionManager transactionManager, ParameterConverterRegistry registry, ExceptionTranslator translator) {
-        super(method, transactionManager, registry, translator);
+    public SelectPagedMethodProxy(Method method, TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator) {
+        super(method, transactionManager, parameterSetter, translator);
     }
 
     @Override
@@ -35,7 +35,7 @@ public class SelectPagedMethodProxy extends SelectMethodProxy {
         try (PreparedStatement statement = connection.prepareStatement(countSQL)) {
             //设置预处理语句参数
             List<Object> reorderArgs = reorderArgs(argsWithoutPage);
-            setParameters(statement, reorderArgs);
+            parameterSetter.setParameters(statement, reorderArgs);
             //获取到返回值
             try (ResultSet rs = statement.executeQuery()) {
                 if (!rs.next())
@@ -49,7 +49,7 @@ public class SelectPagedMethodProxy extends SelectMethodProxy {
         try (PreparedStatement statement = connection.prepareStatement(pageSQL)) {
             //设置预处理语句参数
             List<Object> reorderArgs = reorderArgs(argsWithoutPage);
-            setParameters(statement, reorderArgs);
+            parameterSetter.setParameters(statement, reorderArgs);
             //获取到返回值
             try (ResultSet rs = statement.executeQuery()) {
                 result = getRowMapper().fetch(rs);
