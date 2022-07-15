@@ -8,6 +8,7 @@ import com.intellij.spring.model.CommonSpringBean
 import com.intellij.spring.model.custom.CustomLocalComponentsDiscoverer
 import com.intellij.spring.model.jam.stereotype.CustomSpringComponent
 import me.danwi.sqlex.core.annotation.repository.SqlExMethods
+import me.danwi.sqlex.core.annotation.repository.SqlExTables
 import me.danwi.sqlex.idea.util.extension.psiClass
 import me.danwi.sqlex.spring.ImportSqlEx
 import java.util.*
@@ -24,14 +25,20 @@ class SqlExMethodComponentDiscoverer : CustomLocalComponentsDiscoverer() {
             .mapNotNull { it.findAttributeValue("value") } //拿到所有的Class值
             .filterIsInstance<PsiClassObjectAccessExpression>()
             .mapNotNull { it.operand.type.psiClass }
-        //通过SqlExMethods注解,找到挂在其上的所有SqlExMethod类
-        val daoClasses = repositoryClasses
-            .mapNotNull { it.getAnnotation(SqlExMethods::class.java.name)?.findAttributeValue("value") }
+        //通过SqlExMethods/SqlExTables注解,找到挂在其上的所有SqlExMethod类/表操作类
+        val beanClasses = repositoryClasses
+            .flatMap {
+                listOf(
+                    it.getAnnotation(SqlExMethods::class.java.name)?.findAttributeValue("value"),
+                    it.getAnnotation(SqlExTables::class.java.name)?.findAttributeValue("value")
+                )
+            }
+            .filterNotNull()
             .flatMap {
                 when (it) {
-                    //单个类例如@SqlExMethods(XxxDao.class)
+                    //单个类例如@Annotation(Xxx.class)
                     is PsiClassObjectAccessExpression -> return@flatMap listOf(it)
-                    //多个类例如@SqlExMethods({XxxDao.class,XxxDao2.class})
+                    //多个类例如@Annotation({Xxx.class,Xxx2.class})
                     is PsiArrayInitializerMemberValue -> return@flatMap it.initializers.toList()
                     else -> return@flatMap listOf()
                 }
@@ -39,6 +46,6 @@ class SqlExMethodComponentDiscoverer : CustomLocalComponentsDiscoverer() {
             .filterIsInstance<PsiClassObjectAccessExpression>()
             .mapNotNull { it.operand.type.psiClass }
         //构造自定义的Spring组件,返回
-        return daoClasses.map { CustomSpringComponent(it) }.toMutableList()
+        return beanClasses.map { CustomSpringComponent(it) }.toMutableList()
     }
 }

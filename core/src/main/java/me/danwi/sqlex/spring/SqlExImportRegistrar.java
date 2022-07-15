@@ -1,6 +1,7 @@
 package me.danwi.sqlex.spring;
 
 import me.danwi.sqlex.core.annotation.repository.SqlExMethods;
+import me.danwi.sqlex.core.annotation.repository.SqlExTables;
 import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.config.RuntimeBeanReference;
 import org.springframework.beans.factory.support.AbstractBeanDefinition;
@@ -19,34 +20,43 @@ public class SqlExImportRegistrar implements ImportBeanDefinitionRegistrar {
         assert attributes != null;
         Class<?> repository = attributes.getClass("value");
         String factoryName = attributes.getString("factoryName");
-        //获取到这个repository所有的方法
+        //获取到这个repository所有的Dao接口
         SqlExMethods methodsAnnotation = repository.getAnnotation(SqlExMethods.class);
         if (methodsAnnotation != null) {
             Class<?>[] daoMethods = methodsAnnotation.value();
             //循环注册所有的bean
             for (Class<?> daoMethod : daoMethods) {
-                registerDaoBeanDefinition(registry, daoMethod, factoryName);
+                registerBeanDefinition(registry, daoMethod, factoryName);
+            }
+        }
+        //获取到这个repository所有的表操作类
+        SqlExTables tablesAnnotation = repository.getAnnotation(SqlExTables.class);
+        if (tablesAnnotation != null) {
+            Class<?>[] tableClasses = tablesAnnotation.value();
+            //循环注册所有的bean
+            for (Class<?> tableClass : tableClasses) {
+                registerBeanDefinition(registry, tableClass, factoryName);
             }
         }
     }
 
     /**
-     * 对单个的dao接口实施bean注册
+     * 对单个的dao接口/表操作类实施bean注册
      *
      * @param registry    注册表
-     * @param daoMethod   dao接口
+     * @param clazz       dao接口/表操作类的类型
      * @param factoryName DaoFactory名称(bean名称)
      */
-    private void registerDaoBeanDefinition(BeanDefinitionRegistry registry, Class<?> daoMethod, String factoryName) {
+    private void registerBeanDefinition(BeanDefinitionRegistry registry, Class<?> clazz, String factoryName) {
         AbstractBeanDefinition definition = BeanDefinitionBuilder.genericBeanDefinition(SqlExFactoryBean.class).getBeanDefinition();
-        definition.getConstructorArgumentValues().addGenericArgumentValue(daoMethod.getName());
+        definition.getConstructorArgumentValues().addGenericArgumentValue(clazz.getName());
         if (StringUtils.hasText(factoryName))
             definition.getPropertyValues().addPropertyValue("factory", new RuntimeBeanReference(factoryName));
-        definition.setAttribute(FactoryBean.OBJECT_TYPE_ATTRIBUTE, daoMethod.getName());
+        definition.setAttribute(FactoryBean.OBJECT_TYPE_ATTRIBUTE, clazz.getName());
         definition.setAutowireMode(AbstractBeanDefinition.AUTOWIRE_BY_TYPE);
         definition.setRole(AbstractBeanDefinition.ROLE_INFRASTRUCTURE);
         definition.setAutowireCandidate(true);
         definition.setLazyInit(false);
-        registry.registerBeanDefinition(daoMethod.getName(), definition);
+        registry.registerBeanDefinition(clazz.getName(), definition);
     }
 }
