@@ -1,5 +1,9 @@
 package me.danwi.sqlex.core.query;
 
+import me.danwi.sqlex.core.ExceptionTranslator;
+import me.danwi.sqlex.core.jdbc.ParameterSetter;
+import me.danwi.sqlex.core.jdbc.mapper.BeanMapper;
+import me.danwi.sqlex.core.jdbc.mapper.RowMapper;
 import me.danwi.sqlex.core.query.expression.Expression;
 import me.danwi.sqlex.core.transaction.TransactionManager;
 import me.danwi.sqlex.core.type.PagedResult;
@@ -8,14 +12,18 @@ import java.util.List;
 
 public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
     private final TransactionManager transactionManager;
-    private final Class<T> entityClass;
+    private final ParameterSetter parameterSetter;
+    private final RowMapper rowMapper;
+    private final ExceptionTranslator translator;
     private boolean forUpdate = false;
     private Long skip;
     private Long take;
 
-    public TableQuery(TransactionManager transactionManager, Class<T> entityClass) {
+    public TableQuery(TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator, Class<T> entityClass) {
         this.transactionManager = transactionManager;
-        this.entityClass = entityClass;
+        this.parameterSetter = parameterSetter;
+        this.rowMapper = new BeanMapper(entityClass);
+        this.translator = translator;
     }
 
     /**

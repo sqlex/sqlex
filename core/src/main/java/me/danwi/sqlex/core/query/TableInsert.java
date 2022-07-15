@@ -1,13 +1,19 @@
 package me.danwi.sqlex.core.query;
 
+import me.danwi.sqlex.core.ExceptionTranslator;
+import me.danwi.sqlex.core.jdbc.ParameterSetter;
 import me.danwi.sqlex.core.transaction.TransactionManager;
 
 public class TableInsert<T> {
     private final TransactionManager transactionManager;
+    private final ParameterSetter parameterSetter;
+    private final ExceptionTranslator translator;
     private final Class<T> entityClass;
 
-    public TableInsert(TransactionManager transactionManager, Class<T> entityClass) {
+    public TableInsert(TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator, Class<T> entityClass) {
         this.transactionManager = transactionManager;
+        this.parameterSetter = parameterSetter;
+        this.translator = translator;
         this.entityClass = entityClass;
     }
 

@@ -3,6 +3,7 @@ package me.danwi.sqlex.core;
 import com.mysql.cj.jdbc.MysqlConnectionPoolDataSource;
 import me.danwi.sqlex.core.annotation.SqlExRepository;
 import me.danwi.sqlex.core.checker.Checker;
+import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.exception.SqlExRepositoryNotMatchException;
 import me.danwi.sqlex.core.exception.SqlExSQLException;
 import me.danwi.sqlex.core.exception.SqlExUndeclaredException;
@@ -15,6 +16,8 @@ import me.danwi.sqlex.core.transaction.TransactionManager;
 
 import javax.sql.DataSource;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -26,6 +29,7 @@ public class DaoFactory {
     final private TransactionManager transactionManager;
     final private ParameterSetter parameterSetter;
     final private Map<Class<?>, InvocationProxy> invocationProxyCache = new HashMap<>();
+    final private Map<Class<?>, Object> tableObjectCache = new HashMap<>();
     final private ExceptionTranslator exceptionTranslator;
     final private Migrator migrator;
     final private Checker checker;
@@ -272,5 +276,44 @@ public class DaoFactory {
                 new Class[]{dao},
                 invocationProxy
         );
+    }
+
+    /**
+     * 获取表操作对象的示例
+     *
+     * @param table 表操作对象Class
+     * @param <T>   表操作对象类型
+     * @return 表操作对象实例
+     * @throws SqlExRepositoryNotMatchException 给定的表实例类不属于Factory管理的Repository
+     */
+    public <T> T getTableInstance(Class<T> table) {
+        //尝试从缓存中获取
+        Object tableObject = tableObjectCache.get(table);
+        if (tableObject == null) {
+            synchronized (tableObjectCache) {
+                tableObject = tableObjectCache.get(table);
+                if (tableObject == null) {
+                    //检查这个Table类是否属于repository
+                    SqlExRepository annotation = table.getAnnotation(SqlExRepository.class);
+                    if (annotation == null)
+                        throw new SqlExRepositoryNotMatchException();
+                    if (!annotation.value().getName().equals(this.repositoryClass.getName()))
+                        throw new SqlExRepositoryNotMatchException();
+                    //缓存中没有再自己新建
+                    try {
+                        Constructor<T> constructor = table.getConstructor(TransactionManager.class, ParameterSetter.class, ExceptionTranslator.class);
+                        tableObject = constructor.newInstance(this.transactionManager, this.parameterSetter, this.exceptionTranslator);
+                    } catch (NoSuchMethodException | IllegalAccessException | InstantiationException |
+                             InvocationTargetException e) {
+                        //代码是自己生成的,不可能出现错误
+                        throw new SqlExImpossibleException("无法实例化表操作对象", e);
+                    }
+                    tableObjectCache.put(table, tableObject);
+                }
+            }
+        }
+
+        //noinspection unchecked
+        return (T) tableObject;
     }
 }
