@@ -165,8 +165,8 @@ class GeneratedTableFile(
             .addModifiers(Modifier.PUBLIC)
             .returns(ClassName.get(TableDelete::class.java))
             .addCode(
-                "return new \$T(this.transactionManager, this.parameterSetter, this.translator);",
-                TableDelete::class.java
+                "return new \$T(\$S, this.transactionManager, this.parameterSetter, this.translator);",
+                TableDelete::class.java, tableName
             )
             .build()
     }
