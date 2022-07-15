@@ -130,7 +130,7 @@ class GeneratedTableFile(
                 .addParameter(ClassName.get(TransactionManager::class.java), "transactionManager")
                 .addParameter(ClassName.get(ParameterSetter::class.java), "parameterSetter")
                 .addParameter(ClassName.get(ExceptionTranslator::class.java), "translator")
-                .addCode("super(transactionManager, parameterSetter, translator);\n")
+                .addCode("super(\$S, transactionManager, parameterSetter, translator);\n", tableName)
                 .build()
         )
         //添加set方法
