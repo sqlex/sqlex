@@ -1,4 +1,4 @@
-package me.danwi.sqlex.core.invoke.mapper;
+package me.danwi.sqlex.core.jdbc.mapper;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;

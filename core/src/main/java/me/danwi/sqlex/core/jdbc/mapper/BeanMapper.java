@@ -1,4 +1,4 @@
-package me.danwi.sqlex.core.invoke.mapper;
+package me.danwi.sqlex.core.jdbc.mapper;
 
 import me.danwi.sqlex.core.annotation.entity.SqlExColumnName;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
