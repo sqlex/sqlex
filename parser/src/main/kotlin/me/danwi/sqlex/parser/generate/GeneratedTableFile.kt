@@ -107,9 +107,9 @@ class GeneratedTableFile(
             .addParameter(ClassName.get(TransactionManager::class.java), "transactionManager")
             .addParameter(ClassName.get(ParameterSetter::class.java), "parameterSetter")
             .addParameter(ClassName.get(ExceptionTranslator::class.java), "translator")
-            .addCode("super(transactionManager, parameterSetter, translator, \$T.class);\n", entityTypeName)
-            .addCode("this.transactionManager = transactionManager;")
-            .addCode("this.parameterSetter = parameterSetter;")
+            .addCode("super(\$S, transactionManager, parameterSetter, translator);\n", tableName)
+            .addCode("this.transactionManager = transactionManager;\n")
+            .addCode("this.parameterSetter = parameterSetter;\n")
             .addCode("this.translator = translator;")
             .build()
     }
