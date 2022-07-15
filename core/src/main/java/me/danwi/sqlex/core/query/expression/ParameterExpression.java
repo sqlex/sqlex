@@ -9,6 +9,6 @@ public class ParameterExpression implements Expression {
 
     @Override
     public String toSQL() {
-        return "?";
+        return ExpressionUtil.getParameterPlaceholder(value);
     }
 }
