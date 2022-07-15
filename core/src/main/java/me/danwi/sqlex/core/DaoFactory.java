@@ -29,7 +29,6 @@ public class DaoFactory {
     final private TransactionManager transactionManager;
     final private ParameterSetter parameterSetter;
     final private Map<Class<?>, InvocationProxy> invocationProxyCache = new HashMap<>();
-    final private Map<Class<?>, Object> tableObjectCache = new HashMap<>();
     final private ExceptionTranslator exceptionTranslator;
     final private Migrator migrator;
     final private Checker checker;
@@ -243,6 +242,23 @@ public class DaoFactory {
     }
 
     /**
+     * 获取数据访问对象/表操作对象的实例
+     *
+     * @param clazz 数据访问对象/表操作对象Class
+     * @param <T>   数据访问对象/表操作对象类型
+     * @return 数据访问对象/表操作对象实例
+     * @throws SqlExRepositoryNotMatchException 给定的类型不属于Factory管理的Repository
+     */
+    public <T> T getInstance(Class<T> clazz) {
+        //TODO: 目前是通过是否为接口来判断,需要改成注解判断(生成代码时添加不同的注解,用于表明类型)
+        if (clazz.isInterface()) {
+            return getDaoInstance(clazz);
+        } else {
+            return getTableInstance(clazz);
+        }
+    }
+
+    /**
      * 获取数据访问对象的实例
      *
      * @param dao 数据访问对象Class
@@ -250,7 +266,7 @@ public class DaoFactory {
      * @return 数据访问对象实例
      * @throws SqlExRepositoryNotMatchException 给定的Dao接口不属于Factory管理的Repository
      */
-    public <D> D getInstance(Class<D> dao) {
+    private <D> D getDaoInstance(Class<D> dao) {
         //尝试从缓存中获取
         InvocationProxy invocationProxy = invocationProxyCache.get(dao);
         if (invocationProxy == null) {
@@ -286,34 +302,21 @@ public class DaoFactory {
      * @return 表操作对象实例
      * @throws SqlExRepositoryNotMatchException 给定的表实例类不属于Factory管理的Repository
      */
-    public <T> T getTableInstance(Class<T> table) {
-        //尝试从缓存中获取
-        Object tableObject = tableObjectCache.get(table);
-        if (tableObject == null) {
-            synchronized (tableObjectCache) {
-                tableObject = tableObjectCache.get(table);
-                if (tableObject == null) {
-                    //检查这个Table类是否属于repository
-                    SqlExRepository annotation = table.getAnnotation(SqlExRepository.class);
-                    if (annotation == null)
-                        throw new SqlExRepositoryNotMatchException();
-                    if (!annotation.value().getName().equals(this.repositoryClass.getName()))
-                        throw new SqlExRepositoryNotMatchException();
-                    //缓存中没有再自己新建
-                    try {
-                        Constructor<T> constructor = table.getConstructor(TransactionManager.class, ParameterSetter.class, ExceptionTranslator.class);
-                        tableObject = constructor.newInstance(this.transactionManager, this.parameterSetter, this.exceptionTranslator);
-                    } catch (NoSuchMethodException | IllegalAccessException | InstantiationException |
-                             InvocationTargetException e) {
-                        //代码是自己生成的,不可能出现错误
-                        throw new SqlExImpossibleException("无法实例化表操作对象", e);
-                    }
-                    tableObjectCache.put(table, tableObject);
-                }
-            }
+    private <T> T getTableInstance(Class<T> table) {
+        //检查这个Table类是否属于repository
+        SqlExRepository annotation = table.getAnnotation(SqlExRepository.class);
+        if (annotation == null)
+            throw new SqlExRepositoryNotMatchException();
+        if (!annotation.value().getName().equals(this.repositoryClass.getName()))
+            throw new SqlExRepositoryNotMatchException();
+        //缓存中没有再自己新建
+        try {
+            Constructor<T> constructor = table.getConstructor(TransactionManager.class, ParameterSetter.class, ExceptionTranslator.class);
+            return constructor.newInstance(this.transactionManager, this.parameterSetter, this.exceptionTranslator);
+        } catch (NoSuchMethodException | IllegalAccessException | InstantiationException |
+                 InvocationTargetException e) {
+            //代码是自己生成的,不可能出现错误
+            throw new SqlExImpossibleException("无法实例化表操作对象", e);
         }
-
-        //noinspection unchecked
-        return (T) tableObject;
     }
 }
