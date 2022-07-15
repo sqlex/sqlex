@@ -1,9 +1,5 @@
 package me.danwi.sqlex.core.query.expression;
 
-import me.danwi.sqlex.core.query.expression.logical.AndExpression;
-import me.danwi.sqlex.core.query.expression.logical.NotExpression;
-import me.danwi.sqlex.core.query.expression.logical.OrExpression;
-
 import java.util.Arrays;
 
 public interface Expression {
@@ -14,23 +10,69 @@ public interface Expression {
      */
     String toSQL();
 
+    //函数调用
     static FunctionCallExpression func(String name, Expression... args) {
         return new FunctionCallExpression(name, Arrays.asList(args));
     }
 
+    //预处理参数
     static ParameterExpression arg(Object value) {
         return new ParameterExpression(value);
     }
 
-    static NotExpression not(Expression exp) {
-        return new NotExpression(exp);
+    //逻辑运算
+    static UnaryExpression not(Expression exp) {
+        return new UnaryExpression("!", exp);
     }
 
-    default AndExpression and(Expression right) {
-        return new AndExpression(this, right);
+    default BinaryExpression and(Expression right) {
+        return new BinaryExpression("and", this, right);
     }
 
-    default OrExpression or(Expression right) {
-        return new OrExpression(this, right);
+    default BinaryExpression or(Expression right) {
+        return new BinaryExpression("or", this, right);
+    }
+
+    //关系运算
+    default BinaryExpression eq(Expression right) {
+        return new BinaryExpression("=", this, right);
+    }
+
+    default BinaryExpression gt(Expression right) {
+        return new BinaryExpression(">", this, right);
+    }
+
+    default BinaryExpression gte(Expression right) {
+        return new BinaryExpression(">=", this, right);
+    }
+
+    default BinaryExpression lt(Expression right) {
+        return new BinaryExpression("<", this, right);
+    }
+
+    default BinaryExpression lte(Expression right) {
+        return new BinaryExpression("<=", this, right);
+    }
+
+    //数学运算
+    default BinaryExpression add(Expression right) {
+        return new BinaryExpression("+", this, right);
+    }
+
+    default BinaryExpression sub(Expression right) {
+        return new BinaryExpression("-", this, right);
+    }
+
+    default BinaryExpression mul(Expression right) {
+        return new BinaryExpression("*", this, right);
+    }
+
+    default BinaryExpression div(Expression right) {
+        return new BinaryExpression("/", this, right);
+    }
+
+    //其他
+    default BinaryExpression like(Expression right) {
+        return new BinaryExpression("like", this, right);
     }
 }
