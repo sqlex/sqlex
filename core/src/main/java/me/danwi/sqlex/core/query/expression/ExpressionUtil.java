@@ -44,10 +44,9 @@ public class ExpressionUtil {
         try {
             String sql = expression.toSQL();
             //获取参数上下文信息
-            List<Object> parameters = null;
+            List<Object> parameters = new LinkedList<>();
             Map<String, Object> context = ExpressionUtil.parameterContext.get();
             if (context != null) {
-                parameters = new LinkedList<>();
                 //对占位符进行排序
                 String tempSQL = sql;
                 List<Map.Entry<String, Object>> placeholders = context.entrySet().stream()
