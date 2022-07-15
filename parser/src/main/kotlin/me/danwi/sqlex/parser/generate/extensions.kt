@@ -149,22 +149,26 @@ fun Array<Field>.toEntityClass(className: String, isStatic: Boolean = false): Ty
  * 给实体类添加数据列getter/setter
  */
 fun TypeSpec.Builder.addColumnGetterAndSetter(columnName: String, type: TypeName): TypeSpec.Builder {
-    this.addField(type, "_${columnName.pascalName}", Modifier.PRIVATE)
+    val pascalName = columnName.pascalName
+    this.addField(type, pascalName, Modifier.PRIVATE)
     this.addMethod(
-        MethodSpec.methodBuilder("get${columnName.pascalName}")
+        MethodSpec.methodBuilder("get$pascalName")
+            .addAnnotation(
+                AnnotationSpec.builder(SqlExColumnName::class.java).addMember("value", "\$S", columnName).build()
+            )
             .addModifiers(Modifier.PUBLIC)
-            .addStatement("return this._${columnName.pascalName}")
+            .addStatement("return this.$pascalName")
             .returns(type)
             .build()
     )
     this.addMethod(
-        MethodSpec.methodBuilder("set${columnName.pascalName}")
+        MethodSpec.methodBuilder("set$pascalName")
             .addAnnotation(
                 AnnotationSpec.builder(SqlExColumnName::class.java).addMember("value", "\$S", columnName).build()
             )
             .addModifiers(Modifier.PUBLIC)
             .addParameter(type, "value")
-            .addStatement("this._${columnName.pascalName} = value")
+            .addStatement("this.$pascalName = value")
             .build()
     )
     return this
