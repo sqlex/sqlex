@@ -148,7 +148,7 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
             //添加count
             String countSQL = "select count(1) from (" + sqlParameterBind.getSQL() + ") temp";
             //新建预处理数据
-            try (PreparedStatement statement = connection.prepareStatement(sqlParameterBind.getSQL())) {
+            try (PreparedStatement statement = connection.prepareStatement(countSQL)) {
                 parameterSetter.setParameters(statement, sqlParameterBind.getParameters());
                 //获取到返回值
                 try (ResultSet rs = statement.executeQuery()) {
