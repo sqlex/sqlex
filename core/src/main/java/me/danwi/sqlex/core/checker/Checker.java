@@ -11,10 +11,7 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class Checker {
     private final Logger logger = LoggerFactory.getLogger(getClass());
@@ -54,7 +51,10 @@ public class Checker {
                     if (targetColumn != null && sourceColumn.typeId == JDBCType.TINYINT && sourceColumn.length == 1 && targetColumn.typeId == JDBCType.BIT && targetColumn.length == 1) {
                         return;
                     }
-                    if (targetColumn == null || sourceColumn.typeId != targetColumn.typeId) {
+                    if (targetColumn == null ||
+                            sourceColumn.typeId != targetColumn.typeId || //数据类型不匹配
+                            sourceColumn.primaryKey != targetColumn.primaryKey //主键不匹配
+                    ) {
                         diffColumns.add(sourceColumn);
                     }
                 });
@@ -102,6 +102,17 @@ public class Checker {
                             columnResultSet.getString("TYPE_NAME").contains("UNSIGNED")
                     ));
                 }
+                //主键
+                ResultSet primaryKeyResultSet = databaseMetaData.getPrimaryKeys(null, null, tableName);
+                while (primaryKeyResultSet.next()) {
+                    String columnName = primaryKeyResultSet.getString("COLUMN_NAME");
+                    for (ColumnInfo c : columns) {
+                        if (Objects.equals(c.name, columnName)) {
+                            c.setPrimaryKey(true);
+                        }
+                    }
+                }
+
                 tables.add(new TableInfo(tableName, columns));
             }
             return tables;
@@ -123,6 +134,7 @@ public class Checker {
                         //获取元数据
                         Column.MetaData metaData = ((Column) instance).getMetaData();
                         columns.add(new ColumnInfo(
+                                metaData.isPrimaryKey(),
                                 metaData.getColumnName(),
                                 metaData.getJdbcType(),
                                 metaData.getTypeName(),
