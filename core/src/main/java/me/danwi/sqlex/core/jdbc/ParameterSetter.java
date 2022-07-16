@@ -8,6 +8,7 @@ import me.danwi.sqlex.core.type.ParameterConverter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.*;
 import java.util.HashMap;
 import java.util.List;
@@ -94,6 +95,9 @@ public class ParameterSetter {
             return;
         } else if (arg instanceof String) {
             statement.setString(index, (String) arg);
+            return;
+        } else if (arg instanceof BigInteger) {
+            statement.setBigDecimal(index, new BigDecimal((BigInteger) arg));
             return;
         } else if (arg instanceof BigDecimal) {
             statement.setBigDecimal(index, (BigDecimal) arg);
