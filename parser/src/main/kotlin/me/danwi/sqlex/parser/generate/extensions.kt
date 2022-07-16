@@ -142,6 +142,44 @@ fun Array<Field>.toEntityClass(className: String, isStatic: Boolean = false): Ty
     this
         .map { Pair(it.name, it.JavaType) }
         .forEach { typeSpecBuilder.addColumnGetterAndSetter(it.first, it.second) }
+    //给实体添加toString
+    typeSpecBuilder.addMethod(
+        MethodSpec.methodBuilder("toString")
+            .addAnnotation(Override::class.java)
+            .addModifiers(Modifier.PUBLIC)
+            .returns(java.lang.String::class.java)
+            .addCode("return \"$className{ \" +")
+            .addCode(this.map { it.name.pascalName }.joinToString("+ \", \" +") { "\"$it=\" + $it" })
+            .addCode("+ \" }\";").build()
+    )
+    //给实体添加hashCode
+    typeSpecBuilder.addMethod(
+        MethodSpec.methodBuilder("hashCode")
+            .addAnnotation(Override::class.java)
+            .addModifiers(Modifier.PUBLIC)
+            .returns(ClassName.INT)
+            .addCode("return java.util.Objects.hash(${this.joinToString(", ") { it.name.pascalName }});")
+            .build()
+    )
+    //给实体添加equals方法
+    typeSpecBuilder.addMethod(
+        MethodSpec.methodBuilder("equals")
+            .addAnnotation(Override::class.java)
+            .addModifiers(Modifier.PUBLIC)
+            .returns(ClassName.BOOLEAN)
+            .addParameter(java.lang.Object::class.java, "o")
+            .addCode("if (this == o) return true;\n")
+            .addCode("if (o == null || getClass() != o.getClass()) return false;\n")
+            .addCode("$className other = ($className) o;\n")
+            .addCode("return ${
+                this
+                    .map { it.name.pascalName }
+                    .joinToString(" && ")
+                    { "java.util.Objects.equals($it, other.$it)" }
+            };")
+            .build()
+    )
+
     return typeSpecBuilder.build()
 }
 
