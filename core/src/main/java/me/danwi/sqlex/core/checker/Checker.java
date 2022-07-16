@@ -102,13 +102,14 @@ public class Checker {
                                     columnResultSet.getString("TYPE_NAME").contains("UNSIGNED")
                             ));
                         }
-                        //主键
-                        ResultSet primaryKeyResultSet = databaseMetaData.getPrimaryKeys(null, null, tableName);
-                        while (primaryKeyResultSet.next()) {
-                            String columnName = primaryKeyResultSet.getString("COLUMN_NAME");
-                            for (ColumnInfo c : columns) {
-                                if (Objects.equals(c.name, columnName)) {
-                                    c.setPrimaryKey(true);
+                        //主键信息
+                        try (ResultSet primaryKeyResultSet = databaseMetaData.getPrimaryKeys(null, null, tableName)) {
+                            while (primaryKeyResultSet.next()) {
+                                String columnName = primaryKeyResultSet.getString("COLUMN_NAME");
+                                for (ColumnInfo c : columns) {
+                                    if (Objects.equals(c.name, columnName)) {
+                                        c.setPrimaryKey(true);
+                                    }
                                 }
                             }
                         }
