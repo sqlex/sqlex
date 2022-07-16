@@ -85,37 +85,38 @@ public class Checker {
         try (Connection conn = this.factory.newConnection()) {
             DatabaseMetaData databaseMetaData = conn.getMetaData();
             //获取所有的表名
-            ResultSet tableResultSet = databaseMetaData.getTables(conn.getCatalog(), null, null, null);
-            List<TableInfo> tables = new ArrayList<>();
-            while (tableResultSet.next()) {
-                //表名
-                String tableName = tableResultSet.getString("TABLE_NAME");
-                //列信息
-                ResultSet columnResultSet = databaseMetaData.getColumns(conn.getCatalog(), null, tableName, null);
-                List<ColumnInfo> columns = new ArrayList<>();
-                while (columnResultSet.next()) {
-                    columns.add(new ColumnInfo(
-                            columnResultSet.getString("COLUMN_NAME"),
-                            JDBCType.valueOf(columnResultSet.getInt("DATA_TYPE")),
-                            MysqlType.getByJdbcType(columnResultSet.getInt("DATA_TYPE")).getName().toLowerCase(),
-                            columnResultSet.getInt("COLUMN_SIZE"),
-                            columnResultSet.getString("TYPE_NAME").contains("UNSIGNED")
-                    ));
-                }
-                //主键
-                ResultSet primaryKeyResultSet = databaseMetaData.getPrimaryKeys(null, null, tableName);
-                while (primaryKeyResultSet.next()) {
-                    String columnName = primaryKeyResultSet.getString("COLUMN_NAME");
-                    for (ColumnInfo c : columns) {
-                        if (Objects.equals(c.name, columnName)) {
-                            c.setPrimaryKey(true);
+            try (ResultSet tableResultSet = databaseMetaData.getTables(conn.getCatalog(), null, null, null)) {
+                List<TableInfo> tables = new ArrayList<>();
+                while (tableResultSet.next()) {
+                    //表名
+                    String tableName = tableResultSet.getString("TABLE_NAME");
+                    //列信息
+                    try (ResultSet columnResultSet = databaseMetaData.getColumns(conn.getCatalog(), null, tableName, null)) {
+                        List<ColumnInfo> columns = new ArrayList<>();
+                        while (columnResultSet.next()) {
+                            columns.add(new ColumnInfo(
+                                    columnResultSet.getString("COLUMN_NAME"),
+                                    JDBCType.valueOf(columnResultSet.getInt("DATA_TYPE")),
+                                    MysqlType.getByJdbcType(columnResultSet.getInt("DATA_TYPE")).getName().toLowerCase(),
+                                    columnResultSet.getInt("COLUMN_SIZE"),
+                                    columnResultSet.getString("TYPE_NAME").contains("UNSIGNED")
+                            ));
                         }
+                        //主键
+                        ResultSet primaryKeyResultSet = databaseMetaData.getPrimaryKeys(null, null, tableName);
+                        while (primaryKeyResultSet.next()) {
+                            String columnName = primaryKeyResultSet.getString("COLUMN_NAME");
+                            for (ColumnInfo c : columns) {
+                                if (Objects.equals(c.name, columnName)) {
+                                    c.setPrimaryKey(true);
+                                }
+                            }
+                        }
+                        tables.add(new TableInfo(tableName, columns));
                     }
                 }
-
-                tables.add(new TableInfo(tableName, columns));
+                return tables;
             }
-            return tables;
         } catch (SQLException e) {
             throw factory.getExceptionTranslator().translate(e);
         }
