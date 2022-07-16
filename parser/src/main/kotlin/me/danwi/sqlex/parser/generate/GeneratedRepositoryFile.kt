@@ -49,21 +49,6 @@ class GeneratedRepositoryFile(
                     builder.build()
                 }
             )
-            .addAnnotations(
-                session.allTables.map { table ->
-                    val builder = AnnotationSpec
-                        .builder(SqlExTableInfo::class.java)
-                        .addMember("name", "\$S", table)
-                    session.getColumns(table).forEach {
-                        builder.addMember("columnNames", "\$S", it.name)
-                            .addMember("columnTypeIds", "\$L", it.JdbcType.vendorTypeNumber)
-                            .addMember("columnTypeNames", "\$S", it.dbType)
-                            .addMember("columnLengths", "\$LL", it.length)
-                            .addMember("columnUnsigneds", "\$L", it.unsigned)
-                    }
-                    builder.build()
-                }
-            )
             .addAnnotation(tableAnnotationSpecBuilder.build())
             .addAnnotation(methodAnnotationSpecBuilder.build())
             .build()
