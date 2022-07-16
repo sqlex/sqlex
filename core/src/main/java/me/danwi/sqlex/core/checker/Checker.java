@@ -98,7 +98,8 @@ public class Checker {
                             columnResultSet.getString("COLUMN_NAME"),
                             JDBCType.valueOf(columnResultSet.getInt("DATA_TYPE")),
                             MysqlType.getByJdbcType(columnResultSet.getInt("DATA_TYPE")).getName().toLowerCase(),
-                            columnResultSet.getInt("COLUMN_SIZE")
+                            columnResultSet.getInt("COLUMN_SIZE"),
+                            columnResultSet.getString("TYPE_NAME").contains("UNSIGNED")
                     ));
                 }
                 tables.add(new TableInfo(tableName, columns));
@@ -125,7 +126,8 @@ public class Checker {
                                 metaData.getColumnName(),
                                 metaData.getJdbcType(),
                                 metaData.getTypeName(),
-                                metaData.getLength()
+                                metaData.getLength(),
+                                metaData.isUnsigned()
                         ));
                         tableName = metaData.getTableName();
                     }
