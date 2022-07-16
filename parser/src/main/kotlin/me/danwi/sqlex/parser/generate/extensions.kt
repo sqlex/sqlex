@@ -29,7 +29,7 @@ val Field.JavaType: TypeName
         } else if (listOf("int", "integer").contains(this.dbType)) { //int, integer(unsigned时, java.lang.Long)
             return if (this.unsigned) ClassName.LONG.box() else ClassName.INT.box()
         } else if (this.dbType == "bigint") { //bigint(unsigned时, java.math.BigInteger)
-            return if (this.unsigned) ClassName.LONG.box() else ClassName.get(BigInteger::class.java)
+            return if (this.unsigned) ClassName.get(BigInteger::class.java) else ClassName.LONG.box()
         } else if (this.dbType == "float") { //float
             return ClassName.FLOAT.box()
         } else if (this.dbType == "double") { //double
