@@ -10,7 +10,7 @@ public class ColumnInfo {
     long length;
     boolean unsigned;
 
-    public ColumnInfo(String name, JDBCType typeId, String typeName, long length,boolean unsigned) {
+    public ColumnInfo(String name, JDBCType typeId, String typeName, long length, boolean unsigned) {
         this.name = name;
         this.typeId = typeId;
         this.typeName = typeName;
