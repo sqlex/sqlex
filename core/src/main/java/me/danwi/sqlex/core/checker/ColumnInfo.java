@@ -10,12 +10,11 @@ public class ColumnInfo {
     long length;
     boolean unsigned;
 
-    public ColumnInfo(String name, JDBCType typeId, String typeName, long length, boolean unsigned) {
+    public ColumnInfo(String name, JDBCType typeId, String typeName, long length) {
         this.name = name;
         this.typeId = typeId;
         this.typeName = typeName;
         this.length = length;
-        this.unsigned = unsigned;
     }
 
     public String getName() {

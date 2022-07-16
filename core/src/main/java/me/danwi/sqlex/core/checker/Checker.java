@@ -2,11 +2,14 @@ package me.danwi.sqlex.core.checker;
 
 import com.mysql.cj.MysqlType;
 import me.danwi.sqlex.core.DaoFactory;
-import me.danwi.sqlex.core.annotation.repository.SqlExTableInfo;
+import me.danwi.sqlex.core.annotation.repository.SqlExTables;
 import me.danwi.sqlex.core.exception.SqlExCheckException;
+import me.danwi.sqlex.core.query.Column;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -95,8 +98,7 @@ public class Checker {
                             columnResultSet.getString("COLUMN_NAME"),
                             JDBCType.valueOf(columnResultSet.getInt("DATA_TYPE")),
                             MysqlType.getByJdbcType(columnResultSet.getInt("DATA_TYPE")).getName().toLowerCase(),
-                            columnResultSet.getInt("COLUMN_SIZE"),
-                            columnResultSet.getString("TYPE_NAME").contains("UNSIGNED")
+                            columnResultSet.getInt("COLUMN_SIZE")
                     ));
                 }
                 tables.add(new TableInfo(tableName, columns));
@@ -109,18 +111,29 @@ public class Checker {
 
     private List<TableInfo> getRepositoryTables() {
         List<TableInfo> tables = new ArrayList<>();
-        for (SqlExTableInfo t : this.factory.getRepositoryClass().getAnnotationsByType(SqlExTableInfo.class)) {
+        for (Class tableClass : this.factory.getRepositoryClass().getAnnotation(SqlExTables.class).value()) {
             List<ColumnInfo> columns = new ArrayList<>();
-            for (int i = 0; i < t.columnNames().length; i++) {
-                columns.add(new ColumnInfo(
-                        t.columnNames()[i],
-                        JDBCType.valueOf(t.columnTypeIds()[i]),
-                        t.columnTypeNames()[i],
-                        t.columnLengths()[i],
-                        t.columnUnsigneds()[i]
-                ));
+            String tableName = "";
+            for (Field field : tableClass.getFields()) {
+                try {
+                    //静态且是Column类
+                    Object instance = field.get(null);
+                    if (Modifier.isStatic(field.getModifiers()) && instance instanceof Column) {
+                        //获取元数据
+                        Column.MetaData metaData = ((Column) instance).getMetaData();
+                        columns.add(new ColumnInfo(
+                                metaData.getColumnName(),
+                                metaData.getJdbcType(),
+                                metaData.getTypeName(),
+                                metaData.getLength()
+                        ));
+                        tableName = metaData.getTableName();
+                    }
+                } catch (Exception e) {
+                    logger.warn("获取column信息失败: {}", e.toString());
+                }
             }
-            tables.add(new TableInfo(t.name(), columns));
+            tables.add(new TableInfo(tableName, columns));
         }
         return tables;
     }
