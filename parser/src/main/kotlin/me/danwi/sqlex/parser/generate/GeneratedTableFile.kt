@@ -68,7 +68,7 @@ class GeneratedTableFile(
                 .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
                 .initializer(
                     CodeBlock.of(
-                        "new \$T(\$S,\$S, \$S,\$L,\$L, \$L,\$L,\$L, \$L,\$L,\$L, \$L,\$L)",
+                        "new \$T(\$S,\$S, \$S,\$L,\$LL, \$L,\$L,\$LL, \$L,\$L,\$L, \$L,\$L)",
                         ClassName.get(Column::class.java),
                         tableName, it.name,
                         it.dbType, "java.sql.JDBCType.${it.JdbcType.name}", it.length,
