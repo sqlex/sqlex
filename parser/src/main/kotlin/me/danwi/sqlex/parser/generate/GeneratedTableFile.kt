@@ -9,6 +9,7 @@ import me.danwi.sqlex.core.query.TableInsert
 import me.danwi.sqlex.core.query.TableQuery
 import me.danwi.sqlex.core.query.TableUpdate
 import me.danwi.sqlex.core.query.Column
+import me.danwi.sqlex.core.query.expression.Expression
 import me.danwi.sqlex.core.transaction.TransactionManager
 import me.danwi.sqlex.parser.Field
 import me.danwi.sqlex.parser.Session
@@ -55,6 +56,8 @@ class GeneratedTableFile(
         typeSpecBuilder.addMethod(generateDeleteMethod())
         //添加select方法
         typeSpecBuilder.addMethod(generateSelectMethod())
+        //添加短链接方法
+        typeSpecBuilder.addMethods(generateShortCutMethods(columns))
 
         return typeSpecBuilder.build()
     }
@@ -185,5 +188,40 @@ class GeneratedTableFile(
                 TableQuery::class.java, tableName, entityTypeName
             )
             .build()
+    }
+
+    private fun generateShortCutMethods(columns: Array<Field>): List<MethodSpec> {
+        //获取主键/唯一列
+        val uniqueColumns = columns.filter { it.isPrimaryKey || it.isUnique }
+        //查找方法
+        val findMethods = uniqueColumns
+            .map {
+                MethodSpec.methodBuilder("findBy${it.name.pascalName}")
+                    .addModifiers(Modifier.PUBLIC)
+                    .returns(entityTypeName)
+                    .addParameter(it.JavaType, "value")
+                    .addCode(
+                        "return this.select().where(${className}.${it.name.pascalName}.eq(\$T.arg(value))).findOne();",
+                        Expression::class.java
+                    )
+                    .build()
+
+            }
+        //删除方法
+        val deleteMethods = uniqueColumns
+            .map {
+                MethodSpec.methodBuilder("deleteBy${it.name.pascalName}")
+                    .addModifiers(Modifier.PUBLIC)
+                    .returns(ClassName.BOOLEAN)
+                    .addParameter(it.JavaType, "value")
+                    .addCode(
+                        "return this.delete().where(${className}.${it.name.pascalName}.eq(\$T.arg(value))).execute() > 0;",
+                        Expression::class.java
+                    )
+                    .build()
+
+            }
+
+        return findMethods + deleteMethods
     }
 }
