@@ -39,18 +39,18 @@ public class TableInsert<T> {
      */
     public static int NULL_IS_NONE = 1;
     /**
-     * 返回生成主键 TODO
+     * 如果存在key冲突,则更新
      */
-    public static int RETURN_GENERATE_KEY = 1 << 1;
+    public static int INSERT_OR_UPDATE = 1 << 1;
 
     /**
      * 新建行(插入)
      *
      * @param entity  需要插入的实体
      * @param options 选项
-     * @return 插入后的实体
+     * @return 自动生成的主键(没有则为null)
      */
-    public T save(T entity, int options) {
+    public Long save(T entity, int options) {
         //列名
         List<String> columnNames = new LinkedList<>();
         //参数
@@ -84,6 +84,15 @@ public class TableInsert<T> {
                 String.join(", ", columnNames),
                 columnNames.stream().map(it -> "?").collect(Collectors.joining(", "))
         );
+        //如果key重复,则更新
+        if ((options & INSERT_OR_UPDATE) == INSERT_OR_UPDATE) {
+            sql = sql
+                    + " on duplicate key update "
+                    + columnNames.stream()
+                    .map(it -> String.format("%s = values(%s)", it, it))
+                    .collect(Collectors.joining(","));
+        }
+
         //开始准备执行
         //获取事务
         Transaction currentTransaction = transactionManager.getCurrentTransaction();
@@ -97,12 +106,20 @@ public class TableInsert<T> {
 
         //调用方法
         try {
-            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            try (PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
                 parameterSetter.setParameters(statement, parameters);
                 //执行
                 statement.executeUpdate();
-                //TODO: 返回带主键生成的实体
-                return entity;
+                //获取生成主键信息
+                try (ResultSet rs = statement.getGeneratedKeys()) {
+                    if (rs.next()) {
+                        if (rs.getMetaData().getColumnCount() == 1) {
+                            return rs.getLong(1);
+                        }
+                    }
+                }
+                //没有主键信息,则返回null
+                return null;
             }
         } catch (SQLException e) {
             throw translator.translate(e);
@@ -123,19 +140,39 @@ public class TableInsert<T> {
      * 新建行(插入)
      *
      * @param entity 需要插入的实体
-     * @return 插入后的实体
+     * @return 自动生成的主键(没有则为null)
      */
-    public T save(T entity) {
+    public Long save(T entity) {
         return save(entity, NONE_OPTIONS);
     }
 
     /**
      * 新建行(插入),忽略为null的属性
      *
-     * @param entity 需要参数的实体
-     * @return 插入后的实体
+     * @param entity 需要插入的实体
+     * @return 自动生成的主键(没有则为null)
      */
-    public T saveWithoutNull(T entity) {
+    public Long saveWithoutNull(T entity) {
         return save(entity, NULL_IS_NONE);
+    }
+
+    /**
+     * 新建行(插入),如果key冲突则更新
+     *
+     * @param entity 实体
+     * @return 自动生成的主键(没有则为null)
+     */
+    public Long saveOrUpdate(T entity) {
+        return save(entity, INSERT_OR_UPDATE);
+    }
+
+    /**
+     * 新建行(插入),忽略为null的属性,如果key冲突则更新
+     *
+     * @param entity 实体
+     * @return 自动生成的主键(没有则为null)
+     */
+    public Long saveOrUpdateWithoutNull(T entity) {
+        return save(entity, NULL_IS_NONE | INSERT_OR_UPDATE);
     }
 }
