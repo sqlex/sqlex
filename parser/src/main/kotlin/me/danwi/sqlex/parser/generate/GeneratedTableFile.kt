@@ -9,6 +9,7 @@ import me.danwi.sqlex.core.query.TableInsert
 import me.danwi.sqlex.core.query.TableQuery
 import me.danwi.sqlex.core.query.TableUpdate
 import me.danwi.sqlex.core.query.Column
+import me.danwi.sqlex.core.query.InsertOption
 import me.danwi.sqlex.core.query.expression.Expression
 import me.danwi.sqlex.core.transaction.TransactionManager
 import me.danwi.sqlex.parser.Field
@@ -247,13 +248,17 @@ class GeneratedTableFile(
                 .addModifiers(Modifier.PUBLIC)
                 .returns(entityTypeName)
                 .addParameter(entityTypeName, "entity")
-                .addCode("return this.save(entity, TableInsert.NULL_IS_NONE);")
+                .addCode("return this.save(entity, \$T.NULL_IS_NONE);", InsertOption::class.java)
             //saveOrUpdate方法
             val saveOrUpdateMethod = MethodSpec.methodBuilder("saveOrUpdate")
                 .addModifiers(Modifier.PUBLIC)
                 .returns(entityTypeName)
                 .addParameter(entityTypeName, "entity")
-                .addCode("return this.save(entity, TableInsert.NULL_IS_NONE | TableInsert.INSERT_OR_UPDATE);")
+                .addCode(
+                    "return this.save(entity, \$T.NULL_IS_NONE | \$T.INSERT_OR_UPDATE);",
+                    InsertOption::class.java,
+                    InsertOption::class.java
+                )
             listOf(saveWithOptionsMethod.build(), saveMethod.build(), saveOrUpdateMethod.build())
         } else {
             listOf()

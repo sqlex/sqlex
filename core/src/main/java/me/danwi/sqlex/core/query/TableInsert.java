@@ -31,19 +31,6 @@ public class TableInsert<T> {
     }
 
     /**
-     * 没有选项
-     */
-    public static int NONE_OPTIONS = 0;
-    /**
-     * 如果值为NULL,则表示该值为设置
-     */
-    public static int NULL_IS_NONE = 1;
-    /**
-     * 如果存在key冲突,则更新
-     */
-    public static int INSERT_OR_UPDATE = 1 << 1;
-
-    /**
      * 新建行(插入)
      *
      * @param entity  需要插入的实体
@@ -67,7 +54,7 @@ public class TableInsert<T> {
                     if (columnNameAnnotation != null) {
                         Object value = readMethod.invoke(entity);
                         //如果是null,且设置了忽略null值的插入,则忽略该列
-                        if ((options & NULL_IS_NONE) == NULL_IS_NONE && value == null)
+                        if ((options & InsertOption.NULL_IS_NONE) == InsertOption.NULL_IS_NONE && value == null)
                             continue;
                         columnNames.add(columnNameAnnotation.value());
                         parameters.add(value);
@@ -85,7 +72,7 @@ public class TableInsert<T> {
                 columnNames.stream().map(it -> "?").collect(Collectors.joining(", "))
         );
         //如果key重复,则更新
-        if ((options & INSERT_OR_UPDATE) == INSERT_OR_UPDATE) {
+        if ((options & InsertOption.INSERT_OR_UPDATE) == InsertOption.INSERT_OR_UPDATE) {
             sql = sql
                     + " on duplicate key update "
                     + columnNames.stream()
@@ -143,7 +130,7 @@ public class TableInsert<T> {
      * @return 自动生成的主键(没有则为null)
      */
     public Long insert(T entity) {
-        return insert(entity, NONE_OPTIONS);
+        return insert(entity, InsertOption.NONE_OPTIONS);
     }
 
     /**
@@ -153,7 +140,7 @@ public class TableInsert<T> {
      * @return 自动生成的主键(没有则为null)
      */
     public Long insertWithoutNull(T entity) {
-        return insert(entity, NULL_IS_NONE);
+        return insert(entity, InsertOption.NULL_IS_NONE);
     }
 
     /**
@@ -163,7 +150,7 @@ public class TableInsert<T> {
      * @return 自动生成的主键(没有则为null)
      */
     public Long upsert(T entity) {
-        return insert(entity, INSERT_OR_UPDATE);
+        return insert(entity, InsertOption.INSERT_OR_UPDATE);
     }
 
     /**
@@ -173,6 +160,6 @@ public class TableInsert<T> {
      * @return 自动生成的主键(没有则为null)
      */
     public Long upsertWithoutNull(T entity) {
-        return insert(entity, NULL_IS_NONE | INSERT_OR_UPDATE);
+        return insert(entity, InsertOption.NULL_IS_NONE | InsertOption.INSERT_OR_UPDATE);
     }
 }
