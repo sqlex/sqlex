@@ -221,7 +221,43 @@ class GeneratedTableFile(
                     .build()
 
             }
-
-        return findMethods + deleteMethods
+        //当存在主键/唯一列的时候,添加Save方法,用于将刚刚保存的实体返回
+        val saveMethods = if (uniqueColumns.isNotEmpty()) {
+            //save方法(带选项)
+            val saveWithOptionsMethod = MethodSpec.methodBuilder("save")
+                .addModifiers(Modifier.PUBLIC)
+                .returns(entityTypeName)
+                .addParameter(entityTypeName, "entity")
+                .addParameter(ClassName.INT, "options")
+            //先将数据存储进去
+            saveWithOptionsMethod.addCode("Long generatedKey = this.insert(entity, options);\n")
+            //自增主键查询
+            val autoPrimaryKeyColumn = columns.find { it.isPrimaryKey && it.isAutoIncrement }
+            if (autoPrimaryKeyColumn != null)
+                saveWithOptionsMethod.addCode("if(generatedKey != null) return this.findBy${autoPrimaryKeyColumn.name.pascalName}(generatedKey);\n")
+            //如果主键没有/或者没有生成key,则使用唯一键查询
+            uniqueColumns.forEach {
+                val fieldGetter = "entity.get${it.name.pascalName}()"
+                saveWithOptionsMethod.addCode("if($fieldGetter != null) return this.findBy${it.name.pascalName}($fieldGetter);\n")
+            }
+            //最后返回空
+            saveWithOptionsMethod.addCode("return null;")
+            //save方法
+            val saveMethod = MethodSpec.methodBuilder("save")
+                .addModifiers(Modifier.PUBLIC)
+                .returns(entityTypeName)
+                .addParameter(entityTypeName, "entity")
+                .addCode("return this.save(entity, TableInsert.NULL_IS_NONE);")
+            //saveOrUpdate方法
+            val saveOrUpdateMethod = MethodSpec.methodBuilder("saveOrUpdate")
+                .addModifiers(Modifier.PUBLIC)
+                .returns(entityTypeName)
+                .addParameter(entityTypeName, "entity")
+                .addCode("return this.save(entity, TableInsert.NULL_IS_NONE | TableInsert.INSERT_OR_UPDATE);")
+            listOf(saveWithOptionsMethod.build(), saveMethod.build(), saveOrUpdateMethod.build())
+        } else {
+            listOf()
+        }
+        return findMethods + deleteMethods + saveMethods
     }
 }
