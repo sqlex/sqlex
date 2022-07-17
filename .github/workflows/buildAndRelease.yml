@@ -319,7 +319,7 @@ jobs:
       - name: Upload Plugin
         uses: actions/upload-artifact@v3
         with:
-          name: jetbrains plugin
+          name: jetbrains-plugin
           path: idea-plugin/build/distributions/*.zip
 
   jetbrains-publish:
