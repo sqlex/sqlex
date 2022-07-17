@@ -275,6 +275,8 @@ jobs:
         run: ./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository
 
   jetbrains-build:
+    if: github.ref == 'refs/heads/master'
+
     needs:
       - idea-plugin-verify
       - test
