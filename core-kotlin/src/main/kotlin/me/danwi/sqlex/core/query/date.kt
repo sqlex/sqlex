@@ -1,20 +1,11 @@
 package me.danwi.sqlex.core.query
 
 import me.danwi.sqlex.core.query.expression.Expression
-import me.danwi.sqlex.core.query.expression.FunctionCallExpression
 
-fun now(): FunctionCallExpression {
-    return Expression.now()
-}
+fun now() = Expression.now()
 
-fun currentTimestamp(): FunctionCallExpression {
-    return Expression.currentTimestamp()
-}
+fun currentTimestamp() = Expression.currentTimestamp()
 
-fun dateFormat(date: Expression, format: Expression): FunctionCallExpression {
-    return Expression.dateFormat(date, format)
-}
+fun dateFormat(date: Expression, format: Expression) = Expression.dateFormat(date, format)
 
-fun dateFormat(date: Expression, format: String): FunctionCallExpression {
-    return Expression.dateFormat(date, format)
-}
+fun dateFormat(date: Expression, format: String) = Expression.dateFormat(date, format)
