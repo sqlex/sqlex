@@ -50,7 +50,7 @@ public class TableInsert<T> {
      * @param options 选项
      * @return 自动生成的主键(没有则为null)
      */
-    public Long save(T entity, int options) {
+    public Long insert(T entity, int options) {
         //列名
         List<String> columnNames = new LinkedList<>();
         //参数
@@ -142,8 +142,8 @@ public class TableInsert<T> {
      * @param entity 需要插入的实体
      * @return 自动生成的主键(没有则为null)
      */
-    public Long save(T entity) {
-        return save(entity, NONE_OPTIONS);
+    public Long insert(T entity) {
+        return insert(entity, NONE_OPTIONS);
     }
 
     /**
@@ -152,8 +152,8 @@ public class TableInsert<T> {
      * @param entity 需要插入的实体
      * @return 自动生成的主键(没有则为null)
      */
-    public Long saveWithoutNull(T entity) {
-        return save(entity, NULL_IS_NONE);
+    public Long insertWithoutNull(T entity) {
+        return insert(entity, NULL_IS_NONE);
     }
 
     /**
@@ -162,8 +162,8 @@ public class TableInsert<T> {
      * @param entity 实体
      * @return 自动生成的主键(没有则为null)
      */
-    public Long saveOrUpdate(T entity) {
-        return save(entity, INSERT_OR_UPDATE);
+    public Long upsert(T entity) {
+        return insert(entity, INSERT_OR_UPDATE);
     }
 
     /**
@@ -172,7 +172,7 @@ public class TableInsert<T> {
      * @param entity 实体
      * @return 自动生成的主键(没有则为null)
      */
-    public Long saveOrUpdateWithoutNull(T entity) {
-        return save(entity, NULL_IS_NONE | INSERT_OR_UPDATE);
+    public Long upsertWithoutNull(T entity) {
+        return insert(entity, NULL_IS_NONE | INSERT_OR_UPDATE);
     }
 }
