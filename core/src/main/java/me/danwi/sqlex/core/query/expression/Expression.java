@@ -10,17 +10,22 @@ public interface Expression {
      */
     String toSQL();
 
-    //函数调用
-    static FunctionCallExpression func(String name, Expression... args) {
-        return new FunctionCallExpression(name, Arrays.asList(args));
-    }
-
     //预处理参数
     static ParameterExpression arg(Object value) {
         return new ParameterExpression(value);
     }
 
-    //逻辑运算
+    //字面量
+    static LiteralExpression lit(Object value) {
+        return new LiteralExpression(value);
+    }
+
+    //函数调用
+    static FunctionCallExpression func(String name, Expression... args) {
+        return new FunctionCallExpression(name, Arrays.asList(args));
+    }
+
+    //region 逻辑运算
     static UnaryExpression not(Expression exp) {
         return new UnaryExpression("!", exp);
     }
@@ -32,8 +37,9 @@ public interface Expression {
     default BinaryExpression or(Expression right) {
         return new BinaryExpression("or", this, right);
     }
+    //endregion
 
-    //关系运算
+    //region 关系运算
     default BinaryExpression eq(Expression right) {
         return new BinaryExpression("=", this, right);
     }
@@ -58,7 +64,12 @@ public interface Expression {
         return new BinaryExpression("<=", this, right);
     }
 
-    //数学运算
+    default BinaryExpression like(Expression right) {
+        return new BinaryExpression("like", this, right);
+    }
+    //endregion
+
+    //region 算术运算
     default BinaryExpression add(Expression right) {
         return new BinaryExpression("+", this, right);
     }
@@ -74,9 +85,23 @@ public interface Expression {
     default BinaryExpression div(Expression right) {
         return new BinaryExpression("/", this, right);
     }
+    //endregion
 
-    //其他
-    default BinaryExpression like(Expression right) {
-        return new BinaryExpression("like", this, right);
+    //region 时间函数
+    static FunctionCallExpression now() {
+        return func("now");
     }
+
+    static FunctionCallExpression currentTimestamp() {
+        return func("current_timestamp");
+    }
+
+    static FunctionCallExpression dateFormat(Expression date, Expression format) {
+        return func("date_format", date, format);
+    }
+
+    static FunctionCallExpression dateFormat(Expression date, String format) {
+        return func("date_format", date, lit(format));
+    }
+    //endregion
 }
