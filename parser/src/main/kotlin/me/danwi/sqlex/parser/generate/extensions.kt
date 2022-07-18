@@ -121,7 +121,7 @@ val Field.JdbcType: JDBCType
 /**
  * 将字段数组转换成实体类
  */
-fun Array<Field>.toEntityClass(className: String, isStatic: Boolean = false): TypeSpec {
+fun Array<Field>.toEntityClass(className: String, isStatic: Boolean = false, constructor: Boolean = true): TypeSpec {
     val typeSpecBuilder = TypeSpec.classBuilder(className).addModifiers(Modifier.PUBLIC)
     if (isStatic)
         typeSpecBuilder.addModifiers(Modifier.STATIC)
@@ -142,6 +142,37 @@ fun Array<Field>.toEntityClass(className: String, isStatic: Boolean = false): Ty
     this
         .map { Pair(it.name, it.JavaType) }
         .forEach { typeSpecBuilder.addColumnGetterAndSetter(it.first, it.second) }
+    //给实体添加构造函数
+    if (constructor) {
+        //无参构造函数
+        typeSpecBuilder.addMethod(MethodSpec.constructorBuilder().addModifiers(Modifier.PUBLIC).build())
+        //全字段构造函数
+        val allFieldConstructorBuilder = MethodSpec.constructorBuilder()
+            .addModifiers(Modifier.PUBLIC)
+        this.forEach {
+            val fieldName = it.name.pascalName
+            allFieldConstructorBuilder.addParameter(it.JavaType, fieldName)
+            allFieldConstructorBuilder.addCode("this.$fieldName = $fieldName;\n")
+        }
+        typeSpecBuilder.addMethod(allFieldConstructorBuilder.build())
+        //必要字段的构造函数,必要字段指的是 不能null,且不能自动生成(不自增 && 没有默认值)
+        val necessaryColumns = this.filter {
+            it.notNull && (!it.isAutoIncrement && !it.hasDefaultVale)
+        }
+        if (necessaryColumns.isNotEmpty()) {
+            val fromMethodBuilder = MethodSpec.methodBuilder("from")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(ClassName.bestGuess(className))
+                .addCode("$className object = new $className();\n")
+            necessaryColumns.forEach {
+                val fieldName = it.name.pascalName
+                fromMethodBuilder.addParameter(it.JavaType, fieldName)
+                fromMethodBuilder.addCode("object.$fieldName = $fieldName;\n")
+            }
+            fromMethodBuilder.addCode("return object;")
+            typeSpecBuilder.addMethod(fromMethodBuilder.build())
+        }
+    }
     //给实体添加toString
     typeSpecBuilder.addMethod(
         MethodSpec.methodBuilder("toString")
