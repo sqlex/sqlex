@@ -29,7 +29,7 @@ class Field {
     var notNull = false
 
     //是否含有默认值
-    var hasDefaultVale = false
+    var hasDefaultValue = false
 }
 
 class PlanInfo(

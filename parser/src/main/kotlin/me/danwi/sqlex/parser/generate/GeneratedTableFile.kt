@@ -75,7 +75,7 @@ class GeneratedTableFile(
                         it.dbType, "java.sql.JDBCType.${it.JdbcType.name}", it.length,
                         it.unsigned, it.binary, it.decimal,
                         it.isPrimaryKey, it.isAutoIncrement, it.isUnique,
-                        it.notNull, it.hasDefaultVale
+                        it.notNull, it.hasDefaultValue
                     )
                 )
                 .build()

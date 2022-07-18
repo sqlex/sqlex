@@ -157,7 +157,7 @@ fun Array<Field>.toEntityClass(className: String, isStatic: Boolean = false, con
         typeSpecBuilder.addMethod(allFieldConstructorBuilder.build())
         //必要字段的构造函数,必要字段指的是 不能null,且不能自动生成(不自增 && 没有默认值)
         val necessaryColumns = this.filter {
-            it.notNull && (!it.isAutoIncrement && !it.hasDefaultVale)
+            it.notNull && (!it.isAutoIncrement && !it.hasDefaultValue)
         }
         if (necessaryColumns.isNotEmpty()) {
             val fromMethodBuilder = MethodSpec.methodBuilder("from")

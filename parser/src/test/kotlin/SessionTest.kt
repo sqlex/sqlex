@@ -190,7 +190,7 @@ class SessionTest {
         assertTrue(fields[0].isAutoIncrement)
         assertFalse(fields[0].isUnique)
         assertTrue(fields[0].notNull)
-        assertTrue(fields[0].hasDefaultVale)
+        assertTrue(fields[0].hasDefaultValue)
 
         assertEquals("name", fields[1].name)
         assertEquals("varchar", fields[1].dbType)
@@ -201,7 +201,7 @@ class SessionTest {
         assertFalse(fields[1].isAutoIncrement)
         assertFalse(fields[1].isUnique)
         assertTrue(fields[1].notNull)
-        assertFalse(fields[1].hasDefaultVale)
+        assertFalse(fields[1].hasDefaultValue)
 
         assertEquals("departmentID", fields[2].name)
         assertEquals("int", fields[2].dbType)
@@ -212,7 +212,7 @@ class SessionTest {
         assertFalse(fields[1].isAutoIncrement)
         assertFalse(fields[1].isUnique)
         assertTrue(fields[1].notNull)
-        assertFalse(fields[1].hasDefaultVale)
+        assertFalse(fields[1].hasDefaultValue)
 
         assertEquals("age", fields[3].name)
         assertEquals("int", fields[3].dbType)
@@ -223,7 +223,7 @@ class SessionTest {
         assertFalse(fields[1].isAutoIncrement)
         assertFalse(fields[1].isUnique)
         assertTrue(fields[1].notNull)
-        assertFalse(fields[1].hasDefaultVale)
+        assertFalse(fields[1].hasDefaultValue)
 
         assertEquals("status", fields[4].name)
         assertEquals("binary", fields[4].dbType)
@@ -234,7 +234,7 @@ class SessionTest {
         assertFalse(fields[1].isAutoIncrement)
         assertFalse(fields[1].isUnique)
         assertTrue(fields[1].notNull)
-        assertFalse(fields[1].hasDefaultVale)
+        assertFalse(fields[1].hasDefaultValue)
 
         //department表
         fields = session.getColumns("department")
@@ -249,7 +249,7 @@ class SessionTest {
         assertTrue(fields[0].isAutoIncrement)
         assertFalse(fields[0].isUnique)
         assertTrue(fields[0].notNull)
-        assertTrue(fields[0].hasDefaultVale)
+        assertTrue(fields[0].hasDefaultValue)
 
         assertEquals("name", fields[1].name)
         assertEquals("varchar", fields[1].dbType)
@@ -260,7 +260,7 @@ class SessionTest {
         assertFalse(fields[1].isAutoIncrement)
         assertFalse(fields[1].isUnique)
         assertTrue(fields[1].notNull)
-        assertFalse(fields[1].hasDefaultVale)
+        assertFalse(fields[1].hasDefaultValue)
     }
 
     @Test
