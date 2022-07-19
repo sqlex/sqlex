@@ -68,10 +68,12 @@ val Field.JavaType: TypeName
             ).contains(this.dbType)
         ) { //tinytext, text, mediumtext, longtext
             return ClassName.get(java.lang.String::class.java)
+        } else if (this.dbType == "var_string") { //mysql内部类型, 等同于varchar
+            return ClassName.get(java.lang.String::class.java)
         } else {
             //return "Object"
             //内测阶段直接抛出异常, 便于排错
-            throw Exception("${this.dbType} 映射失败!!!")
+            throw Exception("db[${this.dbType}] -> java 映射失败!!!")
         }
     }
 
@@ -114,7 +116,7 @@ val Field.JdbcType: JDBCType
         else -> {
             //JDBCType.VARCHAR
             //内测阶段直接抛出异常, 便于排错
-            throw Exception("${this.dbType} 映射失败!!!")
+            throw Exception("db[${this.dbType}] -> jdbc 映射失败!!!")
         }
     }
 
