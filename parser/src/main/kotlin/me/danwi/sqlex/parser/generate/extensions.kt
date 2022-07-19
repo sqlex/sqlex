@@ -73,7 +73,7 @@ val Field.JavaType: TypeName
         } else {
             //return "Object"
             //内测阶段直接抛出异常, 便于排错
-            throw Exception("${this.dbType} 映射失败!!!")
+            throw Exception("db[${this.dbType}] -> java 映射失败!!!")
         }
     }
 
@@ -116,7 +116,7 @@ val Field.JdbcType: JDBCType
         else -> {
             //JDBCType.VARCHAR
             //内测阶段直接抛出异常, 便于排错
-            throw Exception("${this.dbType} 映射失败!!!")
+            throw Exception("db[${this.dbType}] -> jdbc 映射失败!!!")
         }
     }
 
