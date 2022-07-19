@@ -5,6 +5,8 @@ import me.danwi.sqlex.common.ColumnNameRegex
 import me.danwi.sqlex.core.annotation.entity.SqlExColumnName
 import me.danwi.sqlex.parser.Field
 import me.danwi.sqlex.parser.util.pascalName
+import org.jetbrains.annotations.NotNull
+import org.jetbrains.annotations.Nullable
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.sql.JDBCType
@@ -121,7 +123,12 @@ val Field.JdbcType: JDBCType
 /**
  * 将字段数组转换成实体类
  */
-fun Array<Field>.toEntityClass(className: String, isStatic: Boolean = false, constructor: Boolean = true): TypeSpec {
+fun Array<Field>.toEntityClass(
+    className: String,
+    isStatic: Boolean = false,
+    constructor: Boolean = true,
+    nullableAnnotation: Boolean = true
+): TypeSpec {
     val typeSpecBuilder = TypeSpec.classBuilder(className).addModifiers(Modifier.PUBLIC)
     if (isStatic)
         typeSpecBuilder.addModifiers(Modifier.STATIC)
@@ -139,9 +146,7 @@ fun Array<Field>.toEntityClass(className: String, isStatic: Boolean = false, con
         throw Exception("非法的列名 ${invalidFieldNames.joinToString(", ") { it.name }}")
     }
     //给实体添加getter/setter
-    this
-        .map { Pair(it.name, it.JavaType) }
-        .forEach { typeSpecBuilder.addColumnGetterAndSetter(it.first, it.second) }
+    this.forEach { typeSpecBuilder.addColumnGetterAndSetter(it, nullableAnnotation) }
     //给实体添加构造函数
     if (constructor) {
         //无参构造函数
@@ -151,7 +156,13 @@ fun Array<Field>.toEntityClass(className: String, isStatic: Boolean = false, con
             .addModifiers(Modifier.PUBLIC)
         this.forEach {
             val fieldName = it.name.pascalName
-            allFieldConstructorBuilder.addParameter(it.JavaType, fieldName)
+            val parameterSpec = ParameterSpec.builder(it.JavaType, fieldName)
+            if (nullableAnnotation)
+                if (it.notNull)
+                    parameterSpec.addAnnotation(NotNull::class.java)
+                else
+                    parameterSpec.addAnnotation(Nullable::class.java)
+            allFieldConstructorBuilder.addParameter(parameterSpec.build())
             allFieldConstructorBuilder.addCode("this.$fieldName = $fieldName;\n")
         }
         typeSpecBuilder.addMethod(allFieldConstructorBuilder.build())
@@ -166,7 +177,10 @@ fun Array<Field>.toEntityClass(className: String, isStatic: Boolean = false, con
                 .addCode("$className object = new $className();\n")
             necessaryColumns.forEach {
                 val fieldName = it.name.pascalName
-                fromMethodBuilder.addParameter(it.JavaType, fieldName)
+                val parameterSpec = ParameterSpec.builder(it.JavaType, fieldName)
+                if (nullableAnnotation)
+                    parameterSpec.addAnnotation(NotNull::class.java)
+                fromMethodBuilder.addParameter(parameterSpec.build())
                 fromMethodBuilder.addCode("object.$fieldName = $fieldName;\n")
             }
             fromMethodBuilder.addCode("return object;")
@@ -217,26 +231,42 @@ fun Array<Field>.toEntityClass(className: String, isStatic: Boolean = false, con
 /**
  * 给实体类添加数据列getter/setter
  */
-fun TypeSpec.Builder.addColumnGetterAndSetter(columnName: String, type: TypeName): TypeSpec.Builder {
+fun TypeSpec.Builder.addColumnGetterAndSetter(field: Field, nullableAnnotation: Boolean = true): TypeSpec.Builder {
+    val columnName = field.name
+    val type = field.JavaType
+    val notNull = field.notNull
     val pascalName = columnName.pascalName
     this.addField(type, pascalName, Modifier.PRIVATE)
-    this.addMethod(
-        MethodSpec.methodBuilder("get$pascalName")
-            .addAnnotation(
-                AnnotationSpec.builder(SqlExColumnName::class.java).addMember("value", "\$S", columnName).build()
-            )
-            .addModifiers(Modifier.PUBLIC)
-            .addStatement("return this.$pascalName")
-            .returns(type)
-            .build()
-    )
+
+    //getter
+    val getterMethodSpec = MethodSpec.methodBuilder("get$pascalName")
+        .addAnnotation(
+            AnnotationSpec.builder(SqlExColumnName::class.java).addMember("value", "\$S", columnName).build()
+        )
+        .addModifiers(Modifier.PUBLIC)
+        .addStatement("return this.$pascalName")
+        .returns(type)
+    if (nullableAnnotation)
+        if (notNull)
+            getterMethodSpec.addAnnotation(NotNull::class.java)
+        else
+            getterMethodSpec.addAnnotation(Nullable::class.java)
+    this.addMethod(getterMethodSpec.build())
+
+    //setter
+    val parameterSpec = ParameterSpec.builder(type, "value")
+    if (nullableAnnotation)
+        if (notNull)
+            parameterSpec.addAnnotation(NotNull::class.java)
+        else
+            parameterSpec.addAnnotation(Nullable::class.java)
     this.addMethod(
         MethodSpec.methodBuilder("set$pascalName")
             .addAnnotation(
                 AnnotationSpec.builder(SqlExColumnName::class.java).addMember("value", "\$S", columnName).build()
             )
             .addModifiers(Modifier.PUBLIC)
-            .addParameter(type, "value")
+            .addParameter(parameterSpec.build())
             .addStatement("this.$pascalName = value")
             .build()
     )

@@ -15,6 +15,7 @@ import me.danwi.sqlex.parser.exception.SqlExRepositoryMethodException
 import me.danwi.sqlex.parser.util.*
 import org.antlr.v4.runtime.CharStreams
 import org.antlr.v4.runtime.CommonTokenStream
+import org.jetbrains.annotations.Nullable
 import javax.lang.model.element.Modifier
 
 private class ImportedClasses(imported: List<SqlExMethodLanguageParser.ImportExContext>) {
@@ -149,7 +150,8 @@ class GeneratedMethodFile(
         } else {
             //如果是多列,则生成对应的实体类
             val resultClassName = method.returnType()?.text ?: "${methodName.pascalName}Result"
-            val resultClassSpec = fields.toEntityClass(resultClassName, isStatic = true, constructor = false)
+            val resultClassSpec =
+                fields.toEntityClass(resultClassName, isStatic = true, constructor = false, nullableAnnotation = false)
             //把实体类添加到内部类
             innerClasses.add(resultClassSpec)
             ClassName.get(packageName, className, resultClassName)
@@ -161,9 +163,10 @@ class GeneratedMethodFile(
             //单行,判断是否有paged
             if (isPaged)
                 throw Exception("单行查询不能声明为分页方法")
-            //如果是单行,返回值直接就是结果类型
+            //如果是单行,返回值直接就是结果类型,且可能为空
             returnTypeName = resultTypeName
             methodSpec.addAnnotation(SqlExOneRow::class.java)
+            methodSpec.addAnnotation(Nullable::class.java)
         }
         //是否为分页
         if (isPaged) {

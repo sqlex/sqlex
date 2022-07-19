@@ -15,6 +15,8 @@ import me.danwi.sqlex.core.transaction.TransactionManager
 import me.danwi.sqlex.parser.Field
 import me.danwi.sqlex.parser.Session
 import me.danwi.sqlex.parser.util.pascalName
+import org.jetbrains.annotations.NotNull
+import org.jetbrains.annotations.Nullable
 import javax.lang.model.element.Modifier
 
 class GeneratedTableFile(
@@ -140,10 +142,12 @@ class GeneratedTableFile(
         //添加set方法
         typeSpecBuilder.addMethods(
             columns.map {
+                val parameterSpec = ParameterSpec.builder(it.JavaType, "value")
+                    .addAnnotation(if (it.notNull) NotNull::class.java else Nullable::class.java)
                 MethodSpec.methodBuilder("set${it.name.pascalName}")
                     .addModifiers(Modifier.PUBLIC)
                     .returns(updateClassTypeName)
-                    .addParameter(it.JavaType, "value")
+                    .addParameter(parameterSpec.build())
                     .addCode("super.values.put(\$S, value);\n", it.name)
                     .addCode("return this;")
                     .build()
@@ -198,6 +202,7 @@ class GeneratedTableFile(
         val findMethods = uniqueColumns
             .map {
                 MethodSpec.methodBuilder("findBy${it.name.pascalName}")
+                    .addAnnotation(Nullable::class.java)
                     .addModifiers(Modifier.PUBLIC)
                     .returns(entityTypeName)
                     .addParameter(it.JavaType, "value")
@@ -226,6 +231,7 @@ class GeneratedTableFile(
         val saveMethods = if (uniqueColumns.isNotEmpty()) {
             //save方法(带选项)
             val saveWithOptionsMethod = MethodSpec.methodBuilder("save")
+                .addAnnotation(Nullable::class.java)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(entityTypeName)
                 .addParameter(entityTypeName, "entity")
@@ -245,12 +251,14 @@ class GeneratedTableFile(
             saveWithOptionsMethod.addCode("return null;")
             //save方法
             val saveMethod = MethodSpec.methodBuilder("save")
+                .addAnnotation(Nullable::class.java)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(entityTypeName)
                 .addParameter(entityTypeName, "entity")
                 .addCode("return this.save(entity, \$T.NULL_IS_NONE);", InsertOption::class.java)
             //saveOrUpdate方法
             val saveOrUpdateMethod = MethodSpec.methodBuilder("saveOrUpdate")
+                .addAnnotation(Nullable::class.java)
                 .addModifiers(Modifier.PUBLIC)
                 .returns(entityTypeName)
                 .addParameter(entityTypeName, "entity")

@@ -10,6 +10,7 @@ import me.danwi.sqlex.core.query.expression.ExpressionUtil;
 import me.danwi.sqlex.core.transaction.Transaction;
 import me.danwi.sqlex.core.transaction.TransactionManager;
 import me.danwi.sqlex.core.type.PagedResult;
+import org.jetbrains.annotations.Nullable;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -221,6 +222,7 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
      *
      * @return 第一条数据
      */
+    @Nullable
     public T findOne() {
         List<T> results = this.take(1).find();
         if (results.size() > 0)

@@ -6,6 +6,7 @@ import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.jdbc.ParameterSetter;
 import me.danwi.sqlex.core.transaction.Transaction;
 import me.danwi.sqlex.core.transaction.TransactionManager;
+import org.jetbrains.annotations.Nullable;
 
 import java.beans.IntrospectionException;
 import java.beans.Introspector;
@@ -37,6 +38,7 @@ public class TableInsert<T> {
      * @param options 选项
      * @return 自动生成的主键(没有则为null)
      */
+    @Nullable
     public Long insert(T entity, int options) {
         //列名
         List<String> columnNames = new LinkedList<>();
@@ -129,6 +131,7 @@ public class TableInsert<T> {
      * @param entity 需要插入的实体
      * @return 自动生成的主键(没有则为null)
      */
+    @Nullable
     public Long insert(T entity) {
         return insert(entity, InsertOption.NONE_OPTIONS);
     }
@@ -139,6 +142,7 @@ public class TableInsert<T> {
      * @param entity 需要插入的实体
      * @return 自动生成的主键(没有则为null)
      */
+    @Nullable
     public Long insertWithoutNull(T entity) {
         return insert(entity, InsertOption.NULL_IS_NONE);
     }
@@ -149,6 +153,7 @@ public class TableInsert<T> {
      * @param entity 实体
      * @return 自动生成的主键(没有则为null)
      */
+    @Nullable
     public Long upsert(T entity) {
         return insert(entity, InsertOption.INSERT_OR_UPDATE);
     }
@@ -159,6 +164,7 @@ public class TableInsert<T> {
      * @param entity 实体
      * @return 自动生成的主键(没有则为null)
      */
+    @Nullable
     public Long upsertWithoutNull(T entity) {
         return insert(entity, InsertOption.NULL_IS_NONE | InsertOption.INSERT_OR_UPDATE);
     }
