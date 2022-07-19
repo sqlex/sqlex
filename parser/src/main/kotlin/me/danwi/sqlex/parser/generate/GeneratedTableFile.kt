@@ -31,11 +31,11 @@ class GeneratedTableFile(
     private val updateClassTypeName = ClassName.get(rootPackage, className, updateClassName)
 
     override fun generate(): TypeSpec {
-        //获取表的所有字段信息
-        val columns = session.getColumns(tableName)
+        //获取表信息
+        val tableInfo = session.getTableInfo(tableName)
 
         //获取生成列
-        val generatedColumn = columns.find { it.isAutoIncrement }
+        val generatedColumn = tableInfo.columns.find { it.isAutoIncrement }
         val generatedColumnJavaType = generatedColumn?.JavaType ?: ClassName.get(Void::class.java)
 
         //构建表操作类
@@ -61,9 +61,9 @@ class GeneratedTableFile(
         //添加构造函数
         typeSpecBuilder.addMethod(generateConstructorMethod(generatedColumn))
         //添加静态列表达式字段
-        typeSpecBuilder.addFields(generateColumnExpression(columns))
+        typeSpecBuilder.addFields(generateColumnExpression(tableInfo.columns))
         //添加update类
-        typeSpecBuilder.addType(generateUpdateClass(columns))
+        typeSpecBuilder.addType(generateUpdateClass(tableInfo.columns))
         //添加update方法
         typeSpecBuilder.addMethod(generateUpdateMethod())
         //添加delete方法
@@ -71,7 +71,7 @@ class GeneratedTableFile(
         //添加select方法
         typeSpecBuilder.addMethod(generateSelectMethod())
         //添加短链接方法
-        typeSpecBuilder.addMethods(generateShortCutMethods(columns))
+        typeSpecBuilder.addMethods(generateShortCutMethods(tableInfo.columns))
 
         return typeSpecBuilder.build()
     }

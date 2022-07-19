@@ -178,7 +178,7 @@ class SessionTest {
         //TODO:重新开session,需要处理一下golang那边的BUG
         session = Session("getColumns_test")
 
-        var fields = session.getColumns("person")
+        var fields = session.getTableInfo("person").columns
         assertEquals(5, fields.size)
 
         assertEquals("id", fields[0].name)
@@ -237,7 +237,7 @@ class SessionTest {
         assertFalse(fields[1].hasDefaultValue)
 
         //department表
-        fields = session.getColumns("department")
+        fields = session.getTableInfo("department").columns
         assertEquals(2, fields.size)
 
         assertEquals("id", fields[0].name)
@@ -261,6 +261,67 @@ class SessionTest {
         assertFalse(fields[1].isUnique)
         assertTrue(fields[1].notNull)
         assertFalse(fields[1].hasDefaultValue)
+    }
+
+    @Test
+    fun getUniques() {
+        var session = Session("getUniques_test")
+        //language=MySQL
+        session.execute(
+            """
+            create table table1(
+                id int auto_increment primary key,
+                name varchar(255) not null unique,
+                name2 varchar(255) unique,
+                age int
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            create table table2(
+                id varchar(255) not null,
+                name varchar(255) not null,
+                name2 varchar(255) unique,
+                a varchar(255) not null ,
+                b varchar(255) not null ,
+                primary key (id, name),
+                unique (a, b)
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            create table table3(
+                id varchar(255) not null,
+                name varchar(255) not null
+            )
+        """.trimIndent()
+        )
+        session.close()
+
+        //TODO:重新开session,需要处理一下golang那边的BUG
+        session = Session("getUniques_test")
+
+        var tableInfo = session.getTableInfo("table1")
+        assertArrayEquals(arrayOf("id"), tableInfo.primaryKey)
+        assertEquals(3, tableInfo.uniques.size)
+        assertTrue(tableInfo.uniques.map { it.joinToString(",") }.contains(arrayOf("id").joinToString(",")))
+        assertTrue(tableInfo.uniques.map { it.joinToString(",") }.contains(arrayOf("name").joinToString(",")))
+        assertTrue(tableInfo.uniques.map { it.joinToString(",") }.contains(arrayOf("name2").joinToString(",")))
+
+        tableInfo = session.getTableInfo("table2")
+        assertArrayEquals(arrayOf("id", "name"), tableInfo.primaryKey)
+        assertEquals(3, tableInfo.uniques.size)
+        assertTrue(tableInfo.uniques.map { it.joinToString(",") }.contains(arrayOf("id", "name").joinToString(",")))
+        assertTrue(tableInfo.uniques.map { it.joinToString(",") }.contains(arrayOf("name2").joinToString(",")))
+        assertTrue(tableInfo.uniques.map { it.joinToString(",") }.contains(arrayOf("a", "b").joinToString(",")))
+
+        tableInfo = session.getTableInfo("table3")
+        assertNull(tableInfo.primaryKey)
+        assertEquals(0, tableInfo.uniques.size)
     }
 
     @Test
