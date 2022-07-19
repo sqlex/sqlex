@@ -31,8 +31,23 @@ class GeneratedTableFile(
     private val updateClassTypeName = ClassName.get(rootPackage, className, updateClassName)
 
     override fun generate(): TypeSpec {
+        //获取表的所有字段信息
+        val columns = session.getColumns(tableName)
+
+        //获取生成列
+        val generatedColumn = columns.find { it.isAutoIncrement }
+        val generatedColumnJavaType = generatedColumn?.JavaType ?: ClassName.get(Void::class.java)
+
+        //构建表操作类
         val typeSpecBuilder = TypeSpec.classBuilder(className).addModifiers(Modifier.PUBLIC)
-            .superclass(ParameterizedTypeName.get(ClassName.get(TableInsert::class.java), entityTypeName))
+            //继承至 TableInsert<实体,生成列>
+            .superclass(
+                ParameterizedTypeName.get(
+                    ClassName.get(TableInsert::class.java),
+                    entityTypeName,
+                    generatedColumnJavaType
+                )
+            )
             .addAnnotation(
                 //所属的repository
                 AnnotationSpec
@@ -44,9 +59,7 @@ class GeneratedTableFile(
         //添加字段
         typeSpecBuilder.addFields(generateFields())
         //添加构造函数
-        typeSpecBuilder.addMethod(generateConstructorMethod())
-
-        val columns = session.getColumns(tableName)
+        typeSpecBuilder.addMethod(generateConstructorMethod(generatedColumn))
         //添加静态列表达式字段
         typeSpecBuilder.addFields(generateColumnExpression(columns))
         //添加update类
@@ -105,13 +118,22 @@ class GeneratedTableFile(
         )
     }
 
-    private fun generateConstructorMethod(): MethodSpec {
-        return MethodSpec.constructorBuilder()
+    private fun generateConstructorMethod(generatedColumn: Field?): MethodSpec {
+        val constructorMethod = MethodSpec.constructorBuilder()
             .addModifiers(Modifier.PUBLIC)
             .addParameter(ClassName.get(TransactionManager::class.java), "transactionManager")
             .addParameter(ClassName.get(ParameterSetter::class.java), "parameterSetter")
             .addParameter(ClassName.get(ExceptionTranslator::class.java), "translator")
-            .addCode("super(\$S, transactionManager, parameterSetter, translator);\n", tableName)
+        //如有生成列,则把生成列的类型传给TableInsert构造函数,没有则传空
+        if (generatedColumn != null)
+            constructorMethod.addCode(
+                "super(\$S, \$T.class, transactionManager, parameterSetter, translator);\n",
+                tableName, generatedColumn.JavaType
+            )
+        else
+            constructorMethod.addCode("super(\$S, null, transactionManager, parameterSetter, translator);\n", tableName)
+
+        return constructorMethod
             .addCode("this.transactionManager = transactionManager;\n")
             .addCode("this.parameterSetter = parameterSetter;\n")
             .addCode("this.translator = translator;")
@@ -230,13 +252,21 @@ class GeneratedTableFile(
                 .returns(entityTypeName)
                 .addParameter(entityTypeName, "entity")
                 .addParameter(ClassName.INT, "options")
-            //先将数据存储进去
-            saveWithOptionsMethod.addCode("Long generatedKey = this.insert(entity, options);\n")
-            //自增主键查询
-            val autoPrimaryKeyColumn = columns.find { it.isPrimaryKey && it.isAutoIncrement }
-            if (autoPrimaryKeyColumn != null)
-                saveWithOptionsMethod.addCode("if(generatedKey != null) return this.findBy${autoPrimaryKeyColumn.name.pascalName}(generatedKey);\n")
-            //如果主键没有/或者没有生成key,则使用唯一键查询
+            //获取自动生成带主键/唯一列
+            val generatedColumn = uniqueColumns.find { it.isAutoIncrement }
+            if (generatedColumn != null) {
+                //如果有唯一生成列,则插入数据并获取唯一生成列的值
+                saveWithOptionsMethod.addCode(
+                    "\$T generatedColumnValue = this.insert(entity, options);\n",
+                    generatedColumn.JavaType
+                )
+                //如果获取到了值,则尝试通过该值去查找刚刚插入的行
+                saveWithOptionsMethod.addCode("if(generatedColumnValue != null) return this.findBy${generatedColumn.name.pascalName}(generatedColumnValue);\n")
+            } else {
+                //否则直接插入即可
+                saveWithOptionsMethod.addCode("this.insert(entity, options);\n");
+            }
+            //如果主键没有/或者没有获取到生成列的值,则使用唯一键查询
             uniqueColumns.forEach {
                 val fieldGetter = "entity.get${it.name.pascalName}()"
                 saveWithOptionsMethod.addCode("if($fieldGetter != null) return this.findBy${it.name.pascalName}($fieldGetter);\n")
