@@ -73,8 +73,24 @@ public interface Expression {
         return new InExpression(this, set);
     }
 
+    default NotExpression notIn(Iterable<Expression> set) {
+        return not(this.in(set));
+    }
+
     default LikeExpression like(Expression right) {
         return new LikeExpression(this, right);
+    }
+
+    default NotExpression notLike(Expression right) {
+        return not(this.like(right));
+    }
+
+    default IsNullExpression isNull() {
+        return new IsNullExpression(this);
+    }
+
+    default NotExpression isNotNull() {
+        return not(this.isNull());
     }
     //endregion
 
