@@ -233,6 +233,7 @@ class GeneratedTableFile(
                     )
                 }
                 MethodSpec.methodBuilder("findBy${it.joinToString("And") { c -> c.name.pascalName }}")
+                    .addAnnotation(Nullable::class.java)
                     .addModifiers(Modifier.PUBLIC)
                     .returns(entityTypeName)
                     .addParameters(parameters)
