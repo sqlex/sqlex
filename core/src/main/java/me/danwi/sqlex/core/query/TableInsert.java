@@ -4,6 +4,7 @@ import me.danwi.sqlex.core.ExceptionTranslator;
 import me.danwi.sqlex.core.annotation.entity.SqlExColumnName;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.jdbc.ParameterSetter;
+import me.danwi.sqlex.core.jdbc.mapper.BasicTypeMapper;
 import me.danwi.sqlex.core.transaction.Transaction;
 import me.danwi.sqlex.core.transaction.TransactionManager;
 import org.jetbrains.annotations.Nullable;
@@ -18,14 +19,25 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class TableInsert<T> {
+/**
+ * 表插入
+ *
+ * @param <T> 实体类型
+ * @param <K> 自动生成字段的类型
+ */
+public class TableInsert<T, K> {
     private final String tableName;
+    private final BasicTypeMapper generatedColumnMapper;
     private final TransactionManager transactionManager;
     private final ParameterSetter parameterSetter;
     private final ExceptionTranslator translator;
 
-    public TableInsert(String tableName, TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator) {
+    public TableInsert(String tableName, Class<K> generatedColumnJavaType, TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator) {
         this.tableName = tableName;
+        if (generatedColumnJavaType == null)
+            this.generatedColumnMapper = null;
+        else
+            this.generatedColumnMapper = new BasicTypeMapper(generatedColumnJavaType);
         this.transactionManager = transactionManager;
         this.parameterSetter = parameterSetter;
         this.translator = translator;
@@ -36,10 +48,10 @@ public class TableInsert<T> {
      *
      * @param entity  需要插入的实体
      * @param options 选项
-     * @return 自动生成的主键(没有则为null)
+     * @return 自动生成的列的值(没有则为null)
      */
     @Nullable
-    public Long insert(T entity, int options) {
+    public K insert(T entity, int options) {
         //列名
         List<String> columnNames = new LinkedList<>();
         //参数
@@ -99,15 +111,16 @@ public class TableInsert<T> {
                 parameterSetter.setParameters(statement, parameters);
                 //执行
                 statement.executeUpdate();
-                //获取生成主键信息
+                //获取生成列的值
                 try (ResultSet rs = statement.getGeneratedKeys()) {
-                    if (rs.next()) {
-                        if (rs.getMetaData().getColumnCount() == 1) {
-                            return rs.getLong(1);
-                        }
+                    //如果存在生成列,则获取它的值
+                    if (this.generatedColumnMapper != null) {
+                        List<?> fetchResult = this.generatedColumnMapper.fetch(rs);
+                        if (fetchResult.size() > 0)
+                            return (K) fetchResult.get(0);
                     }
                 }
-                //没有主键信息,则返回null
+                //没有生成列信息,则返回null
                 return null;
             }
         } catch (SQLException e) {
@@ -129,10 +142,10 @@ public class TableInsert<T> {
      * 新建行(插入)
      *
      * @param entity 需要插入的实体
-     * @return 自动生成的主键(没有则为null)
+     * @return 自动生成的列的值(没有则为null)
      */
     @Nullable
-    public Long insert(T entity) {
+    public K insert(T entity) {
         return insert(entity, InsertOption.NONE_OPTIONS);
     }
 
@@ -140,10 +153,10 @@ public class TableInsert<T> {
      * 新建行(插入),忽略为null的属性
      *
      * @param entity 需要插入的实体
-     * @return 自动生成的主键(没有则为null)
+     * @return 自动生成的列的值(没有则为null)
      */
     @Nullable
-    public Long insertWithoutNull(T entity) {
+    public K insertWithoutNull(T entity) {
         return insert(entity, InsertOption.NULL_IS_NONE);
     }
 
@@ -151,10 +164,10 @@ public class TableInsert<T> {
      * 新建行(插入),如果key冲突则更新
      *
      * @param entity 实体
-     * @return 自动生成的主键(没有则为null)
+     * @return 自动生成的列的值(没有则为null)
      */
     @Nullable
-    public Long upsert(T entity) {
+    public K upsert(T entity) {
         return insert(entity, InsertOption.INSERT_OR_UPDATE);
     }
 
@@ -162,10 +175,10 @@ public class TableInsert<T> {
      * 新建行(插入),忽略为null的属性,如果key冲突则更新
      *
      * @param entity 实体
-     * @return 自动生成的主键(没有则为null)
+     * @return 自动生成的列的值(没有则为null)
      */
     @Nullable
-    public Long upsertWithoutNull(T entity) {
+    public K upsertWithoutNull(T entity) {
         return insert(entity, InsertOption.NULL_IS_NONE | InsertOption.INSERT_OR_UPDATE);
     }
 }

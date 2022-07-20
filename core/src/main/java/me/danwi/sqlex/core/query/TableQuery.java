@@ -16,6 +16,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -25,11 +26,15 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
     private final ParameterSetter parameterSetter;
     private final RowMapper rowMapper;
     private final ExceptionTranslator translator;
-    private Expression orderExpression;
-    private Order orderType;
+    private final List<OrderPair> orders = new ArrayList<>();
     private Long skip;
     private Long take;
     private boolean forUpdate = false;
+
+    private static class OrderPair {
+        Expression expression;
+        Order order;
+    }
 
     public TableQuery(String tableName, TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator, Class<T> entityClass) {
         this.tableName = tableName;
@@ -57,8 +62,10 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
      * @return this
      */
     public TableQuery<T> order(Expression exp, Order order) {
-        this.orderExpression = exp;
-        this.orderType = order;
+        OrderPair pair = new OrderPair();
+        pair.expression = exp;
+        pair.order = order;
+        orders.add(pair);
         return this;
     }
 
@@ -105,12 +112,15 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
             parameters.addAll(sqlParameterBind.getParameters());
         }
         //处理order
-        if (this.orderExpression != null) {
-            SQLParameterBind sqlParameterBind = ExpressionUtil.toSQL(this.orderExpression);
-            sql = sql + " order by " + sqlParameterBind.getSQL();
-            parameters.addAll(sqlParameterBind.getParameters());
-            if (this.orderType == Order.Desc)
-                sql += " desc";
+        if (!orders.isEmpty()) {
+            sql = sql + " order by ";
+            List<String> orderSegments = new LinkedList<>();
+            for (OrderPair order : orders) {
+                SQLParameterBind sqlParameterBind = ExpressionUtil.toSQL(order.expression);
+                orderSegments.add("(" + sqlParameterBind.getSQL() + ") " + (order.order == Order.Asc ? "asc" : "desc"));
+                parameters.addAll(sqlParameterBind.getParameters());
+            }
+            sql = sql + String.join(", ", orderSegments);
         }
         //处理limit相关
         if (this.skip != null && this.take != null)
