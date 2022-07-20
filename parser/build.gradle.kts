@@ -15,6 +15,7 @@ dependencies {
     antlr("org.antlr:antlr4:4.10.1") {
         exclude("com.ibm.icu", "icu4j")
     }
+    implementation("org.jetbrains:annotations:23.0.0")
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.8.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.8.2")
