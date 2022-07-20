@@ -2,6 +2,9 @@ package me.danwi.sqlex.core.query
 
 import me.danwi.sqlex.core.query.expression.BinaryExpression
 import me.danwi.sqlex.core.query.expression.Expression
+import me.danwi.sqlex.core.query.expression.InExpression
+import me.danwi.sqlex.core.query.expression.LikeExpression
+import me.danwi.sqlex.core.query.expression.NotExpression
 
 infix fun Expression.eq(right: Expression): BinaryExpression = this.eq(right)
 infix fun Expression.eq(right: Any): BinaryExpression = this.eq(right.arg)
@@ -21,5 +24,11 @@ infix fun Expression.lt(right: Any): BinaryExpression = this.lt(right.arg)
 infix fun Expression.lte(right: Expression): BinaryExpression = this.lte(right)
 infix fun Expression.lte(right: Any): BinaryExpression = this.lte(right.arg)
 
-infix fun Expression.like(right: Expression): BinaryExpression = this.like(right)
-infix fun Expression.like(right: String): BinaryExpression = this.like(right.arg)
+infix fun Expression.`in`(set: Iterable<Expression>): InExpression = this.`in`(set)
+infix fun Expression.notIn(set: Iterable<Expression>): NotExpression = !this.`in`(set)
+
+infix fun Expression.like(right: Expression): LikeExpression = this.like(right)
+infix fun Expression.like(right: String): LikeExpression = this.like(right.arg)
+
+infix fun Expression.notLike(right: Expression): NotExpression = !this.like(right)
+infix fun Expression.notLike(right: String): NotExpression = !this.like(right.arg)

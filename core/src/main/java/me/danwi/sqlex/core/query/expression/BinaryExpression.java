@@ -2,8 +2,8 @@ package me.danwi.sqlex.core.query.expression;
 
 public class BinaryExpression implements Expression {
     private final String operator;
-    private final Expression left;
-    private final Expression right;
+    protected final Expression left;
+    protected final Expression right;
 
     public BinaryExpression(String operator, Expression left, Expression right) {
         this.operator = operator;

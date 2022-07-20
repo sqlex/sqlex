@@ -2,7 +2,7 @@ package me.danwi.sqlex.core.query.expression;
 
 public class UnaryExpression implements Expression {
     private final String operator;
-    private final Expression exp;
+    protected final Expression exp;
 
     public UnaryExpression(String operator, Expression exp) {
         this.operator = operator;

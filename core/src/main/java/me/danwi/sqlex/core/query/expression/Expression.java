@@ -26,8 +26,8 @@ public interface Expression {
     }
 
     //region 逻辑运算
-    static UnaryExpression not(Expression exp) {
-        return new UnaryExpression("!", exp);
+    static NotExpression not(Expression exp) {
+        return new NotExpression(exp);
     }
 
     default BinaryExpression and(Expression right) {
@@ -64,8 +64,12 @@ public interface Expression {
         return new BinaryExpression("<=", this, right);
     }
 
-    default BinaryExpression like(Expression right) {
-        return new BinaryExpression("like", this, right);
+    default InExpression in(Iterable<Expression> set) {
+        return new InExpression(this, set);
+    }
+
+    default LikeExpression like(Expression right) {
+        return new LikeExpression(this, right);
     }
     //endregion
 
