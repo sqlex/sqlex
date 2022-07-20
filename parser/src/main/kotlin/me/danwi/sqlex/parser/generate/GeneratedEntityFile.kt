@@ -10,7 +10,7 @@ class GeneratedEntityFile(
     private val session: Session,
 ) : GeneratedJavaFile(rootPackage, tableName.pascalName) {
     override fun generate(): TypeSpec {
-        val columns = session.getColumns(tableName)
-        return columns.toEntityClass(tableName.pascalName)
+        val tableInfo = session.getTableInfo(tableName)
+        return tableInfo.columns.toEntityClass(tableName.pascalName)
     }
 }

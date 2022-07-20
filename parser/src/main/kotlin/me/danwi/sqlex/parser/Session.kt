@@ -32,6 +32,13 @@ class Field {
     var hasDefaultValue = false
 }
 
+class TableInfo(
+    val name: String,
+    val primaryKey: Array<String>?,
+    val uniques: Array<Array<String>>,
+    val columns: Array<Field>
+)
+
 class PlanInfo(
     val fields: Array<Field>,
     val maxOneRow: Boolean
@@ -73,8 +80,8 @@ class Session(database: String) {
         return ffiInvoke("DatabaseAPI", "GetTableDDL", sessionID, table)
     }
 
-    fun getColumns(table: String): Array<Field> {
-        return ffiInvoke("DatabaseAPI", "GetColumns", sessionID, table)
+    fun getTableInfo(table: String): TableInfo {
+        return ffiInvoke("DatabaseAPI", "GetTableInfo", sessionID, table)
     }
 
     fun getPlanInfo(sql: String): PlanInfo {
