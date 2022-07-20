@@ -25,6 +25,11 @@ public interface Expression {
         return new FunctionCallExpression(name, Arrays.asList(args));
     }
 
+    //原生SQL
+    static RawExpression sql(String rawSQL) {
+        return new RawExpression(rawSQL);
+    }
+
     //region 逻辑运算
     static NotExpression not(Expression exp) {
         return new NotExpression(exp);
