@@ -184,6 +184,18 @@ fun Array<Field>.toEntityClass(
         }
         if (necessaryColumns.isNotEmpty()) {
             val fromMethodBuilder = MethodSpec.methodBuilder("from")
+                .addJavadoc(
+                    """
+                    通过数据库表必要的字段构建实体
+                    <br/>
+                    必要的字段指的是, 非空且不能自动生成(不自增且没有默认值)
+                    <br/>
+                    注意: 该方法构造的实体仅用作数据库插入, 其内部属性不是空安全的(kotlin)  
+                    
+                    @deprecated 该方法已经弃用, 请使用 {@link #forInsert} 方法
+                """.trimIndent()
+                )
+                .addAnnotation(java.lang.Deprecated::class.java)
                 .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
                 .returns(ClassName.bestGuess(className))
                 .addCode("$className object = new $className();\n")
@@ -197,6 +209,30 @@ fun Array<Field>.toEntityClass(
             }
             fromMethodBuilder.addCode("return object;")
             typeSpecBuilder.addMethod(fromMethodBuilder.build())
+
+            val forInsertMethod = MethodSpec.methodBuilder("forInsert")
+                .addJavadoc(
+                    """
+                    通过数据库表必要的字段构建实体
+                    <br/>
+                    必要的字段指的是, 非空且不能自动生成(不自增且没有默认值)
+                    <br/>
+                    注意: 该方法构造的实体仅用作数据库插入, 其内部属性不是空安全的(kotlin) 
+                """.trimIndent()
+                )
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .returns(ClassName.bestGuess(className))
+                .addCode("$className object = new $className();\n")
+            necessaryColumns.forEach {
+                val fieldName = it.name.pascalName
+                val parameterSpec = ParameterSpec.builder(it.JavaType, fieldName)
+                if (nullableAnnotation)
+                    parameterSpec.addAnnotation(NotNull::class.java)
+                forInsertMethod.addParameter(parameterSpec.build())
+                forInsertMethod.addCode("object.$fieldName = $fieldName;\n")
+            }
+            forInsertMethod.addCode("return object;")
+            typeSpecBuilder.addMethod(forInsertMethod.build())
         }
     }
     //给实体添加toString
