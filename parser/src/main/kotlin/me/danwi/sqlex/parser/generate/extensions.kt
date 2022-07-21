@@ -24,7 +24,17 @@ val Field.JavaType: TypeName
         if (this.dbType == "bit") { //bit(n)
             return if (this.length == 1L) ClassName.BOOLEAN.box() else ArrayTypeName.of(ClassName.BYTE)
         } else if (this.dbType == "tinyint") { //tinyint(n) 或者 bool, boolean
-            //TODO: tinyInt1isBit为false时, Integer; 为true时, Boolean且size是1. 默认为false
+            //如果是tinyint(1)
+            if (this.length == 1L) {
+                //有可能是boolean,此时根据列名来判断
+                //如果是 isXXX, is-xxx, is_xxx 等明确表明了"是/否" 意图的列名,则映射为boolean
+                if (this.name.length > 2 && this.name.startsWith("is")) {
+                    val thirdChar = this.name[2]
+                    if (thirdChar == '_' || thirdChar == '-' || thirdChar.isUpperCase()) {
+                        return ClassName.BOOLEAN.box()
+                    }
+                }
+            }
             return ClassName.INT.box()
         } else if (listOf("smallint", "mediumint").contains(this.dbType)) { //smallint, mediumint(不管是否unsigned)
             return ClassName.INT.box()
