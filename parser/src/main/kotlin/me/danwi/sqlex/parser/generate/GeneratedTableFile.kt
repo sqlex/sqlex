@@ -271,16 +271,16 @@ class GeneratedTableFile(
                 .returns(entityTypeName)
                 .addParameter(entityTypeName, "entity")
                 .addParameter(ClassName.INT, "options")
-            //获取自动生成带主键/唯一列(且是单列)
-            val generatedColumn = uniqueColumns.find { it.size == 1 && it[0].isAutoIncrement }?.get(0)
+            //判断是否有自增列
+            val generatedColumn = tableInfo.columns.find { it.isAutoIncrement }
             if (generatedColumn != null) {
-                //如果有唯一生成列,则插入数据并获取唯一生成列的值
+                //如果有自增列,则获取它的返回值
                 saveWithOptionsMethod.addCode(
                     "\$T generatedColumnValue = this.insert(entity, options);\n",
                     generatedColumn.JavaType
                 )
-                //如果获取到了值,则尝试通过该值去查找刚刚插入的行
-                saveWithOptionsMethod.addCode("if(generatedColumnValue != null) return this.findBy${generatedColumn.name.pascalName}(generatedColumnValue);\n")
+                //如果获取到了值,则给赋值到实体中,以便下面的代码中用来做唯一查找
+                saveWithOptionsMethod.addCode("if(generatedColumnValue != null) entity.set${generatedColumn.name.pascalName}(generatedColumnValue);\n")
             } else {
                 //否则直接插入即可
                 saveWithOptionsMethod.addCode("this.insert(entity, options);\n");
