@@ -14,6 +14,7 @@ class SqlExMethodFoldingBuilder : FoldingBuilderEx() {
         //取得当前sqlm文件内所有的method
         val methodSubtrees = root.root?.methods ?: return arrayOf()
         return methodSubtrees
+            .filter { it.textRange.length > 0 }
             .map { FoldingDescriptor(it, it.textRange) }
             .toTypedArray()
     }
