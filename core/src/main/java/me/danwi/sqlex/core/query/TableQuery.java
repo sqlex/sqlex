@@ -103,7 +103,7 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
 
     //构建SQL
     private SQLParameterBind buildSQL() {
-        String sql = "select * from " + tableName;
+        String sql = "select * from `" + tableName + "`";
         List<Object> parameters = new LinkedList<>();
         //处理where条件
         if (this.whereCondition != null) {

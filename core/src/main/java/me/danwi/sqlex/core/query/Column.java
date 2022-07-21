@@ -109,7 +109,7 @@ public class Column implements Expression {
 
     @Override
     public String toSQL() {
-        return String.format("%s.%s", this.metaData.tableName, this.metaData.columnName);
+        return String.format("`%s`.`%s`", this.metaData.tableName, this.metaData.columnName);
     }
 
     public MetaData getMetaData() {

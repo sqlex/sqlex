@@ -26,7 +26,7 @@ public class TableDelete extends WhereBuilder<TableDelete> {
     }
 
     private SQLParameterBind buildSQL() {
-        String sql = "delete from " + tableName;
+        String sql = "delete from `" + tableName + "`";
         List<Object> parameters = new LinkedList<>();
         //处理where条件
         if (this.whereCondition != null) {

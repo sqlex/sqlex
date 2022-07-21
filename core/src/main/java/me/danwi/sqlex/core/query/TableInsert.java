@@ -80,9 +80,9 @@ public class TableInsert<T, K> {
         }
 
         //构建SQL
-        String sql = String.format("insert into %s(%s) values(%s)",
+        String sql = String.format("insert into `%s`(%s) values(%s)",
                 tableName,
-                String.join(", ", columnNames),
+                columnNames.stream().map(name -> "`" + name + "`").collect(Collectors.joining(", ")),
                 columnNames.stream().map(it -> "?").collect(Collectors.joining(", "))
         );
         //如果key重复,则更新
@@ -90,7 +90,7 @@ public class TableInsert<T, K> {
             sql = sql
                     + " on duplicate key update "
                     + columnNames.stream()
-                    .map(it -> String.format("%s = values(%s)", it, it))
+                    .map(it -> String.format("`%s` = values(`%s`)", it, it))
                     .collect(Collectors.joining(","));
         }
 
