@@ -77,10 +77,10 @@ public class LiteralExpressionTest {
 
     @Test
     public void fromTime() {
-        assertEquals("FROM_UNIXTIME(1658479904)", Expression.lit(new java.util.Date(1658479904000L)).toSQL());
+        assertEquals("FROM_UNIXTIME(1658479904.123000)", Expression.lit(new java.util.Date(1658479904123L)).toSQL());
         assertEquals("DATE'2022-08-10'", Expression.lit(java.sql.Date.valueOf("2022-08-10")).toSQL());
         assertEquals("TIME'14:32:12'", Expression.lit(java.sql.Time.valueOf("14:32:12")).toSQL());
-        assertEquals("FROM_UNIXTIME(1658479904)", Expression.lit(new java.sql.Timestamp(1658479904123L)).toSQL());
+        assertEquals("FROM_UNIXTIME(1658479904.001000)", Expression.lit(new java.sql.Timestamp(1658479904001L)).toSQL());
         assertEquals("DATE'2022-08-10'", Expression.lit(java.time.LocalDate.of(2022, 8, 10)).toSQL());
         assertEquals("TIME'14:32:12'", Expression.lit(java.time.LocalTime.of(14, 32, 12)).toSQL());
         assertEquals(
@@ -91,9 +91,13 @@ public class LiteralExpressionTest {
                         123 * 1000 * 1000)
                 ).toSQL()
         );
-        assertEquals("FROM_UNIXTIME(1658479904)", Expression.lit(java.time.OffsetDateTime.of(
+        assertEquals("FROM_UNIXTIME(1658479904.012000)", Expression.lit(java.time.OffsetDateTime.of(
                 2022, 7, 22,
-                8, 51, 44, 0,
+                8, 51, 44, 12 * 1000 * 1000,
+                ZoneOffset.UTC)).toSQL());
+        assertEquals("FROM_UNIXTIME(1658479904.012000)", Expression.lit(java.time.ZonedDateTime.of(
+                2022, 7, 22,
+                8, 51, 44, 12 * 1000 * 1000,
                 ZoneOffset.UTC)).toSQL());
     }
 

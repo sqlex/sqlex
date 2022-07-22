@@ -4,6 +4,7 @@ import me.danwi.sqlex.core.exception.SqlExException;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.sql.Timestamp;
 import java.time.format.DateTimeFormatter;
 
 public class LiteralExpression implements Expression {
@@ -41,19 +42,31 @@ public class LiteralExpression implements Expression {
             return String.format("TIME'%s'", value);
         } else if (value instanceof java.sql.Timestamp) {
             java.sql.Timestamp time = (java.sql.Timestamp) value;
-            return String.format("FROM_UNIXTIME(%d)", time.getTime() / 1000);
+            long second = time.getTime() / 1000;
+            long ms = time.getTime() - second * 1000;
+            return String.format("FROM_UNIXTIME(%d.%06d)", second, ms * 1000);
         } else if (value instanceof java.util.Date) {
             java.util.Date time = (java.util.Date) value;
-            return String.format("FROM_UNIXTIME(%d)", time.getTime() / 1000);
+            long second = time.getTime() / 1000;
+            long ms = time.getTime() - second * 1000;
+            return String.format("FROM_UNIXTIME(%d.%06d)", second, ms * 1000);
         } else if (value instanceof java.time.LocalDateTime) {
             java.time.LocalDateTime localDateTime = (java.time.LocalDateTime) value;
             String date = localDateTime.toLocalDate().toString();
             String time = localDateTime.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
             return String.format("TIMESTAMP('%s %s')", date, time);
         } else if (value instanceof java.time.OffsetDateTime) {
-            return String.format("FROM_UNIXTIME(%d)", ((java.time.OffsetDateTime) value).toEpochSecond());
+            java.time.OffsetDateTime offsetDateTime = (java.time.OffsetDateTime) value;
+            Timestamp timestamp = Timestamp.from(offsetDateTime.toInstant());
+            long second = timestamp.getTime() / 1000;
+            long ms = timestamp.getTime() - second * 1000;
+            return String.format("FROM_UNIXTIME(%d.%06d)", second, ms * 1000);
         } else if (value instanceof java.time.ZonedDateTime) {
-            return String.format("FROM_UNIXTIME(%d)", ((java.time.ZonedDateTime) value).toEpochSecond());
+            java.time.ZonedDateTime offsetDateTime = (java.time.ZonedDateTime) value;
+            Timestamp timestamp = Timestamp.from(offsetDateTime.toInstant());
+            long second = timestamp.getTime() / 1000;
+            long ms = timestamp.getTime() - second * 1000;
+            return String.format("FROM_UNIXTIME(%d.%06d)", second, ms * 1000);
         } else {
             throw new SqlExException("不支持的字面量类型");
         }
