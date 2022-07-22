@@ -1,6 +1,7 @@
 package me.danwi.sqlex.core.query.expression;
 
 import java.util.Arrays;
+import java.util.Iterator;
 
 public interface Expression {
     /**
@@ -127,6 +128,45 @@ public interface Expression {
 
     static FunctionCallExpression dateFormat(Expression date, String format) {
         return func("date_format", date, lit(format));
+    }
+    //endregion
+
+    //#region 辅助函数
+
+    /**
+     * 将表达式通过 or 联合起来
+     *
+     * @param expressions 表达式集合
+     * @return 联合后的表达式, 如果集合为空, 则返回null
+     */
+    static Expression joinByAnd(Iterable<Expression> expressions) {
+        Iterator<Expression> iterator = expressions.iterator();
+        if (!iterator.hasNext()) return null;
+        Expression accumulator = iterator.next();
+        while (iterator.hasNext()) {
+            Expression expression = iterator.next();
+            if (expression != null)
+                accumulator = accumulator.and(iterator.next());
+        }
+        return accumulator;
+    }
+
+    /**
+     * 将表达式通过 or 联合起来
+     *
+     * @param expressions 表达式集合
+     * @return 联合后的表达式, 如果集合为空, 则返回null
+     */
+    static Expression joinByOr(Iterable<Expression> expressions) {
+        Iterator<Expression> iterator = expressions.iterator();
+        if (!iterator.hasNext()) return null;
+        Expression accumulator = iterator.next();
+        while (iterator.hasNext()) {
+            Expression expression = iterator.next();
+            if (expression != null)
+                accumulator = accumulator.or(iterator.next());
+        }
+        return accumulator;
     }
     //endregion
 }
