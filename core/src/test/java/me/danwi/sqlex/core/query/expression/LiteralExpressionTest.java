@@ -5,9 +5,11 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.time.ZoneOffset;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 
 public class LiteralExpressionTest {
     @Test
@@ -74,12 +76,34 @@ public class LiteralExpressionTest {
     }
 
     @Test
+    public void fromTime() {
+        assertEquals("FROM_UNIXTIME(1658479904)", Expression.lit(new java.util.Date(1658479904000L)).toSQL());
+        assertEquals("DATE'2022-08-10'", Expression.lit(java.sql.Date.valueOf("2022-08-10")).toSQL());
+        assertEquals("TIME'14:32:12'", Expression.lit(java.sql.Time.valueOf("14:32:12")).toSQL());
+        assertEquals("FROM_UNIXTIME(1658479904)", Expression.lit(new java.sql.Timestamp(1658479904123L)).toSQL());
+        assertEquals("DATE'2022-08-10'", Expression.lit(java.time.LocalDate.of(2022, 8, 10)).toSQL());
+        assertEquals("TIME'14:32:12'", Expression.lit(java.time.LocalTime.of(14, 32, 12)).toSQL());
+        assertEquals(
+                "TIMESTAMP('2022-07-22 16:52:44')",
+                Expression.lit(java.time.LocalDateTime.of(
+                        2022, 7, 22,
+                        16, 52, 44,
+                        123 * 1000 * 1000)
+                ).toSQL()
+        );
+        assertEquals("FROM_UNIXTIME(1658479904)", Expression.lit(java.time.OffsetDateTime.of(
+                2022, 7, 22,
+                8, 51, 44, 0,
+                ZoneOffset.UTC)).toSQL());
+    }
+
+    @Test
     public void fromUnsupported() {
         assertThrowsExactly(SqlExException.class, () -> {
-            Expression.lit(OffsetDateTime.now()).toSQL();
+            Expression.lit(OffsetTime.now()).toSQL();
         });
         assertThrowsExactly(SqlExException.class, () -> {
-            Expression.lit(OffsetDateTime.now()).toSQL();
+            Expression.lit(OffsetTime.now()).toSQL();
         });
     }
 }
