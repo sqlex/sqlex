@@ -9,6 +9,8 @@ public class LiteralExpression implements Expression {
     private final Object value;
 
     public LiteralExpression(Object value) {
+        if (value instanceof Expression)
+            throw new SqlExException("已经是一个表达式了,无需转换成预处理参数");
         this.value = value;
     }
 
