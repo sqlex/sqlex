@@ -15,6 +15,8 @@ public class WhereBuilder<T> {
      * @return this
      */
     public T where(Expression exp) {
+        if (exp == null)
+            return (T) this;
         if (whereCondition == null)
             whereCondition = exp;
         else
