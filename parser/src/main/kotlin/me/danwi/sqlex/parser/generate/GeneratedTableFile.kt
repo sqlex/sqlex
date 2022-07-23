@@ -82,7 +82,7 @@ class GeneratedTableFile(
     private fun generateColumnExpression(columns: Array<Field>): List<FieldSpec> {
         return columns.map {
             FieldSpec.builder(ClassName.get(Column::class.java), it.name.pascalName)
-                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
                 .initializer(
                     CodeBlock.of(
                         "new \$T(\$S,\$S, \$S,\$L,\$LL, \$L,\$L,\$LL, \$L,\$L,\$L, \$L,\$L)",
