@@ -35,7 +35,7 @@ allprojects {
     }
 
     group = "me.danwi.sqlex"
-    version = "0.10.12"
+    version = "0.10.13"
 
     //开发环境,版本统一添加SNAPSHOT
     if (ext["development"] == true)
