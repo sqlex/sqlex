@@ -2,6 +2,8 @@ package me.danwi.sqlex.core.query.expression;
 
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public interface Expression {
     /**
@@ -167,6 +169,18 @@ public interface Expression {
                 accumulator = accumulator.or(iterator.next());
         }
         return accumulator;
+    }
+    //endregion
+    
+    //#region 字符串函数
+    static FunctionCallExpression concat(Expression... param) {
+        return func("concat", param);
+    }
+
+    static FunctionCallExpression concatWs(LiteralExpression expression, Expression... param) {
+        List<Expression> list = Arrays.stream(param).collect(Collectors.toList());
+        list.add(0, expression);
+        return new FunctionCallExpression("concat_ws", list);
     }
     //endregion
 }
