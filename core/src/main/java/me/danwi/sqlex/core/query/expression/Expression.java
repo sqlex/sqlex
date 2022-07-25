@@ -23,6 +23,19 @@ public interface Expression {
         return new LiteralExpression(value);
     }
 
+    //类型转换
+    static CastExpression cast(Expression expression, CastExpression.Type type) {
+        return new CastExpression(expression, type);
+    }
+
+    static CastExpression cast(Expression expression, CastExpression.Type type, long length) {
+        return new CastExpression(expression, type, length);
+    }
+
+    static CastExpression cast(Expression expression, CastExpression.Type type, long precision, long scale) {
+        return new CastExpression(expression, type, precision, scale);
+    }
+
     //函数调用
     static FunctionCallExpression func(String name, Expression... args) {
         return new FunctionCallExpression(name, Arrays.asList(args));
@@ -171,7 +184,7 @@ public interface Expression {
         return accumulator;
     }
     //endregion
-    
+
     //#region 字符串函数
     static FunctionCallExpression concat(Expression... param) {
         return func("concat", param);
