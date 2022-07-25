@@ -68,6 +68,9 @@ public class TableUpdate<T> extends WhereBuilder<T> {
      * @return 更新的行数
      */
     public long execute() {
+        //如果没有值,则直接返回0
+        if (values.size() == 0)
+            return 0;
         //获取事务
         Transaction currentTransaction = transactionManager.getCurrentTransaction();
         Connection connection;
