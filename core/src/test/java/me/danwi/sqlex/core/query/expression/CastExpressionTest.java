@@ -8,7 +8,7 @@ public class CastExpressionTest {
     @Test
     void noLength() {
         assertEquals("cast('1' as BINARY)", Expression.cast(Expression.lit("1"), CastExpression.Type.BINARY).toSQL());
-        assertEquals("cast('2020-01-01' as DATE)", Expression.cast(Expression.lit("1"), CastExpression.Type.DATE).toSQL());
+        assertEquals("cast('2020-01-01' as DATE)", Expression.cast(Expression.lit("2020-01-01"), CastExpression.Type.DATE).toSQL());
     }
 
     @Test
