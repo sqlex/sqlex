@@ -248,8 +248,8 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
      * @return 分页结果
      */
     public PagedResult<T> page(long pageSize, long pageNo) {
-        this.skip(pageSize * pageNo).take(pageSize);
         long total = this.count();
+        this.skip(pageSize * pageNo).take(pageSize);
         List<T> data = this.find();
         return new PagedResult<>(pageSize, pageNo, total, data);
     }
