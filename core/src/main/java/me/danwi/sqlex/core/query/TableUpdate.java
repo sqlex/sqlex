@@ -31,7 +31,7 @@ public class TableUpdate<T> extends WhereBuilder<T> {
     }
 
     private SQLParameterBind buildSQL() {
-        String sql = "update `" + tableName + "`";
+        String sql = "update `" + tableName + "` set ";
         List<Object> parameters = new LinkedList<>();
         //添加set部分
         List<String> setSegments = new LinkedList<>();
@@ -44,12 +44,12 @@ public class TableUpdate<T> extends WhereBuilder<T> {
                 ///添加参数
                 parameters.addAll(sqlParameterBind.getParameters());
                 //添加set片段
-                setSegments.add(String.format("set `%s` = %s", columnName, sqlParameterBind.getSQL()));
+                setSegments.add(String.format("`%s` = %s", columnName, sqlParameterBind.getSQL()));
             } else {
                 //添加参数
                 parameters.add(value);
                 //添加set片段
-                setSegments.add(String.format("set `%s` = ?", columnName));
+                setSegments.add(String.format("`%s` = ?", columnName));
             }
         }
         sql = sql + " " + String.join(", ", setSegments);
