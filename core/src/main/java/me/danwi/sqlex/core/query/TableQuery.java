@@ -249,7 +249,7 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
      */
     public PagedResult<T> page(long pageSize, long pageNo) {
         long total = this.count();
-        this.skip(pageSize * pageNo).take(pageSize);
+        this.skip(pageSize * (pageNo - 1)).take(pageSize);
         List<T> data = this.find();
         return new PagedResult<>(pageSize, pageNo, total, data);
     }

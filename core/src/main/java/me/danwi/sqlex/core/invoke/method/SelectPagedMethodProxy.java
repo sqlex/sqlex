@@ -44,7 +44,7 @@ public class SelectPagedMethodProxy extends SelectMethodProxy {
             }
         }
         //获取分页结果的SQL
-        String pageSQL = "select * from (" + sql + ") temp limit " + pageSize + " offset " + pageSize * pageNo;
+        String pageSQL = "select * from (" + sql + ") temp limit " + pageSize + " offset " + pageSize * (pageNo - 1);
         Object result;
         try (PreparedStatement statement = connection.prepareStatement(pageSQL)) {
             //设置预处理语句参数
