@@ -161,7 +161,7 @@ public interface Expression {
         while (iterator.hasNext()) {
             Expression expression = iterator.next();
             if (expression != null)
-                accumulator = accumulator.and(iterator.next());
+                accumulator = accumulator.and(expression);
         }
         return accumulator;
     }
@@ -179,7 +179,7 @@ public interface Expression {
         while (iterator.hasNext()) {
             Expression expression = iterator.next();
             if (expression != null)
-                accumulator = accumulator.or(iterator.next());
+                accumulator = accumulator.or(expression);
         }
         return accumulator;
     }
