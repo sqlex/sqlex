@@ -84,7 +84,7 @@ public class LiteralExpressionTest {
         assertEquals("DATE'2022-08-10'", Expression.lit(java.time.LocalDate.of(2022, 8, 10)).toSQL());
         assertEquals("TIME'14:32:12'", Expression.lit(java.time.LocalTime.of(14, 32, 12)).toSQL());
         assertEquals(
-                "TIMESTAMP('2022-07-22 16:52:44')",
+                "TIMESTAMP('2022-07-22 16:52:44.123000')",
                 Expression.lit(java.time.LocalDateTime.of(
                         2022, 7, 22,
                         16, 52, 44,

@@ -53,7 +53,7 @@ public class LiteralExpression implements Expression {
         } else if (value instanceof java.time.LocalDateTime) {
             java.time.LocalDateTime localDateTime = (java.time.LocalDateTime) value;
             String date = localDateTime.toLocalDate().toString();
-            String time = localDateTime.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+            String time = localDateTime.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSSSSS"));
             return String.format("TIMESTAMP('%s %s')", date, time);
         } else if (value instanceof java.time.OffsetDateTime) {
             java.time.OffsetDateTime offsetDateTime = (java.time.OffsetDateTime) value;
