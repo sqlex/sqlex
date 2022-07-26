@@ -31,7 +31,7 @@ class SqlExPlugin : Plugin<Project> {
             val kapt = project.extensions.findByName("kapt") ?: return@withPlugin
             val kaptClass = kapt::class.java
             val setterMethod =
-                kaptClass.methods.find { it.name == "keepJavacAnnotationProcessors" } ?: return@withPlugin
+                kaptClass.methods.find { it.name == "setKeepJavacAnnotationProcessors" } ?: return@withPlugin
             setterMethod.invoke(kapt, true)
         }
 
