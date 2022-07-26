@@ -71,14 +71,6 @@ allprojects {
         }
     }
 
-    //groovy相关配置
-    pluginManager.withPlugin("groovy") {
-        tasks.withType<GroovyCompile> {
-            sourceCompatibility = "1.8"
-            targetCompatibility = "1.8"
-        }
-    }
-
     tasks.withType<Test> {
         useJUnitPlatform()
     }

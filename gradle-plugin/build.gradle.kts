@@ -2,7 +2,6 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     `java-gradle-plugin`
-    groovy
     kotlin("jvm")
     `maven-publish`
     id("com.gradle.plugin-publish") version "1.0.0-rc-1"
@@ -13,16 +12,26 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
 }
 
-//kotlin和groovy兼容交互
-tasks {
-    val compileKotlin = named("compileKotlin", KotlinCompile::class).get()
-    val compileGroovy = named("compileGroovy", GroovyCompile::class).get()
-    val classes by getting
-
-    compileGroovy.dependsOn(compileKotlin)
-    compileGroovy.classpath += files(compileKotlin.destinationDirectory)
-    classes.dependsOn(compileGroovy)
+//让程序能读取到gradle配置的版本
+val generateBuildJava = tasks.create("generateBuildJava") {
+    val outputDir = "$buildDir/generated/java"
+    this.extra.set("outputDir", outputDir)
+    inputs.property("version", project.version)
+    outputs.dir(outputDir)
+    doLast {
+        mkdir(outputDir)
+        file("$outputDir/BuildFile.java").writeText(
+            """
+            public class BuildFile {
+                public static final String VERSION = "${project.version}";
+            }
+        """.trimIndent()
+        )
+    }
 }
+tasks.findByName("compileJava")?.dependsOn(generateBuildJava)
+tasks.findByName("compileKotlin")?.dependsOn(generateBuildJava)
+sourceSets { main { java { srcDir(generateBuildJava.extra.get("outputDir")!!) } } }
 
 gradlePlugin {
     plugins {
