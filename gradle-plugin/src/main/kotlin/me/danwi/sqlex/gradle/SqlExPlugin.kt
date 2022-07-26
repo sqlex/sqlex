@@ -17,12 +17,22 @@ class SqlExPlugin : Plugin<Project> {
         //插件是否成功应用
         var isApplied = false
 
+        //只有配置了java插件,SqlEx插件才会起作用
         project.pluginManager.withPlugin("java") {
             project.extensions.configure(JavaPluginExtension::class.java) {
                 //获取Java插件的源码集
                 it.sourceSets.forEach(::configureSourceSet)
                 isApplied = true
             }
+        }
+
+        //当kotlin的kapt开启的时候,保证注解处理器的运行
+        project.pluginManager.withPlugin("org.jetbrains.kotlin.kapt") {
+            val kapt = project.extensions.findByName("kapt") ?: return@withPlugin
+            val kaptClass = kapt::class.java
+            val setterMethod =
+                kaptClass.methods.find { it.name == "keepJavacAnnotationProcessors" } ?: return@withPlugin
+            setterMethod.invoke(kapt, true)
         }
 
         project.afterEvaluate {
@@ -72,7 +82,6 @@ class SqlExPlugin : Plugin<Project> {
                 val dep = resolveDetails.target
                 if (dep.group == "me.danwi.sqlex") {
                     if (dep.version.isNullOrEmpty()) {
-                        println("version ${dep.version}")
                         resolveDetails.useVersion(BuildFile.VERSION)
                     } else if (dep.version != BuildFile.VERSION) {
                         throw GradleException("Gradle插件版本和Core依赖版本不一致, Gradle Plugin: ${BuildFile.VERSION}, Core: ${dep.version}")
