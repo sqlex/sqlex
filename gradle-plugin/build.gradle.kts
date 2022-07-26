@@ -17,9 +17,11 @@ val generateBuildJava = tasks.create("generateBuildJava") {
     inputs.property("version", project.version)
     outputs.dir(outputDir)
     doLast {
-        mkdir(outputDir)
-        file("$outputDir/BuildFile.java").writeText(
+        mkdir("$outputDir/me/danwi/sqlex/gradle/")
+        file("$outputDir/me/danwi/sqlex/gradle/BuildFile.java").writeText(
             """
+            package me.danwi.sqlex.gradle;
+            
             public class BuildFile {
                 public static final String VERSION = "${project.version}";
             }
