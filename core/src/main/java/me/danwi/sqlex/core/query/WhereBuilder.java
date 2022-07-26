@@ -29,7 +29,9 @@ public class WhereBuilder<T> {
      *
      * @param supplier 条件提供者
      * @return this
+     * @deprecated 请勿使用该函数, 在以后的版本中, 会删除
      */
+    @Deprecated
     public T where(Supplier<Expression> supplier) {
         return where(supplier.get());
     }
