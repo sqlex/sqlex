@@ -325,6 +325,68 @@ class SessionTest {
     }
 
     @Test
+    fun getPlanInfo() {
+        var session = Session("getPlanInfo_test")
+        //language=MySQL
+        session.execute(
+            """
+            create table person(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            create table department(
+                id int auto_increment primary key,
+                name varchar(255) not null 
+            )
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column departmentID int not null
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column age int unsigned not null
+        """.trimIndent()
+        )
+        //language=MySQL
+        session.execute(
+            """
+            alter table person add column status char(255) charset binary not null
+        """.trimIndent()
+        )
+        session.close()
+
+        //TODO:重新开session,需要处理一下golang那边的BUG
+        session = Session("getPlanInfo_test")
+        assertEquals(
+            "person",
+            session.getPlanInfo("insert into person values(?,?,?,?,?)").insertTable
+        )
+        assertEquals(
+            "person",
+            session.getPlanInfo("insert into person(name, departmentID, age, status) values(?,?,?,?)").insertTable
+        )
+        assertEquals(
+            "person",
+            session.getPlanInfo("insert into person(id, name, departmentID, age, status) values(null,?,?,?,?)").insertTable
+        )
+        assertEquals(
+            "person",
+            session.getPlanInfo("insert into person(id, name, departmentID, age, status) values(?,?,?,?,?)").insertTable
+        )
+        assertNull(session.getPlanInfo("select * from person").insertTable)
+    }
+
+    @Test
     fun getFields() {
         var session = Session("getFields_test")
         //language=MySQL

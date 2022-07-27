@@ -41,7 +41,8 @@ class TableInfo(
 
 class PlanInfo(
     val fields: Array<Field>,
-    val maxOneRow: Boolean
+    val maxOneRow: Boolean,
+    val insertTable: String
 )
 
 enum class StatementType { Select, Insert, Update, Delete, Other }
