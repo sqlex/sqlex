@@ -193,7 +193,7 @@ public abstract class BaseMethodProxy implements MethodProxy {
                 );
             }
         }
-        //处理重写信息 TODO: 还需要计算重写有没有重叠部分,不过在这种编译那边不会出现这种情况
+        //处理重写信息
         StringBuilder rewrittenSQL = new StringBuilder(this.sql);
         while (!rewriteInfos.isEmpty()) {
             //取得第一个
