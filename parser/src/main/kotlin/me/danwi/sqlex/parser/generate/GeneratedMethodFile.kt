@@ -109,7 +109,7 @@ class GeneratedMethodFile(
         //根据类型来生成不同的方法
         return when (statementInfo.type) {
             StatementType.Select -> generateSelectMethod(method, namedParameterSQL, statementInfo, planInfo)
-            StatementType.Insert -> generateInsertMethod(method, namedParameterSQL, statementInfo)
+            StatementType.Insert -> generateInsertMethod(method, namedParameterSQL, session, statementInfo, planInfo)
             StatementType.Update -> generateUpdateMethod(method, namedParameterSQL, statementInfo)
             StatementType.Delete -> generateDeleteMethod(method, namedParameterSQL, statementInfo)
             else -> throw Exception("不支持的语句类型,只支持(select/insert/update/delete)")
@@ -182,7 +182,9 @@ class GeneratedMethodFile(
     private fun generateInsertMethod(
         method: SqlExMethodLanguageParser.MethodContext,
         namedParameterSQL: NamedParameterSQL,
-        statementInfo: StatementInfo
+        session: Session,
+        statementInfo: StatementInfo,
+        planInfo: PlanInfo
     ): MethodSpec {
         //获取到方法名
         val methodName = method.methodName().text
@@ -201,7 +203,14 @@ class GeneratedMethodFile(
         //生成参数
         methodSpec.addParameters(generateParameter(methodName, method.paramList(), namedParameterSQL, false))
         //添加返回值
-        methodSpec.returns(ClassName.LONG)
+        //获取自动生成列的信息
+        val autoIncrementColumn = session.getTableInfo(planInfo.insertTable).columns.find { it.isAutoIncrement }
+        if (autoIncrementColumn == null)
+            methodSpec.returns(ClassName.VOID)
+        else
+            methodSpec
+                .addAnnotation(Nullable::class.java)
+                .returns(autoIncrementColumn.JavaType)
         return methodSpec.build()
     }
 
