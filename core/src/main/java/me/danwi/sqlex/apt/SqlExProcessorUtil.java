@@ -1,4 +1,4 @@
-package me.danwi.sqlex.core.apt;
+package me.danwi.sqlex.apt;
 
 import me.danwi.sqlex.common.ParameterTypes;
 import me.danwi.sqlex.core.annotation.repository.SqlExConverter;
