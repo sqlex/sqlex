@@ -126,8 +126,8 @@ public class SqlExParameterCheckAnnotationProcessor extends AbstractProcessor {
                 }
             }
             //普通参数,只需要判断数据类型
-            //判断他是否为一个List  TODO: 可能会更改为Iterable
-            if (util.getQualifiedName(parameterType).contentEquals("java.util.List")) {
+            //判断他是否为一个List
+            if (util.getQualifiedName(parameterType).contentEquals(List.class.getName())) {
                 parameterType = ((DeclaredType) parameterType).getTypeArguments().get(0);
             }
             if (!util.isSupportedType(typesUtil.asElement(parameterType), registeredTypes)) {
