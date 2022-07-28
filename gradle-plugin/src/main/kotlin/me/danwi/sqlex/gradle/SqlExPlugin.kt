@@ -69,7 +69,6 @@ class SqlExPlugin : Plugin<Project> {
         //让java编译依赖于SqlEx编译任务
         project.tasks.withType(JavaCompile::class.java) { it.dependsOn(task) }
 
-        //TODO: 兼容其他方言
         project.tasks.findByName(sourceSet.getCompileTaskName("kotlin"))?.dependsOn(task)
         project.tasks.findByName(sourceSet.getCompileTaskName("groovy"))?.dependsOn(task)
         project.tasks.findByName(sourceSet.getCompileTaskName("scala"))?.dependsOn(task)
