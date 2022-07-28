@@ -5,6 +5,6 @@ package me.danwi.sqlex.core.exception;
  */
 public class SqlExRepositoryNotMatchException extends SqlExException {
     public SqlExRepositoryNotMatchException() {
-        super("Dao接口不属于DaoFactory所管理的SqlEx Repository");
+        super("类型不属于DaoFactory所管理的SqlEx Repository");
     }
 }

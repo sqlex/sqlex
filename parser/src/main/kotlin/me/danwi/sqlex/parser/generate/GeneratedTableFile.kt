@@ -3,6 +3,7 @@ package me.danwi.sqlex.parser.generate
 import com.squareup.javapoet.*
 import me.danwi.sqlex.core.ExceptionTranslator
 import me.danwi.sqlex.core.annotation.SqlExRepository
+import me.danwi.sqlex.core.annotation.SqlExTableAccessObject
 import me.danwi.sqlex.core.jdbc.ParameterSetter
 import me.danwi.sqlex.core.query.TableDelete
 import me.danwi.sqlex.core.query.TableInsert
@@ -58,6 +59,7 @@ class GeneratedTableFile(
                     .addMember("value", "\$T.class", ClassName.get(rootPackage, RepositoryClassName))
                     .build()
             )
+            .addAnnotation(SqlExTableAccessObject::class.java)
 
         //添加字段
         typeSpecBuilder.addFields(generateFields())

@@ -2,6 +2,7 @@ package me.danwi.sqlex.parser.generate
 
 import com.squareup.javapoet.*
 import me.danwi.sqlex.common.Paged
+import me.danwi.sqlex.core.annotation.SqlExDataAccessObject
 import me.danwi.sqlex.core.annotation.SqlExRepository
 import me.danwi.sqlex.core.annotation.method.*
 import me.danwi.sqlex.core.annotation.method.parameter.*
@@ -87,6 +88,7 @@ class GeneratedMethodFile(
                     .addMember("value", "\$T.class", ClassName.get(rootPackage, RepositoryClassName))
                     .build()
             )
+            .addAnnotation(SqlExDataAccessObject::class.java)
             .addModifiers(Modifier.PUBLIC)
             .addTypes(innerClasses)
             .addMethods(methodSpecs)

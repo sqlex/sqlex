@@ -1,7 +1,9 @@
 package me.danwi.sqlex.core;
 
 import com.mysql.cj.jdbc.MysqlConnectionPoolDataSource;
+import me.danwi.sqlex.core.annotation.SqlExDataAccessObject;
 import me.danwi.sqlex.core.annotation.SqlExRepository;
+import me.danwi.sqlex.core.annotation.SqlExTableAccessObject;
 import me.danwi.sqlex.core.checker.Checker;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.exception.SqlExRepositoryNotMatchException;
@@ -250,11 +252,12 @@ public class DaoFactory {
      * @throws SqlExRepositoryNotMatchException 给定的类型不属于Factory管理的Repository
      */
     public <T> T getInstance(Class<T> clazz) {
-        //TODO: 目前是通过是否为接口来判断,需要改成注解判断(生成代码时添加不同的注解,用于表明类型)
-        if (clazz.isInterface()) {
+        if (clazz.isAnnotationPresent(SqlExDataAccessObject.class)) {
             return getDaoInstance(clazz);
-        } else {
+        } else if (clazz.isAnnotationPresent(SqlExTableAccessObject.class)) {
             return getTableInstance(clazz);
+        } else {
+            throw new SqlExRepositoryNotMatchException();
         }
     }
 
