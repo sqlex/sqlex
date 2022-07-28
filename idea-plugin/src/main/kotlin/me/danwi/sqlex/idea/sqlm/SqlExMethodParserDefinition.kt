@@ -51,6 +51,7 @@ open class SqlExMethodParserDefinition : ParserDefinition {
         val RULE_SQL: RuleIElementType = rules[SqlExMethodLanguageParser.RULE_sql]
 
         val TOKEN_IMPORT: TokenIElementType = tokens[SqlExMethodLanguageLexer.IMPORT]
+        val TOKEN_STAR: TokenIElementType = tokens[SqlExMethodLanguageLexer.STAR]
         val TOKEN_WS: TokenIElementType = tokens[SqlExMethodLanguageLexer.WS]
         val TOKEN_SQL_WS: TokenIElementType = tokens[SqlExMethodLanguageLexer.SQL_WS]
         val TOKEN_SQL: TokenIElementType = tokens[SqlExMethodLanguageLexer.SQL]

@@ -13,6 +13,7 @@ import me.danwi.sqlex.idea.sqlm.SqlExMethodParserDefinition.Companion.TOKEN_LB
 import me.danwi.sqlex.idea.sqlm.SqlExMethodParserDefinition.Companion.TOKEN_LCB
 import me.danwi.sqlex.idea.sqlm.SqlExMethodParserDefinition.Companion.TOKEN_RB
 import me.danwi.sqlex.idea.sqlm.SqlExMethodParserDefinition.Companion.TOKEN_RCB
+import me.danwi.sqlex.idea.sqlm.SqlExMethodParserDefinition.Companion.TOKEN_STAR
 import me.danwi.sqlex.parser.SqlExMethodLanguageLexer
 import org.antlr.intellij.adaptor.lexer.ANTLRLexerAdaptor
 
@@ -21,6 +22,8 @@ class SqlExMethodSyntaxHighlighter : SyntaxHighlighterBase() {
         private val BRACES = arrayOf(createTextAttributesKey("SQLEX_BRACES", DefaultLanguageHighlighterColors.BRACES))
         private val KEYWORD =
             arrayOf(createTextAttributesKey("SQLEX_KEYWORD", DefaultLanguageHighlighterColors.KEYWORD))
+        private val STAR =
+            arrayOf(createTextAttributesKey("SQLEX_STAR", DefaultLanguageHighlighterColors.OPERATION_SIGN))
         private val METHOD =
             arrayOf(createTextAttributesKey("SQLEX_METHOD", DefaultLanguageHighlighterColors.INSTANCE_METHOD))
         private val COMMENT =
@@ -33,6 +36,7 @@ class SqlExMethodSyntaxHighlighter : SyntaxHighlighterBase() {
             TOKEN_ID -> METHOD
             TOKEN_COMMENT -> COMMENT
             TOKEN_LB, TOKEN_RB, TOKEN_LCB, TOKEN_RCB -> BRACES
+            TOKEN_STAR -> STAR
             else -> TextAttributesKey.EMPTY_ARRAY
         }
     }
