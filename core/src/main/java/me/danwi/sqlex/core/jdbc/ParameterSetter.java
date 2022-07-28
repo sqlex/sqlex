@@ -64,7 +64,7 @@ public class ParameterSetter {
         return null;
     }
 
-    //设置单个参数 TODO: 部分数据类型没有补全
+    //设置单个参数
     public void setParameter(PreparedStatement statement, int index, Object arg) throws SQLException {
         if (arg == null) {
             statement.setNull(index, Types.NULL);
@@ -102,7 +102,7 @@ public class ParameterSetter {
         } else if (arg instanceof BigDecimal) {
             statement.setBigDecimal(index, (BigDecimal) arg);
             return;
-        } else if (arg instanceof byte[]) { //TODO: 尚未确认
+        } else if (arg instanceof byte[]) {
             statement.setBytes(index, (byte[]) arg);
             return;
         } else if (arg instanceof Blob) {
