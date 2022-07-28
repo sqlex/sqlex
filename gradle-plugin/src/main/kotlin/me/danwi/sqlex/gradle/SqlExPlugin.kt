@@ -76,18 +76,23 @@ class SqlExPlugin : Plugin<Project> {
 
     //依赖版本管理
     private fun configureDependencies() {
+        val groupName = "me.danwi.sqlex"
+        val artifactNames = listOf("core", "core-kotlin")
+        //给没有标记版本的添加版本标记
         project.configurations.forEach { config ->
             config.resolutionStrategy.eachDependency { resolveDetails ->
-                val dep = resolveDetails.target
-                if (dep.group == "me.danwi.sqlex") {
-                    if (dep.version.isNullOrEmpty()) {
-                        resolveDetails.useVersion(BuildFile.VERSION)
-                    } else if (dep.version != BuildFile.VERSION) {
-                        throw GradleException("Gradle插件版本和Core依赖版本不一致, Gradle Plugin: ${BuildFile.VERSION}, Core: ${dep.version}")
-                    }
-                }
+                if (resolveDetails.target.group == groupName
+                    && resolveDetails.target.name in artifactNames
+                    && resolveDetails.target.version.isNullOrBlank()
+                )
+                    resolveDetails.useVersion(BuildFile.VERSION)
             }
         }
+        //检查是否有版本不匹配的情况
+        project.configurations.flatMap { it.dependencies }
+            .filter { it.group == groupName && it.name in artifactNames && !it.version.isNullOrEmpty() }
+            .filter { it.version != BuildFile.VERSION }
+            .forEach { throw GradleException("Gradle插件版本和Core依赖版本不一致, Gradle Plugin: ${BuildFile.VERSION}, Core: ${it.version}") }
     }
 
     //配置注解处理器
