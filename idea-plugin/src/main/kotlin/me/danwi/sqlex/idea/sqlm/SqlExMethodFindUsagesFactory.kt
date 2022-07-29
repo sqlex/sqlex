@@ -20,7 +20,7 @@ class SqlExMethodFindUsagesFactory : FindUsagesHandlerFactory() {
         if (element is MethodNameSubtree)
             return SqlExMethodMethodFindUsageHandler(element)
         else if (element is SqlExMethodFile)
-            return SqlExMethodMFileFindUsageHandler(element)
+            return SqlExMethodFileFindUsageHandler(element)
         return null
     }
 }
@@ -44,7 +44,7 @@ class SqlExMethodMethodFindUsageHandler(private val element: PsiElement) : FindU
     }
 }
 
-class SqlExMethodMFileFindUsageHandler(private val element: PsiElement) : FindUsagesHandler(element) {
+class SqlExMethodFileFindUsageHandler(private val element: PsiElement) : FindUsagesHandler(element) {
     override fun getSecondaryElements(): Array<PsiElement> {
         return arrayOf(
             element.containingFile.virtualFile.getUserData(SqlExMethodPsiClassCacheKey) ?: return PsiElement.EMPTY_ARRAY

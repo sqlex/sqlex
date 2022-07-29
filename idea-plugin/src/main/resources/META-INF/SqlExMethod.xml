@@ -20,7 +20,7 @@
         <lang.parserDefinition language="SqlExMethod"
                                implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodParserDefinition"/>
         <!--高亮等编辑器基本特性-->
-        <highlightVisitor implementation="me.danwi.sqlex.idea.sqlm.SqlExSemanticHighlighter"/>
+        <highlightVisitor implementation="me.danwi.sqlex.idea.sqlm.SqlExMethodSemanticHighlighter"/>
         <lang.syntaxHighlighter language="SqlExMethod"
                                 implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodSyntaxHighlighter"/>
         <lang.commenter language="SqlExMethod" implementationClass="me.danwi.sqlex.idea.sqlm.SqlExMethodCommenter"/>

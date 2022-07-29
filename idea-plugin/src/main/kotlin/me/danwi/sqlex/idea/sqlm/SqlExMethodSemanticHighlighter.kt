@@ -10,7 +10,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import me.danwi.sqlex.idea.sqlm.psi.*
 
-class SqlExSemanticHighlighter : HighlightVisitor {
+class SqlExMethodSemanticHighlighter : HighlightVisitor {
     private var highlightInfoHolder: HighlightInfoHolder? = null
 
     override fun suitableForFile(file: PsiFile): Boolean {
@@ -49,6 +49,6 @@ class SqlExSemanticHighlighter : HighlightVisitor {
     }
 
     override fun clone(): HighlightVisitor {
-        return SqlExSemanticHighlighter()
+        return SqlExMethodSemanticHighlighter()
     }
 }
