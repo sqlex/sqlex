@@ -4,6 +4,7 @@ import me.danwi.sqlex.parser.util.pascalName
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.compile.JavaCompile
@@ -22,26 +23,17 @@ class SqlExPlugin : Plugin<Project> {
             project.extensions.configure(JavaPluginExtension::class.java) {
                 //获取Java插件的源码集
                 it.sourceSets.forEach(::configureSourceSet)
-                isApplied = true
             }
-        }
-
-        //当kotlin的kapt开启的时候,保证注解处理器的运行
-        project.pluginManager.withPlugin("org.jetbrains.kotlin.kapt") {
-            val kapt = project.extensions.findByName("kapt") ?: return@withPlugin
-            val kaptClass = kapt::class.java
-            val setterMethod =
-                kaptClass.methods.find { it.name == "setKeepJavacAnnotationProcessors" } ?: return@withPlugin
-            setterMethod.invoke(kapt, true)
+            //注解处理器配置
+            configureAnnotationProcessor()
+            isApplied = true
         }
 
         project.afterEvaluate {
             if (!isApplied)
                 throw GradleException("SqlEx插件依赖Java插件做代码编译,请在项目中引入Java插件")
-            //依赖管理
+            //检查依赖版本
             configureDependencies()
-            //注解处理器管理
-            configureAnnotationProcessor()
         }
     }
 
@@ -74,6 +66,21 @@ class SqlExPlugin : Plugin<Project> {
         project.tasks.findByName(sourceSet.getCompileTaskName("scala"))?.dependsOn(task)
     }
 
+    //配置注解处理器
+    private fun configureAnnotationProcessor() {
+        //兼容kotlin,判断kapt插件是否存在
+        if (project.pluginManager.hasPlugin("org.jetbrains.kotlin.kapt")) {
+            //如果kapt插件存在,则添加kapt依赖
+            project.dependencies.add("kapt", "me.danwi.sqlex:core:${BuildFile.VERSION}")
+        } else {
+            //如果kapt插件不存在,则添加普通的annotationProcessor依赖
+            project.dependencies.add(
+                JavaPlugin.ANNOTATION_PROCESSOR_CONFIGURATION_NAME,
+                "me.danwi.sqlex:core:${BuildFile.VERSION}"
+            )
+        }
+    }
+
     //依赖版本管理
     private fun configureDependencies() {
         val groupName = "me.danwi.sqlex"
@@ -93,14 +100,5 @@ class SqlExPlugin : Plugin<Project> {
             .filter { it.group == groupName && it.name in artifactNames && !it.version.isNullOrEmpty() }
             .filter { it.version != BuildFile.VERSION }
             .forEach { throw GradleException("Gradle插件版本和Core依赖版本不一致, Gradle Plugin: ${BuildFile.VERSION}, Core: ${it.version}") }
-    }
-
-    //配置注解处理器
-    private fun configureAnnotationProcessor() {
-        val configName = "annotationProcessor"
-        val apt = project.configurations.getByName(configName).dependencies
-            .any { it.group == "me.danwi.sqlex" && it.name == "core" }
-        if (!apt)
-            project.dependencies.add(configName, "me.danwi.sqlex:core:${BuildFile.VERSION}")
     }
 }
