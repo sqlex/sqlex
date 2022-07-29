@@ -8,10 +8,7 @@ import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
 import com.intellij.openapi.editor.colors.TextAttributesKey
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
-import me.danwi.sqlex.idea.sqlm.psi.MethodNameSubtree
-import me.danwi.sqlex.idea.sqlm.psi.ParamNameSubtree
-import me.danwi.sqlex.idea.sqlm.psi.ParamTypeSubtree
-import me.danwi.sqlex.idea.sqlm.psi.ReturnTypeSubtree
+import me.danwi.sqlex.idea.sqlm.psi.*
 
 class SqlExSemanticHighlighter : HighlightVisitor {
     private var highlightInfoHolder: HighlightInfoHolder? = null
@@ -31,6 +28,7 @@ class SqlExSemanticHighlighter : HighlightVisitor {
 
     private fun getHighlighterColor(element: PsiElement): TextAttributesKey? {
         return when (element) {
+            is ClassNameSubtree -> DefaultLanguageHighlighterColors.CLASS_REFERENCE
             is ReturnTypeSubtree -> DefaultLanguageHighlighterColors.CLASS_REFERENCE
             is MethodNameSubtree -> DefaultLanguageHighlighterColors.INSTANCE_METHOD
             is ParamNameSubtree -> DefaultLanguageHighlighterColors.PARAMETER
