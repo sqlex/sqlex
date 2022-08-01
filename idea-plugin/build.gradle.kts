@@ -24,6 +24,11 @@ intellij {
     plugins.set(listOf("yaml", "java", "DatabaseTools", "Kotlin", "Spring"))
 }
 
+tasks.runIde {
+    //修改调试时候的IDEA的内存使用限制
+    jvmArgs = listOf("-Xms1024m", "-Xmx2048m")
+}
+
 tasks.patchPluginXml {
     sinceBuild.set("211")
     untilBuild.set("222.*")
