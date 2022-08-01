@@ -63,8 +63,13 @@ class SqlExRepositoryImportProvider : SqlExRepositoryBaseProvider("me.danwi.sqle
         get() {
             val actions = DefaultActionGroup()
             //Repository导入
-            actions.add(object : AnAction("该文件所处的SqlEx Repository尚未被导入,点击立刻导入", null, SqlExIcons.ImportAction) {
+            actions.add(object :
+                AnAction("该文件所处的SqlEx Repository尚未被导入,点击立刻导入", null, SqlExIcons.ImportAction) {
                 override fun actionPerformed(event: AnActionEvent) {
+                    //保存当前document
+                    val editor = event.getData(CommonDataKeys.EDITOR)
+                    if (editor != null)
+                        FileDocumentManager.getInstance().saveDocument(editor.document)
                     val virtualFile = event.getData(CommonDataKeys.VIRTUAL_FILE) ?: return
                     val sourceRoot = virtualFile.sourceRoot ?: return
                     event.project?.importRepository(sourceRoot)
@@ -83,6 +88,10 @@ class SqlExRepositoryRefreshProvider : SqlExRepositoryBaseProvider("me.danwi.sql
             //索引更新
             actions.add(object : AnAction("索引已经过期,点击刷新SqlEx索引", null, SqlExIcons.RefreshAction) {
                 override fun actionPerformed(event: AnActionEvent) {
+                    //保存当前document
+                    val editor = event.getData(CommonDataKeys.EDITOR)
+                    if (editor != null)
+                        FileDocumentManager.getInstance().saveDocument(editor.document)
                     val virtualFile = event.getData(CommonDataKeys.VIRTUAL_FILE) ?: return
                     virtualFile.sqlexRepositoryService?.refresh()
                 }
