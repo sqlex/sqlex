@@ -1,4 +1,4 @@
-# created on ${DATE}, by ${USER}
 # SqlEx 配置文件
 
+# 根包
 package: com.example.dao
