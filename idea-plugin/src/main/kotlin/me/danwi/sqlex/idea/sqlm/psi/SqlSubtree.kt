@@ -14,7 +14,7 @@ import me.danwi.sqlex.parser.StatementInfo
 import me.danwi.sqlex.parser.StatementType
 import org.antlr.intellij.adaptor.psi.IdentifierDefSubtree
 
-private val fieldsCacheKey = Key<PlanInfo>("me.danwi.sqlex.idea.sqlm.PlanInfoCacheKey")
+private val planInfoCacheKey = Key<PlanInfo>("me.danwi.sqlex.idea.sqlm.PlanInfoCacheKey")
 private val statementInfoCacheKey = Key<StatementInfo>("me.danwi.sqlex.idea.sqlm.StatementInfoCacheKey")
 
 class SqlSubtree(node: ASTNode, idElementType: IElementType) : IdentifierDefSubtree(node, idElementType),
@@ -49,7 +49,7 @@ class SqlSubtree(node: ASTNode, idElementType: IElementType) : IdentifierDefSubt
                 if (statementInfo?.type != StatementType.Select) return null
                 val session = this.containingFile.virtualFile.sqlexRepositoryService?.repository?.session ?: return null
                 val sql = this.text ?: return null
-                return this.getUserData(fieldsCacheKey) ?: session.getPlanInfo(sql)
+                return this.getUserData(planInfoCacheKey) ?: session.getPlanInfo(sql)
             } catch (_: Exception) {
                 return null
             }
@@ -67,7 +67,7 @@ class SqlSubtree(node: ASTNode, idElementType: IElementType) : IdentifierDefSubt
         }
 
     override fun subtreeChanged() {
-        this.putUserData(fieldsCacheKey, null)
+        this.putUserData(planInfoCacheKey, null)
         this.putUserData(statementInfoCacheKey, null)
     }
 }
