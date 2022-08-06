@@ -178,6 +178,24 @@ class GeneratedTableFile(
                     .build()
             }
         )
+        //添加set方法
+        typeSpecBuilder.addMethods(
+            columns.map {
+                val parameterSpec = ParameterSpec.builder(it.JavaType, "value")
+                    .addAnnotation(if (it.notNull) NotNull::class.java else Nullable::class.java)
+                MethodSpec.methodBuilder("set${it.name.pascalName}")
+                    .addModifiers(Modifier.PUBLIC)
+                    .returns(updateClassTypeName)
+                    .addParameter(ParameterSpec.builder(ClassName.BOOLEAN.box(), "condition").build())
+                    .addParameter(parameterSpec.build())
+                    .addCode("if (condition) { \n")
+                    .addCode("    super.values.put(\$S, value) ;\n", it.name)
+                    .addCode("    super.values.put(\$S, value);\n", it.name)
+                    .addCode("} \n")
+                    .addCode("return this;")
+                    .build()
+            }
+        )
 
         return typeSpecBuilder.build()
     }
