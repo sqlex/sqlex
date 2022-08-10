@@ -81,10 +81,15 @@ class SqlExPlugin : Plugin<Project> {
         if (project.pluginManager.hasPlugin("org.jetbrains.kotlin.kapt")) {
             //如果kapt插件存在,则添加kapt依赖
             project.dependencies.add("kapt", "me.danwi.sqlex:core:${BuildFile.VERSION}")
+            project.dependencies.add("kaptTest", "me.danwi.sqlex:core:${BuildFile.VERSION}")
         } else {
             //如果kapt插件不存在,则添加普通的annotationProcessor依赖
             project.dependencies.add(
                 JavaPlugin.ANNOTATION_PROCESSOR_CONFIGURATION_NAME,
+                "me.danwi.sqlex:core:${BuildFile.VERSION}"
+            )
+            project.dependencies.add(
+                JavaPlugin.TEST_ANNOTATION_PROCESSOR_CONFIGURATION_NAME,
                 "me.danwi.sqlex:core:${BuildFile.VERSION}"
             )
         }
