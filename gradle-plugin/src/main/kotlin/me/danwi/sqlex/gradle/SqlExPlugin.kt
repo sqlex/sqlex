@@ -4,6 +4,7 @@ import me.danwi.sqlex.parser.util.pascalName
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.file.SourceDirectorySet
 import org.gradle.api.plugins.JavaPlugin
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.tasks.SourceSet
@@ -20,8 +21,8 @@ class SqlExPlugin : Plugin<Project> {
 
         //只有配置了java插件,SqlEx插件才会起作用
         project.pluginManager.withPlugin("java") {
+            //配置源码集
             project.extensions.configure(JavaPluginExtension::class.java) {
-                //获取Java插件的源码集
                 it.sourceSets.forEach(::configureSourceSet)
             }
             //注解处理器配置
@@ -32,6 +33,10 @@ class SqlExPlugin : Plugin<Project> {
         project.afterEvaluate {
             if (!isApplied)
                 throw GradleException("SqlEx插件依赖Java插件做代码编译,请在项目中引入Java插件")
+            //配置生成任务
+            project.extensions.configure(JavaPluginExtension::class.java) {
+                it.sourceSets.forEach(::configureTask)
+            }
             //检查依赖版本
             configureDependencies()
         }
@@ -40,12 +45,16 @@ class SqlExPlugin : Plugin<Project> {
     //针对java的源码集生成对应的sqlex源码目录,并添加对应的编译任务
     private fun configureSourceSet(sourceSet: SourceSet) {
         //新建sqlex源码目录
-        val sourceDirectory = project.objects.sourceDirectorySet(sourceSet.name, "${sourceSet.name} SqlEx source")
+        val sourceDirectory = project.objects.sourceDirectorySet(sourceSet.name, "${sourceSet.name} sqlex source")
         //设置默认路径,可被配置修改
         sourceDirectory.srcDir("src/${sourceSet.name}/sqlex")
         //添加到源码集中
         sourceSet.extensions.add("sqlex", sourceDirectory)
+    }
 
+    //给SqlEx的源码集配置对应的生成任务
+    private fun configureTask(sourceSet: SourceSet) {
+        val sourceDirectory = sourceSet.extensions.getByName("sqlex") as SourceDirectorySet
         //给对应的源码集配置SqlEx编译任务
         val task =
             project.tasks.create(
