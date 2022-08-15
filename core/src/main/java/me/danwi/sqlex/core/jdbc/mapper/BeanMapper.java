@@ -16,7 +16,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 
-public class BeanMapper<T> extends RowMapper {
+public class BeanMapper<T> extends RowMapper<T> {
     //实体类
     private final Class<T> beanClass;
     //实体类构造函数
@@ -111,7 +111,7 @@ public class BeanMapper<T> extends RowMapper {
 
         while (resultSet.next()) {
             //新建实体类实例
-            Object beanInstance;
+            T beanInstance;
             try {
                 beanInstance = beanConstructor.newInstance();
             } catch (Exception e) {
@@ -132,7 +132,7 @@ public class BeanMapper<T> extends RowMapper {
             }
 
             //添加到结果列表
-            resultList.add((T) beanInstance);
+            resultList.add(beanInstance);
         }
         return resultList;
     }

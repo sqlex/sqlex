@@ -7,12 +7,12 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 
-public abstract class RowMapper {
-    protected Object fetchColumn(ResultSet resultSet, int columnIndex, Class<?> dataType) throws SQLException {
+public abstract class RowMapper<T> {
+    protected T fetchColumn(ResultSet resultSet, int columnIndex, Class<?> dataType) throws SQLException {
         return fetchColumn(resultSet, columnIndex, dataType.getName());
     }
 
-    protected Object fetchColumn(ResultSet resultSet, int colIndex, String dataTypeName) throws SQLException {
+    protected T fetchColumn(ResultSet resultSet, int colIndex, String dataTypeName) throws SQLException {
         Object value;
         switch (dataTypeName) {
             case "java.lang.Boolean":
@@ -57,9 +57,9 @@ public abstract class RowMapper {
         }
         if (resultSet.wasNull())
             value = null;
-        return value;
+        return (T) value;
     }
 
 
-    public abstract List<?> fetch(ResultSet resultSet) throws SQLException;
+    public abstract List<T> fetch(ResultSet resultSet) throws SQLException;
 }

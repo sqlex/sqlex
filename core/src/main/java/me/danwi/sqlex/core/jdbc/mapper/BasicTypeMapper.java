@@ -5,7 +5,7 @@ import java.sql.SQLException;
 import java.util.LinkedList;
 import java.util.List;
 
-public class BasicTypeMapper<T> extends RowMapper {
+public class BasicTypeMapper<T> extends RowMapper<T> {
     private final Class<?> dataType;
 
 
@@ -19,8 +19,8 @@ public class BasicTypeMapper<T> extends RowMapper {
         LinkedList<T> resultList = new LinkedList<>();
 
         while (resultSet.next()) {
-            Object value = fetchColumn(resultSet, 1, dataType);
-            resultList.add((T) value);
+            T value = fetchColumn(resultSet, 1, dataType);
+            resultList.add(value);
         }
 
         return resultList;
