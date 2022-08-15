@@ -16,15 +16,15 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 
-public class BeanMapper extends RowMapper {
+public class BeanMapper<T> extends RowMapper {
     //实体类
-    private final Class<?> beanClass;
+    private final Class<T> beanClass;
     //实体类构造函数
-    private final Constructor<?> beanConstructor;
+    private final Constructor<T> beanConstructor;
     //实体类属性信息缓存
     private PropertyInfo[] beanPropertyInfoCaches;
 
-    public BeanMapper(Class<?> bean) {
+    public BeanMapper(Class<T> bean) {
         beanClass = bean;
         try {
             beanConstructor = beanClass.getDeclaredConstructor();
@@ -102,9 +102,9 @@ public class BeanMapper extends RowMapper {
 
 
     //从结果集中获取实体
-    public List<?> fetch(ResultSet resultSet) throws SQLException {
+    public List<T> fetch(ResultSet resultSet) throws SQLException {
         //结果列表
-        LinkedList<Object> resultList = new LinkedList<>();
+        LinkedList<T> resultList = new LinkedList<>();
 
         //获取实体的属性信息
         PropertyInfo[] propertyInfos = getPropertyInfo(resultSet);
@@ -132,7 +132,7 @@ public class BeanMapper extends RowMapper {
             }
 
             //添加到结果列表
-            resultList.add(beanInstance);
+            resultList.add((T) beanInstance);
         }
         return resultList;
     }
