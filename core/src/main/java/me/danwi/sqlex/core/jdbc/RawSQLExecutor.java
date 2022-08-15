@@ -37,6 +37,17 @@ public class RawSQLExecutor {
     }
 
     /**
+     * 执行SQL,返回影响的行数
+     *
+     * @param sql        SQL语句
+     * @param parameters 预处理参数
+     * @return 影响的行数
+     */
+    public long execute(String sql, Object... parameters) {
+        return execute(null, sql, parameters).getAffectRows();
+    }
+
+    /**
      * 执行SQL,返回执行结果
      *
      * @param generateKeyType 生成键的Java类
@@ -70,11 +81,13 @@ public class RawSQLExecutor {
             //获取生成列的值
             K generatedKey = null;
             try (ResultSet rs = statement.getGeneratedKeys()) {
-                //如果存在生成列,则获取他的值
-                BasicTypeMapper<K> mapper = new BasicTypeMapper<>(generateKeyType);
-                List<K> fetchResult = mapper.fetch(rs);
-                if (fetchResult.size() > 0)
-                    generatedKey = fetchResult.get(0);
+                if (generateKeyType != null) {
+                    //如果存在生成列,则获取他的值
+                    BasicTypeMapper<K> mapper = new BasicTypeMapper<>(generateKeyType);
+                    List<K> fetchResult = mapper.fetch(rs);
+                    if (fetchResult.size() > 0)
+                        generatedKey = fetchResult.get(0);
+                }
             }
             //返回结果
             return new ExecuteResult<>(affectRows, generatedKey);
