@@ -1,12 +1,8 @@
 package me.danwi.sqlex.core.query;
 
-import me.danwi.sqlex.core.ExceptionTranslator;
 import me.danwi.sqlex.core.annotation.entity.SqlExColumnName;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
-import me.danwi.sqlex.core.jdbc.ParameterSetter;
-import me.danwi.sqlex.core.jdbc.mapper.BasicTypeMapper;
-import me.danwi.sqlex.core.transaction.Transaction;
-import me.danwi.sqlex.core.transaction.TransactionManager;
+import me.danwi.sqlex.core.jdbc.RawSQLExecutor;
 import org.jetbrains.annotations.Nullable;
 
 import java.beans.IntrospectionException;
@@ -14,7 +10,6 @@ import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.sql.*;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -27,20 +22,14 @@ import java.util.stream.Collectors;
  */
 public class TableInsert<T, K> {
     private final String tableName;
-    private final BasicTypeMapper generatedColumnMapper;
-    private final TransactionManager transactionManager;
-    private final ParameterSetter parameterSetter;
-    private final ExceptionTranslator translator;
+    private final RawSQLExecutor executor;
+    private final Class<K> generatedColumnJavaType;
 
-    public TableInsert(String tableName, Class<K> generatedColumnJavaType, TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator) {
+
+    public TableInsert(String tableName, RawSQLExecutor executor, Class<K> generatedColumnJavaType) {
         this.tableName = tableName;
-        if (generatedColumnJavaType == null)
-            this.generatedColumnMapper = null;
-        else
-            this.generatedColumnMapper = new BasicTypeMapper(generatedColumnJavaType);
-        this.transactionManager = transactionManager;
-        this.parameterSetter = parameterSetter;
-        this.translator = translator;
+        this.executor = executor;
+        this.generatedColumnJavaType = generatedColumnJavaType;
     }
 
     /**
@@ -94,48 +83,8 @@ public class TableInsert<T, K> {
                     .collect(Collectors.joining(","));
         }
 
-        //开始准备执行
-        //获取事务
-        Transaction currentTransaction = transactionManager.getCurrentTransaction();
-        Connection connection;
-        if (currentTransaction != null)
-            //存在事务,则从事务中获取连接
-            connection = currentTransaction.getConnection();
-        else
-            //不存在事务,则新建一个连接
-            connection = transactionManager.newConnection();
-
-        //调用方法
-        try {
-            try (PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-                parameterSetter.setParameters(statement, parameters);
-                //执行
-                statement.executeUpdate();
-                //获取生成列的值
-                try (ResultSet rs = statement.getGeneratedKeys()) {
-                    //如果存在生成列,则获取它的值
-                    if (this.generatedColumnMapper != null) {
-                        List<?> fetchResult = this.generatedColumnMapper.fetch(rs);
-                        if (fetchResult.size() > 0)
-                            return (K) fetchResult.get(0);
-                    }
-                }
-                //没有生成列信息,则返回null
-                return null;
-            }
-        } catch (SQLException e) {
-            throw translator.translate(e);
-        } finally {
-            //不是事务中的连接主要手动关闭
-            if (currentTransaction == null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    //noinspection ThrowFromFinallyBlock
-                    throw translator.translate(e);
-                }
-            }
-        }
+        //执行
+        return executor.execute(this.generatedColumnJavaType, sql, parameters).getGeneratedKey();
     }
 
     /**
