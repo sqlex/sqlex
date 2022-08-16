@@ -1,7 +1,7 @@
 plugins {
     java
     kotlin("jvm")
-    id("org.jetbrains.intellij") version "1.7.0"
+    id("org.jetbrains.intellij") version "1.8.0"
 }
 
 dependencies {
