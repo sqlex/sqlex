@@ -1,34 +1,25 @@
 package me.danwi.sqlex.core.invoke.method;
 
-import me.danwi.sqlex.core.ExceptionTranslator;
 import me.danwi.sqlex.core.annotation.method.SqlExScript;
 import me.danwi.sqlex.core.annotation.method.parameter.SqlExInExprPosition;
 import me.danwi.sqlex.core.annotation.method.parameter.SqlExIsNullExprPosition;
 import me.danwi.sqlex.core.annotation.method.parameter.SqlExMarkerPosition;
 import me.danwi.sqlex.core.annotation.method.parameter.SqlExParameterPosition;
-import me.danwi.sqlex.core.jdbc.ParameterSetter;
-import me.danwi.sqlex.core.transaction.Transaction;
-import me.danwi.sqlex.core.transaction.TransactionManager;
+import me.danwi.sqlex.core.jdbc.RawSQLExecutor;
 
 import java.lang.reflect.Method;
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public abstract class BaseMethodProxy implements MethodProxy {
-    //事务管理器
-    final private TransactionManager transactionManager;
     //SQL语句
-    final private String sql;
+    private final String sql;
     //预处理参数信息
     private final MarkerInfo[] markerInfos;
-    //参数转换器注册表
-    protected final ParameterSetter parameterSetter;
-    //异常翻译
-    private final ExceptionTranslator translator;
+    //SQL执行器
+    protected final RawSQLExecutor executor;
 
     private static class MarkerInfo {
         public int argIndex; //引用方法参数的位置
@@ -36,12 +27,10 @@ public abstract class BaseMethodProxy implements MethodProxy {
         public SqlExIsNullExprPosition isNullExprPosition; //?是否在? is null表达式中
     }
 
-    public BaseMethodProxy(Method method, TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator) {
-        this.transactionManager = transactionManager;
-        this.translator = translator;
+    public BaseMethodProxy(Method method, RawSQLExecutor executor) {
+        this.executor = executor;
         //获取sql
         sql = method.getAnnotation(SqlExScript.class).value();
-        this.parameterSetter = parameterSetter;
 
         //填充marker信息
         int[] markerPositions = method.getAnnotation(SqlExMarkerPosition.class).value();
@@ -213,36 +202,4 @@ public abstract class BaseMethodProxy implements MethodProxy {
         //返回重写后的结果
         return rewrittenSQL.toString();
     }
-
-    @Override
-    public Object invoke(Object[] args) {
-        //获取事务
-        Transaction currentTransaction = transactionManager.getCurrentTransaction();
-        Connection connection;
-        if (currentTransaction != null)
-            //存在事务,则从事务中获取连接
-            connection = currentTransaction.getConnection();
-        else
-            //不存在事务,则新建一个连接
-            connection = transactionManager.newConnection();
-
-        //调用方法
-        try {
-            return invoke(args, connection);
-        } catch (SQLException e) {
-            throw translator.translate(e);
-        } finally {
-            //不是事务中的连接主要手动关闭
-            if (currentTransaction == null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    //noinspection ThrowFromFinallyBlock
-                    throw translator.translate(e);
-                }
-            }
-        }
-    }
-
-    protected abstract Object invoke(Object[] args, Connection connection) throws SQLException;
 }

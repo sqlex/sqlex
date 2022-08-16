@@ -1,17 +1,13 @@
 package me.danwi.sqlex.core.invoke.method;
 
-import me.danwi.sqlex.core.ExceptionTranslator;
-import me.danwi.sqlex.core.jdbc.ParameterSetter;
-import me.danwi.sqlex.core.transaction.TransactionManager;
+import me.danwi.sqlex.core.jdbc.RawSQLExecutor;
 
 import java.lang.reflect.Method;
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.List;
 
 public class SelectOneRowMethodProxy extends SelectMethodProxy {
-    public SelectOneRowMethodProxy(Method method, TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator) {
-        super(method, transactionManager, parameterSetter, translator);
+    public SelectOneRowMethodProxy(Method method, RawSQLExecutor executor) {
+        super(method, executor);
     }
 
     @Override
@@ -20,8 +16,8 @@ public class SelectOneRowMethodProxy extends SelectMethodProxy {
     }
 
     @Override
-    protected Object invoke(Object[] args, Connection connection) throws SQLException {
-        Object result = super.invoke(args, connection);
+    public Object invoke(Object[] args) {
+        Object result = super.invoke(args);
         if (result instanceof List) {
             List<?> resultList = (List<?>) result;
             if (resultList.size() > 0)
