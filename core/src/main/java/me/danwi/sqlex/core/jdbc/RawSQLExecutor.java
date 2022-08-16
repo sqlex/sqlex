@@ -38,6 +38,17 @@ public class RawSQLExecutor {
     /**
      * 执行SQL,返回生成键的值
      *
+     * @param sql        SQL语句
+     * @param parameters 预处理参数
+     * @return 返回插入的行数
+     */
+    public long insert(String sql, Object... parameters) {
+        return execute(null, sql, Arrays.asList(parameters)).getAffectRows();
+    }
+
+    /**
+     * 执行SQL,返回生成键的值
+     *
      * @param generateKeyType 生成键的Java类
      * @param sql             SQL语句
      * @param parameters      预处理参数
@@ -68,6 +79,19 @@ public class RawSQLExecutor {
      */
     public long update(String sql, Object... parameters) {
         return execute(null, sql, Arrays.asList(parameters)).getAffectRows();
+    }
+
+    /**
+     * 执行SQL查询,返回结果
+     *
+     * @param rowType    行映射Java类型
+     * @param sql        SQL语句
+     * @param parameters 预处理参数
+     * @param <T>        结果映射Bean类型
+     * @return 结果集合
+     */
+    public <T> List<T> select(Class<T> rowType, String sql, Object... parameters) {
+        return query(rowType, sql, Arrays.asList(parameters));
     }
 
     /**
@@ -130,67 +154,42 @@ public class RawSQLExecutor {
     }
 
     /**
-     * 执行SQL查询,返回结果
+     * 查询SQL,返回查询结果
      *
-     * @param beanType   结果映射Bean类
+     * @param rowType    行类型
      * @param sql        SQL语句
      * @param parameters 预处理参数
-     * @param <T>        结果映射Bean类型
-     * @return 结果集合
+     * @param <T>        行类型
+     * @return 结果集
      */
-    public <T> List<T> query(Class<T> beanType, String sql, Object... parameters) {
-        return query(new BeanMapper<>(beanType), sql, Arrays.asList(parameters));
+    public <T> List<T> query(Class<T> rowType, String sql, Object... parameters) {
+        return query(null, rowType, sql, Arrays.asList(parameters));
     }
 
     /**
-     * 执行SQL查询,返回结果
-     *
-     * @param beanMapper 结果映射器
-     * @param sql        SQL语句
-     * @param parameters 预处理参数
-     * @param <T>        结果映射Bean类型
-     * @return 结果集合
-     */
-    public <T> List<T> query(BeanMapper<T> beanMapper, String sql, List<Object> parameters) {
-        return queryWithMapper(beanMapper, sql, parameters);
-    }
-
-    /**
-     * 请求单列结果
-     *
-     * @param columnType 列类型
-     * @param sql        SQL语句
-     * @param parameters 预处理参数
-     * @param <T>        列类型
-     * @return 结果集合
-     */
-    public <T> List<T> queryColumn(Class<T> columnType, String sql, Object... parameters) {
-        return queryColumn(new BasicTypeMapper<>(columnType), sql, Arrays.asList(parameters));
-    }
-
-    /**
-     * 请求单列结果
-     *
-     * @param basicMapper 基本类型映射
-     * @param sql         SQL语句
-     * @param parameters  预处理参数
-     * @param <T>         列类型
-     * @return 结果集合
-     */
-    public <T> List<T> queryColumn(BasicTypeMapper<T> basicMapper, String sql, List<Object> parameters) {
-        return queryWithMapper(basicMapper, sql, parameters);
-    }
-
-    /**
-     * 执行SQL返回结果
+     * 查询SQL,返回查询结果
      *
      * @param rowMapper  行映射器
      * @param sql        SQL语句
      * @param parameters 预处理参数
      * @param <T>        行类型
-     * @return 结果集合
+     * @return 结果集
      */
-    public <T> List<T> queryWithMapper(RowMapper<T> rowMapper, String sql, List<Object> parameters) {
+    public <T> List<T> query(RowMapper<T> rowMapper, String sql, Object... parameters) {
+        return query(rowMapper, null, sql, Arrays.asList(parameters));
+    }
+
+    /**
+     * 查询SQL,返回查询结果
+     *
+     * @param rowMapper  行映射器
+     * @param rowType    行类型,与rowMapper二选一
+     * @param sql        SQL语句
+     * @param parameters 预处理参数
+     * @param <T>        行类型
+     * @return 结果集
+     */
+    public <T> List<T> query(RowMapper<T> rowMapper, Class<T> rowType, String sql, List<Object> parameters) {
         //尝试获取当前事务
         Transaction currentTransaction = transactionManager.getCurrentTransaction();
         Connection connection;
@@ -207,7 +206,17 @@ public class RawSQLExecutor {
             setter.setParameters(statement, parameters);
             //获取返回值
             try (ResultSet rs = statement.executeQuery()) {
-                return rowMapper.fetch(rs);
+                if (rowMapper != null) {
+                    //如果指定了row mapper,则使用它来做映射
+                    return rowMapper.fetch(rs);
+                } else {
+                    //如果是单行,则使用BasicTypeMapper
+                    if (rs.getMetaData().getColumnCount() == 1) {
+                        return new BasicTypeMapper<>(rowType).fetch(rs);
+                    } else {
+                        return new BeanMapper<>(rowType).fetch(rs);
+                    }
+                }
             }
         } catch (SQLException e) {
             throw translator.translate(e);

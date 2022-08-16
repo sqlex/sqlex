@@ -135,7 +135,7 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
         //添加count
         String countSQL = "select count(1) from (" + sqlParameterBind.getSQL() + ") temp";
         //执行
-        return executor.queryColumn(new BasicTypeMapper<>(Long.class), countSQL, sqlParameterBind.getParameters()).get(0);
+        return executor.query(new BasicTypeMapper<>(Long.class), null, countSQL, sqlParameterBind.getParameters()).get(0);
     }
 
     /**
@@ -147,7 +147,7 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
         //构建SQL
         SQLParameterBind sqlParameterBind = this.buildSQL();
         //执行
-        return executor.queryWithMapper(this.beanMapper, sqlParameterBind.getSQL(), sqlParameterBind.getParameters());
+        return executor.query(this.beanMapper, null, sqlParameterBind.getSQL(), sqlParameterBind.getParameters());
     }
 
     /**
