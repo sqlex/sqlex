@@ -1,6 +1,5 @@
 package me.danwi.sqlex.core.invoke;
 
-import me.danwi.sqlex.core.ExceptionTranslator;
 import me.danwi.sqlex.core.annotation.method.SqlExOneRow;
 import me.danwi.sqlex.core.annotation.method.SqlExPaged;
 import me.danwi.sqlex.core.annotation.method.type.SqlExDelete;
@@ -9,8 +8,7 @@ import me.danwi.sqlex.core.annotation.method.type.SqlExSelect;
 import me.danwi.sqlex.core.annotation.method.type.SqlExUpdate;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.invoke.method.*;
-import me.danwi.sqlex.core.jdbc.ParameterSetter;
-import me.danwi.sqlex.core.transaction.TransactionManager;
+import me.danwi.sqlex.core.jdbc.RawSQLExecutor;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -18,16 +16,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class InvocationProxy implements InvocationHandler {
-    final private TransactionManager transactionManager;
-    final private ParameterSetter parameterSetter;
-    final private ExceptionTranslator translator;
+    private final RawSQLExecutor executor;
+    private final Map<Method, MethodProxy> methodProxyCache = new HashMap<>();
 
-    final private Map<Method, MethodProxy> methodProxyCache = new HashMap<>();
-
-    public InvocationProxy(TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator) {
-        this.transactionManager = transactionManager;
-        this.parameterSetter = parameterSetter;
-        this.translator = translator;
+    public InvocationProxy(RawSQLExecutor executor) {
+        this.executor = executor;
     }
 
     @Override
@@ -41,17 +34,17 @@ public class InvocationProxy implements InvocationHandler {
                     //解析他的类型,生成不同的method proxy
                     if (method.getDeclaredAnnotation(SqlExSelect.class) != null) {
                         if (method.getDeclaredAnnotation(SqlExPaged.class) != null) {
-                            methodProxy = new SelectPagedMethodProxy(method, transactionManager, parameterSetter, translator);
+                            methodProxy = new SelectPagedMethodProxy(method, this.executor);
                         } else if (method.getDeclaredAnnotation(SqlExOneRow.class) != null) {
-                            methodProxy = new SelectOneRowMethodProxy(method, transactionManager, parameterSetter, translator);
+                            methodProxy = new SelectOneRowMethodProxy(method, this.executor);
                         } else {
-                            methodProxy = new SelectMethodProxy(method, transactionManager, parameterSetter, translator);
+                            methodProxy = new SelectMethodProxy(method, this.executor);
                         }
                     } else if (method.getAnnotation(SqlExInsert.class) != null) {
-                        methodProxy = new InsertMethodProxy(method, transactionManager, parameterSetter, translator);
+                        methodProxy = new InsertMethodProxy(method, this.executor);
                     } else if (method.getAnnotation(SqlExUpdate.class) != null
                             || method.getAnnotation(SqlExDelete.class) != null) {
-                        methodProxy = new UpdateDeleteMethodProxy(method, transactionManager, parameterSetter, translator);
+                        methodProxy = new UpdateDeleteMethodProxy(method, this.executor);
                     } else {
                         throw new SqlExImpossibleException("错误的方法类型");
                     }

@@ -1,31 +1,21 @@
 package me.danwi.sqlex.core.query;
 
-import me.danwi.sqlex.core.ExceptionTranslator;
-import me.danwi.sqlex.core.exception.SqlExImpossibleException;
-import me.danwi.sqlex.core.jdbc.ParameterSetter;
+import me.danwi.sqlex.core.jdbc.RawSQLExecutor;
+import me.danwi.sqlex.core.jdbc.mapper.BasicTypeMapper;
 import me.danwi.sqlex.core.jdbc.mapper.BeanMapper;
-import me.danwi.sqlex.core.jdbc.mapper.RowMapper;
 import me.danwi.sqlex.core.query.expression.Expression;
 import me.danwi.sqlex.core.query.expression.ExpressionUtil;
-import me.danwi.sqlex.core.transaction.Transaction;
-import me.danwi.sqlex.core.transaction.TransactionManager;
 import me.danwi.sqlex.core.type.PagedResult;
 import org.jetbrains.annotations.Nullable;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
 public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
     private final String tableName;
-    private final TransactionManager transactionManager;
-    private final ParameterSetter parameterSetter;
-    private final RowMapper rowMapper;
-    private final ExceptionTranslator translator;
+    private final RawSQLExecutor executor;
+    private final BeanMapper<T> beanMapper;
     private final List<OrderPair> orders = new ArrayList<>();
     private Long skip;
     private Long take;
@@ -36,12 +26,10 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
         Order order;
     }
 
-    public TableQuery(String tableName, TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator, Class<T> entityClass) {
+    public TableQuery(String tableName, RawSQLExecutor executor, Class<T> entityClass) {
         this.tableName = tableName;
-        this.transactionManager = transactionManager;
-        this.parameterSetter = parameterSetter;
-        this.rowMapper = new BeanMapper(entityClass);
-        this.translator = translator;
+        this.executor = executor;
+        this.beanMapper = new BeanMapper<>(entityClass);
     }
 
     /**
@@ -142,45 +130,12 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
      * @return 行数
      */
     public long count() {
-        //获取事务
-        Transaction currentTransaction = transactionManager.getCurrentTransaction();
-        Connection connection;
-        if (currentTransaction != null)
-            //存在事务,则从事务中获取连接
-            connection = currentTransaction.getConnection();
-        else
-            //不存在事务,则新建一个连接
-            connection = transactionManager.newConnection();
-
-        //调用方法
-        try {
-            //构建SQL
-            SQLParameterBind sqlParameterBind = this.buildSQL();
-            //添加count
-            String countSQL = "select count(1) from (" + sqlParameterBind.getSQL() + ") temp";
-            //新建预处理数据
-            try (PreparedStatement statement = connection.prepareStatement(countSQL)) {
-                parameterSetter.setParameters(statement, sqlParameterBind.getParameters());
-                //获取到返回值
-                try (ResultSet rs = statement.executeQuery()) {
-                    if (!rs.next())
-                        throw new SqlExImpossibleException("无法获取分页总行数");
-                    return rs.getLong(1);
-                }
-            }
-        } catch (SQLException e) {
-            throw translator.translate(e);
-        } finally {
-            //不是事务中的连接主要手动关闭
-            if (currentTransaction == null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    //noinspection ThrowFromFinallyBlock
-                    throw translator.translate(e);
-                }
-            }
-        }
+        //构建SQL
+        SQLParameterBind sqlParameterBind = this.buildSQL();
+        //添加count
+        String countSQL = "select count(1) from (" + sqlParameterBind.getSQL() + ") temp";
+        //执行
+        return executor.query(new BasicTypeMapper<>(Long.class), null, countSQL, sqlParameterBind.getParameters()).get(0);
     }
 
     /**
@@ -189,42 +144,10 @@ public class TableQuery<T> extends WhereBuilder<TableQuery<T>> {
      * @return 结果
      */
     public List<T> find() {
-        //获取事务
-        Transaction currentTransaction = transactionManager.getCurrentTransaction();
-        Connection connection;
-        if (currentTransaction != null)
-            //存在事务,则从事务中获取连接
-            connection = currentTransaction.getConnection();
-        else
-            //不存在事务,则新建一个连接
-            connection = transactionManager.newConnection();
-
-        //调用方法
-        try {
-            //构建SQL
-            SQLParameterBind sqlParameterBind = this.buildSQL();
-            //新建预处理数据
-            try (PreparedStatement statement = connection.prepareStatement(sqlParameterBind.getSQL())) {
-                parameterSetter.setParameters(statement, sqlParameterBind.getParameters());
-                //获取到返回值
-                try (ResultSet rs = statement.executeQuery()) {
-                    //noinspection unchecked
-                    return (List<T>) rowMapper.fetch(rs);
-                }
-            }
-        } catch (SQLException e) {
-            throw translator.translate(e);
-        } finally {
-            //不是事务中的连接主要手动关闭
-            if (currentTransaction == null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    //noinspection ThrowFromFinallyBlock
-                    throw translator.translate(e);
-                }
-            }
-        }
+        //构建SQL
+        SQLParameterBind sqlParameterBind = this.buildSQL();
+        //执行
+        return executor.query(this.beanMapper, null, sqlParameterBind.getSQL(), sqlParameterBind.getParameters());
     }
 
     /**

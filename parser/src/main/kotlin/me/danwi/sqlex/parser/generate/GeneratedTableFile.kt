@@ -1,18 +1,11 @@
 package me.danwi.sqlex.parser.generate
 
 import com.squareup.javapoet.*
-import me.danwi.sqlex.core.ExceptionTranslator
 import me.danwi.sqlex.core.annotation.SqlExRepository
 import me.danwi.sqlex.core.annotation.SqlExTableAccessObject
-import me.danwi.sqlex.core.jdbc.ParameterSetter
-import me.danwi.sqlex.core.query.TableDelete
-import me.danwi.sqlex.core.query.TableInsert
-import me.danwi.sqlex.core.query.TableQuery
-import me.danwi.sqlex.core.query.TableUpdate
-import me.danwi.sqlex.core.query.Column
-import me.danwi.sqlex.core.query.InsertOption
+import me.danwi.sqlex.core.jdbc.RawSQLExecutor
+import me.danwi.sqlex.core.query.*
 import me.danwi.sqlex.core.query.expression.Expression
-import me.danwi.sqlex.core.transaction.TransactionManager
 import me.danwi.sqlex.parser.Field
 import me.danwi.sqlex.parser.Session
 import me.danwi.sqlex.parser.TableInfo
@@ -103,45 +96,29 @@ class GeneratedTableFile(
     private fun generateFields(): List<FieldSpec> {
         return listOf(
             FieldSpec.builder(
-                ClassName.get(TransactionManager::class.java),
-                "transactionManager",
+                RawSQLExecutor::class.java,
+                "executor",
                 Modifier.PRIVATE,
                 Modifier.FINAL
             ).build(),
-            FieldSpec.builder(
-                ClassName.get(ParameterSetter::class.java),
-                "parameterSetter",
-                Modifier.PRIVATE,
-                Modifier.FINAL
-            ).build(),
-            FieldSpec.builder(
-                ClassName.get(ExceptionTranslator::class.java),
-                "translator",
-                Modifier.PRIVATE,
-                Modifier.FINAL
-            ).build()
         )
     }
 
     private fun generateConstructorMethod(generatedColumn: Field?): MethodSpec {
         val constructorMethod = MethodSpec.constructorBuilder()
             .addModifiers(Modifier.PUBLIC)
-            .addParameter(ClassName.get(TransactionManager::class.java), "transactionManager")
-            .addParameter(ClassName.get(ParameterSetter::class.java), "parameterSetter")
-            .addParameter(ClassName.get(ExceptionTranslator::class.java), "translator")
+            .addParameter(RawSQLExecutor::class.java, "executor")
         //如有生成列,则把生成列的类型传给TableInsert构造函数,没有则传空
         if (generatedColumn != null)
             constructorMethod.addCode(
-                "super(\$S, \$T.class, transactionManager, parameterSetter, translator);\n",
+                "super(\$S, executor, \$T.class);\n",
                 tableName, generatedColumn.JavaType
             )
         else
-            constructorMethod.addCode("super(\$S, null, transactionManager, parameterSetter, translator);\n", tableName)
+            constructorMethod.addCode("super(\$S, executor, null);\n", tableName)
 
         return constructorMethod
-            .addCode("this.transactionManager = transactionManager;\n")
-            .addCode("this.parameterSetter = parameterSetter;\n")
-            .addCode("this.translator = translator;")
+            .addCode("this.executor = executor;")
             .build()
     }
 
@@ -158,10 +135,8 @@ class GeneratedTableFile(
         typeSpecBuilder.addMethod(
             MethodSpec.constructorBuilder()
                 .addModifiers(Modifier.PUBLIC)
-                .addParameter(ClassName.get(TransactionManager::class.java), "transactionManager")
-                .addParameter(ClassName.get(ParameterSetter::class.java), "parameterSetter")
-                .addParameter(ClassName.get(ExceptionTranslator::class.java), "translator")
-                .addCode("super(\$S, transactionManager, parameterSetter, translator);\n", tableName)
+                .addParameter(RawSQLExecutor::class.java, "executor")
+                .addCode("super(\$S, executor);\n", tableName)
                 .build()
         )
         //添加set方法
@@ -187,7 +162,7 @@ class GeneratedTableFile(
             .addModifiers(Modifier.PUBLIC)
             .returns(updateClassTypeName)
             .addCode(
-                "return new \$T(this.transactionManager, this.parameterSetter, this.translator);",
+                "return new \$T(this.executor);",
                 updateClassTypeName
             )
             .build()
@@ -198,7 +173,7 @@ class GeneratedTableFile(
             .addModifiers(Modifier.PUBLIC)
             .returns(ClassName.get(TableDelete::class.java))
             .addCode(
-                "return new \$T(\$S, this.transactionManager, this.parameterSetter, this.translator);",
+                "return new \$T(\$S, this.executor);",
                 TableDelete::class.java, tableName
             )
             .build()
@@ -214,7 +189,7 @@ class GeneratedTableFile(
                 )
             )
             .addCode(
-                "return new \$T<>(\$S, this.transactionManager, this.parameterSetter, this.translator, \$T.class);",
+                "return new \$T<>(\$S, this.executor, \$T.class);",
                 TableQuery::class.java, tableName, entityTypeName
             )
             .build()

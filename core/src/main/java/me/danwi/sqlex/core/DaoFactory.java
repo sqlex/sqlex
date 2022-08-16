@@ -11,6 +11,7 @@ import me.danwi.sqlex.core.exception.SqlExSQLException;
 import me.danwi.sqlex.core.exception.SqlExUndeclaredException;
 import me.danwi.sqlex.core.invoke.InvocationProxy;
 import me.danwi.sqlex.core.jdbc.ParameterSetter;
+import me.danwi.sqlex.core.jdbc.RawSQLExecutor;
 import me.danwi.sqlex.core.migration.Migrator;
 import me.danwi.sqlex.core.transaction.DefaultTransactionManager;
 import me.danwi.sqlex.core.transaction.Transaction;
@@ -262,6 +263,15 @@ public class DaoFactory {
     }
 
     /**
+     * 获取原生SQL执行器
+     *
+     * @return 原生SQL执行器
+     */
+    public RawSQLExecutor getRawSQLExecutor() {
+        return new RawSQLExecutor(transactionManager, parameterSetter, exceptionTranslator);
+    }
+
+    /**
      * 获取数据访问对象的实例
      *
      * @param dao 数据访问对象Class
@@ -283,7 +293,7 @@ public class DaoFactory {
                     if (!annotation.value().getName().equals(this.repositoryClass.getName()))
                         throw new SqlExRepositoryNotMatchException();
                     //缓存中没有再自己新建
-                    invocationProxy = new InvocationProxy(transactionManager, parameterSetter, exceptionTranslator);
+                    invocationProxy = new InvocationProxy(getRawSQLExecutor());
                     invocationProxyCache.put(dao, invocationProxy);
                 }
             }
@@ -314,8 +324,8 @@ public class DaoFactory {
             throw new SqlExRepositoryNotMatchException();
         //缓存中没有再自己新建
         try {
-            Constructor<T> constructor = table.getConstructor(TransactionManager.class, ParameterSetter.class, ExceptionTranslator.class);
-            return constructor.newInstance(this.transactionManager, this.parameterSetter, this.exceptionTranslator);
+            Constructor<T> constructor = table.getConstructor(RawSQLExecutor.class);
+            return constructor.newInstance(getRawSQLExecutor());
         } catch (NoSuchMethodException | IllegalAccessException | InstantiationException |
                  InvocationTargetException e) {
             //代码是自己生成的,不可能出现错误

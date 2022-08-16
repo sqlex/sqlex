@@ -1,29 +1,21 @@
 package me.danwi.sqlex.core.invoke.method;
 
-import me.danwi.sqlex.core.ExceptionTranslator;
 import me.danwi.sqlex.core.annotation.method.SqlExOneColumn;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
-import me.danwi.sqlex.core.jdbc.mapper.BeanMapper;
+import me.danwi.sqlex.core.jdbc.RawSQLExecutor;
 import me.danwi.sqlex.core.jdbc.mapper.BasicTypeMapper;
+import me.danwi.sqlex.core.jdbc.mapper.BeanMapper;
 import me.danwi.sqlex.core.jdbc.mapper.RowMapper;
-import me.danwi.sqlex.core.jdbc.ParameterSetter;
-import me.danwi.sqlex.core.transaction.TransactionManager;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.List;
-
 
 public class SelectMethodProxy extends BaseMethodProxy {
-    private final RowMapper rowMapper;
+    private final RowMapper<?> rowMapper;
 
-    public SelectMethodProxy(Method method, TransactionManager transactionManager, ParameterSetter parameterSetter, ExceptionTranslator translator) {
-        super(method, transactionManager, parameterSetter, translator);
+    public SelectMethodProxy(Method method, RawSQLExecutor executor) {
+        super(method, executor);
         //获取返回值中实体/类型
         Class<?> entityType = getEntityType(method);
         if (entityType == null)
@@ -32,10 +24,10 @@ public class SelectMethodProxy extends BaseMethodProxy {
         //判断是否为单列
         if (method.getAnnotation(SqlExOneColumn.class) != null) {
             //基本支持的类型
-            rowMapper = new BasicTypeMapper(entityType);
+            rowMapper = new BasicTypeMapper<>(entityType);
         } else {
             //构造类型
-            rowMapper = new BeanMapper(entityType);
+            rowMapper = new BeanMapper<>(entityType);
         }
     }
 
@@ -53,21 +45,12 @@ public class SelectMethodProxy extends BaseMethodProxy {
         return null;
     }
 
-    protected RowMapper getRowMapper() {
+    protected RowMapper<?> getRowMapper() {
         return rowMapper;
     }
 
     @Override
-    protected Object invoke(Object[] args, Connection connection) throws SQLException {
-        String sql = rewriteSQL(args);
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            //设置预处理语句参数
-            List<Object> reorderArgs = reorderArgs(args);
-            parameterSetter.setParameters(statement, reorderArgs);
-            //获取到返回值
-            try (ResultSet rs = statement.executeQuery()) {
-                return getRowMapper().fetch(rs);
-            }
-        }
+    public Object invoke(Object[] args) {
+        return this.executor.query(getRowMapper(), null, rewriteSQL(args), reorderArgs(args));
     }
 }
