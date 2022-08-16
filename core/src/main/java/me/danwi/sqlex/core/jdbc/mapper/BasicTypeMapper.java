@@ -6,7 +6,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class BasicTypeMapper<T> extends RowMapper<T> {
-    private final Class<?> dataType;
+    private final Class<T> dataType;
 
 
     public BasicTypeMapper(Class<T> dataType) {

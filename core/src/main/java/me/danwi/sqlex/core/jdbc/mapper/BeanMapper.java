@@ -38,14 +38,14 @@ public class BeanMapper<T> extends RowMapper<T> {
         public String columnName; //列名
         public int columnIndex; //属性在result set中对应的索引
         public Method writeMethod;  //写入方法
-        public String dataTypeName; //数据类型名
+        public Class<?> dataType; //数据类型
 
-        public PropertyInfo(String name, String columnName, Method writeMethod, String dataTypeName) {
+        public PropertyInfo(String name, String columnName, Method writeMethod, Class<?> dataType) {
             this.name = name;
             this.columnName = columnName;
             this.columnIndex = -1;
             this.writeMethod = writeMethod;
-            this.dataTypeName = dataTypeName;
+            this.dataType = dataType;
         }
     }
 
@@ -70,7 +70,7 @@ public class BeanMapper<T> extends RowMapper<T> {
                                 if (writeMethod != null) {
                                     SqlExColumnName columnNameAnnotation = writeMethod.getAnnotation(SqlExColumnName.class);
                                     if (columnNameAnnotation != null)
-                                        return new PropertyInfo(p.getName(), columnNameAnnotation.value(), writeMethod, p.getPropertyType().getName());
+                                        return new PropertyInfo(p.getName(), columnNameAnnotation.value(), writeMethod, p.getPropertyType());
                                 }
                                 return null;
                             })
@@ -122,7 +122,7 @@ public class BeanMapper<T> extends RowMapper<T> {
                 //对应的列索引
                 int colIndex = propertyInfo.columnIndex;
                 //从result set获取的值
-                Object value = fetchColumn(resultSet, colIndex, propertyInfo.dataTypeName);
+                Object value = fetchColumn(resultSet, colIndex, propertyInfo.dataType);
                 //写入数据
                 try {
                     propertyInfo.writeMethod.invoke(beanInstance, value);
