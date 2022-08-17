@@ -1,4 +1,4 @@
-package me.danwi.sqlex.apt;
+package me.danwi.sqlex.compiler;
 
 import me.danwi.sqlex.common.Paged;
 import me.danwi.sqlex.core.annotation.method.SqlExPaged;

@@ -4,13 +4,15 @@ import com.squareup.javapoet.*
 import me.danwi.sqlex.common.Paged
 import me.danwi.sqlex.core.annotation.SqlExDataAccessObject
 import me.danwi.sqlex.core.annotation.SqlExRepository
-import me.danwi.sqlex.core.annotation.method.*
+import me.danwi.sqlex.core.annotation.method.SqlExOneColumn
+import me.danwi.sqlex.core.annotation.method.SqlExOneRow
+import me.danwi.sqlex.core.annotation.method.SqlExPaged
+import me.danwi.sqlex.core.annotation.method.SqlExScript
 import me.danwi.sqlex.core.annotation.method.parameter.*
 import me.danwi.sqlex.core.annotation.method.type.SqlExDelete
 import me.danwi.sqlex.core.annotation.method.type.SqlExInsert
 import me.danwi.sqlex.core.annotation.method.type.SqlExSelect
 import me.danwi.sqlex.core.annotation.method.type.SqlExUpdate
-import me.danwi.sqlex.core.type.PagedResult
 import me.danwi.sqlex.parser.*
 import me.danwi.sqlex.parser.exception.SqlExRepositoryMethodException
 import me.danwi.sqlex.parser.util.*
@@ -173,7 +175,10 @@ class GeneratedMethodFile(
         //是否为分页
         if (isPaged) {
             //如果是分页,则用分页类型包装起来
-            returnTypeName = ParameterizedTypeName.get(ClassName.get(PagedResult::class.java), resultTypeName)
+            returnTypeName = ParameterizedTypeName.get(
+                ClassName.get(me.danwi.sqlex.core.type.PagedResult::class.java),
+                resultTypeName
+            )
             methodSpec.addAnnotation(SqlExPaged::class.java)
         }
         //添加返回值

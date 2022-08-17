@@ -10,6 +10,9 @@ import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.compile.JavaCompile
 
+//编译器APT依赖名称
+private const val CompilerAPTDependencyNotation = "me.danwi.sqlex:compiler:${BuildFile.VERSION}"
+
 class SqlExPlugin : Plugin<Project> {
     lateinit var project: Project
 
@@ -80,17 +83,14 @@ class SqlExPlugin : Plugin<Project> {
         //兼容kotlin,判断kapt插件是否存在
         if (project.pluginManager.hasPlugin("org.jetbrains.kotlin.kapt")) {
             //如果kapt插件存在,则添加kapt依赖
-            project.dependencies.add("kapt", "me.danwi.sqlex:core:${BuildFile.VERSION}")
-            project.dependencies.add("kaptTest", "me.danwi.sqlex:core:${BuildFile.VERSION}")
+            project.dependencies.add("kapt", CompilerAPTDependencyNotation)
+            project.dependencies.add("kaptTest", CompilerAPTDependencyNotation)
         } else {
             //如果kapt插件不存在,则添加普通的annotationProcessor依赖
-            project.dependencies.add(
-                JavaPlugin.ANNOTATION_PROCESSOR_CONFIGURATION_NAME,
-                "me.danwi.sqlex:core:${BuildFile.VERSION}"
-            )
+            project.dependencies.add(JavaPlugin.ANNOTATION_PROCESSOR_CONFIGURATION_NAME, CompilerAPTDependencyNotation)
             project.dependencies.add(
                 JavaPlugin.TEST_ANNOTATION_PROCESSOR_CONFIGURATION_NAME,
-                "me.danwi.sqlex:core:${BuildFile.VERSION}"
+                CompilerAPTDependencyNotation
             )
         }
     }
@@ -98,20 +98,16 @@ class SqlExPlugin : Plugin<Project> {
     //依赖版本管理
     private fun configureDependencies() {
         val groupName = "me.danwi.sqlex"
-        val artifactNames = listOf("core", "core-kotlin")
         //给没有标记版本的添加版本标记
         project.configurations.forEach { config ->
             config.resolutionStrategy.eachDependency { resolveDetails ->
-                if (resolveDetails.target.group == groupName
-                    && resolveDetails.target.name in artifactNames
-                    && resolveDetails.target.version.isNullOrBlank()
-                )
+                if (resolveDetails.target.group == groupName && resolveDetails.target.version.isNullOrBlank())
                     resolveDetails.useVersion(BuildFile.VERSION)
             }
         }
         //检查是否有版本不匹配的情况
         project.configurations.flatMap { it.dependencies }
-            .filter { it.group == groupName && it.name in artifactNames && !it.version.isNullOrEmpty() }
+            .filter { it.group == groupName && !it.version.isNullOrEmpty() }
             .filter { it.version != BuildFile.VERSION }
             .forEach { throw GradleException("Gradle插件版本和Core依赖版本不一致, Gradle Plugin: ${BuildFile.VERSION}, Core: ${it.version}") }
     }
