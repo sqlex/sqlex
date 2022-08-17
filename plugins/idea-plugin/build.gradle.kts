@@ -5,6 +5,8 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":core"))
+    implementation(project(":spring"))
     implementation(project(":parser"))
 
     implementation("org.jetbrains.kotlin:kotlin-stdlib")

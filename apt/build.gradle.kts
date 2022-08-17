@@ -1,8 +1,9 @@
 plugins {
+    java
     kotlin("jvm")
     `maven-publish`
 }
 
 dependencies {
-    compileOnly(project(":core"))
+    implementation(project(":core"))
 }

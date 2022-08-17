@@ -6,9 +6,9 @@ plugins {
 }
 
 dependencies {
-    api(project(":core"))
+    implementation(project(":core"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
-    implementation("net.java.dev.jna:jna:5.11.0")
+    implementation("net.java.dev.jna:jna:5.12.1")
     implementation("com.google.code.gson:gson:2.9.0")
     implementation("org.yaml:snakeyaml:1.30")
     implementation("com.squareup:javapoet:1.13.0")
@@ -17,8 +17,8 @@ dependencies {
     }
     implementation("org.jetbrains:annotations:23.0.0")
 
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.8.2")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.8.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.9.0")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.9.0")
 }
 
 tasks.generateGrammarSource {

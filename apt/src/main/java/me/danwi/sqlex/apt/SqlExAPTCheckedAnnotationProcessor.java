@@ -1,5 +1,6 @@
 package me.danwi.sqlex.apt;
 
+import me.danwi.sqlex.common.Constants;
 import me.danwi.sqlex.core.annotation.repository.SqlExAPTChecked;
 
 import javax.annotation.processing.AbstractProcessor;
@@ -14,8 +15,6 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class SqlExAPTCheckedAnnotationProcessor extends AbstractProcessor {
-    public static String CheckedStubClassName = "IfThisClassUndefinedPleaseCheckAPTConfig";
-
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         Set<? extends Element> repositoryClasses = roundEnv.getElementsAnnotatedWith(SqlExAPTChecked.class);
@@ -33,9 +32,9 @@ public class SqlExAPTCheckedAnnotationProcessor extends AbstractProcessor {
         //根包
         String rootPackage = ((PackageElement) enclosingElement).getQualifiedName().toString();
         try {
-            JavaFileObject sourceFile = processingEnv.getFiler().createSourceFile(rootPackage + "." + CheckedStubClassName);
+            JavaFileObject sourceFile = processingEnv.getFiler().createSourceFile(rootPackage + "." + Constants.CheckedStubClassName);
             try (Writer writer = sourceFile.openWriter()) {
-                writer.write("package " + rootPackage + ";\n\n" + "class " + CheckedStubClassName + "{}");
+                writer.write("package " + rootPackage + ";\n\n" + "class " + Constants.CheckedStubClassName + "{}");
             }
         } catch (Exception ignored) {
         }

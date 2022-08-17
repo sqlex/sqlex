@@ -2,7 +2,7 @@ package me.danwi.sqlex.parser.generate
 
 import com.squareup.javapoet.AnnotationSpec
 import com.squareup.javapoet.TypeSpec
-import me.danwi.sqlex.apt.SqlExAPTCheckedAnnotationProcessor
+import me.danwi.sqlex.common.Constants
 import me.danwi.sqlex.core.RepositoryLike
 import me.danwi.sqlex.core.annotation.repository.*
 import me.danwi.sqlex.parser.Session
@@ -32,7 +32,7 @@ class GeneratedRepositoryFile(
             )
             .addAnnotation(
                 AnnotationSpec.builder(SqlExAPTChecked::class.java)
-                    .addMember("value", "\$L.class", SqlExAPTCheckedAnnotationProcessor.CheckedStubClassName)
+                    .addMember("value", "\$L.class", Constants.CheckedStubClassName)
                     .build()
             )
             .addAnnotations(
