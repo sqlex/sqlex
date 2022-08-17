@@ -2,6 +2,7 @@ package me.danwi.sqlex.maven
 
 import me.danwi.sqlex.parser.generateRepositorySource
 import me.danwi.sqlex.parser.util.SqlExConfigFileName
+import org.apache.maven.model.Resource
 import org.apache.maven.plugin.AbstractMojo
 import org.apache.maven.plugins.annotations.LifecyclePhase
 import org.apache.maven.plugins.annotations.Mojo
@@ -39,7 +40,7 @@ class GenerateMojo : AbstractMojo() {
     @Parameter(defaultValue = "\${project.build.directory}/sqlex-test")
     private var testOutputPath: File? = null
 
-    private fun generateSourceTo(sourceRoots: Array<File>, outputPath: File) {
+    private fun generateSourceTo(sourceRoots: Array<File>, javaOutputDir: File, resourceOutputDir: File) {
         //获取所有的sqlex source roots
         sourceRoots
             .filter { it.exists() && it.isDirectory }
@@ -48,11 +49,12 @@ class GenerateMojo : AbstractMojo() {
                 configFile.exists() && configFile.isFile
             }
         //删除旧的源码
-        outputPath.deleteRecursively()
+        javaOutputDir.deleteRecursively()
+        resourceOutputDir.deleteRecursively()
         //生成源码
         sourceRoots.forEach {
-            log.info("generate [${it.path}] to [${outputPath.path ?: "UNKNOWN"}]")
-            generateRepositorySource(it, outputPath)
+            log.info("generate [${it.path}] to [${javaOutputDir.path ?: "UNKNOWN"}] [${resourceOutputDir.path ?: "UNKNOWN"}]")
+            generateRepositorySource(it, javaOutputDir, resourceOutputDir)
         }
     }
 
@@ -63,16 +65,22 @@ class GenerateMojo : AbstractMojo() {
             this.sources ?: arrayOf(Paths.get(project.basedir.absolutePath, "src", "main", "sqlex").toFile())
         val outputPath = outputPath
         if (outputPath != null) {
-            generateSourceTo(sourceRoots, outputPath)
-            project.addCompileSourceRoot(outputPath.absolutePath)
+            val javaOutputDir = Paths.get(outputPath.absolutePath, "classes").toFile()
+            val resourceOutputDir = Paths.get(outputPath.absolutePath, "resources").toFile()
+            generateSourceTo(sourceRoots, javaOutputDir, resourceOutputDir)
+            project.addCompileSourceRoot(javaOutputDir.absolutePath)
+            project.addResource(Resource().apply { directory = resourceOutputDir.absolutePath })
         }
 
         val testSourceRoots =
             this.sources ?: arrayOf(Paths.get(project.basedir.absolutePath, "src", "test", "sqlex").toFile())
         val testOutputPath = testOutputPath
         if (testOutputPath != null) {
-            generateSourceTo(testSourceRoots, testOutputPath)
-            project.addTestCompileSourceRoot(testOutputPath.absolutePath)
+            val javaOutputDir = Paths.get(testOutputPath.absolutePath, "classes").toFile()
+            val resourceOutputDir = Paths.get(testOutputPath.absolutePath, "resources").toFile()
+            generateSourceTo(testSourceRoots, javaOutputDir, resourceOutputDir)
+            project.addTestCompileSourceRoot(javaOutputDir.absolutePath)
+            project.addTestResource(Resource().apply { directory = resourceOutputDir.absolutePath })
         }
     }
 }

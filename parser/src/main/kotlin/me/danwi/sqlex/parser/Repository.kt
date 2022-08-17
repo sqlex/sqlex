@@ -135,7 +135,7 @@ class Repository(
 }
 
 //给定一个sqlex的source root,将代码生成到指定到文件中
-fun generateRepositorySource(sourceRoot: File, outputDir: File) {
+fun generateRepositorySource(sourceRoot: File, javaOutputDir: File, resourceOutputDir: File) {
     //获取目录下的所有文件
     val files = sourceRoot.walk()
     //读取配置文件
@@ -162,17 +162,26 @@ fun generateRepositorySource(sourceRoot: File, outputDir: File) {
     val repository = builder.build()
     try {
         //在生成的源码目录下写入一个文件做标识
-        val tagFile = File(outputDir.absolutePath, SqlExGeneratedTagFileName)
+        val tagFile = File(javaOutputDir.absolutePath, SqlExGeneratedTagFileName)
         if (!tagFile.exists()) {
             tagFile.parentFile.mkdirs()
             tagFile.writeText("this directory is auto generate by sqlex, DO NOT change anything in it")
         }
+        //写入ddl资源
+        val ddlContent = repository.session.DDL
+        val rootPacket = config.rootPackage ?: throw SqlExRepositoryException("无法获取根包")
+        val ddlFile =
+            Paths.get(resourceOutputDir.absolutePath, rootPacket.packageNameToRelativePath, "ddl.sql").toFile()
+        ddlFile.parentFile.mkdirs()
+        if (ddlFile.exists())
+            throw SqlExRepositoryException("DDL存根重复生成")
+        ddlFile.writeText(ddlContent)
         //生成所有的表实体类和表操作类
         val entityAndTableJavaFiles = repository.generateEntityAndTableClassFiles()
         val entityJavaFiles = entityAndTableJavaFiles.map { it.first }
         //写入生成的实体类文件
         entityJavaFiles.forEach {
-            val sourceFile = Paths.get(outputDir.absolutePath, it.relativePath).toFile()
+            val sourceFile = Paths.get(javaOutputDir.absolutePath, it.relativePath).toFile()
             sourceFile.parentFile.mkdirs()
             if (sourceFile.exists())
                 throw SqlExRepositoryGenerateException(sourceFile.absolutePath, "重复源码生成")
@@ -182,7 +191,7 @@ fun generateRepositorySource(sourceRoot: File, outputDir: File) {
         val tableJavaFiles = entityAndTableJavaFiles.map { it.second }
         //写入生成的操作类文件
         tableJavaFiles.forEach {
-            val sourceFile = Paths.get(outputDir.absolutePath, it.relativePath).toFile()
+            val sourceFile = Paths.get(javaOutputDir.absolutePath, it.relativePath).toFile()
             sourceFile.parentFile.mkdirs()
             if (sourceFile.exists())
                 throw SqlExRepositoryGenerateException(sourceFile.absolutePath, "重复源码生成")
@@ -203,14 +212,14 @@ fun generateRepositorySource(sourceRoot: File, outputDir: File) {
                 tableJavaFiles.map { it.qualifiedName },
                 methodJavaFiles.map { it.qualifiedName }.toList()
             )
-        val repositorySourceFile = Paths.get(outputDir.absolutePath, repositoryJavaFile.relativePath).toFile()
+        val repositorySourceFile = Paths.get(javaOutputDir.absolutePath, repositoryJavaFile.relativePath).toFile()
         repositorySourceFile.parentFile.mkdirs()
         if (repositorySourceFile.exists())
             throw SqlExRepositoryGenerateException(repositorySourceFile.absolutePath, "重复源码生成")
         repositorySourceFile.writeText(repositoryJavaFile.source)
         //写入生成的SqlEx Method类文件
         methodJavaFiles.forEach {
-            val sourceFile = Paths.get(outputDir.absolutePath, it.relativePath).toFile()
+            val sourceFile = Paths.get(javaOutputDir.absolutePath, it.relativePath).toFile()
             sourceFile.parentFile.mkdirs()
             if (sourceFile.exists())
                 throw SqlExRepositoryGenerateException(sourceFile.absolutePath, "重复源码生成")

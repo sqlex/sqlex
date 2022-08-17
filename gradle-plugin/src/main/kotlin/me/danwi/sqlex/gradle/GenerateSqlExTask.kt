@@ -27,12 +27,17 @@ abstract class GenerateSqlExTask : DefaultTask() {
     fun generate() {
         //准备生成目录
         outputDir.deleteRecursively()
-        outputDir.mkdirs()
+
+        val javaOutputDir = Paths.get(outputDir.absolutePath, "classes").toFile()
+        javaOutputDir.mkdirs()
+        val resourcesOutputDir = Paths.get(outputDir.absolutePath, "resources").toFile()
+        resourcesOutputDir.mkdirs()
 
         //把源码生成目录添加java插件的源码目录中去
-        srcSet.java.srcDir(outputDir)
+        srcSet.java.srcDir(javaOutputDir)
+        srcSet.resources.srcDir(resourcesOutputDir)
 
         //针对存在的sqlex做生成
-        sqlexSourceDirs.forEach { generateRepositorySource(it, outputDir) }
+        sqlexSourceDirs.forEach { generateRepositorySource(it, javaOutputDir, resourcesOutputDir) }
     }
 }
