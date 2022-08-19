@@ -2,6 +2,7 @@ plugins {
     java
     antlr
     kotlin("jvm")
+    kotlin("plugin.serialization")
     `maven-publish`
 }
 
@@ -10,7 +11,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
     implementation("net.java.dev.jna:jna:5.11.0")
     implementation("com.google.code.gson:gson:2.9.0")
-    implementation("org.yaml:snakeyaml:1.30")
+    implementation("com.charleskorn.kaml:kaml:0.47.0")
     implementation("com.squareup:javapoet:1.13.0")
     antlr("org.antlr:antlr4:4.10.1") {
         exclude("com.ibm.icu", "icu4j")

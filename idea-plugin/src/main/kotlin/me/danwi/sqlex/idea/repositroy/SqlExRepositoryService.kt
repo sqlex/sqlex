@@ -24,7 +24,7 @@ import com.intellij.sql.dialects.mysql.MysqlDialect
 import me.danwi.sqlex.idea.config.SqlExConfigFileType
 import me.danwi.sqlex.idea.util.extension.*
 import me.danwi.sqlex.parser.RepositoryBuilder
-import me.danwi.sqlex.parser.config.createSqlExConfig
+import me.danwi.sqlex.parser.config.parseSqlExConfig
 import me.danwi.sqlex.parser.exception.SqlExRepositoryMethodException
 import me.danwi.sqlex.parser.exception.SqlExRepositorySchemaException
 import me.danwi.sqlex.parser.util.SqlExConfigFileName
@@ -138,9 +138,9 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                     indicator.text = "SqlEx: 解析配置"
                                     val configFileContent =
                                         sourceRoot.configFile?.textContent ?: throw Exception("无法读取配置文件")
-                                    val config = createSqlExConfig(configFileContent)
-                                    rootPackage = config.rootPackage ?: throw Exception("配置文件中不存在根包信息")
-                                    output("获取到根包信息: $rootPackage")
+                                    val config = parseSqlExConfig(configFileContent)
+                                    rootPackage = config.rootPackage
+                                    output("获取到根包信息: ${config.rootPackage}")
                                     indicator.checkCanceled()
 
                                     //扫描文件
@@ -171,7 +171,8 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                     builderToClean = builder
                                     sortedSchemaFiles.forEachIndexed { index, file ->
                                         val relativePath =
-                                            file.sourceRootRelativePath ?: throw Exception("无法获取${file.name}的相对路径")
+                                            file.sourceRootRelativePath
+                                                ?: throw Exception("无法获取${file.name}的相对路径")
                                         indicator.text =
                                             "SqlEx: 解析Schema(${index + 1}/${sortedSchemaFiles.size}) $relativePath"
                                         output("解析Schema: $relativePath")
@@ -196,16 +197,14 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                     indicator.text = "SqlEx: 同步 Database Tools"
                                     output("同步 Database Tools")
 
-                                    val rootPackage = config.rootPackage ?: throw Exception("无法获取SqlEx Config的根包名")
-
                                     //同步数据源
                                     //在现存的数据源中查找
                                     var dataSource = project.findDataSource(sourceRoot)
                                     //如果现有的数据源没有,则新建一个
                                     if (dataSource == null)
-                                        dataSource = project.addDataSource(rootPackage, sourceRoot)
+                                        dataSource = project.addDataSource(config.rootPackage, sourceRoot)
                                     //设置关键信息
-                                    dataSource.sqlexName = rootPackage
+                                    dataSource.sqlexName = config.rootPackage
                                     dataSource.setDDL(project, ddlScript)
 
                                     indicator.checkCanceled()
@@ -243,12 +242,14 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                         is ProcessCanceledException -> {
                                             output("\nSqlEx索引更新被取消", ConsoleViewContentType.LOG_WARNING_OUTPUT)
                                         }
+
                                         is SqlExRepositorySchemaException -> {
                                             output(
                                                 "\n解析Schema文件 [${e.relativePath}] 错误:\n${e.message}",
                                                 ConsoleViewContentType.ERROR_OUTPUT
                                             )
                                         }
+
                                         else -> {
                                             output(
                                                 "\n重建SqlEx索引时发生错误,索引构建失败:\n${e.message ?: e::class.java.simpleName}",

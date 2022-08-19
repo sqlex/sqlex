@@ -1,7 +1,7 @@
 package me.danwi.sqlex.parser
 
 import me.danwi.sqlex.parser.config.SqlExConfig
-import me.danwi.sqlex.parser.config.createSqlExConfig
+import me.danwi.sqlex.parser.config.parseSqlExConfig
 import me.danwi.sqlex.parser.exception.SqlExRepositoryException
 import me.danwi.sqlex.parser.exception.SqlExRepositoryGenerateException
 import me.danwi.sqlex.parser.exception.SqlExRepositorySchemaException
@@ -23,7 +23,7 @@ class RepositoryBuilder(private val config: SqlExConfig) {
     private val session: Session = Session(databaseName)
 
     private val rootPackageRelativePath =
-        config.rootPackage?.packageNameToRelativePath ?: throw SqlExRepositoryException("无法获取根包信息")
+        config.rootPackage.packageNameToRelativePath
 
     private var currentSchemaVersion = -1
 
@@ -93,7 +93,7 @@ class Repository(
     private val config: SqlExConfig,
     private val schemas: List<String>
 ) {
-    private val rootPackage = config.rootPackage ?: throw SqlExRepositoryException("无法获取根包信息")
+    private val rootPackage = config.rootPackage
     private val converters = config.converters
 
     //生成SqlEx Repository顶级类
@@ -148,7 +148,7 @@ fun generateRepositorySource(sourceRoot: File, javaOutputDir: File, resourceOutp
             else
                 throw SqlExRepositoryException("${sourceRoot.absolutePath}下有多个sqlex配置文件")
         }
-    val config = createSqlExConfig(tempConfigContent ?: return)
+    val config = parseSqlExConfig(tempConfigContent ?: return)
     //获取到schema文件集合
     val schemaFiles = files
         .filter { it.isFile && it.name.isSqlExSchemaFilePath }
@@ -169,9 +169,8 @@ fun generateRepositorySource(sourceRoot: File, javaOutputDir: File, resourceOutp
         }
         //写入ddl资源
         val ddlContent = repository.session.DDL
-        val rootPacket = config.rootPackage ?: throw SqlExRepositoryException("无法获取根包")
         val ddlFile =
-            Paths.get(resourceOutputDir.absolutePath, rootPacket.packageNameToRelativePath, "ddl.sql").toFile()
+            Paths.get(resourceOutputDir.absolutePath, config.rootPackage.packageNameToRelativePath, "ddl.sql").toFile()
         ddlFile.parentFile.mkdirs()
         if (ddlFile.exists())
             throw SqlExRepositoryException("DDL存根重复生成")
