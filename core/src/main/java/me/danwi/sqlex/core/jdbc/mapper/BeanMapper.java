@@ -70,7 +70,11 @@ public class BeanMapper<T> extends RowMapper<T> {
                                 if (writeMethod != null) {
                                     SqlExColumnName columnNameAnnotation = writeMethod.getAnnotation(SqlExColumnName.class);
                                     if (columnNameAnnotation != null)
+                                        //如果指定了列名则使用列名
                                         return new PropertyInfo(p.getName(), columnNameAnnotation.value(), writeMethod, p.getPropertyType());
+                                    else
+                                        //如果没有指定列名,则使用属性名
+                                        return new PropertyInfo(p.getName(), p.getName(), writeMethod, p.getPropertyType());
                                 }
                                 return null;
                             })
@@ -81,8 +85,16 @@ public class BeanMapper<T> extends RowMapper<T> {
                     //填充columnIndex的值,从而建立和result set的对应关系
                     for (PropertyInfo property : propertyInfo) {
                         //遍历result set的column
+                        //优先全等匹配
                         for (int colIndex = 1; colIndex <= metaData.getColumnCount(); colIndex++) {
                             if (property.columnName.equals(metaData.getColumnLabel(colIndex))) {
+                                property.columnIndex = colIndex;
+                                break;
+                            }
+                        }
+                        //如果全等匹配没有找到,则忽略大小写匹配
+                        for (int colIndex = 1; colIndex <= metaData.getColumnCount(); colIndex++) {
+                            if (property.columnName.equalsIgnoreCase(metaData.getColumnLabel(colIndex))) {
                                 property.columnIndex = colIndex;
                                 break;
                             }
