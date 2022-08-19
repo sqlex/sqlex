@@ -17,10 +17,7 @@ val SqlExGeneratedCacheKey = Key<Boolean>("me.danwi.sqlex.SqlExGeneratedCache")
 val SqlExMethodFileCacheKey = Key<VirtualFile>("me.danwi.sqlex.SqlExMethodFileCache")
 val SqlExMethodPsiClassCacheKey = Key<PsiClass>("me.danwi.sqlex.SqlExMethodPsiClassCache")
 
-class SqlExRepository(private val project: Project, private val repository: Repository) {
-    val session
-        get() = repository.session
-
+class SqlExRepository(private val project: Project, val repository: Repository) {
     private var repositoryJavaFile: GeneratedJavaFile? = null
     private var repositoryJavaClass: PsiClass? = null
 

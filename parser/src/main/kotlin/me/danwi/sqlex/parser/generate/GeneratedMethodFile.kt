@@ -4,7 +4,10 @@ import com.squareup.javapoet.*
 import me.danwi.sqlex.common.Paged
 import me.danwi.sqlex.core.annotation.SqlExDataAccessObject
 import me.danwi.sqlex.core.annotation.SqlExRepository
-import me.danwi.sqlex.core.annotation.method.*
+import me.danwi.sqlex.core.annotation.method.SqlExOneColumn
+import me.danwi.sqlex.core.annotation.method.SqlExOneRow
+import me.danwi.sqlex.core.annotation.method.SqlExPaged
+import me.danwi.sqlex.core.annotation.method.SqlExScript
 import me.danwi.sqlex.core.annotation.method.parameter.*
 import me.danwi.sqlex.core.annotation.method.type.SqlExDelete
 import me.danwi.sqlex.core.annotation.method.type.SqlExInsert
@@ -34,7 +37,7 @@ class GeneratedMethodFile(
     private val rootPackage: String,
     relativePath: String,
     private val content: String,
-    private val session: Session
+    private val repository: Repository,
 ) :
     GeneratedJavaFile(
         relativePath.sqlmPathToJavaPath.relativePathToPackageName,
@@ -102,16 +105,18 @@ class GeneratedMethodFile(
         //解析SQL的命名参数信息
         val namedParameterSQL = sqlText.namedParameterSQL
         //获取到SQL语句信息
-        val statementInfo = session.getStatementInfo(namedParameterSQL.sql)
+        val statementInfo =
+            repository.getStatementInfo(namedParameterSQL.sql)
         //获取计划信息
-        val planInfo = session.getPlanInfo(namedParameterSQL.sql)
+        val planInfo =
+            repository.getPlanInfo(namedParameterSQL.sql)
         //只有select中才能使用paged
         if (method.paged() != null && statementInfo.type != StatementType.Select)
             throw Exception("只有Select方法才能标记为分页方法")
         //根据类型来生成不同的方法
         return when (statementInfo.type) {
             StatementType.Select -> generateSelectMethod(method, namedParameterSQL, statementInfo, planInfo)
-            StatementType.Insert -> generateInsertMethod(method, namedParameterSQL, session, statementInfo, planInfo)
+            StatementType.Insert -> generateInsertMethod(method, namedParameterSQL, repository, statementInfo, planInfo)
             StatementType.Update -> generateUpdateMethod(method, namedParameterSQL, statementInfo)
             StatementType.Delete -> generateDeleteMethod(method, namedParameterSQL, statementInfo)
             else -> throw Exception("不支持的语句类型,只支持(select/insert/update/delete)")
@@ -184,7 +189,7 @@ class GeneratedMethodFile(
     private fun generateInsertMethod(
         method: SqlExMethodLanguageParser.MethodContext,
         namedParameterSQL: NamedParameterSQL,
-        session: Session,
+        repository: Repository,
         statementInfo: StatementInfo,
         planInfo: PlanInfo
     ): MethodSpec {
@@ -206,7 +211,7 @@ class GeneratedMethodFile(
         methodSpec.addParameters(generateParameter(methodName, method.paramList(), namedParameterSQL, false))
         //添加返回值
         //获取自动生成列的信息
-        val autoIncrementColumn = session.getTableInfo(planInfo.insertTable).columns.find { it.isAutoIncrement }
+        val autoIncrementColumn = repository.getTableInfo(planInfo.insertTable).columns.find { it.isAutoIncrement }
         if (autoIncrementColumn == null)
             methodSpec.returns(ClassName.VOID)
         else

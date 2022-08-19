@@ -5,7 +5,7 @@ import com.squareup.javapoet.TypeSpec
 import me.danwi.sqlex.apt.SqlExAPTCheckedAnnotationProcessor
 import me.danwi.sqlex.core.RepositoryLike
 import me.danwi.sqlex.core.annotation.repository.*
-import me.danwi.sqlex.parser.Session
+import me.danwi.sqlex.parser.Repository
 import javax.lang.model.element.Modifier
 
 const val RepositoryClassName = "Repository"
@@ -16,7 +16,7 @@ class GeneratedRepositoryFile(
     private val schemas: List<String>,
     private val tableClassNames: List<String>,
     private val methodClassNames: List<String>,
-    private val session: Session,
+    private val repository: Repository,
 ) : GeneratedJavaFile(rootPackage, RepositoryClassName) {
     override fun generate(): TypeSpec {
         val tableAnnotationSpecBuilder = AnnotationSpec.builder(SqlExTables::class.java)
@@ -47,7 +47,7 @@ class GeneratedRepositoryFile(
             .addAnnotations(
                 schemas.mapIndexed { version, script ->
                     //将script解析为单个语句
-                    val sqls = session.getSQLsOfScript(script)
+                    val sqls = repository.getSQLsOfScript(script)
                     val builder = AnnotationSpec
                         .builder(SqlExSchema::class.java)
                         .addMember("version", "\$L", version)

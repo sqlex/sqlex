@@ -1,5 +1,6 @@
 package me.danwi.sqlex.parser
 
+import me.danwi.sqlex.common.SQLUtils
 import me.danwi.sqlex.parser.config.SqlExConfig
 import me.danwi.sqlex.parser.config.parseSqlExConfig
 import me.danwi.sqlex.parser.exception.SqlExRepositoryException
@@ -20,6 +21,10 @@ private val index = AtomicInteger()
 class RepositoryBuilder(private val config: SqlExConfig) {
     private val databaseName = "sqlex_${index.getAndIncrement()}"
 
+    private val foreignDatabaseNameMapping = mutableMapOf<String, String>()
+
+    private val foreignSchemas = mutableMapOf<String, String>()
+
     private val session: Session = Session(databaseName)
 
     private val rootPackageRelativePath =
@@ -28,6 +33,21 @@ class RepositoryBuilder(private val config: SqlExConfig) {
     private var currentSchemaVersion = -1
 
     private val schemaContentCache = mutableListOf<String>()
+
+    fun addForeignSchema(databaseName: String, ddl: String) {
+        val mappingDatabaseName = "sqlex_${index.getAndIncrement()}"
+        val foreignSession = Session(mappingDatabaseName)
+        try {
+            foreignSession.executeScript(ddl)
+            foreignDatabaseNameMapping[databaseName] = mappingDatabaseName
+            foreignSchemas[databaseName] = ddl
+        } catch (e: Exception) {
+            foreignSession.dropDatabaseAndClose()
+            throw SqlExRepositorySchemaException("foreign database $databaseName", e.message)
+        } finally {
+            foreignSession.close()
+        }
+    }
 
     fun addSchema(relativePath: String, script: String) {
         try {
@@ -65,33 +85,39 @@ class RepositoryBuilder(private val config: SqlExConfig) {
 
     fun build(): Repository {
         try {
-            return Repository(databaseName, Session(databaseName), config, schemaContentCache)
+            return Repository(
+                Session(databaseName),
+                config,
+                schemaContentCache,
+                foreignDatabaseNameMapping,
+                foreignSchemas
+            )
         } catch (e: Exception) {
-            try {
-                session.execute("drop database $databaseName")
-            } finally {
-                throw e
-            }
+            session.dropDatabaseAndClose()
+            throw e
         } finally {
             session.close()
         }
     }
 
     fun close() {
-        try {
-            session.execute("drop database $databaseName")
-        } catch (_: Exception) {
-        } finally {
-            session.close()
+        //删除外部database
+        foreignDatabaseNameMapping.values.forEach {
+            try {
+                session.execute("drop database $it")
+            } catch (_: Exception) {
+            }
         }
+        session.dropDatabaseAndClose()
     }
 }
 
 class Repository(
-    private val databaseName: String,
-    val session: Session,
+    private val session: Session,
     private val config: SqlExConfig,
-    private val schemas: List<String>
+    private val schemas: List<String>,
+    private val foreignDatabaseNameMapping: Map<String, String>,
+    private val foreignSchemas: Map<String, String>
 ) {
     private val rootPackage = config.rootPackage
     private val converters = config.converters
@@ -107,30 +133,71 @@ class Repository(
             schemas,
             tableClassNames,
             methodClassNames,
-            session
+            this
         )
     }
 
     //生成所有表的实体类/表操作类
     fun generateEntityAndTableClassFiles(): List<Pair<GeneratedEntityFile, GeneratedTableFile>> {
         return session.allTables.map {
-            val entityFile = GeneratedEntityFile(rootPackage, it, session)
-            val tableFile = GeneratedTableFile(rootPackage, it, entityFile.qualifiedName, session)
+            val entityFile = GeneratedEntityFile(rootPackage, it, this)
+            val tableFile = GeneratedTableFile(rootPackage, it, entityFile.qualifiedName, this)
             Pair(entityFile, tableFile)
         }
     }
 
     //生成SqlEx Method类
     fun generateMethodClassFile(relativePath: String, content: String): GeneratedMethodFile {
-        return GeneratedMethodFile(rootPackage, relativePath, content, session)
+        return GeneratedMethodFile(rootPackage, relativePath, content, this)
     }
 
     fun close() {
-        try {
-            session.execute("drop database $databaseName")
-        } finally {
-            session.close()
+        //删除外部database
+        foreignDatabaseNameMapping.values.forEach {
+            try {
+                session.execute("drop database $it")
+            } catch (_: Exception) {
+            }
         }
+        session.dropDatabaseAndClose()
+    }
+
+    /******** session 包装 ********/
+    //获取自己数据库的ddl
+    val selfDDL: String = session.DDL
+
+    //包含外部数据库
+    val DDL: String
+        get() {
+            val builder = StringBuilder()
+            builder.append(selfDDL)
+            builder.append('\n')
+            //添加外部ddl
+            foreignDatabaseNameMapping.forEach { (databaseName, _) ->
+                val ddl = foreignSchemas[databaseName] ?: return@forEach
+                builder.append("\n# schema of $databaseName\n\n")
+                builder.append("create database $databaseName;\n\n")
+                builder.append("use $databaseName;\n\n")
+                builder.append(ddl)
+                builder.append('\n')
+            }
+            return builder.toString()
+        }
+
+    fun getTableInfo(tableName: String): TableInfo {
+        return session.getTableInfo(tableName)
+    }
+
+    fun getStatementInfo(sql: String): StatementInfo {
+        return session.getStatementInfo(SQLUtils.replaceDatabaseName(sql, foreignDatabaseNameMapping))
+    }
+
+    fun getPlanInfo(sql: String): PlanInfo {
+        return session.getPlanInfo(SQLUtils.replaceDatabaseName(sql, foreignDatabaseNameMapping))
+    }
+
+    fun getSQLsOfScript(script: String): Array<String> {
+        return session.getSQLsOfScript(script)
     }
 }
 
@@ -149,6 +216,17 @@ fun generateRepositorySource(sourceRoot: File, javaOutputDir: File, resourceOutp
                 throw SqlExRepositoryException("${sourceRoot.absolutePath}下有多个sqlex配置文件")
         }
     val config = parseSqlExConfig(tempConfigContent ?: return)
+    val foreignSchemaFiles = config.foreign.map { (name, file) ->
+        val schemaFile = Paths.get(sourceRoot.absolutePath, file).toFile()
+        try {
+            return@map Pair(name, schemaFile.readText())
+        } catch (e: Exception) {
+            throw SqlExRepositoryGenerateException(schemaFile.absolutePath, "无法读取外部Schema文件")
+        }
+    }
+    //构建repository
+    val builder = RepositoryBuilder(config)
+    foreignSchemaFiles.forEach { (databaseName, ddl) -> builder.addForeignSchema(databaseName, ddl) }
     //获取到schema文件集合
     val schemaFiles = files
         .filter { it.isFile && it.name.isSqlExSchemaFilePath }
@@ -156,8 +234,6 @@ fun generateRepositorySource(sourceRoot: File, javaOutputDir: File, resourceOutp
         .filter { it.first != null }
         .sortedBy { it.first }
         .map { it.second }
-    //构建repository
-    val builder = RepositoryBuilder(config)
     schemaFiles.forEach { builder.addSchema(it.absolutePath.relativePathTo(sourceRoot.absolutePath), it.readText()) }
     val repository = builder.build()
     try {
@@ -168,7 +244,7 @@ fun generateRepositorySource(sourceRoot: File, javaOutputDir: File, resourceOutp
             tagFile.writeText("this directory is auto generate by sqlex, DO NOT change anything in it")
         }
         //写入ddl资源
-        val ddlContent = repository.session.DDL
+        val ddlContent = repository.selfDDL
         val ddlFile =
             Paths.get(resourceOutputDir.absolutePath, config.rootPackage.packageNameToRelativePath, "ddl.sql").toFile()
         ddlFile.parentFile.mkdirs()

@@ -47,9 +47,10 @@ class SqlSubtree(node: ASTNode, idElementType: IElementType) : IdentifierDefSubt
         get() {
             try {
                 if (statementInfo?.type != StatementType.Select) return null
-                val session = this.containingFile.virtualFile.sqlexRepositoryService?.repository?.session ?: return null
+                val repository =
+                    this.containingFile.virtualFile.sqlexRepositoryService?.repository?.repository ?: return null
                 val sql = this.text ?: return null
-                return this.getUserData(planInfoCacheKey) ?: session.getPlanInfo(sql)
+                return this.getUserData(planInfoCacheKey) ?: repository.getPlanInfo(sql)
             } catch (_: Exception) {
                 return null
             }
@@ -58,9 +59,10 @@ class SqlSubtree(node: ASTNode, idElementType: IElementType) : IdentifierDefSubt
     val statementInfo: StatementInfo?
         get() {
             try {
-                val session = this.containingFile.virtualFile.sqlexRepositoryService?.repository?.session ?: return null
+                val repository =
+                    this.containingFile.virtualFile.sqlexRepositoryService?.repository?.repository ?: return null
                 val sql = this.text ?: return null
-                return this.getUserData(statementInfoCacheKey) ?: session.getStatementInfo(sql)
+                return this.getUserData(statementInfoCacheKey) ?: repository.getStatementInfo(sql)
             } catch (_: Exception) {
                 return null
             }

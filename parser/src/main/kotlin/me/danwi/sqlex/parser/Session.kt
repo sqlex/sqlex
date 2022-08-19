@@ -59,7 +59,7 @@ class StatementInfo(
     val limitRows: ULong,
 )
 
-class Session(database: String) {
+class Session(val database: String) {
     //创建Session
     private val sessionID: Long = ffiInvoke("DatabaseAPI", "CreateSession", database)
 
@@ -99,5 +99,14 @@ class Session(database: String) {
 
     fun close() {
         ffiCall("DatabaseAPI", "CloseSession", sessionID)
+    }
+
+    fun dropDatabaseAndClose() {
+        try {
+            this.execute("drop database $database")
+        } catch (_: Exception) {
+        } finally {
+            ffiCall("DatabaseAPI", "CloseSession", sessionID)
+        }
     }
 }

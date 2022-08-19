@@ -25,6 +25,7 @@ import me.danwi.sqlex.idea.config.SqlExConfigFileType
 import me.danwi.sqlex.idea.util.extension.*
 import me.danwi.sqlex.parser.RepositoryBuilder
 import me.danwi.sqlex.parser.config.parseSqlExConfig
+import me.danwi.sqlex.parser.exception.SqlExRepositoryGenerateException
 import me.danwi.sqlex.parser.exception.SqlExRepositoryMethodException
 import me.danwi.sqlex.parser.exception.SqlExRepositorySchemaException
 import me.danwi.sqlex.parser.util.SqlExConfigFileName
@@ -143,6 +144,26 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                     output("获取到根包信息: ${config.rootPackage}")
                                     indicator.checkCanceled()
 
+                                    //导入外部schema定义
+                                    indicator.text = "SqlEx: 解析外部Schema"
+                                    indicator.isIndeterminate = true
+                                    val builder = RepositoryBuilder(config)
+                                    builderToClean = builder
+                                    config.foreign.forEach { (databaseName, file) ->
+                                        val schemaFile = sourceRoot.findFileByRelativePath(file)
+                                            ?: throw SqlExRepositoryGenerateException(file, "找不到外部Schema文件")
+                                        val ddlScript =
+                                            schemaFile.textContent ?: throw SqlExRepositoryGenerateException(
+                                                schemaFile.path,
+                                                "无法读取外部Schema文件"
+                                            )
+                                        output("解析外部Schema: $databaseName")
+                                        builder.addForeignSchema(databaseName, ddlScript)
+                                        indicator.checkCanceled()
+                                    }
+
+                                    indicator.checkCanceled()
+
                                     //扫描文件
                                     indicator.text = "SqlEx: 扫描文件"
                                     val schemaFiles = mutableListOf<VirtualFile>()
@@ -167,8 +188,6 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                     //解析schema文件
                                     indicator.text = "SqlEx: 解析Schema"
                                     indicator.isIndeterminate = false
-                                    val builder = RepositoryBuilder(config)
-                                    builderToClean = builder
                                     sortedSchemaFiles.forEachIndexed { index, file ->
                                         val relativePath =
                                             file.sourceRootRelativePath
@@ -186,7 +205,6 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                     indicator.isIndeterminate = true
                                     //构建SqlEx仓库
                                     val parserRepository = builder.build()
-                                    val ddlScript = parserRepository.session.DDL
                                     val repository = SqlExRepository(project, parserRepository)
                                     repositoryToClean = repository
                                     this@SqlExRepositoryService.repository = repository
@@ -205,7 +223,7 @@ class SqlExRepositoryService(val sourceRoot: VirtualFile) {
                                         dataSource = project.addDataSource(config.rootPackage, sourceRoot)
                                     //设置关键信息
                                     dataSource.sqlexName = config.rootPackage
-                                    dataSource.setDDL(project, ddlScript)
+                                    dataSource.setDDL(project, parserRepository.DDL)
 
                                     indicator.checkCanceled()
 

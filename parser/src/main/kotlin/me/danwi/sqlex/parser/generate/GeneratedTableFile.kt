@@ -7,7 +7,7 @@ import me.danwi.sqlex.core.jdbc.RawSQLExecutor
 import me.danwi.sqlex.core.query.*
 import me.danwi.sqlex.core.query.expression.Expression
 import me.danwi.sqlex.parser.Field
-import me.danwi.sqlex.parser.Session
+import me.danwi.sqlex.parser.Repository
 import me.danwi.sqlex.parser.TableInfo
 import me.danwi.sqlex.parser.util.pascalName
 import org.jetbrains.annotations.NotNull
@@ -18,7 +18,7 @@ class GeneratedTableFile(
     private val rootPackage: String,
     private val tableName: String,
     entityQualifiedName: String,
-    private val session: Session
+    private val repository: Repository
 ) : GeneratedJavaFile(rootPackage, "${tableName.pascalName}Table") {
     //实体类
     private val entityTypeName: ClassName = ClassName.bestGuess(DoNotHidePackagePrefix + entityQualifiedName)
@@ -29,7 +29,7 @@ class GeneratedTableFile(
 
     override fun generate(): TypeSpec {
         //获取表信息
-        val tableInfo = session.getTableInfo(tableName)
+        val tableInfo = repository.getTableInfo(tableName)
 
         //获取生成列
         val generatedColumn = tableInfo.columns.find { it.isAutoIncrement }

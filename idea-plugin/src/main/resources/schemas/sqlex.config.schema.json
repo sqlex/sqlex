@@ -18,6 +18,24 @@
       "examples": [
         "com.example.dao.converters.FooBarParameterConverter"
       ]
+    },
+    "foreign": {
+      "description": "外部Schema定义",
+      "type": "object",
+      "patternProperties": {
+        "(^_([a-zA-Z0-9]_?)*$)|(^[a-zA-Z](_?[a-zA-Z0-9])*_?$)": {
+          "description": "外部Schema文件地址(相对于配置目录)",
+          "type": "string",
+          "examples": [
+            "foreign/common.sql"
+          ]
+        }
+      },
+      "examples": [
+        {
+          "common": "foreign/common.sql"
+        }
+      ]
     }
   },
   "required": [
