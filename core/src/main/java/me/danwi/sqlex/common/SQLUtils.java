@@ -26,9 +26,9 @@ public class SQLUtils {
     public static String replaceDatabaseName(String sql, Map<String, String> mapping) {
         final boolean[] isReplaced = {false};
         SQLStatement sqlStatement = com.alibaba.druid.sql.SQLUtils.parseSingleMysqlStatement(sql);
+        final List<String> databaseNames = new LinkedList<>();
+        //替换表引用
         sqlStatement.accept(new MySqlASTVisitor() {
-            final List<String> databaseNames = new LinkedList<>();
-
             @Override
             public boolean visit(SQLExprTableSource table) {
                 String databaseName = table.getSchema();
@@ -42,7 +42,9 @@ public class SQLUtils {
                 }
                 return false;
             }
-
+        });
+        //替换表达式中的表引用
+        sqlStatement.accept(new MySqlASTVisitor() {
             @Override
             public boolean visit(SQLPropertyExpr x) {
                 //TODO: 目前的分析和替换是不严格的可能会出现错误
