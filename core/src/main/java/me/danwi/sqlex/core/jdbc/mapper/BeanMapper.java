@@ -67,7 +67,7 @@ public class BeanMapper<T> extends RowMapper<T> {
                     propertyInfo = Arrays.stream(propertyDescriptors)
                             .map(p -> {
                                 Method writeMethod = p.getWriteMethod();
-                                if (writeMethod != null) {
+                                if (writeMethod != null && p.getReadMethod() != null) {
                                     SqlExColumnName columnNameAnnotation = writeMethod.getAnnotation(SqlExColumnName.class);
                                     if (columnNameAnnotation != null)
                                         //如果指定了列名则使用列名
