@@ -35,6 +35,8 @@ public class DaoFactory {
     final private ExceptionTranslator exceptionTranslator;
     final private Migrator migrator;
     final private Checker checker;
+    //实例变量
+    private Map<String, String> databaseNameMapping = new HashMap<>();
 
     /**
      * 默认异常翻译
@@ -245,6 +247,16 @@ public class DaoFactory {
     }
 
     /**
+     * 设置外部数据库在运行时的实际名称
+     *
+     * @param name       在Repository定义的数据库名称
+     * @param actualName 运行时实际名称
+     */
+    public void setDatabaseName(String name, String actualName) {
+        databaseNameMapping.put(name, actualName);
+    }
+
+    /**
      * 获取数据访问对象/表操作对象的实例
      *
      * @param clazz 数据访问对象/表操作对象Class
@@ -268,7 +280,7 @@ public class DaoFactory {
      * @return 原生SQL执行器
      */
     public RawSQLExecutor getRawSQLExecutor() {
-        return new RawSQLExecutor(transactionManager, parameterSetter, exceptionTranslator);
+        return new RawSQLExecutor(transactionManager, parameterSetter, exceptionTranslator, databaseNameMapping);
     }
 
     /**
