@@ -77,7 +77,7 @@ public class Migrator {
     public int migrate(int version, MigrateCallback callback) {
         /*
             流程说明
-            迁移过程中会保持一个连接用于持有锁(锁版本表) + 版本信息的修改 + 回调执行
+            迁移过程中会保持一个连接用于持有锁(锁版本表) + 版本信息的修改
             另外每个版本的迁移在新的连接中进行
         */
         //根包
@@ -92,9 +92,9 @@ public class Migrator {
             throw new SqlExMigrationException(ex);
         }
 
-        //用于更新迁移信息/执行回调任务的连接,手动事务管理
+        //用于更新迁移信息的连接,手动事务管理
         Connection lockConnection = daoFactory.newConnection();
-        //用于更新迁移信息/执行回调任务的执行器
+        //用于更新迁移信息的执行器
         RawSQLExecutor executor = daoFactory.getRawSQLExecutor(lockConnection);
         //连接原本的自动提交属性
         boolean originAutoCommit = false;
@@ -144,8 +144,31 @@ public class Migrator {
             for (int currentVersion = versionInfo.getVersion() + 1; currentVersion <= version; currentVersion++) {
                 logger.info("+ 正在执行 {} 版本的迁移任务", currentVersion);
                 //执行回调任务
-                if (callback != null)
-                    callback.before(currentVersion, executor);
+                if (callback != null) {
+                    //回调任务在独立的连接中进行
+                    Connection migrateConnection = daoFactory.newConnection();
+                    boolean connectionAutoCommit = false;
+                    try {
+                        //设置连接属性
+                        if (migrateConnection.getAutoCommit()) {
+                            migrateConnection.setAutoCommit(false);
+                            connectionAutoCommit = true;
+                        }
+                        //执行回调
+                        callback.before(currentVersion, daoFactory.getRawSQLExecutor(migrateConnection));
+                        //提交
+                        migrateConnection.commit();
+                    } catch (Exception e) {
+                        migrateConnection.rollback();
+                        throw e;
+                    } finally {
+                        //还原原本的自动提交属性
+                        if (connectionAutoCommit)
+                            migrateConnection.setAutoCommit(false);
+                        migrateConnection.close();
+                    }
+                }
+                //执行迁移任务
                 Migration migration = migrations[currentVersion];
                 String[] sqls = migration.getScripts();
                 for (String sql : sqls) {
@@ -154,8 +177,30 @@ public class Migrator {
                 //一个版本迁移完成,则更新一下版本号
                 executor.execute("update _sqlex_version_ set version=? where package=?", currentVersion, rootPackage);
                 //执行回调任务
-                if (callback != null)
-                    callback.after(currentVersion, executor);
+                if (callback != null) {
+                    //回调任务在独立的连接中进行
+                    Connection migrateConnection = daoFactory.newConnection();
+                    boolean connectionAutoCommit = false;
+                    try {
+                        //设置连接属性
+                        if (migrateConnection.getAutoCommit()) {
+                            migrateConnection.setAutoCommit(false);
+                            connectionAutoCommit = true;
+                        }
+                        //执行回调
+                        callback.after(currentVersion, daoFactory.getRawSQLExecutor(migrateConnection));
+                        //提交
+                        migrateConnection.commit();
+                    } catch (Exception e) {
+                        migrateConnection.rollback();
+                        throw e;
+                    } finally {
+                        //还原原本的自动提交属性
+                        if (connectionAutoCommit)
+                            migrateConnection.setAutoCommit(false);
+                        migrateConnection.close();
+                    }
+                }
                 logger.info("+ {} 版本迁移成功", currentVersion);
             }
             //迁移完成,修改迁移状态
