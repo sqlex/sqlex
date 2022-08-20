@@ -36,7 +36,7 @@ public class DaoFactory {
     final private Migrator migrator;
     final private Checker checker;
     //实例变量
-    private Map<String, String> databaseNameMapping = new HashMap<>();
+    final private Map<String, String> databaseNameMapping = new HashMap<>();
 
     /**
      * 默认异常翻译
