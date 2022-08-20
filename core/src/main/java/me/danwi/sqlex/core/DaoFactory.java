@@ -284,6 +284,16 @@ public class DaoFactory {
     }
 
     /**
+     * 获取原生SQL执行器,不从事务管理器中获取连接,而是使用指定的连接
+     *
+     * @param connection 指定SQL执行的连接
+     * @return 原生SQL执行器
+     */
+    public RawSQLExecutor getRawSQLExecutor(Connection connection) {
+        return new RawSQLExecutor(connection, parameterSetter, exceptionTranslator, databaseNameMapping);
+    }
+
+    /**
      * 获取数据访问对象的实例
      *
      * @param dao 数据访问对象Class
