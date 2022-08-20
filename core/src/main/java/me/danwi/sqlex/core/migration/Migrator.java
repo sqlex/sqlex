@@ -1,7 +1,6 @@
 package me.danwi.sqlex.core.migration;
 
 import me.danwi.sqlex.core.DaoFactory;
-import me.danwi.sqlex.core.annotation.entity.SqlExColumnName;
 import me.danwi.sqlex.core.annotation.repository.SqlExSchema;
 import me.danwi.sqlex.core.exception.SqlExException;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
@@ -10,7 +9,9 @@ import me.danwi.sqlex.core.jdbc.RawSQLExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.List;
 
 public class Migrator {
@@ -19,40 +20,6 @@ public class Migrator {
     private final DaoFactory daoFactory;
     //迁移任务定义
     private final Migration[] migrations;
-
-    //版本表信息
-    private static class VersionInfo {
-        private String rootPackage;
-        private Integer version;
-        private Boolean canMigrate;
-
-        public String getRootPackage() {
-            return rootPackage;
-        }
-
-        @SqlExColumnName("package")
-        public void setRootPackage(String rootPackage) {
-            this.rootPackage = rootPackage;
-        }
-
-        public Integer getVersion() {
-            return version;
-        }
-
-        @SqlExColumnName("version")
-        public void setVersion(Integer version) {
-            this.version = version;
-        }
-
-        public Boolean getCanMigrate() {
-            return canMigrate;
-        }
-
-        @SqlExColumnName("can_migrate")
-        public void setCanMigrate(Boolean canMigrate) {
-            this.canMigrate = canMigrate;
-        }
-    }
 
     public Migrator(DaoFactory factory) {
         SqlExSchema[] schemas = factory.getRepositoryClass().getAnnotationsByType(SqlExSchema.class);
