@@ -12,6 +12,7 @@ import me.danwi.sqlex.core.exception.SqlExUndeclaredException;
 import me.danwi.sqlex.core.invoke.InvocationProxy;
 import me.danwi.sqlex.core.jdbc.ParameterSetter;
 import me.danwi.sqlex.core.jdbc.RawSQLExecutor;
+import me.danwi.sqlex.core.migration.MigrateCallback;
 import me.danwi.sqlex.core.migration.Migrator;
 import me.danwi.sqlex.core.transaction.DefaultTransactionManager;
 import me.danwi.sqlex.core.transaction.Transaction;
@@ -233,10 +234,19 @@ public class DaoFactory {
     }
 
     /**
-     * 迁移数据版本
+     * 迁移到最近版本
      */
     public void migrate() {
         migrator.migrate();
+    }
+
+    /**
+     * 迁移到最近版本
+     *
+     * @param callback 迁移回调
+     */
+    public void migrate(MigrateCallback callback) {
+        migrator.migrate(callback);
     }
 
     /**
