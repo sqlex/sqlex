@@ -1,14 +1,17 @@
 package me.danwi.sqlex.core.migration;
 
 import me.danwi.sqlex.core.DaoFactory;
+import me.danwi.sqlex.core.annotation.entity.SqlExColumnName;
 import me.danwi.sqlex.core.annotation.repository.SqlExSchema;
 import me.danwi.sqlex.core.exception.SqlExException;
 import me.danwi.sqlex.core.exception.SqlExImpossibleException;
 import me.danwi.sqlex.core.exception.SqlExMigrationException;
+import me.danwi.sqlex.core.jdbc.RawSQLExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.sql.*;
+import java.util.List;
 
 public class Migrator {
     private final Logger logger = LoggerFactory.getLogger(getClass());
@@ -16,6 +19,40 @@ public class Migrator {
     private final DaoFactory daoFactory;
     //迁移任务定义
     private final Migration[] migrations;
+
+    //版本表信息
+    private static class VersionInfo {
+        private String rootPackage;
+        private Integer version;
+        private Boolean canMigrate;
+
+        public String getRootPackage() {
+            return rootPackage;
+        }
+
+        @SqlExColumnName("package")
+        public void setRootPackage(String rootPackage) {
+            this.rootPackage = rootPackage;
+        }
+
+        public Integer getVersion() {
+            return version;
+        }
+
+        @SqlExColumnName("version")
+        public void setVersion(Integer version) {
+            this.version = version;
+        }
+
+        public Boolean getCanMigrate() {
+            return canMigrate;
+        }
+
+        @SqlExColumnName("can_migrate")
+        public void setCanMigrate(Boolean canMigrate) {
+            this.canMigrate = canMigrate;
+        }
+    }
 
     public Migrator(DaoFactory factory) {
         SqlExSchema[] schemas = factory.getRepositoryClass().getAnnotationsByType(SqlExSchema.class);
@@ -34,22 +71,23 @@ public class Migrator {
         this.daoFactory = factory;
     }
 
-    //助手方法,执行语句
-    private void execute(Connection connection, String sql) {
-        try (Statement statement = connection.createStatement()) {
-            statement.execute(sql);
-        } catch (SQLException ex) {
-            throw new SqlExMigrationException(ex);
-        }
-    }
-
     /**
      * 迁移到最近版本
      *
      * @return 返回成功迁移的版本号
      */
     public int migrate() {
-        return migrate(migrations.length - 1);
+        return migrate(null);
+    }
+
+    /**
+     * 迁移到最新版本
+     *
+     * @param callback 迁移回调
+     * @return 返回成功迁移的版本号
+     */
+    public int migrate(MigrateCallback callback) {
+        return migrate(migrations.length - 1, callback);
     }
 
     /**
@@ -59,96 +97,107 @@ public class Migrator {
      * @return 返回成功迁移的版本号
      */
     public int migrate(int version) {
+        return migrate(version, null);
+    }
+
+    /**
+     * 迁移到指定版本
+     *
+     * @param version  版本号
+     * @param callback 迁移回调
+     * @return 返回成功迁移的版本号
+     */
+    public int migrate(int version, MigrateCallback callback) {
         /*
             流程说明
-            迁移过程中会保持一个连接用于持有锁(锁版本表) + 版本信息的修改
+            迁移过程中会保持一个连接用于持有锁(锁版本表) + 版本信息的修改 + 回调执行
             另外每个版本的迁移在新的连接中进行
         */
         //根包
         String rootPackage = daoFactory.getRepositoryClass().getPackage().getName();
         logger.info("准备将数据库({})迁移到 {} 版本", rootPackage, version);
         //保证版本表的存在
-        try (Connection connection = daoFactory.newConnection()) {
-            execute(connection, "create table if not exists _sqlex_version_(package text not null, version int not null, can_migrate bool not null)");
-        } catch (SQLException ex) {
+        try {
+            Connection connection = daoFactory.newConnection();
+            RawSQLExecutor executor = daoFactory.getRawSQLExecutor(connection);
+            executor.execute("create table if not exists _sqlex_version_(package text not null, version int not null, can_migrate bool not null)");
+        } catch (Exception ex) {
             throw new SqlExMigrationException(ex);
         }
 
-        //专用于锁定版本信息的连接
-        Connection lockConnection;
+        //用于更新迁移信息/执行回调任务的连接,手动事务管理
+        Connection lockConnection = daoFactory.newConnection();
+        //用于更新迁移信息/执行回调任务的执行器
+        RawSQLExecutor executor = daoFactory.getRawSQLExecutor(lockConnection);
         //连接原本的自动提交属性
         boolean originAutoCommit = false;
 
         try {
-            //获取连接
-            lockConnection = daoFactory.newConnection();
             //设置连接属性
             if (lockConnection.getAutoCommit()) {
                 lockConnection.setAutoCommit(false);
                 originAutoCommit = true;
             }
             //锁定表,如果表锁定发生异常则终止整个迁移过程
-            execute(lockConnection, "lock tables _sqlex_version_ write");
+            executor.execute("lock tables _sqlex_version_ write");
             logger.info("获取到全局锁,准备开始迁移");
-        } catch (SQLException ex) {
-            throw new SqlExMigrationException(ex);
-        }
 
-        try {
-            //判断是否存在版本信息
-            boolean hasVersion = false;
-            int migratedVersion = -1;
-            boolean canMigrate = false;
-            try (PreparedStatement getVersionStatement = lockConnection.prepareStatement("select version,can_migrate from _sqlex_version_ where package=? for update")) {
-                getVersionStatement.setString(1, rootPackage);
-                try (ResultSet resultSet = getVersionStatement.executeQuery()) {
-                    if (resultSet.next()) {
-                        //存在版本信息
-                        hasVersion = true;
-                        migratedVersion = resultSet.getInt(1);
-                        canMigrate = resultSet.getBoolean(2);
-                    }
-                }
+            //获取当前的版本信息
+            VersionInfo versionInfo = null;
+            List<VersionInfo> results = executor.query(VersionInfo.class, "select * from _sqlex_version_ where package=?", rootPackage);
+            if (!results.isEmpty()) {
+                //存在版本信息
+                versionInfo = results.get(0);
             }
             //不存在版本信息,插入版本信息
-            if (!hasVersion) {
-                execute(lockConnection, "insert into _sqlex_version_ values('" + rootPackage + "', -1, true)");
-                canMigrate = true;
+            if (versionInfo == null) {
+                executor.execute("insert into _sqlex_version_ values(?, -1, true)", rootPackage);
+                versionInfo = new VersionInfo();
+                versionInfo.setRootPackage(rootPackage);
+                versionInfo.setVersion(-1);
+                versionInfo.setCanMigrate(true);
             }
             //如果无法迁移
-            if (!canMigrate)
+            if (!versionInfo.getCanMigrate())
                 throw new SqlExMigrationException("当前状态为无法执行迁移,可能是上次的迁移没有成功完成,需要人工介入");
-
             //开始迁移
             //版本号相等,无需迁移
-            if (version == migratedVersion) {
-                logger.info("数据库当前版本已经是 {},无需迁移", migratedVersion);
-                return migratedVersion;
+            if (version == versionInfo.getVersion()) {
+                logger.info("数据库当前版本已经是 {},无需迁移", versionInfo.getVersion());
+                return versionInfo.getVersion();
             }
-            logger.info("当前数据库版本 {}, 版本差异 {}", migratedVersion, version - migratedVersion);
+
+            logger.info("当前数据库版本 {}, 版本差异 {}", versionInfo.getVersion(), version - versionInfo.getVersion());
             //检查版本范围
-            if (version <= migratedVersion || version >= migrations.length)
-                throw new SqlExMigrationException("错误的版本号,当前版本范围" + migratedVersion + "<version<=" + (migrations.length - 1));
+            if (version <= versionInfo.getVersion() || version >= migrations.length)
+                throw new SqlExMigrationException("错误的版本号,当前版本范围" + versionInfo.getVersion() + "<version<=" + (migrations.length - 1));
             //修改迁移状态
-            execute(lockConnection, "update _sqlex_version_ set can_migrate=false where package='" + rootPackage + "'");
+            executor.execute("update _sqlex_version_ set can_migrate=false where package=?", rootPackage);
             //挨个版本迁移
-            for (int currentVersion = migratedVersion + 1; currentVersion <= version; currentVersion++) {
+            for (int currentVersion = versionInfo.getVersion() + 1; currentVersion <= version; currentVersion++) {
                 logger.info("+ 正在执行 {} 版本的迁移任务", currentVersion);
+                //执行回调任务
+                if (callback != null)
+                    callback.before(currentVersion, executor);
                 Migration migration = migrations[currentVersion];
                 String[] sqls = migration.getScripts();
                 for (String sql : sqls) {
                     doMigrate(currentVersion, sql);
                 }
+                //一个版本迁移完成,则更新一下版本号
+                executor.execute("update _sqlex_version_ set version=? where package=?", currentVersion, rootPackage);
+                //执行回调任务
+                if (callback != null)
+                    callback.after(currentVersion, executor);
                 logger.info("+ {} 版本迁移成功", currentVersion);
             }
-            //迁移完成,更新版本号,更新状态信息
-            execute(lockConnection, "update _sqlex_version_ set can_migrate=true,version=" + version + " where package='" + rootPackage + "'");
-
+            //迁移完成,修改迁移状态
+            executor.execute("update _sqlex_version_ set can_migrate=true where package=?", rootPackage);
             //返回版本号
             return version;
         } catch (Exception ex) {
             //迁移过程中出现异常,记录状态信息
-            execute(lockConnection, "update _sqlex_version_ set can_migrate=false where package='" + rootPackage + "'");
+            executor.execute("update _sqlex_version_ set can_migrate=false where package=?", rootPackage);
             //包装异常
             if (ex instanceof SqlExMigrationException)
                 throw (SqlExMigrationException) ex;
@@ -164,7 +213,7 @@ public class Migrator {
                     //只要上面锁定代码执行过,该语句就一定会执行
                     //如果该语句执行错误,可能是connection closed
                     //那样session持有的锁也就自动释放了
-                    execute(lockConnection, "unlock tables");
+                    executor.execute("unlock tables");
                     logger.info("数据库({})版本迁移完成,释放全局锁", rootPackage);
                 }
                 //还原原本的自动提交属性
