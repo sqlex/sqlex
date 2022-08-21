@@ -6,7 +6,7 @@ import com.alibaba.druid.sql.ast.SQLStatement;
 
 import java.util.List;
 
-public class SQLMigrateCallback {
+public class SQLMigrateUtil {
     public static MigrateCallback before(int version, String script) {
         return VersionMigrateCallback.before(version, executor -> {
             List<SQLStatement> statements = SQLUtils.parseStatements(script, DbType.mysql);
