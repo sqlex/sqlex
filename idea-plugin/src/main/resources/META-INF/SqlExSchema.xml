@@ -8,5 +8,8 @@
         />
         <!--文件模版-->
         <internalFileTemplate id="SqlEx.Schema" name="SqlEx Schema" order="after SqlEx.Config"/>
+        <!--子版本注释提供-->
+        <codeInsight.inlayProvider language="SQL"
+                                   implementationClass="me.danwi.sqlex.idea.sqls.SqlExSchemaVersionInlayHintsProvider"/>
     </extensions>
 </idea-plugin>
