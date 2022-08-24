@@ -3,10 +3,14 @@ package me.danwi.sqlex.core.migration;
 import com.alibaba.druid.DbType;
 import com.alibaba.druid.sql.SQLUtils;
 import com.alibaba.druid.sql.ast.SQLStatement;
+import me.danwi.sqlex.core.exception.SqlExException;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.List;
 
 public class SQLMigrateUtil {
@@ -29,21 +33,66 @@ public class SQLMigrateUtil {
     }
 
     public static MigrateCallback before(int version, InputStream inputStream) {
+
         String script;
         script = readToString(inputStream);
-        if (script != null) {
-            return before(version, script);
-        }
-        return null;
+        return before(version, script);
     }
 
     public static MigrateCallback after(int version, InputStream inputStream) {
         String script;
         script = readToString(inputStream);
-        if (script != null) {
-            return after(version, script);
+        return after(version, script);
+    }
+
+
+    public static MigrateCallback before(int version, URL url) {
+        try {
+            return before(version, url.openStream());
+        } catch (IOException e) {
+            throw new SqlExException("从URL中获取版本迁移回调脚本文件流异常。", e);
         }
-        return null;
+    }
+
+    public static MigrateCallback after(int version, URL url) {
+        try {
+            return after(version, url.openStream());
+        } catch (IOException e) {
+            throw new SqlExException("从URL中获取版本迁移回调脚本文件流异常。", e);
+        }
+    }
+
+    public static MigrateCallback before(int version, File file) {
+        return before(version, toScriptUrl(file));
+    }
+
+
+    public static MigrateCallback after(int version, File file) {
+        return after(version, toScriptUrl(file));
+    }
+
+    public static MigrateCallback beforeForPath(int version, String path) {
+        return before(version, toScriptUrl(new File(path)));
+    }
+
+
+    public static MigrateCallback afterForPath(int version, String path) {
+        return after(version, toScriptUrl(new File(path)));
+    }
+
+
+    private static URL toScriptUrl(File file) {
+        if (file.isDirectory()) {
+            throw new SqlExException("版本迁移回调脚本文件转换字符串异常。");
+        }
+        if (!file.exists()) {
+            throw new SqlExException("版本迁移回调脚本文件转换字符串异常。");
+        }
+        try {
+            return file.toURI().toURL();
+        } catch (MalformedURLException e) {
+            throw new SqlExException("版本迁移回调脚本文件转换URL异常。");
+        }
     }
 
     private static String readToString(InputStream inputStream) {
@@ -55,13 +104,12 @@ public class SQLMigrateUtil {
             }
             return result.toString("UTF-8");
         } catch (Exception e) {
-            e.printStackTrace();
-            return null;
+            throw new SqlExException("版本迁移回调脚本文件转换字符串异常。", e);
         } finally {
             try {
                 inputStream.close();
             } catch (IOException e) {
-                e.printStackTrace();
+                throw new SqlExException("版本迁移回调脚本文件流关闭异常。", e);
             }
         }
     }
