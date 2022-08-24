@@ -33,7 +33,6 @@ public class SQLMigrateUtil {
     }
 
     public static MigrateCallback before(int version, InputStream inputStream) {
-
         String script;
         script = readToString(inputStream);
         return before(version, script);
@@ -47,16 +46,16 @@ public class SQLMigrateUtil {
 
 
     public static MigrateCallback before(int version, URL url) {
-        try {
-            return before(version, url.openStream());
+        try (InputStream inputStream = url.openStream()) {
+            return before(version, inputStream);
         } catch (IOException e) {
             throw new SqlExException("从URL中获取版本迁移回调脚本文件流异常。", e);
         }
     }
 
     public static MigrateCallback after(int version, URL url) {
-        try {
-            return after(version, url.openStream());
+        try (InputStream inputStream = url.openStream()) {
+            return after(version, inputStream);
         } catch (IOException e) {
             throw new SqlExException("从URL中获取版本迁移回调脚本文件流异常。", e);
         }
@@ -83,15 +82,15 @@ public class SQLMigrateUtil {
 
     private static URL toScriptUrl(File file) {
         if (file.isDirectory()) {
-            throw new SqlExException("版本迁移回调脚本文件转换字符串异常。");
+            throw new SqlExException("该文件是文件夹，无法转换为版本迁移回调脚本");
         }
         if (!file.exists()) {
-            throw new SqlExException("版本迁移回调脚本文件转换字符串异常。");
+            throw new SqlExException("该文件不存在，无法转换为版本迁移回调脚本");
         }
         try {
             return file.toURI().toURL();
         } catch (MalformedURLException e) {
-            throw new SqlExException("版本迁移回调脚本文件转换URL异常。");
+            throw new SqlExException("版本迁移回调脚本文件转换URL异常");
         }
     }
 
@@ -104,13 +103,7 @@ public class SQLMigrateUtil {
             }
             return result.toString("UTF-8");
         } catch (Exception e) {
-            throw new SqlExException("版本迁移回调脚本文件转换字符串异常。", e);
-        } finally {
-            try {
-                inputStream.close();
-            } catch (IOException e) {
-                throw new SqlExException("版本迁移回调脚本文件流关闭异常。", e);
-            }
+            throw new SqlExException("版本迁移回调脚本文件转换字符串异常", e);
         }
     }
 }
