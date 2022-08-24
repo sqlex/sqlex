@@ -33,9 +33,7 @@ public class SQLMigrateUtil {
     }
 
     public static MigrateCallback before(int version, InputStream inputStream) {
-        String script;
-        script = readToString(inputStream);
-        return before(version, script);
+        return before(version, readToString(inputStream));
     }
 
     public static MigrateCallback after(int version, InputStream inputStream) {
@@ -49,7 +47,7 @@ public class SQLMigrateUtil {
         try (InputStream inputStream = url.openStream()) {
             return before(version, inputStream);
         } catch (IOException e) {
-            throw new SqlExException("从URL中获取版本迁移回调脚本文件流异常。", e);
+            throw new SqlExException("从URL中获取版本迁移回调脚本文件流异常", e);
         }
     }
 
@@ -57,7 +55,7 @@ public class SQLMigrateUtil {
         try (InputStream inputStream = url.openStream()) {
             return after(version, inputStream);
         } catch (IOException e) {
-            throw new SqlExException("从URL中获取版本迁移回调脚本文件流异常。", e);
+            throw new SqlExException("从URL中获取版本迁移回调脚本文件流异常", e);
         }
     }
 
