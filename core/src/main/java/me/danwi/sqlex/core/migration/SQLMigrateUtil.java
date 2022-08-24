@@ -68,22 +68,22 @@ public class SQLMigrateUtil {
         return after(version, toScriptUrl(file));
     }
 
-    public static MigrateCallback beforeForPath(int version, String path) {
-        return before(version, toScriptUrl(new File(path)));
+    public static MigrateCallback beforeForClassPath(int version, String path) {
+        return before(version, SQLMigrateUtil.class.getClassLoader().getResource(path));
     }
 
 
-    public static MigrateCallback afterForPath(int version, String path) {
-        return after(version, toScriptUrl(new File(path)));
+    public static MigrateCallback afterForClassPath(int version, String path) {
+        return after(version, SQLMigrateUtil.class.getClassLoader().getResource(path));
     }
 
 
     private static URL toScriptUrl(File file) {
         if (file.isDirectory()) {
-            throw new SqlExException("该文件是文件夹，无法转换为版本迁移回调脚本");
+            throw new SqlExException(file.getAbsolutePath() + " 该路径是文件夹，无法转换为版本迁移回调脚本");
         }
         if (!file.exists()) {
-            throw new SqlExException("该文件不存在，无法转换为版本迁移回调脚本");
+            throw new SqlExException(file.getAbsolutePath() + " 该路径文件不存在，无法转换为版本迁移回调脚本");
         }
         try {
             return file.toURI().toURL();
