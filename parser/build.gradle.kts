@@ -9,7 +9,6 @@ dependencies {
     api(project(":core"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
     implementation("net.java.dev.jna:jna:5.12.1")
-    implementation("com.google.code.gson:gson:2.9.0")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.13.4")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.13.4")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.4")

@@ -1,6 +1,7 @@
 package me.danwi.sqlex.parser.ffi
 
-import com.google.gson.Gson
+import com.fasterxml.jackson.databind.type.TypeFactory
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
@@ -15,13 +16,9 @@ interface FFIInterface : Library {
     fun FFIInvoke(reqJson: GoString.ByValue): Pointer?
 }
 
-data class FFIRequest(val moduleName: String, val methodName: String, val params: Array<String>)
+data class FFIRequest(val moduleName: String, val methodName: String, val parameters: Array<out Any>)
 
-class FFIResponse {
-    var success: Boolean = false
-    lateinit var message: String
-    lateinit var returnValue: String
-}
+data class FFIResponse<T>(val success: Boolean, val message: String, val returnValue: T)
 
 val ffiInterface: FFIInterface by lazy {
     //释放原生动态库
@@ -79,10 +76,12 @@ val ffiInterface: FFIInterface by lazy {
     Native.load(dylibFile.absolutePath, FFIInterface::class.java, mapOf(Pair(Library.OPTION_STRING_ENCODING, "utf-8")))
 }
 
+val jacksonMapper = jacksonObjectMapper()
+
 inline fun <reified T> ffiInvoke(module: String, method: String, vararg args: Any): T {
     //准备请求
-    val request = FFIRequest(module, method, args.map { Gson().toJson(it) }.toTypedArray())
-    val requestGoString = GoString.ByValue(Gson().toJson(request))
+    val request = FFIRequest(module, method, args)
+    val requestGoString = GoString.ByValue(jacksonMapper.writeValueAsString(request))
     //调用
     val responseJsonStrPointer =
         ffiInterface.FFIInvoke(requestGoString) ?: throw SqlExFFIInvokeException(module, method, "FFI调用空引用异常")
@@ -91,11 +90,13 @@ inline fun <reified T> ffiInvoke(module: String, method: String, vararg args: An
     //判断是否发生了错误
     if (responseJson == "") throw SqlExFFIInvokeException(module, method, "FFI调用发生错误")
     //解析结果
-    val response = Gson().fromJson(responseJson, FFIResponse::class.java)
+    val dataType = TypeFactory.defaultInstance().constructType(T::class.java)
+    val responseType = TypeFactory.defaultInstance().constructParametricType(FFIResponse::class.java, dataType)
+    val response: FFIResponse<T> = jacksonMapper.readValue(responseJson, responseType)
     //是否出错
     if (!response.success) throw SqlExFFIInvokeException(module, method, response.message)
     //解析返回
-    return Gson().fromJson(response.returnValue, T::class.java)
+    return response.returnValue
 }
 
 fun ffiCall(module: String, method: String, vararg args: Any) {
