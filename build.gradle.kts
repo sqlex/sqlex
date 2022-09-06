@@ -3,7 +3,6 @@ import org.jetbrains.kotlin.konan.properties.hasProperty
 
 plugins {
     kotlin("jvm") version "1.7.10" apply false
-    kotlin("plugin.serialization") version "1.7.10" apply false
     id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
 }
 
