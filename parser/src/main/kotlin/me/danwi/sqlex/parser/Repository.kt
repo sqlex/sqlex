@@ -189,7 +189,7 @@ class Repository(
     }
 
     fun getStatementInfo(sql: String): StatementInfo {
-        return session.getStatementInfo(SQLUtils.replaceDatabaseName(sql, foreignDatabaseNameMapping))
+        return session.getStatementInfo(sql)
     }
 
     fun getPlanInfo(sql: String): PlanInfo {
