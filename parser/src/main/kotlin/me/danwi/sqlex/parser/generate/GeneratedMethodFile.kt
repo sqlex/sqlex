@@ -211,7 +211,8 @@ class GeneratedMethodFile(
         methodSpec.addParameters(generateParameter(methodName, method.paramList(), namedParameterSQL, false))
         //添加返回值
         //获取自动生成列的信息
-        val autoIncrementColumn = repository.getTableInfo(planInfo.insertTable).columns.find { it.isAutoIncrement }
+        val insertTable = planInfo.insertTable ?: throw Exception("无法获取插入的目标表名")
+        val autoIncrementColumn = repository.getTableInfo(insertTable).columns.find { it.isAutoIncrement }
         if (autoIncrementColumn == null)
             methodSpec.returns(ClassName.VOID)
         else

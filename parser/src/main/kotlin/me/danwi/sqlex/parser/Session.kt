@@ -3,60 +3,55 @@ package me.danwi.sqlex.parser
 import me.danwi.sqlex.parser.ffi.ffiCall
 import me.danwi.sqlex.parser.ffi.ffiInvoke
 
-class Field {
-    lateinit var name: String
-    lateinit var dbType: String
-    var length: Long = -1
-    var unsigned: Boolean = false
-    var binary: Boolean = false
-    var decimal: Long = -1
-    lateinit var elements: Array<String>
+data class Field(
+    val name: String,
+    val dbType: String,
+    val length: Long,
+    val unsigned: Boolean,
+    val binary: Boolean,
+    val decimal: Long,
+    val elements: Array<String>?,
 
     //下面是列包含的属性
     //是否为主键
-    var isPrimaryKey = false
-
+    val isPrimaryKey: Boolean,
     //是否是联合主键的一部分
-    var isPartOfMultipleKey = false
-
+    val isMultipleKey: Boolean,
     //是否为自增
-    var isAutoIncrement = false
-
+    val isAutoIncrement: Boolean,
     //是否唯一
-    var isUnique = false
-
+    val isUnique: Boolean,
     //是否不能为空
-    var notNull = false
-
+    val notNull: Boolean,
     //是否含有默认值
-    var hasDefaultValue = false
-}
+    val hasDefaultValue: Boolean
+)
 
-class TableInfo(
+data class TableInfo(
     val name: String,
     val primaryKey: Array<String>?,
     val uniques: Array<Array<String>>,
     val columns: Array<Field>
 )
 
-class PlanInfo(
+data class PlanInfo(
     val fields: Array<Field>,
     val maxOneRow: Boolean,
-    val insertTable: String
+    val insertTable: String?
 )
 
 enum class StatementType { Select, Insert, Update, Delete, Other }
 
-class InExprPosition(val not: Boolean, val marker: Int, val start: Int, val end: Int)
+data class InExprPosition(val not: Boolean, val marker: Int, val start: Int, val end: Int)
 
-class IsNullExprPosition(val not: Boolean, val marker: Int, val start: Int, val end: Int)
+data class IsNullExprPosition(val not: Boolean, val marker: Int, val start: Int, val end: Int)
 
-class StatementInfo(
+data class StatementInfo(
     val type: StatementType,
     val inExprPositions: Array<InExprPosition>,
     val isNullExprPositions: Array<IsNullExprPosition>,
     val hasLimit: Boolean,
-    val limitRows: ULong,
+    val limitRows: Long,
 )
 
 class Session(val database: String) {

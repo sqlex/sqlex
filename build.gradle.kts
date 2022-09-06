@@ -3,7 +3,6 @@ import org.jetbrains.kotlin.konan.properties.hasProperty
 
 plugins {
     kotlin("jvm") version "1.7.10" apply false
-    kotlin("plugin.serialization") version "1.7.10" apply false
     id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
 }
 
@@ -36,7 +35,7 @@ allprojects {
     }
 
     group = "me.danwi.sqlex"
-    version = "0.11.0"
+    version = "0.11.1"
 
     //开发环境,版本统一添加SNAPSHOT
     if (ext["development"] == true)
