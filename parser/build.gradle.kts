@@ -13,7 +13,7 @@ dependencies {
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.13.4")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.4")
     implementation("com.squareup:javapoet:1.13.0")
-    antlr("org.antlr:antlr4:4.10.1") {
+    antlr("org.antlr:antlr4:4.9.2") {
         exclude("com.ibm.icu", "icu4j")
     }
     implementation("org.jetbrains:annotations:23.0.0")
