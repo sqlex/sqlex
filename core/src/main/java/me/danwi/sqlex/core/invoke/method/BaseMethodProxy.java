@@ -1,5 +1,6 @@
 package me.danwi.sqlex.core.invoke.method;
 
+import me.danwi.sqlex.common.StringUtils;
 import me.danwi.sqlex.core.annotation.method.SqlExScript;
 import me.danwi.sqlex.core.annotation.method.parameter.SqlExInExprPosition;
 import me.danwi.sqlex.core.annotation.method.parameter.SqlExIsNullExprPosition;
@@ -107,18 +108,6 @@ public abstract class BaseMethodProxy implements MethodProxy {
         return reorderArgs;
     }
 
-    private static class RewriteInfo {
-        public int start;
-        public int end;
-        public String content;
-
-        public RewriteInfo(int start, int end, String content) {
-            this.start = start;
-            this.end = end;
-            this.content = content;
-        }
-    }
-
     /**
      * 根据方法调用时的参数来重写SQL
      *
@@ -126,7 +115,7 @@ public abstract class BaseMethodProxy implements MethodProxy {
      * @return 被重写的SQL
      */
     protected String rewriteSQL(Object[] methodArgs) {
-        List<RewriteInfo> rewriteInfos = new LinkedList<>();
+        List<StringUtils.ReplaceInfo> replaces = new LinkedList<>();
         //构造重写信息
         for (MarkerInfo markerInfo : markerInfos) {
             //获取到方法调用时的参数
@@ -137,8 +126,8 @@ public abstract class BaseMethodProxy implements MethodProxy {
                 //如果参数为空
                 if (methodArg == null) {
                     //替换in语句
-                    rewriteInfos.add(
-                            new RewriteInfo(
+                    replaces.add(
+                            new StringUtils.ReplaceInfo(
                                     markerInfo.inExprPosition.start(),
                                     markerInfo.inExprPosition.end(),
                                     markerInfo.inExprPosition.not() ? "1=1" : "1=2"
@@ -148,8 +137,8 @@ public abstract class BaseMethodProxy implements MethodProxy {
                     List<?> listArg = (List<?>) methodArg;
                     if (listArg.size() == 0) {
                         //形同null
-                        rewriteInfos.add(
-                                new RewriteInfo(
+                        replaces.add(
+                                new StringUtils.ReplaceInfo(
                                         markerInfo.inExprPosition.start(),
                                         markerInfo.inExprPosition.end(),
                                         markerInfo.inExprPosition.not() ? "1=1" : "1=2"
@@ -158,8 +147,8 @@ public abstract class BaseMethodProxy implements MethodProxy {
                     } else {
                         //拓展?为多个?
                         String markerPart = listArg.stream().map(it -> "?").collect(Collectors.joining(","));
-                        rewriteInfos.add(
-                                new RewriteInfo(
+                        replaces.add(
+                                new StringUtils.ReplaceInfo(
                                         markerInfo.inExprPosition.marker(),
                                         markerInfo.inExprPosition.marker() + 1,
                                         markerPart
@@ -173,8 +162,8 @@ public abstract class BaseMethodProxy implements MethodProxy {
             if (markerInfo.isNullExprPosition != null) {
                 boolean argIsNull = methodArg == null;
                 boolean sqlIsNull = !markerInfo.isNullExprPosition.not();
-                rewriteInfos.add(
-                        new RewriteInfo(
+                replaces.add(
+                        new StringUtils.ReplaceInfo(
                                 markerInfo.isNullExprPosition.start(),
                                 markerInfo.isNullExprPosition.end(),
                                 argIsNull == sqlIsNull ? "1=1" : "1=2"
@@ -182,24 +171,7 @@ public abstract class BaseMethodProxy implements MethodProxy {
                 );
             }
         }
-        //处理重写信息
-        StringBuilder rewrittenSQL = new StringBuilder(this.sql);
-        while (!rewriteInfos.isEmpty()) {
-            //取得第一个
-            RewriteInfo rewriteInfo = rewriteInfos.remove(0);
-            //替换字符串内容
-            rewrittenSQL.replace(rewriteInfo.start, rewriteInfo.end, rewriteInfo.content);
-            //计算尺寸的增长
-            int sizeGrow = rewriteInfo.content.length() - (rewriteInfo.end - rewriteInfo.start);
-            //由于改变了原有的字符串,现在需要重新计算接下来的位置信息
-            rewriteInfos.forEach(info -> {
-                if (info.start >= rewriteInfo.end) {
-                    info.start += sizeGrow;
-                    info.end += sizeGrow;
-                }
-            });
-        }
-        //返回重写后的结果
-        return rewrittenSQL.toString();
+        //重写
+        return StringUtils.replace(sql, replaces);
     }
 }
