@@ -562,6 +562,8 @@ class SessionTest {
         assertFalse(session.getPlanInfo("select * from person").maxOneRow)
         assertFalse(session.getPlanInfo("select name, count(*) from person group by name").maxOneRow)
 
+        //in特殊优化
+        assertFalse(session.getPlanInfo("select * from person where id in (?)").maxOneRow)
     }
 
     @Test

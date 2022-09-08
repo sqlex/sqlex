@@ -1,5 +1,7 @@
 package me.danwi.sqlex.parser
 
+import me.danwi.sqlex.common.StringUtils
+import me.danwi.sqlex.common.StringUtils.ReplaceInfo
 import me.danwi.sqlex.parser.ffi.ffiCall
 import me.danwi.sqlex.parser.ffi.ffiInvoke
 
@@ -81,7 +83,14 @@ class Session(val database: String) {
     }
 
     fun getPlanInfo(sql: String): PlanInfo {
-        return ffiInvoke("DatabaseAPI", "GetPlanInfo", sessionID, sql)
+        //针对 col in (:var) 做特殊处理
+        //如果col具有唯一约束,那么 col in (?) 会被错误的分析为单行数据,而实际上var可能为一个数组
+        //所以这里将其替换为两个?,?,因为这里只获取计划信息,并不影响实际的运行,所以可以安全替换
+        val inExprPositions = getStatementInfo(sql).inExprPositions
+        val replaces = inExprPositions.map { ReplaceInfo(it.marker, it.marker + 1, "?,?") }
+        val rewrittenSQL = StringUtils.replace(sql, replaces)
+        //使用替换过的SQL来做计划分析
+        return ffiInvoke("DatabaseAPI", "GetPlanInfo", sessionID, rewrittenSQL)
     }
 
     fun getStatementInfo(sql: String): StatementInfo {
