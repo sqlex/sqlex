@@ -6,7 +6,6 @@ plugins {
 
 dependencies {
     implementation("org.slf4j:slf4j-api:1.7.36")
-    implementation("org.apache.shardingsphere:shardingsphere-sql-parser-engine:5.1.2")
     implementation("org.apache.shardingsphere:shardingsphere-sql-parser-mysql:5.1.2")
 
     api("org.jetbrains:annotations:23.0.0")
