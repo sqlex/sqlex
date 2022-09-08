@@ -1,12 +1,17 @@
 package me.danwi.sqlex.common;
 
-
+import org.antlr.v4.runtime.Parser;
 import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.atn.PredictionMode;
+import org.antlr.v4.runtime.misc.ParseCancellationException;
+import org.antlr.v4.runtime.tree.ErrorNode;
 import org.antlr.v4.runtime.tree.ParseTree;
-import org.apache.shardingsphere.sql.parser.api.CacheOption;
-import org.apache.shardingsphere.sql.parser.api.SQLParserEngine;
+import org.apache.shardingsphere.sql.parser.api.parser.SQLParser;
 import org.apache.shardingsphere.sql.parser.api.visitor.ASTNode;
 import org.apache.shardingsphere.sql.parser.core.ParseASTNode;
+import org.apache.shardingsphere.sql.parser.core.SQLParserFactory;
+import org.apache.shardingsphere.sql.parser.exception.SQLParsingException;
+import org.apache.shardingsphere.sql.parser.mysql.parser.MySQLParserFacade;
 import org.apache.shardingsphere.sql.parser.mysql.visitor.statement.impl.MySQLStatementSQLVisitor;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.generic.OwnerAvailable;
 import org.apache.shardingsphere.sql.parser.sql.common.segment.generic.OwnerSegment;
@@ -17,8 +22,7 @@ import java.util.*;
  * SQL辅助工具
  */
 public class SQLUtils {
-    //解析引擎
-    private static final SQLParserEngine sqlParserEngine = new SQLParserEngine("MySQL", new CacheOption(10, 100));
+    private static final MySQLParserFacade mysqlParserFacade = new MySQLParserFacade();
 
     //数据库名遍历器
     private static class DatabaseNameVisitor extends MySQLStatementSQLVisitor {
@@ -54,6 +58,33 @@ public class SQLUtils {
         }
     }
 
+    //解析SQL
+    private static ParseASTNode parse(String sql) {
+        ParseASTNode result = twoPhaseParse(sql);
+        if (result.getRootNode() instanceof ErrorNode) {
+            throw new SQLParsingException("Unsupported SQL of `%s`", sql);
+        } else {
+            return result;
+        }
+    }
+
+    private static ParseASTNode twoPhaseParse(String sql) {
+        SQLParser sqlParser = SQLParserFactory.newInstance(sql, mysqlParserFacade.getLexerClass(), mysqlParserFacade.getParserClass());
+        try {
+            ((Parser) sqlParser).getInterpreter().setPredictionMode(PredictionMode.SLL);
+            return (ParseASTNode) sqlParser.parse();
+        } catch (ParseCancellationException var7) {
+            ((Parser) sqlParser).reset();
+            ((Parser) sqlParser).getInterpreter().setPredictionMode(PredictionMode.LL);
+            try {
+                return (ParseASTNode) sqlParser.parse();
+            } catch (ParseCancellationException var6) {
+                throw new SQLParsingException("You have an error in your SQL syntax");
+            }
+        }
+    }
+
+
     /**
      * 根据mapping将SQL中的数据库名做重映射
      * TODO: 不稳定版本,可能会出现替换错误
@@ -64,7 +95,7 @@ public class SQLUtils {
      */
     public static String replaceDatabaseName(String sql, Map<String, String> mapping) {
         //解析为AST
-        ParseASTNode ast = sqlParserEngine.parse(sql, true);
+        ParseASTNode ast = parse(sql);
         //遍历解析出需要替换的位置
         DatabaseNameVisitor databaseNameVisitor = new DatabaseNameVisitor(mapping);
         ast.getRootNode().accept(databaseNameVisitor);
@@ -83,7 +114,7 @@ public class SQLUtils {
         LinkedList<String> result = new LinkedList<>();
         while (true) {
             //解析SQL
-            ParseASTNode ast = sqlParserEngine.parse(script, true);
+            ParseASTNode ast = parse(script);
             if (ast.getRootNode() instanceof ParserRuleContext && ast.getRootNode().getParent() != null) {
                 if (ast.getRootNode().getParent() instanceof ParserRuleContext) {
                     //释放语句
@@ -95,7 +126,7 @@ public class SQLUtils {
                     ParserRuleContext ctx = (ParserRuleContext) ast.getRootNode().getParent();
                     if (ctx.getStop().getStopIndex() + 1 >= script.length())
                         break;
-                    script = script.substring(ctx.getStop().getStopIndex()+1);
+                    script = script.substring(ctx.getStop().getStopIndex() + 1);
                 }
             }
         }
