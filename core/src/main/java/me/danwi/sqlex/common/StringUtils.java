@@ -1,6 +1,7 @@
 package me.danwi.sqlex.common;
 
 import java.util.List;
+import java.util.Objects;
 
 public class StringUtils {
     public static class ReplaceInfo {
@@ -12,6 +13,19 @@ public class StringUtils {
             this.start = start;
             this.end = end;
             this.content = content;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ReplaceInfo that = (ReplaceInfo) o;
+            return start == that.start && end == that.end && Objects.equals(content, that.content);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(start, end, content);
         }
     }
 

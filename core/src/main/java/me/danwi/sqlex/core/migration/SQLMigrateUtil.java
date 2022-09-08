@@ -1,8 +1,6 @@
 package me.danwi.sqlex.core.migration;
 
-import com.alibaba.druid.DbType;
-import com.alibaba.druid.sql.SQLUtils;
-import com.alibaba.druid.sql.ast.SQLStatement;
+import me.danwi.sqlex.common.SQLUtils;
 import me.danwi.sqlex.core.exception.SqlExException;
 
 import java.io.ByteArrayOutputStream;
@@ -11,23 +9,20 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.List;
 
 public class SQLMigrateUtil {
     public static MigrateCallback before(int version, String script) {
         return VersionMigrateCallback.before(version, executor -> {
-            List<SQLStatement> statements = SQLUtils.parseStatements(script, DbType.mysql);
-            for (SQLStatement statement : statements) {
-                executor.execute(statement.toString());
+            for (String statement : SQLUtils.splitStatements(script)) {
+                executor.execute(statement);
             }
         });
     }
 
     public static MigrateCallback after(int version, String script) {
         return VersionMigrateCallback.after(version, executor -> {
-            List<SQLStatement> statements = SQLUtils.parseStatements(script, DbType.mysql);
-            for (SQLStatement statement : statements) {
-                executor.execute(statement.toString());
+            for (String statement : SQLUtils.splitStatements(script)) {
+                executor.execute(statement);
             }
         });
     }
