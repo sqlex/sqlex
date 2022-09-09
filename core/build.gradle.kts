@@ -7,6 +7,7 @@ plugins {
 dependencies {
     implementation("org.slf4j:slf4j-api:1.7.36")
     implementation("org.apache.shardingsphere:shardingsphere-sql-parser-mysql:5.1.2")
+    implementation("com.google.guava:guava:31.1-jre")
 
     api("org.jetbrains:annotations:23.0.0")
     compileOnly("org.springframework:spring-jdbc:5.3.22")

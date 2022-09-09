@@ -1,20 +1,21 @@
 package me.danwi.sqlex.common;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import org.antlr.v4.runtime.Parser;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.atn.PredictionMode;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
+import org.antlr.v4.runtime.tree.AbstractParseTreeVisitor;
 import org.antlr.v4.runtime.tree.ErrorNode;
 import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.RuleNode;
 import org.apache.shardingsphere.sql.parser.api.parser.SQLParser;
-import org.apache.shardingsphere.sql.parser.api.visitor.ASTNode;
+import org.apache.shardingsphere.sql.parser.autogen.MySQLStatementParser;
 import org.apache.shardingsphere.sql.parser.core.ParseASTNode;
 import org.apache.shardingsphere.sql.parser.core.SQLParserFactory;
 import org.apache.shardingsphere.sql.parser.exception.SQLParsingException;
 import org.apache.shardingsphere.sql.parser.mysql.parser.MySQLParserFacade;
-import org.apache.shardingsphere.sql.parser.mysql.visitor.statement.impl.MySQLStatementSQLVisitor;
-import org.apache.shardingsphere.sql.parser.sql.common.segment.generic.OwnerAvailable;
-import org.apache.shardingsphere.sql.parser.sql.common.segment.generic.OwnerSegment;
 
 import java.util.*;
 
@@ -25,7 +26,7 @@ public class SQLUtils {
     private static final MySQLParserFacade mysqlParserFacade = new MySQLParserFacade();
 
     //数据库名遍历器
-    private static class DatabaseNameVisitor extends MySQLStatementSQLVisitor {
+    private static class DatabaseNameVisitor extends AbstractParseTreeVisitor<Object> {
         private final Map<String, String> mapping;
         private final Set<StringUtils.ReplaceInfo> replaces = new HashSet<>();
 
@@ -34,30 +35,47 @@ public class SQLUtils {
         }
 
         @Override
-        public ASTNode visit(ParseTree tree) {
-            ASTNode node = super.visit(tree);
-            if (node instanceof OwnerAvailable) {
-                if (((OwnerAvailable) node).getOwner().isPresent()) {
-                    visitOwnerSegment(((OwnerAvailable) node).getOwner().get());
-                }
-            }
-            return node;
+        public Object visit(ParseTree tree) {
+            if (tree instanceof ParserRuleContext)
+                visit((ParserRuleContext) tree);
+            return super.visit(tree);
         }
 
-        private void visitOwnerSegment(OwnerSegment owner) {
-            if (owner.getOwner().isPresent()) {
-                visitOwnerSegment(owner.getOwner().get());
-                return;
-            }
-            //如果是最顶级的owner,则判断是否需要替换
-            String value = owner.getIdentifier().getValue();
-            //判断是否存在
-            if (mapping.containsKey(value)) {
-                replaces.add(new StringUtils.ReplaceInfo(owner.getStartIndex(), owner.getStopIndex() + 1, mapping.get(value)));
+        @Override
+        public Object visitChildren(RuleNode node) {
+            if (node instanceof ParserRuleContext)
+                visit((ParserRuleContext) node);
+            return super.visitChildren(node);
+        }
+
+        public void visit(ParserRuleContext ctx) {
+            if (ctx instanceof MySQLStatementParser.TableFactorContext) {
+                MySQLStatementParser.TableFactorContext tableFactorContext = (MySQLStatementParser.TableFactorContext) ctx;
+                if (tableFactorContext.tableName() != null) {
+                    if (tableFactorContext.tableName().owner() != null) {
+                        MySQLStatementParser.OwnerContext owner = tableFactorContext.tableName().owner();
+                        String databaseName = mapping.get(owner.getText());
+                        if (databaseName != null) {
+                            replaces.add(new StringUtils.ReplaceInfo(owner.getStart().getStartIndex(), owner.getStop().getStopIndex() + 1, databaseName));
+                        }
+                    }
+                }
+            } else if (ctx instanceof MySQLStatementParser.ColumnRefContext) {
+                MySQLStatementParser.ColumnRefContext columnRefContext = (MySQLStatementParser.ColumnRefContext) ctx;
+                List<MySQLStatementParser.IdentifierContext> identifiers = columnRefContext.identifier();
+                if (identifiers.size() == 3) {
+                    MySQLStatementParser.IdentifierContext schemaID = identifiers.get(0);
+                    String databaseName = mapping.get(schemaID.getText());
+                    if (databaseName != null) {
+                        replaces.add(new StringUtils.ReplaceInfo(schemaID.getStart().getStartIndex(), schemaID.getStop().getStopIndex() + 1, databaseName));
+                    }
+                }
             }
         }
     }
 
+    //替换缓存
+    private static final Cache<String, String> replaceCache = CacheBuilder.newBuilder().maximumSize(500).build();
 
     /**
      * 根据mapping将SQL中的数据库名做重映射
@@ -68,13 +86,20 @@ public class SQLUtils {
      * @return 返回修改了数据库名后的SQL
      */
     public static String replaceDatabaseName(String sql, Map<String, String> mapping) {
-        //解析为AST
-        ParseASTNode ast = parse(sql);
-        //遍历解析出需要替换的位置
-        DatabaseNameVisitor databaseNameVisitor = new DatabaseNameVisitor(mapping);
-        ast.getRootNode().accept(databaseNameVisitor);
-        //替换字符串的位置
-        return StringUtils.replace(sql, new ArrayList<>(databaseNameVisitor.replaces));
+        String key = sql + "." + mapping.hashCode();
+        String result = replaceCache.getIfPresent(key);
+        if (result == null) {
+            //解析为AST
+            ParseASTNode ast = parse(sql);
+            //遍历解析出需要替换的位置
+            DatabaseNameVisitor databaseNameVisitor = new DatabaseNameVisitor(mapping);
+            ast.getRootNode().accept(databaseNameVisitor);
+            //替换字符串的位置
+            result = StringUtils.replace(sql, new ArrayList<>(databaseNameVisitor.replaces));
+            //存入缓存
+            replaceCache.put(key, result);
+        }
+        return result;
     }
 
     /**
