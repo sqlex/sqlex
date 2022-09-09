@@ -51,9 +51,7 @@ data class IsNullExprPosition(val not: Boolean, val marker: Int, val start: Int,
 data class StatementInfo(
     val type: StatementType,
     val inExprPositions: Array<InExprPosition>,
-    val isNullExprPositions: Array<IsNullExprPosition>,
-    val hasLimit: Boolean,
-    val limitRows: Long,
+    val isNullExprPositions: Array<IsNullExprPosition>
 )
 
 class Session(val database: String) {
