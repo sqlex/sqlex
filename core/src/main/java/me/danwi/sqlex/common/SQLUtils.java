@@ -58,32 +58,6 @@ public class SQLUtils {
         }
     }
 
-    //解析SQL
-    private static ParseASTNode parse(String sql) {
-        ParseASTNode result = twoPhaseParse(sql);
-        if (result.getRootNode() instanceof ErrorNode) {
-            throw new SQLParsingException("Unsupported SQL of `%s`", sql);
-        } else {
-            return result;
-        }
-    }
-
-    private static ParseASTNode twoPhaseParse(String sql) {
-        SQLParser sqlParser = SQLParserFactory.newInstance(sql, mysqlParserFacade.getLexerClass(), mysqlParserFacade.getParserClass());
-        try {
-            ((Parser) sqlParser).getInterpreter().setPredictionMode(PredictionMode.SLL);
-            return (ParseASTNode) sqlParser.parse();
-        } catch (ParseCancellationException var7) {
-            ((Parser) sqlParser).reset();
-            ((Parser) sqlParser).getInterpreter().setPredictionMode(PredictionMode.LL);
-            try {
-                return (ParseASTNode) sqlParser.parse();
-            } catch (ParseCancellationException var6) {
-                throw new SQLParsingException("You have an error in your SQL syntax");
-            }
-        }
-    }
-
 
     /**
      * 根据mapping将SQL中的数据库名做重映射
@@ -131,5 +105,31 @@ public class SQLUtils {
             }
         }
         return result;
+    }
+
+    //解析SQL
+    private static ParseASTNode parse(String sql) {
+        ParseASTNode result = twoPhaseParse(sql);
+        if (result.getRootNode() instanceof ErrorNode) {
+            throw new SQLParsingException("Unsupported SQL of `%s`", sql);
+        } else {
+            return result;
+        }
+    }
+
+    private static ParseASTNode twoPhaseParse(String sql) {
+        SQLParser sqlParser = SQLParserFactory.newInstance(sql, mysqlParserFacade.getLexerClass(), mysqlParserFacade.getParserClass());
+        try {
+            ((Parser) sqlParser).getInterpreter().setPredictionMode(PredictionMode.SLL);
+            return (ParseASTNode) sqlParser.parse();
+        } catch (ParseCancellationException var7) {
+            ((Parser) sqlParser).reset();
+            ((Parser) sqlParser).getInterpreter().setPredictionMode(PredictionMode.LL);
+            try {
+                return (ParseASTNode) sqlParser.parse();
+            } catch (ParseCancellationException var6) {
+                throw new SQLParsingException("You have an error in your SQL syntax");
+            }
+        }
     }
 }
