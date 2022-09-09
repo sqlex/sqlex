@@ -27,13 +27,16 @@ val ffiInterface: FFIInterface by lazy {
     //根据操作系统来选择
     val osName = System.getProperty("os.name")
     if (osName.startsWith("Mac OS")) {
-        resourcePath = "native/darwin/libsqlex.dylib"
+        resourcePath = if (System.getProperty("os.arch") == "aarch64")
+            "native/darwin/aarch64/libsqlex.dylib"
+        else
+            "native/darwin/amd64/libsqlex.dylib"
         dylibExtensionName = "dylib"
     } else if (osName.startsWith("Windows")) {
-        resourcePath = "native/windows/libsqlex.dll"
+        resourcePath = "native/windows/amd64/libsqlex.dll"
         dylibExtensionName = "dll"
     } else {
-        resourcePath = "native/linux/libsqlex.so"
+        resourcePath = "native/linux/amd64/libsqlex.so"
         dylibExtensionName = "so"
     }
     //获取资源
