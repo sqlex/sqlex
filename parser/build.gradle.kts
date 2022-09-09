@@ -7,6 +7,10 @@ plugins {
 
 dependencies {
     api(project(":core"))
+    implementation(project(":native-windows-amd64"))
+    implementation(project(":native-linux-amd64"))
+    implementation(project(":native-darwin-amd64"))
+    implementation(project(":native-darwin-aarch64"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
     implementation("net.java.dev.jna:jna:5.12.1")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.13.4")
@@ -48,14 +52,4 @@ tasks.compileKotlin {
 
 tasks.compileTestKotlin {
     dependsOn(tasks.generateTestGrammarSource)
-}
-
-tasks.sourcesJar {
-    dependsOn(tasks.classes)
-    archiveClassifier.set("sources")
-    from(sourceSets["main"].allSource)
-    exclude("**/*.dylib")
-    exclude("**/*.dll")
-    exclude("**/*.so")
-    exclude("**/*.h")
 }
