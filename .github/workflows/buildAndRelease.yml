@@ -139,7 +139,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: linux-amd64-shared-library
-          path: native/darwin-amd64/src/main/resources/native/linux/amd64
+          path: native/linux-amd64/src/main/resources/native/linux/amd64
 
       - name: Download windows amd64 shared library
         uses: actions/download-artifact@v3
@@ -184,7 +184,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: linux-amd64-shared-library
-          path: native/darwin-amd64/src/main/resources/native/linux/amd64
+          path: native/linux-amd64/src/main/resources/native/linux/amd64
 
       - name: Execute Plugin Verifier
         run: ./gradlew runPluginVerifier
@@ -213,7 +213,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: linux-amd64-shared-library
-          path: native/darwin-amd64/src/main/resources/native/linux/amd64
+          path: native/linux-amd64/src/main/resources/native/linux/amd64
 
       - name: Download windows amd64 shared library
         uses: actions/download-artifact@v3
@@ -280,7 +280,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: linux-amd64-shared-library
-          path: native/darwin-amd64/src/main/resources/native/linux/amd64
+          path: native/linux-amd64/src/main/resources/native/linux/amd64
 
       - name: Download windows amd64 shared library
         uses: actions/download-artifact@v3
@@ -334,7 +334,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: linux-amd64-shared-library
-          path: native/darwin-amd64/src/main/resources/native/linux/amd64
+          path: native/linux-amd64/src/main/resources/native/linux/amd64
 
       - name: Download windows amd64 shared library
         uses: actions/download-artifact@v3
