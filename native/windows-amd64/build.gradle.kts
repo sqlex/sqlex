@@ -16,6 +16,7 @@ tasks.sourcesJar {
 }
 
 val splitTask = tasks.create("splitDynamicLibrary") {
+    outputs.upToDateWhen { false }
     doLast {
         val archDirPath = "native/windows/amd64"
         val libFileName = "libsqlex.dll"
@@ -55,6 +56,7 @@ val splitTask = tasks.create("splitDynamicLibrary") {
 }
 
 tasks.processResources {
+    outputs.upToDateWhen { false }
     dependsOn(splitTask)
     exclude("**/native/**")
 }

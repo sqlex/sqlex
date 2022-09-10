@@ -16,6 +16,7 @@ tasks.sourcesJar {
 }
 
 val splitTask = tasks.create("splitDynamicLibrary") {
+    outputs.upToDateWhen { false }
     doLast {
         val archDirPath = "native/darwin/aarch64"
         val libFileName = "libsqlex.dylib"
@@ -55,6 +56,7 @@ val splitTask = tasks.create("splitDynamicLibrary") {
 }
 
 tasks.processResources {
+    outputs.upToDateWhen { false }
     dependsOn(splitTask)
     exclude("**/native/**")
 }
