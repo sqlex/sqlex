@@ -8,8 +8,7 @@ import com.sun.jna.Pointer
 import me.danwi.sqlex.parser.exception.SqlExFFIException
 import me.danwi.sqlex.parser.exception.SqlExFFIInvokeException
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
+import java.nio.charset.Charset
 import java.security.MessageDigest
 
 interface FFIInterface : Library {
@@ -28,36 +27,41 @@ val ffiInterface: FFIInterface by lazy {
     val osName = System.getProperty("os.name")
     if (osName.startsWith("Mac OS")) {
         resourcePath = if (System.getProperty("os.arch") == "aarch64")
-            "native/darwin/aarch64/libsqlex.dylib"
+            "native/darwin/aarch64/libsqlex.dylib.d"
         else
-            "native/darwin/amd64/libsqlex.dylib"
+            "native/darwin/amd64/libsqlex.dylib.d"
         dylibExtensionName = "dylib"
     } else if (osName.startsWith("Windows")) {
-        resourcePath = "native/windows/amd64/libsqlex.dll"
+        resourcePath = "native/windows/amd64/libsqlex.dll.d"
         dylibExtensionName = "dll"
     } else {
-        resourcePath = "native/linux/amd64/libsqlex.so"
+        resourcePath = "native/linux/amd64/libsqlex.so.d"
         dylibExtensionName = "so"
     }
-    //获取资源
-    val hashInputStream =
-        object {}::class.java.classLoader.getResourceAsStream(resourcePath)
-            ?: throw SqlExFFIException("无法获取内嵌原生库")
-    //释放后的名称
-    val hashFileName = hashInputStream.use {
-        //创建消息摘要
-        val digest = MessageDigest.getInstance("MD5")
-        val buffer = ByteArray(1024)
-        var length: Int
-        while (true) {
-            length = hashInputStream.read(buffer)
-            if (length == -1)
-                break
-            digest.update(buffer, 0, length)
+    val classLoader = object {}::class.java.classLoader
+    //获取最大的分片ID
+    val maxIdInputStream = classLoader.getResourceAsStream("$resourcePath/max.id")
+        ?: throw SqlExFFIException("无法获取原生库信息")
+    val maxId = maxIdInputStream.readBytes().toString(Charset.defaultCharset()).toInt()
+    //组合计算分片的hash
+    val digest = MessageDigest.getInstance("MD5")
+    val buffer = ByteArray(1024)
+    for (id in 0..maxId) {
+        //分片流
+        val segmentInputStream =
+            classLoader.getResourceAsStream("$resourcePath/$id") ?: throw SqlExFFIException("无法读取分片信息")
+        segmentInputStream.use {
+            while (true) {
+                val n = segmentInputStream.read(buffer)
+                if (n == -1)
+                    break
+                digest.update(buffer, 0, n)
+            }
         }
-        val hash = digest.digest().joinToString("") { String.format("%02x", it) }
-        "$hash.$dylibExtensionName"
     }
+    //计算出文件hash名称
+    val hashFileName = "${digest.digest().joinToString("") { String.format("%02x", it) }}.$dylibExtensionName"
+    //准备释放最终文件
     //创建临时目录
     val tempDir = System.getProperty("java.io.tmpdir")
     val dylibDir = File(tempDir, "sqlex_dylib")
@@ -66,13 +70,21 @@ val ffiInterface: FFIInterface by lazy {
     val dylibFile = File(dylibDir, hashFileName)
     //判断文件是否已经存在
     if (!dylibFile.exists()) {
-        //获取资源
-        val dylibInputStream =
-            object {}::class.java.classLoader.getResourceAsStream(resourcePath)
-                ?: throw SqlExFFIException("无法获取内嵌原生库")
-        //释放文件
-        dylibInputStream.use {
-            Files.copy(dylibInputStream, dylibFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        val dylibFileOutputStream = dylibFile.outputStream()
+        dylibFileOutputStream.use {
+            //组合释放分片
+            for (id in 0..maxId) {
+                val segmentInputStream =
+                    classLoader.getResourceAsStream("$resourcePath/$id") ?: throw SqlExFFIException("无法读取分片信息")
+                segmentInputStream.use {
+                    while (true) {
+                        val n = segmentInputStream.read(buffer)
+                        if (n == -1)
+                            break
+                        dylibFileOutputStream.write(buffer, 0, n)
+                    }
+                }
+            }
         }
     }
     //释放完毕,开始加载

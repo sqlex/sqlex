@@ -160,7 +160,7 @@ jobs:
           path: native/darwin-aarch64/src/main/resources/native/darwin/aarch64
 
       - name: Execute Gradle test
-        run: ./gradlew test
+        run: ./gradlew test --info
 
   idea-plugin-verify:
     needs:
