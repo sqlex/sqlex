@@ -13,16 +13,13 @@ tasks.sourcesJar {
     exclude("**/*.dll")
     exclude("**/*.so")
     exclude("**/*.h")
+    exclude("**/**.d/**")
 }
 
 val splitTask = tasks.create("splitDynamicLibrary") {
-    outputs.upToDateWhen { false }
     doLast {
         val archDirPath = "native/darwin/aarch64"
         val libFileName = "libsqlex.dylib"
-        //创建资源输出目录
-        val resourceDir = sourceSets.main.get().output.resourcesDir ?: throw GradleException("无法获取资源输出目录")
-        resourceDir.mkdirs()
         //读取库文件
         val libFile =
             Paths.get(projectDir.absolutePath, "src/main/resources", archDirPath, libFileName).toFile()
@@ -35,7 +32,7 @@ val splitTask = tasks.create("splitDynamicLibrary") {
             //1M一个分片
             val buf = ByteArray(1024 * 1024)
             //准备分片目录
-            val segmentDir = Paths.get(resourceDir.absolutePath, archDirPath, "$libFileName.d").toFile()
+            val segmentDir = Paths.get(temporaryDir.absolutePath, archDirPath, "$libFileName.d").toFile()
             segmentDir.deleteRecursively()
             segmentDir.mkdirs()
             //循环释放分片
@@ -52,11 +49,18 @@ val splitTask = tasks.create("splitDynamicLibrary") {
             //写入分片信息
             Paths.get(segmentDir.absolutePath, "max.id").toFile().writeText((index - 1).toString())
         }
+        sourceSets.main.configure {
+            resources {
+                srcDir(temporaryDir)
+            }
+        }
     }
 }
 
 tasks.processResources {
-    outputs.upToDateWhen { false }
     dependsOn(splitTask)
-    exclude("**/native/**")
+    exclude("**/*.dylib")
+    exclude("**/*.dll")
+    exclude("**/*.so")
+    exclude("**/*.h")
 }
