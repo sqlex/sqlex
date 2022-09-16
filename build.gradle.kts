@@ -67,7 +67,7 @@ allprojects {
     pluginManager.withPlugin("org.jetbrains.kotlin.jvm") {
         tasks.withType<KotlinCompile> {
             kotlinOptions.jvmTarget = "1.8"
-            kotlinOptions.freeCompilerArgs = listOf("-Xjvm-default=compatibility")
+            kotlinOptions.freeCompilerArgs = listOf("-Xjvm-default=all-compatibility")
         }
     }
 
