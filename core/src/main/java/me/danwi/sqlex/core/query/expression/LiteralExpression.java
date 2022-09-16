@@ -12,7 +12,7 @@ public class LiteralExpression implements Expression {
 
     public LiteralExpression(Object value) {
         if (value instanceof Expression)
-            throw new SqlExException("已经是一个表达式了,无需转换成预处理参数");
+            throw new SqlExException("已经是一个表达式了,无需转换成字面量");
         this.value = value;
     }
 
