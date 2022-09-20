@@ -29,7 +29,7 @@ SqlEx (SQL extension) 是一个简单的 DB helper.
 
 `sqlm`是另一种"写 Java"的方式, 专用于编写复杂的数据库访问方法. 能自动分析 SQL 并生成对应的结果类型.
 
-动画演示(加载有点慢):
+动画演示(加载有点慢/[直接打开](https://github.com/sqlex/sqlex/blob/master/assets/sqlm.gif)):
 
 ![image](assets/sqlm.gif)
 
@@ -37,7 +37,7 @@ SqlEx (SQL extension) 是一个简单的 DB helper.
 
 `SqlEx` 会根据数据库信息, 准备好对应的`表操作对象`(无须自己手动定义实体), 提供 `Fluent API` 来对数据库做简单操作.
 
-动画演示(加载有点慢):
+动画演示(加载有点慢/[直接打开](https://github.com/sqlex/sqlex/blob/master/assets/fluent-api.gif)):
 
 ![fluent api](assets/fluent-api.gif)
 
