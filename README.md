@@ -52,5 +52,7 @@ SqlEx (SQL extension) 是一个简单的 DB helper.
 另外部分代码的实现上参考了如下项目:
 
 - [ktorm](https://github.com/kotlin-orm/ktorm)
+- [mybatis](https://github.com/mybatis/mybatis-3)
+- [shardingsphere](https://github.com/apache/shardingsphere)
 
 再次特别感谢上述项目的开发者对开源事业做出的贡献.
