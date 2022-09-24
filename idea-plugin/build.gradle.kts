@@ -31,7 +31,7 @@ tasks.runIde {
 
 tasks.patchPluginXml {
     sinceBuild.set("211")
-    untilBuild.set("222.*")
+    untilBuild.set("223.*")
 }
 
 if (ext.has("idea.token") && ext["release"] == true) {
