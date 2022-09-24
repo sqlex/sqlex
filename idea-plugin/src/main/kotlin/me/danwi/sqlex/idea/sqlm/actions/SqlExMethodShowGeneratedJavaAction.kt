@@ -1,6 +1,5 @@
 package me.danwi.sqlex.idea.sqlm.actions
 
-import com.google.googlejavaformat.java.Formatter
 import com.intellij.ide.highlighter.HighlighterFactory
 import com.intellij.ide.highlighter.JavaFileType
 import com.intellij.lang.java.JavaLanguage
@@ -15,8 +14,10 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiFileFactory
+import com.intellij.psi.codeStyle.CodeStyleManager
 import com.intellij.ui.ScreenUtil
 import com.intellij.ui.popup.PopupPositionManager
+import com.intellij.util.DocumentUtil
 import me.danwi.sqlex.idea.config.SqlExConfigFileType
 import me.danwi.sqlex.idea.sqlm.SqlExMethodFileType
 import me.danwi.sqlex.idea.util.extension.isSqlExConfig
@@ -27,9 +28,6 @@ import java.awt.BorderLayout
 import javax.swing.JPanel
 
 class SqlExMethodShowGeneratedJavaAction : AnAction() {
-    //格式化器
-    private val formatter = Formatter()
-
     override fun update(event: AnActionEvent) {
         val file = event.getData(CommonDataKeys.VIRTUAL_FILE)
         if (file == null) {
@@ -57,11 +55,13 @@ class SqlExMethodShowGeneratedJavaAction : AnAction() {
                 throw Exception("索引已经过期,请先重建索引")
             //生成java文件
             val javaFile = service.repository?.findJavaSource(file) ?: throw Exception("不存在该文件所对应的Java源码文件")
-            //格式化
-            val formattedSource = formatter.formatSource(javaFile.source)
             //解析为psi
             val psiJavaFile = PsiFileFactory.getInstance(project)
-                .createFileFromText(JavaLanguage.INSTANCE, formattedSource)
+                .createFileFromText(JavaLanguage.INSTANCE, javaFile.source)
+            //格式化
+            DocumentUtil.writeInRunUndoTransparentAction {
+                CodeStyleManager.getInstance(project).reformat(psiJavaFile)
+            }
             //创建编辑器视图
             val editorView = GeneratedJavaFileViewComponent(project, psiJavaFile)
             //创建弹出框
