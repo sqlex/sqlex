@@ -20,7 +20,15 @@ intellij {
         version.set("2021.1")
     }
     pluginName.set("sqlex")
-    plugins.set(listOf("yaml", "java", "DatabaseTools", "Kotlin", "Spring"))
+    plugins.set(
+        listOf(
+            "org.jetbrains.plugins.yaml",
+            "com.intellij.java",
+            "com.intellij.database",
+            "org.jetbrains.kotlin",
+            "com.intellij.spring"
+        )
+    )
 }
 
 tasks.runIde {
