@@ -1,7 +1,7 @@
 <idea-plugin xmlns:xi="http://www.w3.org/2001/XInclude">
     <id>me.danwi.sqlex</id>
     <name>SqlEx</name>
-    <vendor email="demon@danwi.me" url="https://sqlex.github.com">SqlEx</vendor>
+    <vendor email="demon@danwi.me" url="https://sqlex.github.io">SqlEx</vendor>
 
     <description><![CDATA[
     Adds support for the <a href="https://sqlex.github.io">sqlex</a> framework(A data access framework).
