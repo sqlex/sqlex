@@ -774,6 +774,14 @@ class SessionTest {
         assertEquals('?', sql[positions[0].marker])
         assertEquals("? is null", sql.substring(positions[0].start, positions[0].end))
 
+        sql = "select * from person where (? IS NULL or name = ?)"
+
+        positions = session.getStatementInfo(sql).isNullExprPositions
+        assertEquals(1, positions.size)
+        assertFalse(positions[0].not)
+        assertEquals('?', sql[positions[0].marker])
+        assertEquals("? IS NULL", sql.substring(positions[0].start, positions[0].end))
+
         sql = "select * from person where (? is not null or name = ?)"
 
         positions = session.getStatementInfo(sql).isNullExprPositions
