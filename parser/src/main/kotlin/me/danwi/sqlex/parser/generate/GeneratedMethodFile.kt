@@ -158,7 +158,7 @@ class GeneratedMethodFile(
             //如果是多列,则生成对应的实体类
             val resultClassName = method.returnType()?.text ?: "${methodName.pascalName}Result"
             val resultClassSpec =
-                fields.toEntityClass(resultClassName, isStatic = true, constructor = false, nullableAnnotation = false)
+                fields.toEntityClass(resultClassName, isStatic = true, nullableAnnotation = false)
             //把实体类添加到内部类
             innerClasses.add(resultClassSpec)
             ClassName.get(packageName, className, resultClassName)

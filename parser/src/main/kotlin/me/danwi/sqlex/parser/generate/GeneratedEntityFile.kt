@@ -11,6 +11,6 @@ class GeneratedEntityFile(
 ) : GeneratedJavaFile(rootPackage, tableName.pascalName) {
     override fun generate(): TypeSpec {
         val tableInfo = repository.getTableInfo(tableName)
-        return tableInfo.columns.toEntityClass(tableName.pascalName)
+        return tableInfo.columns.toEntityClass(tableName.pascalName, isStatic = false, nullableAnnotation = true)
     }
 }
