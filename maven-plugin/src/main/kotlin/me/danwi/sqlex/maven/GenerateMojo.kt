@@ -48,9 +48,6 @@ class GenerateMojo : AbstractMojo() {
                 val configFile = File(it.absolutePath, SqlExConfigFileName)
                 configFile.exists() && configFile.isFile
             }
-        //删除旧的源码
-        javaOutputDir.deleteRecursively()
-        resourceOutputDir.deleteRecursively()
         //生成源码
         sourceRoots.forEach {
             log.info("generate [${it.path}] to [${javaOutputDir.path ?: "UNKNOWN"}] [${resourceOutputDir.path ?: "UNKNOWN"}]")

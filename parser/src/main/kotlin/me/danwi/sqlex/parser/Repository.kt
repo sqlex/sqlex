@@ -216,6 +216,24 @@ fun generateRepositorySource(sourceRoot: File, javaOutputDir: File, resourceOutp
                 throw SqlExRepositoryException("${sourceRoot.absolutePath}下有多个sqlex配置文件")
         }
     val config = parseSqlExConfig(tempConfigContent ?: return)
+    //计算缓存 TODO: 目前不支持sqlex文件夹外的外部脚本的变更发现
+    val sourceRootCacheHash = sourceRoot.computeCacheHash
+    val javaOutputDirIsUpdate =
+        javaOutputDir.sourceCacheHash == sourceRootCacheHash
+                && javaOutputDir.selfCacheHash == javaOutputDir.computeCacheHash
+    val resourceOutputDirIsUpdate =
+        resourceOutputDir.sourceCacheHash == sourceRootCacheHash
+                && resourceOutputDir.selfCacheHash == resourceOutputDir.computeCacheHash
+    //如果文件均未变更
+    if (javaOutputDirIsUpdate && resourceOutputDirIsUpdate) {
+        return
+    }
+    //输出目录清理
+    javaOutputDir.deleteRecursively()
+    javaOutputDir.mkdirs()
+    resourceOutputDir.deleteRecursively()
+    resourceOutputDir.mkdirs()
+    //开始构建,读取外部schema
     val foreignSchemaFiles = config.foreign.map { (name, file) ->
         val schemaFile = Paths.get(sourceRoot.absolutePath, file).toFile()
         try {
@@ -300,6 +318,11 @@ fun generateRepositorySource(sourceRoot: File, javaOutputDir: File, resourceOutp
                 throw SqlExRepositoryGenerateException(sourceFile.absolutePath, "重复源码生成")
             sourceFile.writeText(it.source)
         }
+        //写入缓存
+        javaOutputDir.sourceCacheHash = sourceRootCacheHash
+        javaOutputDir.selfCacheHash = javaOutputDir.computeCacheHash
+        resourceOutputDir.sourceCacheHash = sourceRootCacheHash
+        resourceOutputDir.selfCacheHash = resourceOutputDir.computeCacheHash
     } finally {
         repository.close()
     }

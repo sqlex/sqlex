@@ -25,9 +25,6 @@ abstract class GenerateSqlExTask : DefaultTask() {
 
     @TaskAction
     fun generate() {
-        //准备生成目录
-        outputDir.deleteRecursively()
-
         val javaOutputDir = Paths.get(outputDir.absolutePath, "classes").toFile()
         javaOutputDir.mkdirs()
         val resourcesOutputDir = Paths.get(outputDir.absolutePath, "resources").toFile()
