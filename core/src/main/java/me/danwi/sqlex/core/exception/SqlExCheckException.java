@@ -11,6 +11,7 @@ public class SqlExCheckException extends SqlExException {
     private final List<TableInfo> missed;
 
     public SqlExCheckException(List<TableInfo> tables) {
+        super("目标数据库与SqlEx Repository结构定义不一致");
         this.missed = tables;
     }
 
