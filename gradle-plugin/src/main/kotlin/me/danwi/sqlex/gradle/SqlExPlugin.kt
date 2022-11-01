@@ -1,5 +1,6 @@
 package me.danwi.sqlex.gradle
 
+import me.danwi.sqlex.core.Build
 import me.danwi.sqlex.parser.util.pascalName
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
@@ -80,17 +81,17 @@ class SqlExPlugin : Plugin<Project> {
         //兼容kotlin,判断kapt插件是否存在
         if (project.pluginManager.hasPlugin("org.jetbrains.kotlin.kapt")) {
             //如果kapt插件存在,则添加kapt依赖
-            project.dependencies.add("kapt", "me.danwi.sqlex:core:${BuildFile.VERSION}")
-            project.dependencies.add("kaptTest", "me.danwi.sqlex:core:${BuildFile.VERSION}")
+            project.dependencies.add("kapt", "me.danwi.sqlex:core:${Build.VERSION}")
+            project.dependencies.add("kaptTest", "me.danwi.sqlex:core:${Build.VERSION}")
         } else {
             //如果kapt插件不存在,则添加普通的annotationProcessor依赖
             project.dependencies.add(
                 JavaPlugin.ANNOTATION_PROCESSOR_CONFIGURATION_NAME,
-                "me.danwi.sqlex:core:${BuildFile.VERSION}"
+                "me.danwi.sqlex:core:${Build.VERSION}"
             )
             project.dependencies.add(
                 JavaPlugin.TEST_ANNOTATION_PROCESSOR_CONFIGURATION_NAME,
-                "me.danwi.sqlex:core:${BuildFile.VERSION}"
+                "me.danwi.sqlex:core:${Build.VERSION}"
             )
         }
     }
@@ -106,13 +107,13 @@ class SqlExPlugin : Plugin<Project> {
                     && resolveDetails.target.name in artifactNames
                     && resolveDetails.target.version.isNullOrBlank()
                 )
-                    resolveDetails.useVersion(BuildFile.VERSION)
+                    resolveDetails.useVersion(Build.VERSION)
             }
         }
         //检查是否有版本不匹配的情况
         project.configurations.flatMap { it.dependencies }
             .filter { it.group == groupName && it.name in artifactNames && !it.version.isNullOrEmpty() }
-            .filter { it.version != BuildFile.VERSION }
-            .forEach { throw GradleException("Gradle插件版本和Core依赖版本不一致, Gradle Plugin: ${BuildFile.VERSION}, Core: ${it.version}") }
+            .filter { it.version != Build.VERSION }
+            .forEach { throw GradleException("Gradle插件版本和Core依赖版本不一致, Gradle Plugin: ${Build.VERSION}, Core: ${it.version}") }
     }
 }

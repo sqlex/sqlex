@@ -10,28 +10,6 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
 }
 
-//让程序能读取到gradle配置的版本
-val generateBuildJava = tasks.create("generateBuildJava") {
-    val outputDir = "$buildDir/generated/java"
-    this.extra.set("outputDir", outputDir)
-    inputs.property("version", project.version)
-    outputs.dir(outputDir)
-    doLast {
-        mkdir("$outputDir/me/danwi/sqlex/gradle/")
-        file("$outputDir/me/danwi/sqlex/gradle/BuildFile.java").writeText(
-            """
-            package me.danwi.sqlex.gradle;
-            
-            public class BuildFile {
-                public static final String VERSION = "${project.version}";
-            }
-        """.trimIndent()
-        )
-    }
-}
-tasks.findByName("compileJava")?.dependsOn(generateBuildJava)
-tasks.findByName("compileKotlin")?.dependsOn(generateBuildJava)
-sourceSets { main { java { srcDir(generateBuildJava.extra.get("outputDir")!!) } } }
 
 gradlePlugin {
     plugins {

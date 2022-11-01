@@ -1,5 +1,6 @@
 package me.danwi.sqlex.parser.util
 
+import me.danwi.sqlex.core.Build
 import me.danwi.sqlex.parser.exception.SqlExRepositoryException
 import java.io.File
 import java.nio.file.Paths
@@ -63,6 +64,9 @@ val File.computeCacheHash: String
             .sortedBy { it.absolutePath } //按照路径排序
         //计算md5
         val digest = MessageDigest.getInstance("MD5")
+        //更新程序版本
+        digest.update(Build.VERSION.toByteArray())
+        //读取文件
         val buf = ByteArray(1024)
         for (file in allFiles) {
             //更新文件路径
