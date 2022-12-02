@@ -103,7 +103,7 @@ public class Checker {
                             ));
                         }
                         //主键信息
-                        try (ResultSet primaryKeyResultSet = databaseMetaData.getPrimaryKeys(null, null, tableName)) {
+                        try (ResultSet primaryKeyResultSet = databaseMetaData.getPrimaryKeys(conn.getCatalog(), null, tableName)) {
                             while (primaryKeyResultSet.next()) {
                                 String columnName = primaryKeyResultSet.getString("COLUMN_NAME");
                                 for (ColumnInfo c : columns) {
