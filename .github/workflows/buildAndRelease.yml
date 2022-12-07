@@ -12,7 +12,7 @@ jobs:
 
       - uses: actions/setup-go@v3
         with:
-          go-version: 1.18.0
+          go-version: 1.19.4
 
       - name: Build shared library
         env:
@@ -41,7 +41,7 @@ jobs:
 
       - uses: actions/setup-go@v3
         with:
-          go-version: 1.18.0
+          go-version: 1.19.4
 
       - name: Build shared library
         env:
@@ -68,7 +68,7 @@ jobs:
 
       - uses: actions/setup-go@v3
         with:
-          go-version: 1.18.0
+          go-version: 1.19.4
 
       - name: Build shared library
         env:
@@ -93,7 +93,7 @@ jobs:
 
       - uses: actions/setup-go@v3
         with:
-          go-version: 1.18.0
+          go-version: 1.19.4
 
       - name: Build shared library
         env:
