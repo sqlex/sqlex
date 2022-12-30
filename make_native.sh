@@ -9,7 +9,7 @@ if [[ "$OSTYPE" =~ ^darwin ]];then
       DIST="../../native/darwin-aarch64/src/main/resources/native/darwin/aarch64"
     else
       DIST="../../native/darwin-amd64/src/main/resources/native/darwin/amd64"
-    fi 
+    fi
 elif [[ "$OSTYPE" =~ ^linux ]]; then
     LIB="libsqlex.so"
     DIST="../../native/linux-amd64/src/main/resources/native/linux/amd64"
