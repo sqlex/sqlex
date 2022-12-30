@@ -1,25 +1,17 @@
+@file:JvmName("FFIInvoker")
+
 package me.danwi.sqlex.parser.ffi
 
 import com.fasterxml.jackson.databind.type.TypeFactory
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.sun.jna.Library
-import com.sun.jna.Native
-import com.sun.jna.Pointer
 import me.danwi.sqlex.parser.exception.SqlExFFIException
 import me.danwi.sqlex.parser.exception.SqlExFFIInvokeException
 import java.io.File
 import java.nio.charset.Charset
 import java.security.MessageDigest
 
-interface FFIInterface : Library {
-    fun FFIInvoke(reqJson: GoString.ByValue): Pointer?
-}
-
-data class FFIRequest(val moduleName: String, val methodName: String, val parameters: Array<out Any>)
-
-data class FFIResponse<T>(val success: Boolean, val message: String, val returnValue: T)
-
-val ffiInterface: FFIInterface by lazy {
+// 释放并加载原生库
+fun loadNativeLibrary() {
     //释放原生动态库
     val resourcePath: String
     val dylibExtensionName: String
@@ -88,20 +80,22 @@ val ffiInterface: FFIInterface by lazy {
         }
     }
     //释放完毕,开始加载
-    Native.load(dylibFile.absolutePath, FFIInterface::class.java, mapOf(Pair(Library.OPTION_STRING_ENCODING, "utf-8")))
+    System.load(dylibFile.absolutePath)
 }
+
+data class FFIRequest(val moduleName: String, val methodName: String, val parameters: Array<out Any>)
+
+data class FFIResponse<T>(val success: Boolean, val message: String, val returnValue: T)
 
 val jacksonMapper = jacksonObjectMapper()
 
 inline fun <reified T> ffiInvoke(module: String, method: String, vararg args: Any): T {
     //准备请求
     val request = FFIRequest(module, method, args)
-    val requestGoString = GoString.ByValue(jacksonMapper.writeValueAsString(request))
+    val requestJson = jacksonMapper.writeValueAsString(request)
     //调用
-    val responseJsonStrPointer =
-        ffiInterface.FFIInvoke(requestGoString) ?: throw SqlExFFIInvokeException(module, method, "FFI调用空引用异常")
-    //将返回值转换成字符串
-    val responseJson = responseJsonStrPointer.getString(0, "utf-8")
+    val responseJson =
+        NativeFFI.request(requestJson) ?: throw SqlExFFIInvokeException(module, method, "FFI调用空引用异常")
     //判断是否发生了错误
     if (responseJson == "") throw SqlExFFIInvokeException(module, method, "FFI调用发生错误")
     //解析结果
