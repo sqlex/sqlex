@@ -1,7 +1,7 @@
 plugins {
     java
     kotlin("jvm")
-    id("org.jetbrains.intellij") version "1.9.0"
+    id("org.jetbrains.intellij") version "1.11.0"
 }
 
 dependencies {
@@ -17,7 +17,7 @@ intellij {
         localPath.set(project.ext["idea.path"].toString())
     } else {
         type.set("IU")
-        version.set("2021.1")
+        version.set("2022.3")
     }
     pluginName.set("sqlex")
     plugins.set(
