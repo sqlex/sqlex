@@ -79,8 +79,17 @@ fun loadNativeLibrary() {
             }
         }
     }
-    //释放完毕,开始加载
-    System.load(dylibFile.absolutePath)
+    //释放完毕,开始加载,并处理好可能存在的重复加载问题
+    try {
+        System.load(dylibFile.absolutePath)
+    } catch (e: UnsatisfiedLinkError) {
+        //忽略已经加载异常
+        //TODO: 硬编码判断 UnsatisfiedLinkError 异常类型
+        if (e.message?.contains("already loaded in another classloader") != true) {
+            //rethrow
+            throw e
+        }
+    }
 }
 
 data class FFIRequest(val moduleName: String, val methodName: String, val parameters: Array<out Any>)
