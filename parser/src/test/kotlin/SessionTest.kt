@@ -70,7 +70,7 @@ class SessionTest {
             CREATE TABLE `department` (
               `id` int(11) NOT NULL AUTO_INCREMENT,
               `name` varchar(255) NOT NULL,
-              PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */
+              PRIMARY KEY (`id`) /*T![clustered_index] NONCLUSTERED */
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
 
             /* person */
@@ -78,7 +78,7 @@ class SessionTest {
               `id` int(11) NOT NULL AUTO_INCREMENT,
               `name` varchar(255) NOT NULL,
               `departmentID` int(11) NOT NULL,
-              PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */
+              PRIMARY KEY (`id`) /*T![clustered_index] NONCLUSTERED */
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
         """.trimIndent(), session.DDL
         )
