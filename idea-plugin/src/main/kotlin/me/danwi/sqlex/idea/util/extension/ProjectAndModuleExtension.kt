@@ -24,7 +24,7 @@ import java.nio.file.Paths
 
 //获取项目的模块
 val Project.modules: Array<Module>
-    inline get() = ModuleManager.getInstance(this).modules
+    inline get() = this.getService(ModuleManager::class.java).modules
 
 //获取基于项目的存储目录
 val Project.storeDir: Path
