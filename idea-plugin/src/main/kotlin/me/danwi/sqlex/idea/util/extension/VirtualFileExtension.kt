@@ -123,10 +123,11 @@ fun VirtualFile.markAsSource() {
         //已经存在
         if (module.sourceRoots.any { it == this })
             return@invokeLater
-        ModuleRootModificationUtil.updateModel(module) { model ->
+        ModuleRootModificationUtil.modifyModel(module) { model ->
             //获取contentEntry,如果没有,则新建一个
-            val contentEntry = model.contentEntries.find { it.file.isParentOf(this) } ?: return@updateModel
+            val contentEntry = model.contentEntries.find { it.file.isParentOf(this) } ?: return@modifyModel false
             contentEntry.addSourceFolder(this, false)
+            true
         }
     }
 }
@@ -139,7 +140,7 @@ fun VirtualFile.unmarkSource() {
         //如果不存在
         if (module.sourceRoots.none { it == this })
             return@invokeLater
-        ModuleRootModificationUtil.updateModel(module) { model ->
+        ModuleRootModificationUtil.modifyModel(module) { model ->
             model.contentEntries.forEach { entry ->
                 entry.sourceFolders.forEach { sourceRoot ->
                     if (entry.file == this)
@@ -148,6 +149,7 @@ fun VirtualFile.unmarkSource() {
                         entry.removeSourceFolder(sourceRoot)
                 }
             }
+            true
         }
     }
 }

@@ -9,7 +9,7 @@ import me.danwi.sqlex.idea.util.extension.methodSubtree
 import me.danwi.sqlex.idea.util.extension.parentOf
 import me.danwi.sqlex.idea.util.extension.psiFile
 import me.danwi.sqlex.idea.util.extension.sqlexMethodFile
-import org.jetbrains.kotlin.nj2k.postProcessing.resolve
+import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 
 class SqlExMethodGotoDeclarationHandler : GotoDeclarationHandler {
@@ -23,7 +23,7 @@ class SqlExMethodGotoDeclarationHandler : GotoDeclarationHandler {
 
         //解析引用元素
         val referenceElement = sourceElement.parentOf<KtNameReferenceExpression>() ?: return null
-        val targetElement = referenceElement.resolve()
+        val targetElement = referenceElement.mainReference.resolve()
 
         //判断类型
         if (targetElement is PsiMethod) {
