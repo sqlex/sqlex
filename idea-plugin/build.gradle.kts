@@ -1,13 +1,12 @@
 plugins {
     java
     kotlin("jvm")
-    id("org.jetbrains.intellij") version "1.11.0"
+    id("org.jetbrains.intellij") version "1.13.3"
 }
 
 dependencies {
     implementation(project(":parser"))
 
-    implementation("org.jetbrains.kotlin:kotlin-stdlib")
     implementation("org.antlr:antlr4-intellij-adaptor:0.1")
 }
 
@@ -17,7 +16,7 @@ intellij {
         localPath.set(project.ext["idea.path"].toString())
     } else {
         type.set("IU")
-        version.set("2022.3")
+        version.set("LATEST-EAP-SNAPSHOT")
     }
     pluginName.set("sqlex")
     plugins.set(
@@ -37,8 +36,8 @@ tasks.runIde {
 }
 
 tasks.patchPluginXml {
-    sinceBuild.set("211")
-    untilBuild.set("223.*")
+    sinceBuild.set("221")
+    untilBuild.set("231.*")
 }
 
 if (ext.has("idea.token") && ext["release"] == true) {

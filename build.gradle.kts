@@ -1,8 +1,5 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-import org.jetbrains.kotlin.konan.properties.hasProperty
-
 plugins {
-    kotlin("jvm") version "1.7.10" apply false
+    kotlin("jvm") version "1.8.20" apply false
     id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
 }
 
@@ -65,7 +62,7 @@ allprojects {
 
     //kotlin相关配置
     pluginManager.withPlugin("org.jetbrains.kotlin.jvm") {
-        tasks.withType<KotlinCompile> {
+        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
             kotlinOptions.jvmTarget = "1.8"
             kotlinOptions.freeCompilerArgs = listOf("-Xjvm-default=all-compatibility")
         }
@@ -112,7 +109,7 @@ allprojects {
 
         //如果配置了maven-publish,有签名配置,且没有应用自己的签名插件,则尝试应用全局签名配置
         if (pluginManager.hasPlugin("maven-publish")
-            && localProperties.hasProperty("signing.key")
+            && localProperties.getProperty("signing.key") != null
             && !pluginManager.hasPlugin("signing")
         ) {
             pluginManager.apply("signing")
@@ -130,7 +127,7 @@ allprojects {
 }
 
 //配置全局的maven central属性
-if (globalProperties.hasProperty("ossrh.username")) {
+if (globalProperties.getProperty("ossrh.username") != null) {
     pluginManager.withPlugin("io.github.gradle-nexus.publish-plugin") {
         configure<io.github.gradlenexus.publishplugin.NexusPublishExtension> {
             repositories {
