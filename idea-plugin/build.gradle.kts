@@ -16,7 +16,7 @@ intellij {
         localPath.set(project.ext["idea.path"].toString())
     } else {
         type.set("IU")
-        version.set("LATEST-EAP-SNAPSHOT")
+        version.set("2022.1")
     }
     pluginName.set("sqlex")
     plugins.set(
