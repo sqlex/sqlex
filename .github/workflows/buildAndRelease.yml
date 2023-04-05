@@ -132,6 +132,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
+        with:
+          cache-disabled: true
 
       - name: Download linux amd64 shared library
         uses: actions/download-artifact@v3
@@ -175,6 +177,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
+        with:
+          cache-disabled: true
 
       - name: Download linux amd64 shared library
         uses: actions/download-artifact@v3
@@ -202,6 +206,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
+        with:
+          cache-disabled: true
 
       - name: Download linux amd64 shared library
         uses: actions/download-artifact@v3
@@ -267,6 +273,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
+        with:
+          cache-disabled: true
 
       - name: Download linux amd64 shared library
         uses: actions/download-artifact@v3
@@ -319,6 +327,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
+        with:
+          cache-disabled: true
 
       - name: Download linux amd64 shared library
         uses: actions/download-artifact@v3
