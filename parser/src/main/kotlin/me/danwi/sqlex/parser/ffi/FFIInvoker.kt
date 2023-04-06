@@ -6,12 +6,14 @@ import com.fasterxml.jackson.databind.type.TypeFactory
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import me.danwi.sqlex.parser.exception.SqlExFFIException
 import me.danwi.sqlex.parser.exception.SqlExFFIInvokeException
+import net.bytebuddy.dynamic.loading.ClassInjector
 import java.io.File
+import java.lang.reflect.Method
 import java.nio.charset.Charset
 import java.security.MessageDigest
 
 // 释放并加载原生库
-fun loadNativeLibrary() {
+fun extractNativeLibrary(): String {
     //释放原生动态库
     val resourcePath: String
     val dylibExtensionName: String
@@ -79,17 +81,56 @@ fun loadNativeLibrary() {
             }
         }
     }
-    //释放完毕,开始加载,并处理好可能存在的重复加载问题
-    try {
-        System.load(dylibFile.absolutePath)
-    } catch (e: UnsatisfiedLinkError) {
-        //忽略已经加载异常
-        //TODO: 硬编码判断 UnsatisfiedLinkError 异常类型
-        if (e.message?.contains("already loaded in another classloader") != true) {
-            //rethrow
-            throw e
+    return dylibFile.absolutePath
+}
+
+// 原生请求方法
+val ffiRequestMethod: Method by lazy {
+    //常量定义
+    val nativeLibClassName = "me.danwi.sqlex.parser.ffi.NativeLib"
+    val nativeFFIClassName = "me.danwi.sqlex.parser.ffi.NativeFFI"
+    val nativeLibResourcePath = "me/danwi/sqlex/parser/ffi/NativeLib.bin"
+    val nativeFFIResourcePath = "me/danwi/sqlex/parser/ffi/NativeFFI.bin"
+    //最顶层的类加载器
+    val systemLoader = ClassLoader.getSystemClassLoader()
+    val (nativeLibClass, nativeFFIClass) = try {
+        //先尝试使用最顶层的加载器加载
+        Pair(
+            systemLoader.loadClass(nativeLibClassName),
+            systemLoader.loadClass(nativeFFIClassName)
+        )
+    } catch (_: Exception) {
+        try {
+            //如果最顶层的加载器无法加载,则尝试将字节码注入到最顶层的加载器中
+            //获取字节码
+            val nativeLibByteCodeStream =
+                object {}::class.java.classLoader.getResourceAsStream(nativeLibResourcePath)!!
+            val nativeFFIByteCodeStream =
+                object {}::class.java.classLoader.getResourceAsStream(nativeFFIResourcePath)!!
+            val nativeLibByteCode = nativeLibByteCodeStream.use { it.readBytes() }
+            val nativeFFIByteCode = nativeFFIByteCodeStream.use { it.readBytes() }
+            //类注入器
+            val classInjector = ClassInjector.UsingReflection.ofSystemClassLoader()
+            classInjector.injectRaw(
+                mapOf(
+                    nativeLibClassName to nativeLibByteCode,
+                    nativeFFIClassName to nativeFFIByteCode
+                )
+            )
+            val nativeLibClass = systemLoader.loadClass(nativeLibClassName)
+            val nativeFFIClass = systemLoader.loadClass(nativeFFIClassName)
+            Pair(nativeLibClass, nativeFFIClass)
+        } catch (_: Exception) {
+            //如果注入失败,则使用当前的类加载器直接反射加载
+            Pair(Class.forName(nativeLibClassName), Class.forName(nativeFFIClassName))
         }
     }
+    //先释放原生库
+    val dylibFilePath = extractNativeLibrary()
+    //设置全局变量
+    nativeLibClass.getDeclaredField("dylibFilePath").set(null, dylibFilePath)
+    //返回ffi request方法
+    nativeFFIClass.getDeclaredMethod("request", String::class.java)
 }
 
 data class FFIRequest(val moduleName: String, val methodName: String, val parameters: Array<out Any>)
@@ -103,8 +144,7 @@ inline fun <reified T> ffiInvoke(module: String, method: String, vararg args: An
     val request = FFIRequest(module, method, args)
     val requestJson = jacksonMapper.writeValueAsString(request)
     //调用
-    val responseJson =
-        NativeFFI.request(requestJson) ?: throw SqlExFFIInvokeException(module, method, "FFI调用空引用异常")
+    val responseJson = ffiRequestMethod.invoke(null, requestJson) as String
     //判断是否发生了错误
     if (responseJson == "") throw SqlExFFIInvokeException(module, method, "FFI调用发生错误")
     //解析结果

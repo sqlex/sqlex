@@ -12,6 +12,7 @@ dependencies {
     implementation(project(":native-darwin-amd64"))
     implementation(project(":native-darwin-aarch64"))
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
+    implementation("net.bytebuddy:byte-buddy:1.14.3")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.13.4")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.13.4")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.4")
