@@ -9,6 +9,7 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFile
 import icons.SqlExIcons
 import me.danwi.sqlex.idea.util.extension.isInSqlExSourceRoot
+import me.danwi.sqlex.idea.util.extension.runReadAction
 import me.danwi.sqlex.idea.util.extension.sourceRoot
 import me.danwi.sqlex.idea.util.extension.sqlexRepositoryService
 
@@ -47,7 +48,7 @@ abstract class SqlExRepositoryBaseProvider(groupId: String) : AbstractFloatingTo
     }
 
     fun update(file: VirtualFile, component: FloatingToolbarComponent) {
-        if (isVisible(file))
+        if (runReadAction { isVisible(file) })
             component.scheduleShow()
         else
             component.scheduleHide()
