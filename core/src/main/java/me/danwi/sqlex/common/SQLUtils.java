@@ -1,7 +1,5 @@
 package me.danwi.sqlex.common;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import org.antlr.v4.runtime.Parser;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.atn.PredictionMode;
@@ -75,7 +73,7 @@ public class SQLUtils {
     }
 
     //替换缓存
-    private static final Cache<String, String> replaceCache = CacheBuilder.newBuilder().maximumSize(500).build();
+    private static final LRUCache<String, String> replaceCache = new LRUCache<>(500);
 
     /**
      * 根据mapping将SQL中的数据库名做重映射
@@ -87,7 +85,7 @@ public class SQLUtils {
      */
     public static String replaceDatabaseName(String sql, Map<String, String> mapping) {
         String key = sql + "." + mapping.hashCode();
-        String result = replaceCache.getIfPresent(key);
+        String result = replaceCache.get(key);
         if (result == null) {
             //解析为AST
             ParseASTNode ast = parse(sql);
@@ -97,7 +95,7 @@ public class SQLUtils {
             //替换字符串的位置
             result = StringUtils.replace(sql, new ArrayList<>(databaseNameVisitor.replaces));
             //存入缓存
-            replaceCache.put(key, result);
+            replaceCache.set(key, result);
         }
         return result;
     }
