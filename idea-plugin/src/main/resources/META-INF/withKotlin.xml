@@ -10,4 +10,8 @@
         <lang.documentationProvider language="kotlin"
                                     implementationClass="me.danwi.sqlex.idea.sqlm.kotlin.SqlExMethodDocumentationProvider"/>
     </extensions>
+
+    <extensions defaultExtensionNs="org.jetbrains.kotlin">
+        <resolveScopeEnlarger implementation="me.danwi.sqlex.idea.interpreter.kotlin.SqlExResolveScopeEnlarger"/>
+    </extensions>
 </idea-plugin>

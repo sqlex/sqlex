@@ -8,15 +8,16 @@ import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.SearchScope
 import me.danwi.sqlex.idea.repositroy.SqlExGeneratedCacheKey
 
-class SqlExMethodResolveScopeEnlarger : ResolveScopeEnlarger() {
+class SqlExResolveScopeEnlarger : ResolveScopeEnlarger() {
     override fun getAdditionalResolveScope(file: VirtualFile, project: Project): SearchScope? {
-        return SqlExCustomSearchScope()
+        return SqlExCustomSearchScope(project)
     }
 }
 
-class SqlExCustomSearchScope : GlobalSearchScope() {
+class SqlExCustomSearchScope(project: Project) : GlobalSearchScope(project) {
     override fun contains(file: VirtualFile): Boolean {
         return file.getUserData(SqlExGeneratedCacheKey) == true
+                || file.path.contains("me/danwi/sqlex/core")
     }
 
     override fun isSearchInModuleContent(module: Module): Boolean {

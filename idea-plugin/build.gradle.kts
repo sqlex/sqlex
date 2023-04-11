@@ -16,7 +16,7 @@ intellij {
         localPath.set(project.ext["idea.path"].toString())
     } else {
         type.set("IU")
-        version.set("2022.1")
+        version.set("2023.1")
     }
     pluginName.set("sqlex")
     plugins.set(
@@ -36,7 +36,7 @@ tasks.runIde {
 }
 
 tasks.patchPluginXml {
-    sinceBuild.set("221")
+    sinceBuild.set("231")
     untilBuild.set("231.*")
 }
 

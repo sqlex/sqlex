@@ -41,7 +41,7 @@
                          implementationClass="me.danwi.sqlex.idea.inspection.SqlExJavaConverterImplementInspection"
         />
         <!--将生成的文件提供给IDEA,共IDEA做智能提示-->
-        <resolveScopeEnlarger implementation="me.danwi.sqlex.idea.interpreter.SqlExMethodResolveScopeEnlarger"/>
+        <resolveScopeEnlarger implementation="me.danwi.sqlex.idea.interpreter.SqlExResolveScopeEnlarger"/>
         <java.shortNamesCache implementation="me.danwi.sqlex.idea.interpreter.SqlExGeneratedShortNamesCache"/>
         <java.elementFinder implementation="me.danwi.sqlex.idea.interpreter.SqlExGeneratedElementFinder"/>
     </extensions>
