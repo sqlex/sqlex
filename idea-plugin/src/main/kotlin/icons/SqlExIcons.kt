@@ -5,7 +5,15 @@ import com.intellij.openapi.util.IconLoader
 import com.intellij.ui.LayeredIcon
 import com.intellij.util.IconUtil
 
+
 object SqlExIcons {
+    //是否开启了New UI
+    private val isNewUIEnabled = try {
+        com.intellij.ui.NewUiValue.isEnabled()
+    } catch (e: Exception) {
+        false
+    }
+
     private val Icon = IconLoader.getIcon("icons/sqlex.svg", javaClass)
 
     private val IconX12 = IconUtil.resizeSquared(Icon, 12) //Editor gutter
@@ -28,7 +36,7 @@ object SqlExIcons {
     val ShowSourceAction = IconUtil.addText(IconX16, "Java")
 
     @JvmField
-    val ToolWindow = IconUtil.desaturate(IconX13)
+    val ToolWindow = if (isNewUIEnabled) Icon else IconUtil.desaturate(Icon)
 
     val RefreshAction by lazy {
         val layeredIcon = LayeredIcon(2)
