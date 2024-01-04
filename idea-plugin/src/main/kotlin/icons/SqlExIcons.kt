@@ -9,7 +9,9 @@ import com.intellij.util.IconUtil
 object SqlExIcons {
     //是否开启了New UI
     private val isNewUIEnabled = try {
-        com.intellij.ui.NewUiValue.isEnabled()
+        Class.forName("com.intellij.ui.NewUiValue")
+            .getMethod("isEnabled")
+            .invoke(null) as Boolean
     } catch (e: Exception) {
         false
     }
