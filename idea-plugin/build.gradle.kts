@@ -37,7 +37,11 @@ tasks.runIde {
 
 tasks.patchPluginXml {
     sinceBuild.set("221")
-    untilBuild.set("233.*")
+    untilBuild.set("241.*")
+}
+
+tasks.buildSearchableOptions {
+    enabled = false
 }
 
 if (ext.has("idea.token") && ext["release"] == true) {
