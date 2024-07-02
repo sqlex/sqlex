@@ -38,7 +38,7 @@ object SqlExIcons {
     val ShowSourceAction = IconUtil.addText(IconX16, "Java")
 
     @JvmField
-    val ToolWindow = if (isNewUIEnabled) Icon else IconUtil.desaturate(Icon)
+    val ToolWindow = if (isNewUIEnabled) Icon else IconUtil.desaturate(IconX13)
 
     val RefreshAction by lazy {
         val layeredIcon = LayeredIcon(2)
