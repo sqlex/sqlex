@@ -60,7 +60,7 @@ jobs:
           path: 3rdparty/mysql/libsqlex.dll
 
   native-darwin-amd64:
-    runs-on: macos-11
+    runs-on: macos-12
     steps:
       - uses: actions/checkout@v3
         with:
@@ -85,7 +85,7 @@ jobs:
           path: 3rdparty/mysql/libsqlex.dylib
 
   native-darwin-aarch64:
-    runs-on: macos-11
+    runs-on: macos-12
     steps:
       - uses: actions/checkout@v3
         with:
