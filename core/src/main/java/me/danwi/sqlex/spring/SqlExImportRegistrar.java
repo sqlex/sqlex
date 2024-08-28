@@ -52,7 +52,7 @@ public class SqlExImportRegistrar implements ImportBeanDefinitionRegistrar {
         definition.getConstructorArgumentValues().addGenericArgumentValue(clazz.getName());
         if (StringUtils.hasText(factoryName))
             definition.getPropertyValues().addPropertyValue("factory", new RuntimeBeanReference(factoryName));
-        definition.setAttribute(FactoryBean.OBJECT_TYPE_ATTRIBUTE, clazz.getName());
+        definition.setAttribute(FactoryBean.OBJECT_TYPE_ATTRIBUTE, clazz);
         definition.setAutowireMode(AbstractBeanDefinition.AUTOWIRE_BY_TYPE);
         definition.setRole(AbstractBeanDefinition.ROLE_INFRASTRUCTURE);
         definition.setAutowireCandidate(true);
