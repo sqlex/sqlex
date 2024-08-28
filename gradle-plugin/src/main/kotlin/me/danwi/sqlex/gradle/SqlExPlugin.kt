@@ -74,6 +74,9 @@ class SqlExPlugin : Plugin<Project> {
         project.tasks.findByName(sourceSet.getCompileTaskName("kotlin"))?.dependsOn(task)
         project.tasks.findByName(sourceSet.getCompileTaskName("groovy"))?.dependsOn(task)
         project.tasks.findByName(sourceSet.getCompileTaskName("scala"))?.dependsOn(task)
+
+        //让资源处理依赖于SqlEx编译任务
+        project.tasks.findByName(sourceSet.processResourcesTaskName)?.dependsOn(task)
     }
 
     //配置注解处理器
