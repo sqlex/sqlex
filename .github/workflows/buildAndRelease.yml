@@ -136,25 +136,25 @@ jobs:
           cache-disabled: true
 
       - name: Download linux amd64 shared library
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: linux-amd64-shared-library
           path: native/linux-amd64/src/main/resources/native/linux/amd64
 
       - name: Download windows amd64 shared library
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: windows-amd64-shared-library
           path: native/windows-amd64/src/main/resources/native/windows/amd64
 
       - name: Download darwin amd64 shared library
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: darwin-amd64-shared-library
           path: native/darwin-amd64/src/main/resources/native/darwin/amd64
 
       - name: Download darwin aarch64 shared library
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: darwin-aarch64-shared-library
           path: native/darwin-aarch64/src/main/resources/native/darwin/aarch64
@@ -183,25 +183,25 @@ jobs:
           cache-disabled: true
 
       - name: Download linux amd64 shared library
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: linux-amd64-shared-library
           path: native/linux-amd64/src/main/resources/native/linux/amd64
 
       - name: Download windows amd64 shared library
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: windows-amd64-shared-library
           path: native/windows-amd64/src/main/resources/native/windows/amd64
 
       - name: Download darwin amd64 shared library
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: darwin-amd64-shared-library
           path: native/darwin-amd64/src/main/resources/native/darwin/amd64
 
       - name: Download darwin aarch64 shared library
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: darwin-aarch64-shared-library
           path: native/darwin-aarch64/src/main/resources/native/darwin/aarch64
@@ -249,25 +249,25 @@ jobs:
           cache-disabled: true
 
       - name: Download linux amd64 shared library
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: linux-amd64-shared-library
           path: native/linux-amd64/src/main/resources/native/linux/amd64
 
       - name: Download windows amd64 shared library
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: windows-amd64-shared-library
           path: native/windows-amd64/src/main/resources/native/windows/amd64
 
       - name: Download darwin amd64 shared library
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: darwin-amd64-shared-library
           path: native/darwin-amd64/src/main/resources/native/darwin/amd64
 
       - name: Download darwin aarch64 shared library
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: darwin-aarch64-shared-library
           path: native/darwin-aarch64/src/main/resources/native/darwin/aarch64
@@ -302,25 +302,25 @@ jobs:
           cache-disabled: true
 
       - name: Download linux amd64 shared library
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: linux-amd64-shared-library
           path: native/linux-amd64/src/main/resources/native/linux/amd64
 
       - name: Download windows amd64 shared library
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: windows-amd64-shared-library
           path: native/windows-amd64/src/main/resources/native/windows/amd64
 
       - name: Download darwin amd64 shared library
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: darwin-amd64-shared-library
           path: native/darwin-amd64/src/main/resources/native/darwin/amd64
 
       - name: Download darwin aarch64 shared library
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
         with:
           name: darwin-aarch64-shared-library
           path: native/darwin-aarch64/src/main/resources/native/darwin/aarch64
