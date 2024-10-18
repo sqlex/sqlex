@@ -7,7 +7,6 @@ plugins {
 
 dependencies {
     implementation(project(":parser"))
-    implementation("org.jetbrains.kotlin:kotlin-stdlib")
 }
 
 gradlePlugin {
