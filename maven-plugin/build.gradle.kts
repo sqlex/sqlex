@@ -2,7 +2,7 @@ plugins {
     java
     kotlin("jvm")
     `maven-publish`
-    id("de.benediktritter.maven-plugin-development") version "0.4.0"
+    id("de.benediktritter.maven-plugin-development") version "0.4.3"
 }
 
 dependencies {
