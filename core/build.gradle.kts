@@ -23,8 +23,8 @@ val generateBuildJava = tasks.create("generateBuildJava") {
         )
     }
 }
-tasks.findByName("compileJava")?.dependsOn(generateBuildJava)
-tasks.findByName("compileKotlin")?.dependsOn(generateBuildJava)
+tasks.compileJava { dependsOn(generateBuildJava) }
+tasks.sourcesJar { dependsOn(generateBuildJava) }
 sourceSets { main { java { srcDir(generateBuildJava.extra.get("outputDir")!!) } } }
 
 dependencies {
