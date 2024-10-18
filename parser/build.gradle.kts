@@ -47,3 +47,4 @@ tasks.generateGrammarSource {
 tasks.compileKotlin { dependsOn(tasks.generateGrammarSource) }
 tasks.compileTestKotlin { dependsOn(tasks.generateTestGrammarSource) }
 tasks.sourcesJar { dependsOn(tasks.generateGrammarSource) }
+tasks.kotlinSourcesJar { dependsOn(tasks.generateGrammarSource) }

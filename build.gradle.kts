@@ -63,8 +63,8 @@ allprojects {
     //kotlin相关配置
     pluginManager.withPlugin("org.jetbrains.kotlin.jvm") {
         tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-            kotlinOptions.jvmTarget = "1.8"
-            kotlinOptions.freeCompilerArgs = listOf("-Xjvm-default=all-compatibility")
+            compilerOptions.jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8
+            compilerOptions.freeCompilerArgs = listOf("-Xjvm-default=all-compatibility")
         }
     }
 
