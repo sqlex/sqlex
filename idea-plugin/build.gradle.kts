@@ -62,7 +62,7 @@ intellijPlatform {
         }
     }
 
-    if (ext.has("idea.token") && ext["release"] == true) {
+    if (project.ext.has("idea.token") && project.ext["release"] == true) {
         publishing {
             token = ext["idea.token"].toString()
         }
