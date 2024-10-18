@@ -1,20 +1,4 @@
 <idea-plugin xmlns:xi="http://www.w3.org/2001/XInclude">
-    <id>me.danwi.sqlex</id>
-    <name>SqlEx</name>
-    <vendor email="demon@danwi.me" url="https://sqlex.github.io">SqlEx</vendor>
-
-    <description><![CDATA[
-    Adds support for the <a href="https://sqlex.github.io">sqlex</a> framework(A data access framework).
-    The following features are available:
-    <ul>
-        <li>Coding assistance(auto completion, formatting, highlighting...)</li>
-        <li>Navigation between java and sqlm, provide symbol information</li>
-        <li>Integration with Java/Kotlin/Spring</li>
-        <li>Error inspection(such as incorrect grammar)</li>
-    </ul>
-    For more information, please see <a href="https://sqlex.github.io">sqlex official site</a>.
-    ]]></description>
-
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.java</depends>
     <depends>org.jetbrains.plugins.yaml</depends>

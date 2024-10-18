@@ -6,3 +6,5 @@
 .gradle
 /build
 local.properties
+
+.intellijPlatform
