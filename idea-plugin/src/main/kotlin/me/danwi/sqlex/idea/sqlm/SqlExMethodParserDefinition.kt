@@ -26,9 +26,12 @@ import org.antlr.v4.runtime.tree.ParseTree
 open class SqlExMethodParserDefinition : ParserDefinition {
     companion object {
         init {
+            val vocabulary = SqlExMethodLanguageParser.VOCABULARY;
             PSIElementTypeFactory.defineLanguageIElementTypes(
                 SqlExMethodLanguage.INSTANCE,
-                SqlExMethodLanguageParser.tokenNames,
+                (0..vocabulary.maxTokenType).map {
+                    vocabulary.getLiteralName(it) ?: (vocabulary.getSymbolicName(it) ?: "<INVALID>")
+                }.toTypedArray(),
                 SqlExMethodLanguageParser.ruleNames
             )
         }
