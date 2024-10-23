@@ -1,8 +1,9 @@
 <idea-plugin xmlns:xi="http://www.w3.org/2001/XInclude">
     <depends>com.intellij.modules.platform</depends>
-    <depends>com.intellij.java</depends>
+    <depends>com.intellij.modules.json</depends>
     <depends>org.jetbrains.plugins.yaml</depends>
     <depends>com.intellij.database</depends>
+    <depends>com.intellij.java</depends>
 
     <!--可选依赖-->
     <depends optional="true" config-file="withKotlin.xml">org.jetbrains.kotlin</depends>

@@ -20,12 +20,13 @@ dependencies {
         if (project.ext.has("idea.path")) {
             local(project.ext["idea.path"].toString())
         } else {
-            intellijIdeaUltimate("2023.1")
+            intellijIdeaUltimate("243-EAP-SNAPSHOT", useInstaller = false)
         }
         //插件依赖
+        bundledPlugin("com.intellij.modules.json")
         bundledPlugin("org.jetbrains.plugins.yaml")
-        bundledPlugin("com.intellij.java")
         bundledPlugin("com.intellij.database")
+        bundledPlugin("com.intellij.java")
         bundledPlugin("org.jetbrains.kotlin")
         bundledPlugin("com.intellij.spring")
     }
@@ -57,7 +58,7 @@ intellijPlatform {
         For more information, please see <a href="https://sqlex.github.io">sqlex official site</a>.
         """.trimIndent()
         ideaVersion {
-            sinceBuild = "231"
+            sinceBuild = "243"
             untilBuild = "243.*"
         }
     }
