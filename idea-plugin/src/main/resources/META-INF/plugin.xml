@@ -30,4 +30,9 @@
         <java.shortNamesCache implementation="me.danwi.sqlex.idea.interpreter.SqlExGeneratedShortNamesCache"/>
         <java.elementFinder implementation="me.danwi.sqlex.idea.interpreter.SqlExGeneratedElementFinder"/>
     </extensions>
+
+    <!--兼容kotlin k2模式-->
+    <extensions defaultExtensionNs="org.jetbrains.kotlin">
+        <supportsKotlinPluginMode supportsK2="true"/>
+    </extensions>
 </idea-plugin>
