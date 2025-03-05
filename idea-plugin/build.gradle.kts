@@ -29,6 +29,8 @@ dependencies {
         bundledPlugin("com.intellij.java")
         bundledPlugin("org.jetbrains.kotlin")
         bundledPlugin("com.intellij.spring")
+        //工具依赖
+        pluginVerifier()
     }
 }
 
@@ -66,6 +68,12 @@ intellijPlatform {
     if (project.ext.has("idea.token") && project.ext["release"] == true) {
         publishing {
             token = project.ext["idea.token"].toString()
+        }
+    }
+
+    pluginVerification {
+        ides {
+            recommended()
         }
     }
 }
