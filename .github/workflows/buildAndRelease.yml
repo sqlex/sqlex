@@ -4,7 +4,7 @@ on: push
 
 jobs:
   native-linux-amd64:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
         with:
@@ -29,7 +29,7 @@ jobs:
           path: 3rdparty/mysql/libsqlex.so
 
   native-windows-amd64:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: ConorMacBride/install-package@v1
         with:
