@@ -162,6 +162,33 @@ jobs:
       - name: Execute Gradle test
         run: ./gradlew test --info
 
+  idea-plugin-verify:
+    needs:
+      - native-linux-amd64
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-java@v2
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
+        with:
+          cache-disabled: true
+
+      - name: Download linux amd64 shared library
+        uses: actions/download-artifact@v3
+        with:
+          name: linux-amd64-shared-library
+          path: native/linux-amd64/src/main/resources/native/linux/amd64
+
+      - name: Execute Plugin Verifier
+        run: ./gradlew verifyPlugin
+
   maven-publish:
     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
 
