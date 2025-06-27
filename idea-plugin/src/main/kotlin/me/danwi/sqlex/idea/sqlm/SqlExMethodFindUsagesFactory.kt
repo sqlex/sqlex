@@ -37,7 +37,7 @@ class SqlExMethodMethodFindUsageHandler(private val element: PsiElement) : FindU
     override fun findReferencesToHighlight(
         target: PsiElement,
         searchScope: SearchScope
-    ): MutableCollection<PsiReference> {
+    ): Collection<PsiReference> {
         val method = target.parentOf<MethodSubtree>() ?: return mutableListOf()
         val javaMethod = method.javaMethod ?: return mutableListOf()
         return ReferencesSearch.search(javaMethod, searchScope).findAll()
@@ -54,7 +54,7 @@ class SqlExMethodFileFindUsageHandler(private val element: PsiElement) : FindUsa
     override fun findReferencesToHighlight(
         target: PsiElement,
         searchScope: SearchScope
-    ): MutableCollection<PsiReference> {
+    ): Collection<PsiReference> {
         val psiClass =
             element.containingFile.virtualFile.getUserData(SqlExMethodPsiClassCacheKey) ?: return mutableListOf()
         return ReferencesSearch.search(psiClass, searchScope).findAll()

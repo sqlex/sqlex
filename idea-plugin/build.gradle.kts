@@ -1,7 +1,7 @@
 plugins {
     java
     kotlin("jvm")
-    id("org.jetbrains.intellij.platform") version "2.3.0"
+    id("org.jetbrains.intellij.platform") version "2.6.0"
 }
 
 repositories {
@@ -20,7 +20,7 @@ dependencies {
         if (project.ext.has("idea.path")) {
             local(project.ext["idea.path"].toString())
         } else {
-            intellijIdeaUltimate("251-EAP-SNAPSHOT", useInstaller = false)
+            intellijIdeaUltimate("252-EAP-SNAPSHOT", useInstaller = false)
         }
         //插件依赖
         bundledPlugin("com.intellij.modules.json")
@@ -60,8 +60,8 @@ intellijPlatform {
         For more information, please see <a href="https://sqlex.github.io">sqlex official site</a>.
         """.trimIndent()
         ideaVersion {
-            sinceBuild = "232"
-            untilBuild = "251.*"
+            sinceBuild = "233"
+            untilBuild = "252.*"
         }
     }
 

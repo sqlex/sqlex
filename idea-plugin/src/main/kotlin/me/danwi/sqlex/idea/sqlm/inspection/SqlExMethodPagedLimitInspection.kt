@@ -25,7 +25,7 @@ class SqlExMethodPagedLimitInspection : LocalInspectionTool() {
                 element.containingSqlExMethod?.childrenOf<PagedSubtree>()?.firstOrNull() ?: return
 
                 //判断是否有offset
-                val hasOffset = element.children.any { it.text.toLowerCase() == "offset" }
+                val hasOffset = element.children.any { it.text.lowercase() == "offset" }
                 //判断是否有,
                 val hasComma = element.children.any { it.text == "," }
                 //获取数字常量
