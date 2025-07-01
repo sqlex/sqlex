@@ -16,7 +16,7 @@ if (System.getenv("RELEASE") != null) {
 val globalLocalFile = project.file("local.properties")
 if (globalLocalFile.isFile)
     globalProperties.load(globalLocalFile.inputStream())
-globalProperties.forEach { key, value ->
+globalProperties.forEach { (key, value) ->
     ext.set(key as String, value)
 }
 
@@ -32,7 +32,7 @@ allprojects {
     }
 
     group = "me.danwi.sqlex"
-    version = "0.19.252"
+    version = "0.20.0"
 
     //开发环境,版本统一添加SNAPSHOT
     if (ext["development"] == true)
@@ -64,7 +64,7 @@ allprojects {
     pluginManager.withPlugin("org.jetbrains.kotlin.jvm") {
         tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
             compilerOptions.jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8
-            compilerOptions.freeCompilerArgs = listOf("-Xjvm-default=all-compatibility")
+            compilerOptions.jvmDefault = org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode.NO_COMPATIBILITY
         }
     }
 

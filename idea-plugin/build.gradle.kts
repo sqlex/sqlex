@@ -60,7 +60,7 @@ intellijPlatform {
         For more information, please see <a href="https://sqlex.github.io">sqlex official site</a>.
         """.trimIndent()
         ideaVersion {
-            sinceBuild = "233"
+            sinceBuild = "232"
             untilBuild = "252.*"
         }
     }
