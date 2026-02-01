@@ -1,0 +1,30 @@
+# SQLite Scalar Functions Tests
+
+[schema]
+dialect = "sqlite"
+migration = """
+CREATE TABLE scalar_test (
+    id INTEGER PRIMARY KEY,
+    txt TEXT,
+    num REAL,
+    dt TEXT
+);
+
+INSERT INTO scalar_test (txt, num, dt) VALUES 
+('Hello World', -123.45, '2023-06-01 12:00:00');
+"""
+
+[[tests]]
+name = "string_functions"
+query = "SELECT LOWER(txt) as lo, SUBSTR(txt, 1, 5) as sub, LENGTH(txt) as len FROM scalar_test"
+description = "String manipulation functions (SQLite uses SUBSTR instead of SUBSTRING)"
+
+[[tests]]
+name = "math_functions"
+query = "SELECT ABS(num) as absolute FROM scalar_test"
+description = "Mathematical functions (SQLite includes basic math)"
+
+[[tests]]
+name = "datetime_functions"
+query = "SELECT date(dt) as day_start FROM scalar_test"
+description = "Date and time functions"

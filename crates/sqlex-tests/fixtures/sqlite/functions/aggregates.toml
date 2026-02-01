@@ -1,0 +1,37 @@
+# SQLite Aggregate Functions Tests
+
+[schema]
+dialect = "sqlite"
+migration = """
+CREATE TABLE sales (
+    id INTEGER PRIMARY KEY,
+    region TEXT,
+    product TEXT,
+    amount REAL,
+    sale_date TEXT
+);
+
+INSERT INTO sales (region, product, amount, sale_date) VALUES 
+('North', 'Widget', 100.00, '2023-01-01'),
+('North', 'Gadget', 200.00, '2023-01-02'),
+('South', 'Widget', 150.00, '2023-01-01'),
+('South', 'Gadget', 50.00, '2023-01-03'),
+('East', 'Widget', 120.00, '2023-01-02');
+"""
+
+[[tests]]
+name = "basic_aggregates"
+query = "SELECT COUNT(*) as cnt, SUM(amount) as total, AVG(amount) as average FROM sales"
+description = "Basic aggregate functions"
+
+[[tests]]
+name = "group_by"
+query = "SELECT region, SUM(amount) as region_total FROM sales GROUP BY region"
+description = "Group by clause"
+
+[[tests]]
+name = "having_clause"
+query = "SELECT product, AVG(amount) as avg_sales FROM sales GROUP BY product HAVING AVG(amount) > 100"
+description = "Having clause"
+
+# SQLite does not support standard ORDERED SET aggregates syntax like PERCENTILE_CONT

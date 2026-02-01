@@ -1,0 +1,32 @@
+# SQLite Date/Time Types Tests
+
+[schema]
+dialect = "sqlite"
+migration = """
+CREATE TABLE datetime_types (
+    id INTEGER PRIMARY KEY,
+    ts_without DATETIME,
+    just_date DATE
+);
+
+INSERT INTO datetime_types (
+    ts_without, just_date
+) VALUES (
+    '2023-01-01 10:00:00', '2023-01-01'
+);
+"""
+
+[[tests]]
+name = "select_timestamps"
+query = "SELECT ts_without FROM datetime_types"
+description = "Select timestamp types"
+
+[[tests]]
+name = "select_dates"
+query = "SELECT just_date FROM datetime_types"
+description = "Select date types"
+
+[[tests]]
+name = "date_function"
+query = "SELECT datetime(ts_without, '+1 day') as tomorrow FROM datetime_types"
+description = "Date function"

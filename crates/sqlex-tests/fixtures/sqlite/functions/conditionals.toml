@@ -1,0 +1,46 @@
+# SQLite Conditional Expressions Tests
+
+[schema]
+dialect = "sqlite"
+migration = """
+CREATE TABLE conditions (
+    id INTEGER PRIMARY KEY,
+    val1 INTEGER,
+    val2 INTEGER,
+    status TEXT
+);
+
+INSERT INTO conditions (val1, val2, status) VALUES 
+(10, 20, 'active'),
+(NULL, 5, 'inactive'),
+(30, 30, 'pending');
+"""
+
+[[tests]]
+name = "case_expression"
+query = """
+SELECT id, 
+    CASE 
+        WHEN val1 > val2 THEN 'greater'
+        WHEN val1 < val2 THEN 'smaller'
+        ELSE 'equal_or_null' 
+    END as comparison
+FROM conditions
+"""
+description = "Simple CASE expression"
+
+[[tests]]
+name = "coalesce"
+query = "SELECT id, COALESCE(val1, val2, 0) as existing_val FROM conditions"
+description = "COALESCE function"
+
+[[tests]]
+name = "nullif"
+query = "SELECT id, NULLIF(val1, val2) as null_if_equal FROM conditions"
+description = "NULLIF function"
+
+# SQLite supports MAX/MIN which act like GREATEST/LEAST for multiple arguments
+[[tests]]
+name = "greatest_least"
+query = "SELECT id, MAX(val1, val2) as max_val, MIN(val1, val2) as min_val FROM conditions"
+description = "GREATEST and LEAST equivalents"

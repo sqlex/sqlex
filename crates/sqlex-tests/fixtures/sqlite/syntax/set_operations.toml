@@ -1,0 +1,38 @@
+# SQLite Set Operations Tests
+
+[schema]
+dialect = "sqlite"
+migration = """
+CREATE TABLE set_a (
+    id INTEGER,
+    val TEXT
+);
+
+CREATE TABLE set_b (
+    id INTEGER,
+    val TEXT
+);
+
+INSERT INTO set_a VALUES (1, 'a'), (2, 'b'), (3, 'c');
+INSERT INTO set_b VALUES (2, 'b'), (3, 'c'), (4, 'd');
+"""
+
+[[tests]]
+name = "union"
+query = "SELECT id, val FROM set_a UNION SELECT id, val FROM set_b"
+description = "Union (distinct)"
+
+[[tests]]
+name = "union_all"
+query = "SELECT id, val FROM set_a UNION ALL SELECT id, val FROM set_b"
+description = "Union All"
+
+[[tests]]
+name = "intersect"
+query = "SELECT id, val FROM set_a INTERSECT SELECT id, val FROM set_b"
+description = "Intersect"
+
+[[tests]]
+name = "except"
+query = "SELECT id, val FROM set_a EXCEPT SELECT id, val FROM set_b"
+description = "Except (Difference)"

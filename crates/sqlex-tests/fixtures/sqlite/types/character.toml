@@ -1,0 +1,35 @@
+# SQLite Character Types Tests
+
+[schema]
+dialect = "sqlite"
+migration = """
+CREATE TABLE char_types (
+    id INTEGER PRIMARY KEY,
+    varchar_col TEXT,
+    char_col TEXT,
+    text_col TEXT
+);
+
+INSERT INTO char_types (
+    varchar_col, char_col, text_col
+) VALUES (
+    'variable length string', 
+    'fixed len ', 
+    'unlimited length text data'
+);
+"""
+
+[[tests]]
+name = "select_chars"
+query = "SELECT varchar_col, char_col, text_col FROM char_types"
+description = "Select standard character types"
+
+[[tests]]
+name = "string_concatenation"
+query = "SELECT varchar_col || ' ' || text_col as concatenated FROM char_types"
+description = "String concatenation operator"
+
+[[tests]]
+name = "string_functions_inference"
+query = "SELECT LENGTH(varchar_col) as len, UPPER(text_col) as upper_text FROM char_types"
+description = "Function return type inference for strings"

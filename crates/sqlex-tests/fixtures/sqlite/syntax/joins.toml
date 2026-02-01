@@ -1,0 +1,44 @@
+# SQLite Join Tests
+
+[schema]
+dialect = "sqlite"
+migration = """
+CREATE TABLE authors (
+    id INTEGER PRIMARY KEY,
+    name TEXT,
+    country_id INTEGER
+);
+
+CREATE TABLE books (
+    id INTEGER PRIMARY KEY,
+    author_id INTEGER,
+    title TEXT,
+    published_year INTEGER
+);
+
+CREATE TABLE countries (
+    id INTEGER PRIMARY KEY,
+    name TEXT
+);
+
+INSERT INTO authors (id, name, country_id) VALUES (1, 'Author A', 1), (2, 'Author B', NULL);
+INSERT INTO books (author_id, title) VALUES (1, 'Book 1'), (1, 'Book 2'), (NULL, 'Unknown Book');
+INSERT INTO countries (id, name) VALUES (1, 'Country X');
+"""
+
+[[tests]]
+name = "inner_join"
+query = "SELECT a.name as author, b.title FROM authors a INNER JOIN books b ON a.id = b.author_id"
+description = "Inner join"
+
+[[tests]]
+name = "left_join"
+query = "SELECT a.name, b.title FROM authors a LEFT JOIN books b ON a.id = b.author_id"
+description = "Left join (books may be null)"
+
+# SQLite does not support RIGHT JOIN or FULL OUTER JOIN properly (some versions differ, but generally no)
+
+[[tests]]
+name = "cross_join"
+query = "SELECT a.name, c.name as country FROM authors a CROSS JOIN countries c"
+description = "Cross join"

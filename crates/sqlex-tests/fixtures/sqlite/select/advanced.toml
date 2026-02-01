@@ -1,0 +1,81 @@
+# SQLite Advanced Select Tests
+
+[schema]
+dialect = "sqlite"
+migration = """
+CREATE TABLE departments (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL
+);
+
+CREATE TABLE employees (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    dept_id INTEGER,
+    salary REAL,
+    FOREIGN KEY(dept_id) REFERENCES departments(id)
+);
+
+INSERT INTO departments (name) VALUES ('Engineering'), ('Sales'), ('Marketing');
+INSERT INTO employees (name, dept_id, salary) VALUES 
+('Alice', 1, 100000), 
+('Bob', 1, 90000), 
+('Charlie', 2, 80000), 
+('David', NULL, 70000);
+"""
+
+[[tests]]
+name = "alias_columns"
+query = "SELECT name AS employee_name, salary AS emp_salary FROM employees"
+description = "Column aliases"
+
+[[tests]]
+name = "left_join"
+query = """
+SELECT e.name, d.name as dept_name 
+FROM employees e 
+LEFT JOIN departments d ON e.dept_id = d.id
+"""
+description = "Left join nullability"
+
+[[tests]]
+name = "aggregates"
+query = "SELECT count(*) as count, sum(salary) as total_salary FROM employees"
+description = "Aggregates"
+
+[[tests]]
+name = "group_by"
+query = "SELECT dept_id, avg(salary) as avg_sal FROM employees GROUP BY dept_id"
+description = "Group by"
+
+[[tests]]
+name = "order_by"
+query = "SELECT name FROM employees ORDER BY salary DESC"
+description = "Order by"
+
+[[tests]]
+name = "limit_offset"
+query = "SELECT name FROM employees LIMIT 2 OFFSET 1"
+description = "Limit and Offset"
+
+[[tests]]
+name = "cte"
+query = """
+WITH high_paid AS (
+    SELECT * FROM employees WHERE salary > 85000
+)
+SELECT name FROM high_paid
+"""
+description = "Common Table Expressions"
+
+[[tests]]
+name = "recursive_cte"
+query = """
+WITH RECURSIVE cnt(x) AS (
+    SELECT 1
+    UNION ALL
+    SELECT x+1 FROM cnt WHERE x<5
+)
+SELECT x FROM cnt
+"""
+description = "Recursive CTE"

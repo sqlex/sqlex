@@ -1,0 +1,38 @@
+# SQLite Numeric Types Tests
+
+[schema]
+dialect = "sqlite"
+migration = """
+CREATE TABLE numeric_types (
+    id INTEGER PRIMARY KEY,
+    int_num INTEGER,
+    real_num REAL,
+    numeric_num NUMERIC
+);
+
+INSERT INTO numeric_types (
+    int_num, real_num, numeric_num
+) VALUES (
+    2147483647, 123.456, 12345.67
+);
+"""
+
+[[tests]]
+name = "select_integers"
+query = "SELECT int_num FROM numeric_types"
+description = "Select integer types"
+
+[[tests]]
+name = "select_floats"
+query = "SELECT real_num FROM numeric_types"
+description = "Select floating point types"
+
+[[tests]]
+name = "select_numerics"
+query = "SELECT numeric_num FROM numeric_types"
+description = "Select numeric types"
+
+[[tests]]
+name = "arithmetic_operations"
+query = "SELECT int_num + 10 as plus_ten, real_num * 2 as multiplied FROM numeric_types"
+description = "Basic arithmetic operations"
