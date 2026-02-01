@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, rust ]
+  pull_request:
+    branches: [ master, rust ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+
+      - name: Check Docker availability
+        run: |
+          docker --version
+          docker ps
+
+      - name: Check
+        run: cargo check
+
+      - name: Run unit tests
+        run: cargo test --workspace --exclude sqlex-tests
+
+      - name: Run E2E tests
+        run: cargo run -p sqlex-tests
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
