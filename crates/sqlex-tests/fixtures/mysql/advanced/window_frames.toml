@@ -1,0 +1,47 @@
+# MySQL Window Function Tests
+
+[schema]
+dialect = "mysql"
+migration = """
+CREATE TABLE sales (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    region VARCHAR(50),
+    amount DECIMAL(10, 2),
+    sale_date DATE
+);
+"""
+
+[[tests]]
+name = "row_number_rank"
+query = """
+SELECT 
+    region,
+    ROW_NUMBER() OVER (PARTITION BY region ORDER BY amount DESC) as rn,
+    RANK() OVER (PARTITION BY region ORDER BY amount DESC) as rk,
+    DENSE_RANK() OVER (PARTITION BY region ORDER BY amount DESC) as dr
+FROM sales
+"""
+description = "Basic ranking window functions"
+
+[[tests]]
+name = "lag_lead"
+query = """
+SELECT 
+    region,
+    amount,
+    LAG(amount, 1) OVER (PARTITION BY region ORDER BY sale_date) as prev_amt,
+    LEAD(amount, 1) OVER (PARTITION BY region ORDER BY sale_date) as next_amt
+FROM sales
+"""
+description = "Lag and Lead functions"
+
+[[tests]]
+name = "window_invalid_column"
+query = """
+SELECT 
+    region,
+    ROW_NUMBER() OVER (PARTITION BY region, non_existent ORDER BY amount) as rn
+FROM sales
+"""
+description = "Window function with invalid column in PARTITION BY"
+expect_error = true

@@ -148,28 +148,7 @@ impl<'a> QueryAnalyzer<'a> {
             SetExpr::SetOperation { left, .. } => {
                 self.analyze_set_expr(left, Some(&local_ctes), parent_scope)
             },
-            SetExpr::Values(values) => {
-                if values.rows.is_empty() {
-                    return Ok(AnalyzeResult { columns: vec![] });
-                }
-
-                let first_row = &values.rows[0];
-                let mut columns = Vec::new();
-                // Create scope for expression analysis
-                let scope = if let Some(p) = parent_scope {
-                    Scope::new_child(p)
-                } else {
-                    Scope::new()
-                };
-
-                for (i, expr) in first_row.iter().enumerate() {
-                    let (data_type, nullable) = TypeInference::infer(&scope, expr)?;
-                    // Postgres default names: column1, column2, ...
-                    let name = format!("column{}", i + 1);
-                    columns.push(ResultColumn::new(name, data_type, nullable));
-                }
-                Ok(AnalyzeResult { columns })
-            },
+            SetExpr::Values(values) => self.analyze_values(values, parent_scope),
             _ => Err(AnalyzeError::Unsupported("SetExpr type".to_string())),
         }
     }
@@ -184,28 +163,7 @@ impl<'a> QueryAnalyzer<'a> {
             SetExpr::Select(select) => self.analyze_select(select, ctes, parent_scope),
             SetExpr::Query(query) => self.analyze_query_context(query, ctes, parent_scope),
             SetExpr::SetOperation { left, .. } => self.analyze_set_expr(left, ctes, parent_scope),
-            SetExpr::Values(values) => {
-                if values.rows.is_empty() {
-                    return Ok(AnalyzeResult { columns: vec![] });
-                }
-
-                let first_row = &values.rows[0];
-                let mut columns = Vec::new();
-                // Create scope for expression analysis
-                let scope = if let Some(p) = parent_scope {
-                    Scope::new_child(p)
-                } else {
-                    Scope::new()
-                };
-
-                for (i, expr) in first_row.iter().enumerate() {
-                    let (data_type, nullable) = TypeInference::infer(&scope, expr)?;
-                    // Postgres default names: column1, column2, ...
-                    let name = format!("column{}", i + 1);
-                    columns.push(ResultColumn::new(name, data_type, nullable));
-                }
-                Ok(AnalyzeResult { columns })
-            },
+            SetExpr::Values(values) => self.analyze_values(values, parent_scope),
             _ => Ok(AnalyzeResult { columns: vec![] }),
         }
     }
@@ -573,6 +531,55 @@ impl<'a> QueryAnalyzer<'a> {
         }
 
         Ok(result)
+    }
+
+    fn analyze_values(
+        &self,
+        values: &sqlparser::ast::Values,
+        parent_scope: Option<&Scope>,
+    ) -> Result<AnalyzeResult, AnalyzeError> {
+        if values.rows.is_empty() {
+            return Ok(AnalyzeResult { columns: vec![] });
+        }
+
+        let first_row = &values.rows[0];
+        let mut columns = Vec::new();
+        // Create scope for expression analysis
+        let scope = if let Some(p) = parent_scope {
+            Scope::new_child(p)
+        } else {
+            Scope::new()
+        };
+
+        for (i, expr) in first_row.iter().enumerate() {
+            let (data_type, nullable) = TypeInference::infer(&scope, expr)?;
+            let name = if self.dialect == Dialect::MySQL {
+                format!("column_{}", i)
+            } else {
+                format!("column{}", i + 1)
+            };
+            columns.push(ResultColumn::new(name, data_type, nullable));
+        }
+
+        // Validate subsequent rows
+        for (row_idx, row) in values.rows.iter().enumerate().skip(1) {
+            if row.len() != first_row.len() {
+                return Err(AnalyzeError::InvalidQuery(
+                    "VALUES rows have different number of columns".to_string(),
+                ));
+            }
+            for (col_idx, expr) in row.iter().enumerate() {
+                let (t, _) = TypeInference::infer(&scope, expr)?;
+                if !t.is_compatible(&columns[col_idx].data_type) {
+                    return Err(AnalyzeError::TypeMismatch(format!(
+                        "Row {} Column {} has type {:?}, but expected {:?}",
+                        row_idx, col_idx, t, columns[col_idx].data_type
+                    )));
+                }
+            }
+        }
+
+        Ok(AnalyzeResult { columns })
     }
 }
 

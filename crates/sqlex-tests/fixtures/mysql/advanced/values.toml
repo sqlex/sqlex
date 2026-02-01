@@ -1,0 +1,30 @@
+# MySQL VALUES Clause Tests
+
+[schema]
+dialect = "mysql"
+migration = "CREATE TABLE dummy_val (id int);"
+
+[[tests]]
+name = "values_basic"
+query = """
+VALUES ROW(1, 'one'), ROW(2, 'two')
+"""
+description = "Basic VALUES clause"
+
+[[tests]]
+name = "values_in_cte"
+query = """
+WITH t(id, name) AS (
+    VALUES ROW(1, 'one'), ROW(2, 'two')
+)
+SELECT * FROM t
+"""
+description = "VALUES used in CTE"
+
+[[tests]]
+name = "values_type_mismatch"
+query = """
+VALUES ROW(1, 'one'), ROW('two', 2)
+"""
+description = "VALUES with type mismatch"
+expect_error = true

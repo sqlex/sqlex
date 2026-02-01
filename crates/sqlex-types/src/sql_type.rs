@@ -128,6 +128,23 @@ impl SqlType {
             _ => Unknown,
         }
     }
+
+    /// Returns true if two types are compatible (can be used together in UNION/VALUES).
+    pub fn is_compatible(&self, other: &SqlType) -> bool {
+        if self == other {
+            return true;
+        }
+        if self.is_numeric() && other.is_numeric() {
+            return true;
+        }
+        if self.is_string() && other.is_string() {
+            return true;
+        }
+        if matches!(self, SqlType::Unknown) || matches!(other, SqlType::Unknown) {
+            return true;
+        }
+        false
+    }
 }
 
 impl std::fmt::Display for SqlType {

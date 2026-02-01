@@ -25,6 +25,14 @@ pub enum AnalyzeError {
     #[error("Ambiguous column reference: {0}")]
     AmbiguousColumn(String),
 
+    /// Type mismatch
+    #[error("Type mismatch: {0}")]
+    TypeMismatch(String),
+
+    /// Invalid query structure
+    #[error("Invalid query: {0}")]
+    InvalidQuery(String),
+
     /// Unsupported feature
     #[error("Unsupported: {0}")]
     Unsupported(String),

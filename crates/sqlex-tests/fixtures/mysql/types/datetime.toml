@@ -1,0 +1,39 @@
+# MySQL Date/Time Types Tests
+
+[schema]
+dialect = "mysql"
+migration = """
+CREATE TABLE datetime_types (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ts_without DATETIME,
+    ts_with TIMESTAMP,
+    just_date DATE,
+    just_time TIME
+);
+
+INSERT INTO datetime_types (
+    ts_without, ts_with, just_date, just_time
+) VALUES (
+    '2023-01-01 10:00:00', '2023-01-01 10:00:00', '2023-01-01', '10:00:00'
+);
+"""
+
+[[tests]]
+name = "select_timestamps"
+query = "SELECT ts_without, ts_with FROM datetime_types"
+description = "Select timestamp types"
+
+[[tests]]
+name = "select_dates_times"
+query = "SELECT just_date, just_time FROM datetime_types"
+description = "Select date and time types"
+
+[[tests]]
+name = "date_arithmetic"
+query = "SELECT just_date + INTERVAL 1 DAY as tomorrow, ts_without - INTERVAL 1 HOUR as past FROM datetime_types"
+description = "Date and interval arithmetic"
+
+[[tests]]
+name = "function_inference"
+query = "SELECT EXTRACT(YEAR FROM just_date) as year_part, DATE(ts_with) as just_date_from_ts FROM datetime_types"
+description = "Date function return type inference"

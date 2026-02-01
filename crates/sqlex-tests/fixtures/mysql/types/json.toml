@@ -1,0 +1,33 @@
+# MySQL JSON Types Tests
+
+[schema]
+dialect = "mysql"
+migration = """
+CREATE TABLE json_types (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    data_json JSON
+);
+
+INSERT INTO json_types (data_json) 
+VALUES ('{"key": "value", "list": [1, 2, 3]}');
+"""
+
+[[tests]]
+name = "select_json"
+query = "SELECT data_json FROM json_types"
+description = "Select JSON types"
+
+[[tests]]
+name = "json_extraction_text"
+query = "SELECT data_json->>'$.key' as txt_val FROM json_types"
+description = "Extract JSON field as text"
+
+[[tests]]
+name = "json_extraction_obj"
+query = "SELECT data_json->'$.list' as list_obj FROM json_types"
+description = "Extract JSON field as object"
+
+[[tests]]
+name = "json_functions"
+query = "SELECT JSON_EXTRACT(data_json, '$.key') as extracted FROM json_types"
+description = "MySQL JSON_EXTRACT function"

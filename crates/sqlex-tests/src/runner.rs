@@ -166,8 +166,12 @@ impl TestRunner {
             },
             (Ok(_), Err(sqlex_err)) => TestCaseResult {
                 name: test_case.name.clone(),
-                passed: false,
-                error: Some(format!("Sqlex analysis error: {:?}", sqlex_err)),
+                passed: test_case.expect_error,
+                error: if test_case.expect_error {
+                    None
+                } else {
+                    Some(format!("Sqlex analysis error: {:?}", sqlex_err))
+                },
                 db_metadata: None,
                 sqlex_metadata: None,
             },

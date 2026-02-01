@@ -1,0 +1,30 @@
+# MySQL Complex Query Tests
+
+[schema]
+dialect = "mysql"
+migration = "CREATE TABLE dummy_complex (id int);"
+
+[[tests]]
+name = "complex_nested_queries"
+query = """
+WITH RECURSIVE recursive_cte(id) AS (
+    SELECT 1
+    UNION ALL
+    SELECT id + 1 FROM recursive_cte WHERE id < 3
+)
+SELECT 
+    r.id,
+    v.val,
+    p.lead_val
+FROM recursive_cte r
+JOIN (VALUES ROW(1, 'a'), ROW(2, 'b'), ROW(3, 'c')) AS v(id, val) ON r.id = v.id
+CROSS JOIN LATERAL (
+    SELECT 
+           LEAD(name) OVER (ORDER BY name) as lead_val
+    FROM (VALUES ROW('x'), ROW('y'), ROW('z')) AS sub(name)
+    WHERE sub.name > v.val
+    ORDER BY name
+    LIMIT 1
+) AS p
+"""
+description = "Complex query with Recursive CTE, VALUES, LATERAL JOIN, Correlated Subquery and Window Functions"

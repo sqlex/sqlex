@@ -1,0 +1,33 @@
+# MySQL Aggregate Functions Tests
+
+[schema]
+dialect = "mysql"
+migration = """
+CREATE TABLE sales (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    region VARCHAR(50),
+    product VARCHAR(50),
+    amount DECIMAL(10, 2),
+    sale_date DATE
+);
+"""
+
+[[tests]]
+name = "basic_aggregates"
+query = "SELECT COUNT(*) as cnt, SUM(amount) as total, AVG(amount) as average FROM sales"
+description = "Basic aggregate functions"
+
+[[tests]]
+name = "group_by"
+query = "SELECT region, SUM(amount) as region_total FROM sales GROUP BY region"
+description = "Group by clause"
+
+[[tests]]
+name = "having_clause"
+query = "SELECT product, AVG(amount) as avg_sales FROM sales GROUP BY product HAVING AVG(amount) > 100"
+description = "Having clause"
+
+[[tests]]
+name = "group_concat"
+query = "SELECT region, GROUP_CONCAT(product) as products FROM sales GROUP BY region"
+description = "MySQL specific GROUP_CONCAT function"
