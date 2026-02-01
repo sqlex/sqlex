@@ -1,0 +1,60 @@
+# PostgreSQL Basic SELECT Tests
+# Tests for basic SELECT statement analysis
+
+[schema]
+dialect = "postgresql"
+migration = """
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email TEXT,
+    age INT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE posts (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id),
+    title VARCHAR(255) NOT NULL,
+    content TEXT,
+    published BOOLEAN DEFAULT false
+);
+"""
+
+[[tests]]
+name = "select_all_from_users"
+query = "SELECT * FROM users"
+description = "Select all columns from users table"
+
+[[tests]]
+name = "select_specific_columns"
+query = "SELECT id, name, email FROM users"
+description = "Select specific columns"
+
+[[tests]]
+name = "select_with_alias"
+query = "SELECT id, name AS user_name FROM users"
+description = "Select with column alias"
+
+[[tests]]
+name = "select_with_where"
+query = "SELECT id, name FROM users WHERE id = $1"
+description = "Select with parameter in WHERE clause"
+
+[[tests]]
+name = "select_with_join"
+query = """
+SELECT u.name, p.title 
+FROM users u 
+JOIN posts p ON u.id = p.user_id
+"""
+description = "Simple inner join"
+
+[[tests]]
+name = "select_with_left_join"
+query = """
+SELECT u.name, p.title 
+FROM users u 
+LEFT JOIN posts p ON u.id = p.user_id
+"""
+description = "Left join - post columns should be nullable"

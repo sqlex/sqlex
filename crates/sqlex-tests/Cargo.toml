@@ -1,0 +1,41 @@
+[package]
+name = "sqlex-tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "E2E tests for sqlex SQL analyzer"
+
+[dependencies]
+# Internal crates
+sqlex-types = { workspace = true }
+sqlex-parser = { workspace = true }
+sqlex-schema = { workspace = true }
+sqlex-migration = { workspace = true }
+sqlex-analyzer = { workspace = true }
+
+# Configuration parsing
+toml = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+
+# Database connections
+sqlx = { version = "0.8", features = [
+    "runtime-tokio",
+    "postgres",
+    "mysql",
+    "sqlite",
+] }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Test containers
+testcontainers = "0.23"
+testcontainers-modules = { version = "0.11", features = ["postgres", "mysql"] }
+clap = { version = "4.4", features = ["derive", "env"] }
+colored = "2.0"
+walkdir = "2.3"
+

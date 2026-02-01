@@ -1,0 +1,24 @@
+# MySQL Basic SELECT Tests
+
+[schema]
+dialect = "mysql"
+migration = """
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email TEXT,
+    age INT
+);
+"""
+
+[[tests]]
+name = "select_all_from_users"
+query = "SELECT * FROM users"
+
+[[tests]]
+name = "select_specific_columns"
+query = "SELECT id, name, email FROM users"
+
+[[tests]]
+name = "select_with_where"
+query = "SELECT id, name FROM users WHERE id = ?"

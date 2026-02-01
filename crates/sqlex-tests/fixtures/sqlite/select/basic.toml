@@ -1,0 +1,39 @@
+# SQLite Basic SELECT Tests
+
+[schema]
+dialect = "sqlite"
+migration = """
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT,
+    age INTEGER
+);
+
+CREATE TABLE posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id),
+    title TEXT NOT NULL,
+    content TEXT
+);
+"""
+
+[[tests]]
+name = "select_all_from_users"
+query = "SELECT * FROM users"
+
+[[tests]]
+name = "select_specific_columns"
+query = "SELECT id, name, email FROM users"
+
+[[tests]]
+name = "select_with_where"
+query = "SELECT id, name FROM users WHERE id = ?"
+
+[[tests]]
+name = "select_with_join"
+query = """
+SELECT u.name, p.title 
+FROM users u 
+JOIN posts p ON u.id = p.user_id
+"""
