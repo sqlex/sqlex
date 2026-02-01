@@ -1,0 +1,11 @@
+[package]
+name = "sqlex-parser"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SQL parsing wrapper for sqlex"
+
+[dependencies]
+sqlex-types = { workspace = true }
+sqlparser = { workspace = true }
+thiserror = { workspace = true }

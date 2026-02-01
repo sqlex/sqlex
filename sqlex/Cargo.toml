@@ -1,0 +1,16 @@
+[package]
+name = "sqlex"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Database schema analyzer - infer schema from migrations and analyze SQL queries"
+
+[dependencies]
+sqlex-types = { workspace = true }
+sqlex-parser = { workspace = true }
+sqlex-schema = { workspace = true }
+sqlex-migration = { workspace = true }
+sqlex-analyzer = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.15"

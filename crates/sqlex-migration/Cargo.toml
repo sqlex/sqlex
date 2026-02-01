@@ -1,0 +1,15 @@
+[package]
+name = "sqlex-migration"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Migration file loader and executor for sqlex"
+
+[dependencies]
+sqlex-types = { workspace = true }
+sqlex-schema = { workspace = true }
+regex = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

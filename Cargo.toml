@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/sqlex-types",
+    "crates/sqlex-parser",
+    "crates/sqlex-schema",
+    "crates/sqlex-migration",
+    "crates/sqlex-analyzer",
+    "sqlex",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+# Internal crates
+sqlex-types = { path = "crates/sqlex-types" }
+sqlex-parser = { path = "crates/sqlex-parser" }
+sqlex-schema = { path = "crates/sqlex-schema" }
+sqlex-migration = { path = "crates/sqlex-migration" }
+sqlex-analyzer = { path = "crates/sqlex-analyzer" }
+
+# External dependencies
+sqlparser = "0.55"
+thiserror = "2.0"
+regex = "1.11"
