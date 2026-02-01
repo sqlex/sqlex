@@ -5,14 +5,14 @@ use std::collections::HashMap;
 use sqlex_parser::{
     Expr, Query, Select, SelectItem, SetExpr, Statement, TableWithJoins, parse_one, sqlparser,
 };
-use sqlex_schema::SchemaRegistry;
+use sqlex_schema::Catalog;
 use sqlex_types::{ColumnDef, Dialect, ResultColumn, SqlType};
 use sqlparser::ast::{JoinOperator, TableFactor};
 
 use crate::{
     error::AnalyzeError,
     scope::{Scope, ScopeTable},
-    type_inference::TypeInference,
+    type_inference::{DefaultTypeResolver, TypeResolver},
 };
 
 /// Result of query analysis.
@@ -23,15 +23,23 @@ pub struct AnalyzeResult {
 }
 
 /// Query analyzer.
-pub struct QueryAnalyzer<'a> {
-    registry: &'a SchemaRegistry,
+/// Query analyzer.
+pub struct QueryAnalyzer<'a, C: Catalog> {
+    catalog: &'a C,
     dialect: Dialect,
+    type_resolver: Box<dyn TypeResolver>,
 }
 
-impl<'a> QueryAnalyzer<'a> {
+impl<'a, C: Catalog> QueryAnalyzer<'a, C> {
     /// Create a new query analyzer.
-    pub fn new(registry: &'a SchemaRegistry, dialect: Dialect) -> Self {
-        Self { registry, dialect }
+    pub fn new(catalog: &'a C, dialect: Dialect) -> Self {
+        // TODO: In the future we can have different resolvers per dialect
+        let type_resolver: Box<dyn TypeResolver> = Box::new(DefaultTypeResolver);
+        Self {
+            catalog,
+            dialect,
+            type_resolver,
+        }
     }
 
     /// Analyze a SQL query string.
@@ -46,20 +54,21 @@ impl<'a> QueryAnalyzer<'a> {
 
     /// Analyze a Query AST.
     pub fn analyze_query(&self, query: &Query) -> Result<AnalyzeResult, AnalyzeError> {
-        self.analyze_query_context(query, None, None)
+        self.analyze_query_context(query, &[], None)
     }
 
     fn analyze_query_context(
         &self,
         query: &Query,
-        outer_ctes: Option<&HashMap<String, ScopeTable>>,
+        outer_ctes: &[&HashMap<String, ScopeTable>],
         parent_scope: Option<&Scope>,
     ) -> Result<AnalyzeResult, AnalyzeError> {
-        // Collect CTEs
+        // Local CTEs for this query level
         let mut local_ctes = HashMap::new();
-        if let Some(ctes) = outer_ctes {
-            local_ctes.extend(ctes.clone());
-        }
+
+        // Prepare CTE recursion stack
+        let mut all_ctes = outer_ctes.to_vec();
+        // We will push &local_ctes later if we have any
 
         if let Some(with) = &query.with {
             for cte in &with.cte_tables {
@@ -68,8 +77,20 @@ impl<'a> QueryAnalyzer<'a> {
                 let result = if with.recursive {
                     match cte.query.body.as_ref() {
                         SetExpr::SetOperation { left, .. } => {
+                            // For recursive CTE, we need to analyze base case first
+                            // The base case can see outer CTEs but NOT itself (usually)
+                            // But Postgres allows self-reference in base case? No.
+                            // Base case sees outer_ctes.
+
+                            // Recursive step sees outer_ctes + itself.
+
+                            // Here logic was: analyze left with local_ctes.
+                            // We need to construct the stack.
+                            let mut current_ctes = outer_ctes.to_vec();
+                            current_ctes.push(&local_ctes); // Add what we have so far
+
                             let base_res =
-                                self.analyze_set_expr(left, Some(&local_ctes), parent_scope)?;
+                                self.analyze_set_expr(left, &current_ctes, parent_scope)?;
 
                             let explicit_aliases = &cte.alias.columns;
                             let columns = base_res
@@ -97,14 +118,21 @@ impl<'a> QueryAnalyzer<'a> {
                             };
                             local_ctes.insert(cte_name.clone(), scope_table);
 
-                            self.analyze_query_context(&cte.query, Some(&local_ctes), parent_scope)?
+                            let mut current_ctes = outer_ctes.to_vec();
+                            current_ctes.push(&local_ctes);
+
+                            self.analyze_query_context(&cte.query, &current_ctes, parent_scope)?
                         },
                         _ => {
-                            self.analyze_query_context(&cte.query, Some(&local_ctes), parent_scope)?
+                            let mut current_ctes = outer_ctes.to_vec();
+                            current_ctes.push(&local_ctes);
+                            self.analyze_query_context(&cte.query, &current_ctes, parent_scope)?
                         },
                     }
                 } else {
-                    self.analyze_query_context(&cte.query, Some(&local_ctes), parent_scope)?
+                    let mut current_ctes = outer_ctes.to_vec();
+                    current_ctes.push(&local_ctes);
+                    self.analyze_query_context(&cte.query, &current_ctes, parent_scope)?
                 };
 
                 let explicit_aliases = &cte.alias.columns;
@@ -140,13 +168,14 @@ impl<'a> QueryAnalyzer<'a> {
             }
         }
 
+        // Update stack for body analysis
+        all_ctes.push(&local_ctes);
+
         match query.body.as_ref() {
-            SetExpr::Select(select) => self.analyze_select(select, Some(&local_ctes), parent_scope),
-            SetExpr::Query(inner) => {
-                self.analyze_query_context(inner, Some(&local_ctes), parent_scope)
-            },
+            SetExpr::Select(select) => self.analyze_select(select, &all_ctes, parent_scope),
+            SetExpr::Query(inner) => self.analyze_query_context(inner, &all_ctes, parent_scope),
             SetExpr::SetOperation { left, .. } => {
-                self.analyze_set_expr(left, Some(&local_ctes), parent_scope)
+                self.analyze_set_expr(left, &all_ctes, parent_scope)
             },
             SetExpr::Values(values) => self.analyze_values(values, parent_scope),
             _ => Err(AnalyzeError::Unsupported("SetExpr type".to_string())),
@@ -156,7 +185,7 @@ impl<'a> QueryAnalyzer<'a> {
     fn analyze_set_expr(
         &self,
         expr: &SetExpr,
-        ctes: Option<&HashMap<String, ScopeTable>>,
+        ctes: &[&HashMap<String, ScopeTable>],
         parent_scope: Option<&Scope>,
     ) -> Result<AnalyzeResult, AnalyzeError> {
         match expr {
@@ -171,7 +200,7 @@ impl<'a> QueryAnalyzer<'a> {
     fn analyze_select(
         &self,
         select: &Select,
-        ctes: Option<&HashMap<String, ScopeTable>>,
+        ctes: &[&HashMap<String, ScopeTable>],
         parent_scope: Option<&Scope>,
     ) -> Result<AnalyzeResult, AnalyzeError> {
         // Build scope from FROM clause
@@ -185,7 +214,7 @@ impl<'a> QueryAnalyzer<'a> {
 
         // Analyze WHERE clause
         if let Some(selection) = &select.selection {
-            TypeInference::infer(&scope, selection)?;
+            self.type_resolver.infer(&scope, selection)?;
             // We should check for errors/unknown columns here, but TypeInference
             // currently returns (Unknown, true) on error rather than Result.
             // To be strict, we need TypeInference to tell us if valid.
@@ -203,14 +232,14 @@ impl<'a> QueryAnalyzer<'a> {
             GroupByExpr::All(_) => {},
             GroupByExpr::Expressions(exprs, _) => {
                 for expr in exprs {
-                    TypeInference::infer(&scope, expr)?;
+                    self.type_resolver.infer(&scope, expr)?;
                 }
             },
         }
 
         // Analyze HAVING
         if let Some(having) = &select.having {
-            TypeInference::infer(&scope, having)?;
+            self.type_resolver.infer(&scope, having)?;
         }
 
         // Analyze SELECT items
@@ -263,7 +292,7 @@ impl<'a> QueryAnalyzer<'a> {
         &self,
         from: &[TableWithJoins],
         scope: &mut Scope,
-        ctes: Option<&HashMap<String, ScopeTable>>,
+        ctes: &[&HashMap<String, ScopeTable>],
     ) -> Result<(), AnalyzeError> {
         for table_with_joins in from {
             self.resolve_table_factor(&table_with_joins.relation, scope, false, ctes)?;
@@ -291,15 +320,15 @@ impl<'a> QueryAnalyzer<'a> {
         factor: &TableFactor,
         scope: &mut Scope,
         nullable_from_join: bool,
-        ctes: Option<&HashMap<String, ScopeTable>>,
+        ctes: &[&HashMap<String, ScopeTable>],
     ) -> Result<(), AnalyzeError> {
         match factor {
             TableFactor::Table { name, alias, .. } => {
                 let table_name = object_name_to_string(name);
                 let alias_name = alias.as_ref().map(|a| a.name.value.as_str());
 
-                // CTE check
-                if let Some(ctes_map) = ctes {
+                // CTE check (reverse order)
+                for ctes_map in ctes.iter().rev() {
                     if let Some(cte_table) = ctes_map.get(&table_name) {
                         let mut scope_table = cte_table.clone();
                         if let Some(alias) = alias_name {
@@ -312,7 +341,7 @@ impl<'a> QueryAnalyzer<'a> {
                 }
 
                 let table_def = self
-                    .registry
+                    .catalog
                     .get_table(&table_name)
                     .ok_or_else(|| AnalyzeError::UnknownTable(table_name.to_string()))?;
 
@@ -417,7 +446,7 @@ impl<'a> QueryAnalyzer<'a> {
                     // args is Vec<FunctionArg>
                     for arg in args {
                         if let FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) = arg {
-                            let (data_type, _) = TypeInference::infer(scope, expr)?;
+                            let (data_type, _) = self.type_resolver.infer(scope, expr)?;
                             if let SqlType::Array(inner) = data_type {
                                 elem_type = *inner;
                                 break;
@@ -489,7 +518,7 @@ impl<'a> QueryAnalyzer<'a> {
         alias: Option<&str>,
     ) -> Result<ResultColumn, AnalyzeError> {
         // Infer type and nullability
-        let (data_type, nullable) = TypeInference::infer(scope, expr)?;
+        let (data_type, nullable) = self.type_resolver.infer(scope, expr)?;
 
         // Determine column name
         let (name, source_table, source_column) = match expr {
@@ -517,7 +546,7 @@ impl<'a> QueryAnalyzer<'a> {
                 // Expression - use alias or generate name
                 let name = alias
                     .map(|a| a.to_string())
-                    .unwrap_or_else(|| self.expr_to_name(expr));
+                    .unwrap_or_else(|| self.expr_to_name(expr).into_owned());
                 (name, None, None)
             },
         };
@@ -552,7 +581,7 @@ impl<'a> QueryAnalyzer<'a> {
         };
 
         for (i, expr) in first_row.iter().enumerate() {
-            let (data_type, nullable) = TypeInference::infer(&scope, expr)?;
+            let (data_type, nullable) = self.type_resolver.infer(&scope, expr)?;
             let name = if self.dialect == Dialect::MySQL {
                 format!("column_{}", i)
             } else {
@@ -569,7 +598,7 @@ impl<'a> QueryAnalyzer<'a> {
                 ));
             }
             for (col_idx, expr) in row.iter().enumerate() {
-                let (t, _) = TypeInference::infer(&scope, expr)?;
+                let (t, _) = self.type_resolver.infer(&scope, expr)?;
                 if !t.is_compatible(&columns[col_idx].data_type) {
                     return Err(AnalyzeError::TypeMismatch(format!(
                         "Row {} Column {} has type {:?}, but expected {:?}",
@@ -583,29 +612,29 @@ impl<'a> QueryAnalyzer<'a> {
     }
 
     /// Generate a name for an expression (fallback when no alias).
-    fn expr_to_name(&self, expr: &Expr) -> String {
+    fn expr_to_name(&self, expr: &Expr) -> std::borrow::Cow<'static, str> {
         match expr {
-            Expr::Identifier(ident) => ident.value.clone(),
+            Expr::Identifier(ident) => std::borrow::Cow::Owned(ident.value.clone()),
             Expr::CompoundIdentifier(idents) => idents
                 .last()
-                .map(|i| i.value.clone())
-                .unwrap_or_else(|| "?column?".to_string()),
+                .map(|i| std::borrow::Cow::Owned(i.value.clone()))
+                .unwrap_or(std::borrow::Cow::Borrowed("?column?")),
             _ if self.dialect == Dialect::MySQL => {
                 // In MySQL, default names are often the expression itself
-                expr.to_string()
+                std::borrow::Cow::Owned(expr.to_string())
             },
             Expr::Function(func) => func
                 .name
                 .0
                 .last()
-                .map(ident_to_string)
-                .unwrap_or_else(|| "?column?".to_string()),
-            Expr::Value(_) => "?column?".to_string(),
-            Expr::BinaryOp { .. } => "?column?".to_string(),
-            Expr::UnaryOp { .. } => "?column?".to_string(),
-            Expr::Cast { .. } => "?column?".to_string(),
-            Expr::Case { .. } => "case".to_string(),
-            _ => "?column?".to_string(),
+                .map(|i| std::borrow::Cow::Owned(ident_to_string(i)))
+                .unwrap_or(std::borrow::Cow::Borrowed("?column?")),
+            Expr::Value(_) => std::borrow::Cow::Borrowed("?column?"),
+            Expr::BinaryOp { .. } => std::borrow::Cow::Borrowed("?column?"),
+            Expr::UnaryOp { .. } => std::borrow::Cow::Borrowed("?column?"),
+            Expr::Cast { .. } => std::borrow::Cow::Borrowed("?column?"),
+            Expr::Case { .. } => std::borrow::Cow::Borrowed("case"),
+            _ => std::borrow::Cow::Borrowed("?column?"),
         }
     }
 }
@@ -632,6 +661,7 @@ fn ident_to_string(ident: &sqlparser::ast::ObjectNamePart) -> String {
 
 #[cfg(test)]
 mod tests {
+    use sqlex_schema::SchemaRegistry;
     use sqlex_types::SqlType;
 
     use super::*;
@@ -740,5 +770,28 @@ mod tests {
         assert!(!result.columns[1].nullable); // u.name (NOT NULL)
         // orders columns should be nullable due to LEFT JOIN
         assert!(result.columns[2].nullable); // o.amount (nullable from join)
+    }
+
+    #[test]
+    fn test_cte_scoping() {
+        let registry = create_test_schema();
+        let analyzer = QueryAnalyzer::new(&registry, Dialect::PostgreSQL);
+
+        let sql = "
+            WITH user_stats AS (
+                SELECT user_id, COUNT(*) as order_count 
+                FROM orders 
+                GROUP BY user_id
+            )
+            SELECT u.name, s.order_count
+            FROM users u
+            JOIN user_stats s ON u.id = s.user_id
+        ";
+
+        let result = analyzer.analyze(sql).unwrap();
+        assert_eq!(result.columns.len(), 2);
+        assert_eq!(result.columns[0].name, "name");
+        assert_eq!(result.columns[1].name, "order_count");
+        assert_eq!(result.columns[1].data_type, SqlType::BigInt);
     }
 }

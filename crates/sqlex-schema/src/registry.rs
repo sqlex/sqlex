@@ -84,7 +84,19 @@ impl SchemaRegistry {
     pub fn table_count(&self) -> usize {
         self.tables.len()
     }
+}
 
+impl crate::Catalog for SchemaRegistry {
+    fn get_table(&self, name: &str) -> Option<&TableDef> {
+        self.get_table(name)
+    }
+
+    fn has_table(&self, name: &str) -> bool {
+        self.has_table(name)
+    }
+}
+
+impl SchemaRegistry {
     // --- Private methods ---
 
     fn apply_create_table(&mut self, create: &CreateTable) -> Result<(), SchemaError> {

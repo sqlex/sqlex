@@ -8,13 +8,16 @@ use crate::{
     scope::{ColumnResolutionError, Scope},
 };
 
-/// Infer the type and nullability of an expression.
-pub struct TypeInference;
+/// Trait for resolving expression types.
+pub trait TypeResolver {
+    fn infer(&self, scope: &Scope, expr: &Expr) -> Result<(SqlType, bool), AnalyzeError>;
+}
 
-impl TypeInference {
-    /// Infer the type and nullability of an expression.
-    /// Returns (SqlType, nullable).
-    pub fn infer(scope: &Scope, expr: &Expr) -> Result<(SqlType, bool), AnalyzeError> {
+/// Default type resolver implementation.
+pub struct DefaultTypeResolver;
+
+impl TypeResolver for DefaultTypeResolver {
+    fn infer(&self, scope: &Scope, expr: &Expr) -> Result<(SqlType, bool), AnalyzeError> {
         match expr {
             // Column reference
             Expr::Identifier(ident) => match scope.resolve_column(None, &ident.value) {
@@ -40,11 +43,11 @@ impl TypeInference {
             Expr::Value(value_with_span) => Ok(Self::infer_value_with_span(value_with_span)),
 
             // Binary operations
-            Expr::BinaryOp { left, op, right } => Self::infer_binary_op(scope, left, op, right),
+            Expr::BinaryOp { left, op, right } => self.infer_binary_op(scope, left, op, right),
 
             // Unary operations
             Expr::UnaryOp { op, expr } => {
-                let (inner_type, nullable) = Self::infer(scope, expr)?;
+                let (inner_type, nullable) = self.infer(scope, expr)?;
                 match op {
                     sqlparser::ast::UnaryOperator::Not => Ok((SqlType::Boolean, nullable)),
                     sqlparser::ast::UnaryOperator::Minus | sqlparser::ast::UnaryOperator::Plus => {
@@ -55,7 +58,7 @@ impl TypeInference {
             },
 
             // Function calls
-            Expr::Function(func) => Self::infer_function(scope, func),
+            Expr::Function(func) => self.infer_function(scope, func),
 
             // CASE expression
             Expr::Case {
@@ -68,7 +71,7 @@ impl TypeInference {
                 let mut nullable = else_result.is_none(); // Nullable if no ELSE
 
                 for case_when in conditions {
-                    let (t, n) = Self::infer(scope, &case_when.result)?;
+                    let (t, n) = self.infer(scope, &case_when.result)?;
                     if result_type == SqlType::Unknown {
                         result_type = t;
                     }
@@ -76,7 +79,7 @@ impl TypeInference {
                 }
 
                 if let Some(else_expr) = else_result {
-                    let (t, n) = Self::infer(scope, else_expr)?;
+                    let (t, n) = self.infer(scope, else_expr)?;
                     if result_type == SqlType::Unknown {
                         result_type = t;
                     }
@@ -100,7 +103,7 @@ impl TypeInference {
             },
 
             // Nested expression
-            Expr::Nested(inner) => Self::infer(scope, inner),
+            Expr::Nested(inner) => self.infer(scope, inner),
 
             // IS NULL / IS NOT NULL
             Expr::IsNull(_) | Expr::IsNotNull(_) => Ok((SqlType::Boolean, false)),
@@ -121,7 +124,9 @@ impl TypeInference {
             _ => Ok((SqlType::Unknown, true)),
         }
     }
+}
 
+impl DefaultTypeResolver {
     fn infer_value_with_span(value: &sqlparser::ast::ValueWithSpan) -> (SqlType, bool) {
         match &value.value {
             sqlparser::ast::Value::Number(_, _) => (SqlType::Integer, false), // Simplified
@@ -134,13 +139,14 @@ impl TypeInference {
     }
 
     fn infer_binary_op(
+        &self,
         scope: &Scope,
         left: &Expr,
         op: &sqlparser::ast::BinaryOperator,
         right: &Expr,
     ) -> Result<(SqlType, bool), AnalyzeError> {
-        let (left_type, left_nullable) = Self::infer(scope, left)?;
-        let (right_type, right_nullable) = Self::infer(scope, right)?;
+        let (left_type, left_nullable) = self.infer(scope, left)?;
+        let (right_type, right_nullable) = self.infer(scope, right)?;
         let nullable = left_nullable || right_nullable;
 
         use sqlparser::ast::BinaryOperator::*;
@@ -168,6 +174,7 @@ impl TypeInference {
     }
 
     fn infer_function(
+        &self,
         scope: &Scope,
         func: &sqlparser::ast::Function,
     ) -> Result<(SqlType, bool), AnalyzeError> {
@@ -176,10 +183,10 @@ impl TypeInference {
             match over {
                 sqlparser::ast::WindowType::WindowSpec(spec) => {
                     for expr in &spec.partition_by {
-                        Self::infer(scope, expr)?;
+                        self.infer(scope, expr)?;
                     }
                     for order in &spec.order_by {
-                        Self::infer(scope, &order.expr)?;
+                        self.infer(scope, &order.expr)?;
                     }
                 },
                 sqlparser::ast::WindowType::NamedWindow(_) => {},
@@ -199,7 +206,7 @@ impl TypeInference {
 
             // SUM preserves the input type
             "SUM" => {
-                let inner_type = Self::infer_function_arg_type(scope, func)?;
+                let inner_type = self.infer_function_arg_type(scope, func)?;
                 Ok((inner_type, true)) // SUM returns NULL for empty set
             },
 
@@ -208,7 +215,7 @@ impl TypeInference {
 
             // MIN/MAX preserve the input type
             "MIN" | "MAX" => {
-                let inner_type = Self::infer_function_arg_type(scope, func)?;
+                let inner_type = self.infer_function_arg_type(scope, func)?;
                 Ok((inner_type, true))
             },
 
@@ -219,13 +226,13 @@ impl TypeInference {
 
             // COALESCE - returns first non-null, type of first arg
             "COALESCE" => {
-                let inner_type = Self::infer_function_arg_type(scope, func)?;
+                let inner_type = self.infer_function_arg_type(scope, func)?;
                 Ok((inner_type, false)) // COALESCE with literals makes it non-null
             },
 
             // NULLIF - makes result nullable
             "NULLIF" => {
-                let inner_type = Self::infer_function_arg_type(scope, func)?;
+                let inner_type = self.infer_function_arg_type(scope, func)?;
                 Ok((inner_type, true))
             },
 
@@ -242,13 +249,13 @@ impl TypeInference {
 
             // Window functions - preserve type
             "LAG" | "LEAD" | "FIRST_VALUE" | "LAST_VALUE" => {
-                let inner_type = Self::infer_function_arg_type(scope, func)?;
+                let inner_type = self.infer_function_arg_type(scope, func)?;
                 Ok((inner_type, true))
             },
 
             // Set returning functions
             "UNNEST" => {
-                let inner = Self::infer_function_arg_type(scope, func)?;
+                let inner = self.infer_function_arg_type(scope, func)?;
                 if let SqlType::Array(elem) = inner {
                     Ok((*elem, true))
                 } else {
@@ -262,6 +269,7 @@ impl TypeInference {
     }
 
     fn infer_function_arg_type(
+        &self,
         scope: &Scope,
         func: &sqlparser::ast::Function,
     ) -> Result<SqlType, AnalyzeError> {
@@ -273,13 +281,13 @@ impl TypeInference {
                         sqlparser::ast::FunctionArg::Unnamed(
                             sqlparser::ast::FunctionArgExpr::Expr(expr),
                         ) => {
-                            return Ok(Self::infer(scope, expr)?.0);
+                            return Ok(self.infer(scope, expr)?.0);
                         },
                         sqlparser::ast::FunctionArg::Named {
                             arg: sqlparser::ast::FunctionArgExpr::Expr(expr),
                             ..
                         } => {
-                            return Ok(Self::infer(scope, expr)?.0);
+                            return Ok(self.infer(scope, expr)?.0);
                         },
                         _ => {},
                     }
