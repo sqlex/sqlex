@@ -87,6 +87,23 @@ impl TableDef {
         self.columns.push(column);
     }
 
+    /// Insert a column after another column.
+    pub fn insert_column_after(&mut self, column: ColumnDef, after_col: &str) {
+        if column.is_primary_key && !self.primary_key.contains(&column.name) {
+            self.primary_key.push(column.name.clone());
+        }
+        if let Some(pos) = self
+            .columns
+            .iter()
+            .position(|c| c.name.eq_ignore_ascii_case(after_col))
+        {
+            self.columns.insert(pos + 1, column);
+        } else {
+            // Fallback to push if column not found
+            self.columns.push(column);
+        }
+    }
+
     /// Get a column by name.
     pub fn get_column(&self, name: &str) -> Option<&ColumnDef> {
         self.columns

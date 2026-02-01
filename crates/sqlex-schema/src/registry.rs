@@ -149,6 +149,28 @@ impl SchemaRegistry {
         let table_name = object_name_to_string(name);
         let key = table_name.to_lowercase();
 
+        // Check for RenameTable operation first as it requires special handling
+        for op in operations {
+            if let AlterTableOperation::RenameTable {
+                table_name: new_name,
+            } = op
+            {
+                let new_table_name = object_name_to_string(new_name);
+                let new_key = new_table_name.to_lowercase();
+
+                if let Some(mut table) = self.tables.remove(&key) {
+                    table.name = new_table_name;
+                    self.tables.insert(new_key, table);
+                    // After RENAME TO, the original table name is no longer valid for this statement
+                    // Usually RENAME TO is the only operation.
+                    return Ok(());
+                } else {
+                    return Err(SchemaError::TableNotFound(table_name));
+                }
+            }
+        }
+
+        // Handle other operations
         let table = self
             .tables
             .get_mut(&key)
@@ -159,6 +181,7 @@ impl SchemaRegistry {
                 AlterTableOperation::AddColumn {
                     column_def,
                     if_not_exists,
+                    column_position,
                     ..
                 } => {
                     let col_name = column_def.name.value.clone();
@@ -171,7 +194,20 @@ impl SchemaRegistry {
                         }
                     } else {
                         let col_def = convert_column_def(column_def, self.dialect);
-                        table.add_column(col_def);
+
+                        use sqlex_parser::sqlparser::ast::MySQLColumnPosition;
+                        match column_position {
+                            Some(MySQLColumnPosition::After(after_col)) => {
+                                table.insert_column_after(col_def, &after_col.value);
+                            },
+                            Some(MySQLColumnPosition::First) => {
+                                // Insert at position 0
+                                table.columns.insert(0, col_def);
+                            },
+                            None => {
+                                table.add_column(col_def);
+                            },
+                        }
                     }
                 },
                 AlterTableOperation::DropColumn {
@@ -194,6 +230,86 @@ impl SchemaRegistry {
                     let old_name = old_column_name.value.clone();
                     if let Some(col) = table.get_column_mut(&old_name) {
                         col.name = new_column_name.value.clone();
+                    } else {
+                        return Err(SchemaError::ColumnNotFound {
+                            table: table_name.clone(),
+                            column: old_name,
+                        });
+                    }
+                },
+                AlterTableOperation::ChangeColumn {
+                    old_name,
+                    new_name,
+                    data_type,
+                    options: _options,
+                    column_position,
+                } => {
+                    let old_col_name = old_name.value.clone();
+                    let new_col_name = new_name.value.clone();
+
+                    if let Some(pos) = table
+                        .columns
+                        .iter()
+                        .position(|c| c.name.eq_ignore_ascii_case(&old_col_name))
+                    {
+                        let mut col = table.columns.remove(pos);
+                        col.name = new_col_name;
+                        col.data_type = convert_data_type(data_type, self.dialect);
+
+                        // Process options if needed (simplified here)
+
+                        use sqlex_parser::sqlparser::ast::MySQLColumnPosition;
+                        match column_position {
+                            Some(MySQLColumnPosition::After(after_col)) => {
+                                table.insert_column_after(col, &after_col.value);
+                            },
+                            Some(MySQLColumnPosition::First) => {
+                                table.columns.insert(0, col);
+                            },
+                            None => {
+                                table.columns.insert(pos, col);
+                            },
+                        }
+                    } else {
+                        return Err(SchemaError::ColumnNotFound {
+                            table: table_name.clone(),
+                            column: old_col_name,
+                        });
+                    }
+                },
+                AlterTableOperation::ModifyColumn {
+                    col_name,
+                    data_type,
+                    options: _options,
+                    column_position,
+                } => {
+                    let col_name = col_name.value.clone();
+
+                    if let Some(pos) = table
+                        .columns
+                        .iter()
+                        .position(|c| c.name.eq_ignore_ascii_case(&col_name))
+                    {
+                        let mut col = table.columns.remove(pos);
+                        col.data_type = convert_data_type(data_type, self.dialect);
+
+                        use sqlex_parser::sqlparser::ast::MySQLColumnPosition;
+                        match column_position {
+                            Some(MySQLColumnPosition::After(after_col)) => {
+                                table.insert_column_after(col, &after_col.value);
+                            },
+                            Some(MySQLColumnPosition::First) => {
+                                table.columns.insert(0, col);
+                            },
+                            None => {
+                                table.columns.insert(pos, col);
+                            },
+                        }
+                    } else {
+                        return Err(SchemaError::ColumnNotFound {
+                            table: table_name.clone(),
+                            column: col_name,
+                        });
                     }
                 },
                 AlterTableOperation::AlterColumn { column_name, op } => {
@@ -218,14 +334,6 @@ impl SchemaRegistry {
                             _ => {},
                         }
                     }
-                },
-                AlterTableOperation::RenameTable {
-                    table_name: new_name,
-                } => {
-                    let new_table_name = object_name_to_string(new_name);
-                    table.name = new_table_name.clone();
-                    // Note: We'd need to update the key too, but that's complex
-                    // For now, just update the name in the definition
                 },
                 _ => {
                     // Ignore other operations

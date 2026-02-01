@@ -517,7 +517,7 @@ impl<'a> QueryAnalyzer<'a> {
                 // Expression - use alias or generate name
                 let name = alias
                     .map(|a| a.to_string())
-                    .unwrap_or_else(|| expr_to_name(expr));
+                    .unwrap_or_else(|| self.expr_to_name(expr));
                 (name, None, None)
             },
         };
@@ -581,6 +581,33 @@ impl<'a> QueryAnalyzer<'a> {
 
         Ok(AnalyzeResult { columns })
     }
+
+    /// Generate a name for an expression (fallback when no alias).
+    fn expr_to_name(&self, expr: &Expr) -> String {
+        match expr {
+            Expr::Identifier(ident) => ident.value.clone(),
+            Expr::CompoundIdentifier(idents) => idents
+                .last()
+                .map(|i| i.value.clone())
+                .unwrap_or_else(|| "?column?".to_string()),
+            _ if self.dialect == Dialect::MySQL => {
+                // In MySQL, default names are often the expression itself
+                expr.to_string()
+            },
+            Expr::Function(func) => func
+                .name
+                .0
+                .last()
+                .map(ident_to_string)
+                .unwrap_or_else(|| "?column?".to_string()),
+            Expr::Value(_) => "?column?".to_string(),
+            Expr::BinaryOp { .. } => "?column?".to_string(),
+            Expr::UnaryOp { .. } => "?column?".to_string(),
+            Expr::Cast { .. } => "?column?".to_string(),
+            Expr::Case { .. } => "case".to_string(),
+            _ => "?column?".to_string(),
+        }
+    }
 }
 
 fn object_name_to_string(name: &sqlparser::ast::ObjectName) -> String {
@@ -600,29 +627,6 @@ fn qualified_wildcard_to_string(kind: &sqlparser::ast::SelectItemQualifiedWildca
 fn ident_to_string(ident: &sqlparser::ast::ObjectNamePart) -> String {
     match ident {
         sqlparser::ast::ObjectNamePart::Identifier(id) => id.value.clone(),
-    }
-}
-
-/// Generate a name for an expression (fallback when no alias).
-fn expr_to_name(expr: &Expr) -> String {
-    match expr {
-        Expr::Identifier(ident) => ident.value.clone(),
-        Expr::CompoundIdentifier(idents) => idents
-            .last()
-            .map(|i| i.value.clone())
-            .unwrap_or_else(|| "?column?".to_string()),
-        Expr::Function(func) => func
-            .name
-            .0
-            .last()
-            .map(ident_to_string)
-            .unwrap_or_else(|| "?column?".to_string()),
-        Expr::Value(_) => "?column?".to_string(),
-        Expr::BinaryOp { .. } => "?column?".to_string(),
-        Expr::UnaryOp { .. } => "?column?".to_string(),
-        Expr::Cast { .. } => "?column?".to_string(),
-        Expr::Case { .. } => "case".to_string(),
-        _ => "?column?".to_string(),
     }
 }
 

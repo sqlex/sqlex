@@ -52,12 +52,44 @@ impl DatabaseBackend for MysqlBackend {
 
     async fn execute_migration(&self, sql: &str) -> Result<()> {
         // MySQL doesn't support multiple statements in one query easily,
-        // so we split by semicolons and execute each statement
-        for statement in sql.split(';') {
-            let trimmed = statement.trim();
-            if !trimmed.is_empty() {
-                sqlx::raw_sql(trimmed).execute(&self.pool).await?;
+        // so we split by semicolons and execute each statement.
+        // We need to be careful not to split on semicolons inside string literals.
+        let mut statements = Vec::new();
+        let mut current = String::new();
+        let mut in_string = false;
+        let mut escape = false;
+
+        for c in sql.chars() {
+            if escape {
+                current.push(c);
+                escape = false;
+                continue;
             }
+
+            if c == '\'' {
+                in_string = !in_string;
+                current.push(c);
+            } else if c == '\\' && in_string {
+                escape = true;
+                current.push(c);
+            } else if c == ';' && !in_string {
+                let trimmed = current.trim();
+                if !trimmed.is_empty() {
+                    statements.push(trimmed.to_string());
+                }
+                current.clear();
+            } else {
+                current.push(c);
+            }
+        }
+
+        let trimmed = current.trim();
+        if !trimmed.is_empty() {
+            statements.push(trimmed.to_string());
+        }
+
+        for statement in statements {
+            sqlx::raw_sql(&statement).execute(&self.pool).await?;
         }
         Ok(())
     }
