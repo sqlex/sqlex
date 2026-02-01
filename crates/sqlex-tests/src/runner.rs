@@ -319,21 +319,12 @@ impl TestRunner {
 
             // Simple mapping for SQLite compat
             // SQLite INTEGER can match INTEGER, BIGINT, INT, SMALLINT
-            let types_match = if db_type == sqlex_type {
-                true
-            } else if db_type == "INTEGER"
-                && (sqlex_type == "BIGINT" || sqlex_type == "SMALLINT" || sqlex_type == "INT")
-            {
-                true
-            } else if db_type == "REAL" && sqlex_type == "DOUBLE" {
-                true
-            } else if db_type == "TEXT"
-                && (sqlex_type == "VARCHAR" || sqlex_type.starts_with("VARCHAR"))
-            {
-                true
-            } else {
-                false
-            };
+            let types_match = db_type == sqlex_type
+                || (db_type == "INTEGER"
+                    && (sqlex_type == "BIGINT" || sqlex_type == "SMALLINT" || sqlex_type == "INT"))
+                || (db_type == "REAL" && sqlex_type == "DOUBLE")
+                || (db_type == "TEXT"
+                    && (sqlex_type == "VARCHAR" || sqlex_type.starts_with("VARCHAR")));
 
             if !types_match {
                 // return Err(Error::MetadataMismatch {
