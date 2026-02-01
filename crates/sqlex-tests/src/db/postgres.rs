@@ -1,12 +1,12 @@
 //! PostgreSQL backend using testcontainers.
 
 use async_trait::async_trait;
-use sqlx::{postgres::PgPoolOptions, PgPool, Column, Executor};
-use testcontainers::{runners::AsyncRunner, ContainerAsync};
+use sqlx::{Column, Executor, PgPool, postgres::PgPoolOptions};
+use testcontainers::{ContainerAsync, runners::AsyncRunner};
 use testcontainers_modules::postgres::Postgres;
 
 use super::{ColumnMetadata, DatabaseBackend, ParamMetadata, QueryMetadata};
-use crate::{config::Dialect, Result};
+use crate::{Result, config::Dialect};
 
 /// PostgreSQL database backend.
 pub struct PostgresBackend {
@@ -23,17 +23,16 @@ impl PostgresBackend {
             crate::Error::Config(format!("Failed to start PostgreSQL container: {}", e))
         })?;
 
-        let host = container.get_host().await.map_err(|e| {
-            crate::Error::Config(format!("Failed to get container host: {}", e))
-        })?;
-        let port = container.get_host_port_ipv4(5432).await.map_err(|e| {
-            crate::Error::Config(format!("Failed to get container port: {}", e))
-        })?;
+        let host = container
+            .get_host()
+            .await
+            .map_err(|e| crate::Error::Config(format!("Failed to get container host: {}", e)))?;
+        let port = container
+            .get_host_port_ipv4(5432)
+            .await
+            .map_err(|e| crate::Error::Config(format!("Failed to get container port: {}", e)))?;
 
-        let connection_string = format!(
-            "postgres://postgres:postgres@{}:{}/postgres",
-            host, port
-        );
+        let connection_string = format!("postgres://postgres:postgres@{}:{}/postgres", host, port);
 
         let pool = PgPoolOptions::new()
             .max_connections(5)
@@ -71,22 +70,24 @@ impl DatabaseBackend for PostgresBackend {
 
         let params = describe
             .parameters()
-            .map(|p: sqlx::Either<&[sqlx::postgres::PgTypeInfo], usize>| match p {
-                sqlx::Either::Left(types) => types
-                    .iter()
-                    .enumerate()
-                    .map(|(i, t)| ParamMetadata {
-                        position: i + 1,
-                        type_name: Some(t.to_string()),
-                    })
-                    .collect(),
-                sqlx::Either::Right(count) => (0..count)
-                    .map(|i| ParamMetadata {
-                        position: i + 1,
-                        type_name: None,
-                    })
-                    .collect(),
-            })
+            .map(
+                |p: sqlx::Either<&[sqlx::postgres::PgTypeInfo], usize>| match p {
+                    sqlx::Either::Left(types) => types
+                        .iter()
+                        .enumerate()
+                        .map(|(i, t)| ParamMetadata {
+                            position: i + 1,
+                            type_name: Some(t.to_string()),
+                        })
+                        .collect(),
+                    sqlx::Either::Right(count) => (0..count)
+                        .map(|i| ParamMetadata {
+                            position: i + 1,
+                            type_name: None,
+                        })
+                        .collect(),
+                },
+            )
             .unwrap_or_default();
 
         Ok(QueryMetadata { columns, params })

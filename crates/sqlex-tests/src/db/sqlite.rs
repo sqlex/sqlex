@@ -1,10 +1,10 @@
 //! SQLite backend using in-memory database.
 
 use async_trait::async_trait;
-use sqlx::{sqlite::SqlitePoolOptions, SqlitePool, Column, Executor};
+use sqlx::{Column, Executor, SqlitePool, sqlite::SqlitePoolOptions};
 
 use super::{ColumnMetadata, DatabaseBackend, ParamMetadata, QueryMetadata};
-use crate::{config::Dialect, Result};
+use crate::{Result, config::Dialect};
 
 /// SQLite database backend (in-memory).
 pub struct SqliteBackend {
@@ -51,22 +51,24 @@ impl DatabaseBackend for SqliteBackend {
 
         let params = describe
             .parameters()
-            .map(|p: sqlx::Either<&[sqlx::sqlite::SqliteTypeInfo], usize>| match p {
-                sqlx::Either::Left(types) => types
-                    .iter()
-                    .enumerate()
-                    .map(|(i, t)| ParamMetadata {
-                        position: i + 1,
-                        type_name: Some(t.to_string()),
-                    })
-                    .collect(),
-                sqlx::Either::Right(count) => (0..count)
-                    .map(|i| ParamMetadata {
-                        position: i + 1,
-                        type_name: None,
-                    })
-                    .collect(),
-            })
+            .map(
+                |p: sqlx::Either<&[sqlx::sqlite::SqliteTypeInfo], usize>| match p {
+                    sqlx::Either::Left(types) => types
+                        .iter()
+                        .enumerate()
+                        .map(|(i, t)| ParamMetadata {
+                            position: i + 1,
+                            type_name: Some(t.to_string()),
+                        })
+                        .collect(),
+                    sqlx::Either::Right(count) => (0..count)
+                        .map(|i| ParamMetadata {
+                            position: i + 1,
+                            type_name: None,
+                        })
+                        .collect(),
+                },
+            )
             .unwrap_or_default();
 
         Ok(QueryMetadata { columns, params })

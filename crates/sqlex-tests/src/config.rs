@@ -1,7 +1,8 @@
 //! Configuration types for test fixtures.
 
-use serde::Deserialize;
 use std::path::Path;
+
+use serde::Deserialize;
 
 use crate::{Error, Result};
 

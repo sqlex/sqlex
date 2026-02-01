@@ -1,11 +1,12 @@
 //! Database connection and metadata extraction.
 
-pub mod postgres;
 pub mod mysql;
+pub mod postgres;
 pub mod sqlite;
 
 use async_trait::async_trait;
-use crate::{config::Dialect, Result};
+
+use crate::{Result, config::Dialect};
 
 /// Metadata for a single column in a query result.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,14 +59,14 @@ pub async fn create_backend(dialect: Dialect) -> Result<Box<dyn DatabaseBackend>
         Dialect::Postgresql => {
             let backend = postgres::PostgresBackend::new().await?;
             Ok(Box::new(backend))
-        }
+        },
         Dialect::Mysql => {
             let backend = mysql::MysqlBackend::new().await?;
             Ok(Box::new(backend))
-        }
+        },
         Dialect::Sqlite => {
             let backend = sqlite::SqliteBackend::new().await?;
             Ok(Box::new(backend))
-        }
+        },
     }
 }

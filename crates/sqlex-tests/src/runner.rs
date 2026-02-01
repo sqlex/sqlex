@@ -3,9 +3,9 @@
 use std::path::Path;
 
 use crate::{
+    Error, Result,
     config::{Dialect, TestCase, TestSuite},
     db::{self, ColumnMetadata, DatabaseBackend, QueryMetadata},
-    Error, Result,
 };
 
 /// Result of running a single test case.
@@ -70,11 +70,7 @@ impl TestRunner {
     }
 
     /// Run a test suite.
-    pub async fn run_suite(
-        &mut self,
-        suite: &TestSuite,
-        path: String,
-    ) -> Result<TestSuiteResult> {
+    pub async fn run_suite(&mut self, suite: &TestSuite, path: String) -> Result<TestSuiteResult> {
         let dialect = suite.dialect();
 
         // Create a fresh backend for each suite to ensure isolation
@@ -113,9 +109,9 @@ impl TestRunner {
         dialect: sqlex_types::Dialect,
     ) -> Result<sqlex_schema::SchemaRegistry> {
         let mut registry = sqlex_schema::SchemaRegistry::new(dialect);
-        registry.apply_sql(migration).map_err(|e| {
-            Error::MigrationParse(format!("{}", e))
-        })?;
+        registry
+            .apply_sql(migration)
+            .map_err(|e| Error::MigrationParse(format!("{}", e)))?;
         Ok(registry)
     }
 
@@ -160,7 +156,7 @@ impl TestRunner {
                         sqlex_metadata: Some(sqlex_metadata),
                     },
                 }
-            }
+            },
             (Err(db_err), Ok(_)) => TestCaseResult {
                 name: test_case.name.clone(),
                 passed: test_case.expect_error,
@@ -193,10 +189,7 @@ impl TestRunner {
     }
 
     /// Convert sqlex analysis result to our QueryMetadata format.
-    fn convert_sqlex_result(
-        &self,
-        result: &sqlex_analyzer::AnalyzeResult,
-    ) -> QueryMetadata {
+    fn convert_sqlex_result(&self, result: &sqlex_analyzer::AnalyzeResult) -> QueryMetadata {
         let columns = result
             .columns
             .iter()
@@ -246,7 +239,7 @@ impl TestRunner {
                     ),
                 });
             }
-            
+
             // Note: Type comparison is more complex due to different representations
             // For now, we just log the difference but don't fail
             // TODO: Add proper type normalization and comparison
