@@ -1,8 +1,7 @@
 //! SQL data type definitions.
 
 /// Unified SQL data type representation across all dialects.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub enum SqlType {
     // Integer types
     /// Small integer (2 bytes)
@@ -130,7 +129,6 @@ impl SqlType {
         }
     }
 }
-
 
 impl std::fmt::Display for SqlType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

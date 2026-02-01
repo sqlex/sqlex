@@ -577,20 +577,15 @@ impl<'a> QueryAnalyzer<'a> {
 }
 
 fn object_name_to_string(name: &sqlparser::ast::ObjectName) -> String {
-    name.0
-        .last()
-        .map(ident_to_string)
-        .unwrap_or_default()
+    name.0.last().map(ident_to_string).unwrap_or_default()
 }
 
 /// Extract table name from QualifiedWildcard
 fn qualified_wildcard_to_string(kind: &sqlparser::ast::SelectItemQualifiedWildcardKind) -> String {
     match kind {
-        sqlparser::ast::SelectItemQualifiedWildcardKind::ObjectName(name) => name
-            .0
-            .last()
-            .map(ident_to_string)
-            .unwrap_or_default(),
+        sqlparser::ast::SelectItemQualifiedWildcardKind::ObjectName(name) => {
+            name.0.last().map(ident_to_string).unwrap_or_default()
+        },
         sqlparser::ast::SelectItemQualifiedWildcardKind::Expr(_) => String::new(),
     }
 }

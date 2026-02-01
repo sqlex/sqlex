@@ -69,7 +69,6 @@ impl<'a> Scope<'a> {
         self.tables.insert(key, scope_table);
     }
 
-
     /// Resolve a column reference.
     /// Returns (table_alias, column_def, is_nullable).
     pub fn resolve_column(

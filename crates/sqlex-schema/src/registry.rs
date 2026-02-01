@@ -283,10 +283,7 @@ impl SchemaRegistry {
 }
 
 fn object_name_to_string(name: &ObjectName) -> String {
-    name.0
-        .last()
-        .map(ident_to_string)
-        .unwrap_or_default()
+    name.0.last().map(ident_to_string).unwrap_or_default()
 }
 
 fn ident_to_string(ident: &sqlparser::ast::ObjectNamePart) -> String {
