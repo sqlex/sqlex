@@ -11,11 +11,15 @@ use crate::{
 /// Resolve FROM clause to build a scope.
 pub struct FromResolver<'a> {
     registry: &'a SchemaRegistry,
+    ctes: Option<&'a std::collections::HashMap<String, ScopeTable>>,
 }
 
 impl<'a> FromResolver<'a> {
-    pub fn new(registry: &'a SchemaRegistry) -> Self {
-        Self { registry }
+    pub fn new(
+        registry: &'a SchemaRegistry,
+        ctes: Option<&'a std::collections::HashMap<String, ScopeTable>>,
+    ) -> Self {
+        Self { registry, ctes }
     }
 
     /// Resolve FROM clause tables and joins.
@@ -59,6 +63,19 @@ impl<'a> FromResolver<'a> {
             TableFactor::Table { name, alias, .. } => {
                 let table_name = object_name_to_string(name);
                 let alias_name = alias.as_ref().map(|a| a.name.value.as_str());
+
+                // Try to find in CTEs first
+                if let Some(ctes) = self.ctes {
+                    if let Some(cte_table) = ctes.get(&table_name) {
+                        let mut scope_table = cte_table.clone();
+                        if let Some(alias) = alias_name {
+                            scope_table.alias = alias.to_string();
+                        }
+                        scope_table.nullable_from_join = nullable_from_join;
+                        scope.add_table(scope_table);
+                        return Ok(());
+                    }
+                }
 
                 let table_def = self
                     .registry

@@ -1,0 +1,34 @@
+# PostgreSQL Window Functions Tests
+
+[schema]
+dialect = "postgresql"
+migration = """
+CREATE TABLE salaries (
+    id SERIAL PRIMARY KEY,
+    emp_name VARCHAR(50),
+    department VARCHAR(50),
+    salary INTEGER
+);
+
+INSERT INTO salaries (emp_name, department, salary) VALUES 
+('Alice', 'HR', 5000),
+('Bob', 'HR', 5500),
+('Charlie', 'IT', 7000),
+('David', 'IT', 7200),
+('Eve', 'IT', 6800);
+"""
+
+[[tests]]
+name = "row_number_rank"
+query = "SELECT emp_name, department, ROW_NUMBER() OVER (PARTITION BY department ORDER BY salary DESC) as rn, RANK() OVER (PARTITION BY department ORDER BY salary DESC) as rk FROM salaries"
+description = "Row number and rank window functions"
+
+[[tests]]
+name = "lead_lag"
+query = "SELECT emp_name, salary, LAG(salary) OVER (ORDER BY salary) as prev_salary, LEAD(salary) OVER (ORDER BY salary) as next_salary FROM salaries"
+description = "Lead and Lag value functions"
+
+[[tests]]
+name = "frame_clause"
+query = "SELECT emp_name, salary, SUM(salary) OVER (ORDER BY salary ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as running_total FROM salaries"
+description = "Window frames"

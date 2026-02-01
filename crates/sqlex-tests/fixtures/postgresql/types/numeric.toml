@@ -1,0 +1,58 @@
+# PostgreSQL Numeric Types Tests
+
+[schema]
+dialect = "postgresql"
+migration = """
+CREATE TABLE numeric_types (
+    id SERIAL PRIMARY KEY,
+    small_num SMALLINT,
+    int_num INTEGER,
+    big_num BIGINT,
+    real_num REAL,
+    double_num DOUBLE PRECISION,
+    decimal_num DECIMAL(10, 2),
+    numeric_num NUMERIC(10, 2),
+    serial_col SERIAL,
+    bigserial_col BIGSERIAL
+);
+
+INSERT INTO numeric_types (
+    small_num, int_num, big_num, 
+    real_num, double_num, 
+    decimal_num, numeric_num
+) VALUES (
+    32767, 2147483647, 9223372036854775807,
+    123.456, 123456.789123,
+    12345.67, 54321.12
+);
+"""
+
+[[tests]]
+name = "select_integers"
+query = "SELECT small_num, int_num, big_num FROM numeric_types"
+description = "Select standard integer types"
+
+[[tests]]
+name = "select_floats"
+query = "SELECT real_num, double_num FROM numeric_types"
+description = "Select floating point types"
+
+[[tests]]
+name = "select_decimals"
+query = "SELECT decimal_num, numeric_num FROM numeric_types"
+description = "Select arbitrary precision types"
+
+[[tests]]
+name = "select_serials"
+query = "SELECT id, serial_col, bigserial_col FROM numeric_types"
+description = "Select serial auto-increment types"
+
+[[tests]]
+name = "arithmetic_operations"
+query = "SELECT int_num + 10 as plus_ten, big_num * 2 as multiplied FROM numeric_types"
+description = "Basic arithmetic operations"
+
+[[tests]]
+name = "cast_operations"
+query = "SELECT small_num::INTEGER as casted_int, '123'::INTEGER as str_to_int FROM numeric_types"
+description = "Type casting"

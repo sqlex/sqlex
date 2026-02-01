@@ -1,0 +1,43 @@
+# PostgreSQL Geometric and Network Types Tests
+
+[schema]
+dialect = "postgresql"
+migration = """
+CREATE TABLE geo_net_types (
+    id SERIAL PRIMARY KEY,
+    pt POINT,
+    ln LINE,
+    bg BOX,
+    ip_addr INET,
+    mac MACADDR
+);
+
+INSERT INTO geo_net_types (pt, ln, bg, ip_addr, mac) 
+VALUES (
+    POINT(1.0, 2.0),
+    LINE '{1, 2, 3}',
+    BOX(POINT(2.0, 3.0), POINT(0.0, 0.0)),
+    '192.168.1.1',
+    '08:00:2b:01:02:03'
+);
+"""
+
+[[tests]]
+name = "select_geometric"
+query = "SELECT pt, ln, bg FROM geo_net_types"
+description = "Select geometric types"
+
+[[tests]]
+name = "select_network"
+query = "SELECT ip_addr, mac FROM geo_net_types"
+description = "Select network types"
+
+[[tests]]
+name = "geometric_ops"
+query = "SELECT pt <-> POINT(0,0) as distance FROM geo_net_types"
+description = "Geometric operators"
+
+[[tests]]
+name = "network_ops"
+query = "SELECT ip_addr << '192.168.1.0/24'::inet as is_in_subnet FROM geo_net_types"
+description = "Network operators"

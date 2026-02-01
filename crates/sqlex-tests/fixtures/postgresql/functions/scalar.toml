@@ -1,0 +1,35 @@
+# PostgreSQL Scalar Functions Tests
+
+[schema]
+dialect = "postgresql"
+migration = """
+CREATE TABLE scalar_test (
+    id SERIAL PRIMARY KEY,
+    txt VARCHAR(100),
+    num DOUBLE PRECISION,
+    dt TIMESTAMP
+);
+
+INSERT INTO scalar_test (txt, num, dt) VALUES 
+('Hello World', -123.45, '2023-06-01 12:00:00');
+"""
+
+[[tests]]
+name = "string_functions"
+query = "SELECT LOWER(txt) as lo, SUBSTRING(txt, 1, 5) as sub, LENGTH(txt) as len FROM scalar_test"
+description = "String manipulation functions"
+
+[[tests]]
+name = "math_functions"
+query = "SELECT ABS(num) as absolute, CEIL(num) as ceiling, POWER(2, 3) as eight FROM scalar_test"
+description = "Mathematical functions"
+
+[[tests]]
+name = "datetime_functions"
+query = "SELECT NOW() as current_ts, DATE_TRUNC('day', dt) as day_start FROM scalar_test"
+description = "Date and time functions"
+
+[[tests]]
+name = "system_functions"
+query = "SELECT version() as v, current_user as u"
+description = "System information functions"

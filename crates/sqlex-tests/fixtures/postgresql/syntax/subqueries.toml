@@ -1,0 +1,43 @@
+# PostgreSQL Subquery Tests
+
+[schema]
+dialect = "postgresql"
+migration = """
+CREATE TABLE departments (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50)
+);
+
+CREATE TABLE employees (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(50),
+    dept_id INT,
+    salary INT
+);
+
+INSERT INTO departments (name) VALUES ('Sales'), ('Engineering');
+INSERT INTO employees (name, dept_id, salary) VALUES 
+('Alice', 1, 5000), 
+('Bob', 2, 8000),
+('Charlie', 2, 8500);
+"""
+
+[[tests]]
+name = "scalar_subquery"
+query = "SELECT name, (SELECT name FROM departments WHERE id = dept_id) as dept_name FROM employees"
+description = "Scalar subquery in SELECT"
+
+[[tests]]
+name = "subquery_in_where"
+query = "SELECT name FROM employees WHERE dept_id IN (SELECT id FROM departments WHERE name = 'Engineering')"
+description = "Subquery in IN clause"
+
+[[tests]]
+name = "exists_subquery"
+query = "SELECT name FROM departments d WHERE EXISTS (SELECT 1 FROM employees e WHERE e.dept_id = d.id)"
+description = "EXISTS subquery"
+
+[[tests]]
+name = "derived_table"
+query = "SELECT avg_sal FROM (SELECT dept_id, AVG(salary) as avg_sal FROM employees GROUP BY dept_id) as dept_stats"
+description = "Subquery in FROM clause"

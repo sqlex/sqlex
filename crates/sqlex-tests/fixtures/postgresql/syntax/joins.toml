@@ -1,0 +1,52 @@
+# PostgreSQL Join Tests
+
+[schema]
+dialect = "postgresql"
+migration = """
+CREATE TABLE authors (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100),
+    country_id INT
+);
+
+CREATE TABLE books (
+    id SERIAL PRIMARY KEY,
+    author_id INT,
+    title VARCHAR(200),
+    published_year INT
+);
+
+CREATE TABLE countries (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100)
+);
+
+INSERT INTO authors (id, name, country_id) VALUES (1, 'Author A', 1), (2, 'Author B', NULL);
+INSERT INTO books (author_id, title) VALUES (1, 'Book 1'), (1, 'Book 2'), (NULL, 'Unknown Book');
+INSERT INTO countries (id, name) VALUES (1, 'Country X');
+"""
+
+[[tests]]
+name = "inner_join"
+query = "SELECT a.name as author, b.title FROM authors a INNER JOIN books b ON a.id = b.author_id"
+description = "Inner join"
+
+[[tests]]
+name = "left_join"
+query = "SELECT a.name, b.title FROM authors a LEFT JOIN books b ON a.id = b.author_id"
+description = "Left join (books may be null)"
+
+[[tests]]
+name = "right_join"
+query = "SELECT a.name, b.title FROM authors a RIGHT JOIN books b ON a.id = b.author_id"
+description = "Right join (authors may be null)"
+
+[[tests]]
+name = "full_join"
+query = "SELECT a.name, b.title FROM authors a FULL OUTER JOIN books b ON a.id = b.author_id"
+description = "Full outer join"
+
+[[tests]]
+name = "cross_join"
+query = "SELECT a.name, c.name as country FROM authors a CROSS JOIN countries c"
+description = "Cross join"

@@ -1,11 +1,16 @@
 //! Main query analyzer.
 
+use std::collections::HashMap;
+
 use sqlex_parser::{Expr, Query, Select, SelectItem, SetExpr, Statement, parse_one, sqlparser};
 use sqlex_schema::SchemaRegistry;
-use sqlex_types::{Dialect, ResultColumn};
+use sqlex_types::{ColumnDef, Dialect, ResultColumn};
 
 use crate::{
-    error::AnalyzeError, resolver::FromResolver, scope::Scope, type_inference::TypeInference,
+    error::AnalyzeError,
+    resolver::FromResolver,
+    scope::{Scope, ScopeTable},
+    type_inference::TypeInference,
 };
 
 /// Result of query analysis.
@@ -39,12 +44,106 @@ impl<'a> QueryAnalyzer<'a> {
 
     /// Analyze a Query AST.
     pub fn analyze_query(&self, query: &Query) -> Result<AnalyzeResult, AnalyzeError> {
+        self.analyze_query_context(query, None)
+    }
+
+    fn analyze_query_context(
+        &self,
+        query: &Query,
+        outer_ctes: Option<&HashMap<String, ScopeTable>>,
+    ) -> Result<AnalyzeResult, AnalyzeError> {
+        // Collect CTEs
+        let mut local_ctes = HashMap::new();
+        if let Some(ctes) = outer_ctes {
+            local_ctes.extend(ctes.clone());
+        }
+
+        if let Some(with) = &query.with {
+            for cte in &with.cte_tables {
+                let cte_name = cte.alias.name.value.clone();
+                // Analyze CTE query
+                // For recursive CTEs, we might need to seed the table first.
+                // Simple recursive support: assume schema from non-recursive part or just ignore self-ref for now if it fails.
+                // However, without proper recursive handling, the self-ref lookup will fail.
+                // A complete fix requires parsing the CTE query to find the UNION/non-recursive part, analyzing it, adding to scope, then analyzing recursive part.
+                // For now, let's try analyzing the query with current scope.
+
+                // Note: If recursive, we should bind the table name to the scope for the query itself.
+                // But we don't know the schema yet.
+                // If it's recursive, the query body is usually a SetOperation (UNION).
+
+                let result = if with.recursive {
+                    // Hack for recursive CTEs:
+                    // 1. Analyze ignoring the recursive part/self-ref might be hard blindly.
+                    // 2. Or, we can proceed and catch "UnknownTable" and then retry? No.
+                    // Correct way: Extract schema from the left side of UNION.
+                    match cte.query.body.as_ref() {
+                        SetExpr::SetOperation { left, .. } => {
+                            // Analyze left part (non-recursive base case)
+                            // For the base case, we pass the outer CTEs (and any defined before this one)
+                            let base_res = self.analyze_set_expr(left, Some(&local_ctes))?;
+
+                            // Add to scope so right side can see it
+                            let columns = base_res
+                                .columns
+                                .iter()
+                                .map(|c| ColumnDef {
+                                    name: c.name.clone(),
+                                    data_type: c.data_type.clone(),
+                                    nullable: c.nullable,
+                                    default: None,
+                                    is_primary_key: false,
+                                })
+                                .collect();
+
+                            let scope_table = ScopeTable {
+                                alias: cte_name.clone(),
+                                table_name: cte_name.clone(),
+                                columns,
+                                nullable_from_join: false,
+                            };
+                            local_ctes.insert(cte_name.clone(), scope_table);
+
+                            // Now analyze the full query (including right side) with the self-ref in scope
+                            self.analyze_query_context(&cte.query, Some(&local_ctes))?
+                        },
+                        _ => {
+                            // Not a standard recursive CTE structure? Just analyze normally.
+                            self.analyze_query_context(&cte.query, Some(&local_ctes))?
+                        },
+                    }
+                } else {
+                    self.analyze_query_context(&cte.query, Some(&local_ctes))?
+                };
+
+                let columns = result
+                    .columns
+                    .iter()
+                    .map(|c| ColumnDef {
+                        name: c.name.clone(),
+                        data_type: c.data_type.clone(),
+                        nullable: c.nullable,
+                        default: None,
+                        is_primary_key: false,
+                    })
+                    .collect();
+
+                let scope_table = ScopeTable {
+                    alias: cte_name.clone(),
+                    table_name: cte_name.clone(),
+                    columns,
+                    nullable_from_join: false,
+                };
+                local_ctes.insert(cte_name, scope_table);
+            }
+        }
+
         match query.body.as_ref() {
-            SetExpr::Select(select) => self.analyze_select(select),
-            SetExpr::Query(inner) => self.analyze_query(inner),
+            SetExpr::Select(select) => self.analyze_select(select, Some(&local_ctes)),
+            SetExpr::Query(inner) => self.analyze_query_context(inner, Some(&local_ctes)),
             SetExpr::SetOperation { left, .. } => {
                 // For UNION/INTERSECT/EXCEPT, use the left side's columns
-                self.analyze_set_expr(left)
+                self.analyze_set_expr(left, Some(&local_ctes))
             },
             SetExpr::Values(_) => {
                 // VALUES clause - would need value type inference
@@ -54,18 +153,26 @@ impl<'a> QueryAnalyzer<'a> {
         }
     }
 
-    fn analyze_set_expr(&self, expr: &SetExpr) -> Result<AnalyzeResult, AnalyzeError> {
+    fn analyze_set_expr(
+        &self,
+        expr: &SetExpr,
+        ctes: Option<&HashMap<String, ScopeTable>>,
+    ) -> Result<AnalyzeResult, AnalyzeError> {
         match expr {
-            SetExpr::Select(select) => self.analyze_select(select),
-            SetExpr::Query(query) => self.analyze_query(query),
-            SetExpr::SetOperation { left, .. } => self.analyze_set_expr(left),
+            SetExpr::Select(select) => self.analyze_select(select, ctes),
+            SetExpr::Query(query) => self.analyze_query_context(query, ctes),
+            SetExpr::SetOperation { left, .. } => self.analyze_set_expr(left, ctes),
             _ => Ok(AnalyzeResult { columns: vec![] }),
         }
     }
 
-    fn analyze_select(&self, select: &Select) -> Result<AnalyzeResult, AnalyzeError> {
+    fn analyze_select(
+        &self,
+        select: &Select,
+        ctes: Option<&HashMap<String, ScopeTable>>,
+    ) -> Result<AnalyzeResult, AnalyzeError> {
         // Build scope from FROM clause
-        let resolver = FromResolver::new(self.registry);
+        let resolver = FromResolver::new(self.registry, ctes);
         let scope = resolver.resolve(&select.from)?;
 
         // Analyze SELECT items

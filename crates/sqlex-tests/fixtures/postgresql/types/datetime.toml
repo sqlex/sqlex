@@ -1,0 +1,48 @@
+# PostgreSQL Date/Time Types Tests
+
+[schema]
+dialect = "postgresql"
+migration = """
+CREATE TABLE datetime_types (
+    id SERIAL PRIMARY KEY,
+    ts_without TIMESTAMP WITHOUT TIME ZONE,
+    ts_with TIMESTAMP WITH TIME ZONE,
+    just_date DATE,
+    just_time TIME,
+    time_with TIME WITH TIME ZONE,
+    interval_col INTERVAL
+);
+
+INSERT INTO datetime_types (
+    ts_without, ts_with, just_date, 
+    just_time, time_with, interval_col
+) VALUES (
+    '2023-01-01 10:00:00', '2023-01-01 10:00:00+00', '2023-01-01',
+    '10:00:00', '10:00:00+00', '1 year 2 months'
+);
+"""
+
+[[tests]]
+name = "select_timestamps"
+query = "SELECT ts_without, ts_with FROM datetime_types"
+description = "Select timestamp types"
+
+[[tests]]
+name = "select_dates_times"
+query = "SELECT just_date, just_time, time_with FROM datetime_types"
+description = "Select date and time types"
+
+[[tests]]
+name = "select_interval"
+query = "SELECT interval_col FROM datetime_types"
+description = "Select interval type"
+
+[[tests]]
+name = "date_arithmetic"
+query = "SELECT just_date + INTERVAL '1 day' as tomorrow, ts_without - interval_col as past FROM datetime_types"
+description = "Date and interval arithmetic"
+
+[[tests]]
+name = "function_inference"
+query = "SELECT EXTRACT(YEAR FROM just_date) as year_part, DATE_TRUNC('hour', ts_with) as truncated FROM datetime_types"
+description = "Date function return type inference"

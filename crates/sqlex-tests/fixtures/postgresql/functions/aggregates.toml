@@ -1,0 +1,40 @@
+# PostgreSQL Aggregate Functions Tests
+
+[schema]
+dialect = "postgresql"
+migration = """
+CREATE TABLE sales (
+    id SERIAL PRIMARY KEY,
+    region VARCHAR(50),
+    product VARCHAR(50),
+    amount NUMERIC(10, 2),
+    sale_date DATE
+);
+
+INSERT INTO sales (region, product, amount, sale_date) VALUES 
+('North', 'Widget', 100.00, '2023-01-01'),
+('North', 'Gadget', 200.00, '2023-01-02'),
+('South', 'Widget', 150.00, '2023-01-01'),
+('South', 'Gadget', 50.00, '2023-01-03'),
+('East', 'Widget', 120.00, '2023-01-02');
+"""
+
+[[tests]]
+name = "basic_aggregates"
+query = "SELECT COUNT(*) as cnt, SUM(amount) as total, AVG(amount) as average FROM sales"
+description = "Basic aggregate functions"
+
+[[tests]]
+name = "group_by"
+query = "SELECT region, SUM(amount) as region_total FROM sales GROUP BY region"
+description = "Group by clause"
+
+[[tests]]
+name = "having_clause"
+query = "SELECT product, AVG(amount) as avg_sales FROM sales GROUP BY product HAVING AVG(amount) > 100"
+description = "Having clause"
+
+[[tests]]
+name = "ordered_set_aggregates"
+query = "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY amount) as median FROM sales"
+description = "Ordered set aggregates"

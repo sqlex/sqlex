@@ -1,0 +1,39 @@
+# PostgreSQL Array Types Tests
+
+[schema]
+dialect = "postgresql"
+migration = """
+CREATE TABLE array_types (
+    id SERIAL PRIMARY KEY,
+    int_arr INTEGER[],
+    text_arr TEXT[],
+    matrix INTEGER[][]
+);
+
+INSERT INTO array_types (int_arr, text_arr, matrix) 
+VALUES (
+    ARRAY[1, 2, 3], 
+    ARRAY['a', 'b', 'c'], 
+    ARRAY[[1, 2], [3, 4]]
+);
+"""
+
+[[tests]]
+name = "select_arrays"
+query = "SELECT int_arr, text_arr, matrix FROM array_types"
+description = "Select array types"
+
+[[tests]]
+name = "array_access"
+query = "SELECT int_arr[1] as first, matrix[1][1] as top_left FROM array_types"
+description = "Access array elements"
+
+[[tests]]
+name = "array_functions"
+query = "SELECT array_length(int_arr, 1) as len, array_to_string(text_arr, ',') as joined FROM array_types"
+description = "Array functions"
+
+[[tests]]
+name = "unnest_array"
+query = "SELECT unnest(int_arr) as item FROM array_types"
+description = "Unnest array to rows"

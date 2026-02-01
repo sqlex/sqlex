@@ -1,0 +1,42 @@
+# PostgreSQL JSON Types Tests
+
+[schema]
+dialect = "postgresql"
+migration = """
+CREATE TABLE json_types (
+    id SERIAL PRIMARY KEY,
+    data_json JSON,
+    data_jsonb JSONB
+);
+
+INSERT INTO json_types (data_json, data_jsonb) 
+VALUES (
+    '{"key": "value", "list": [1, 2, 3]}', 
+    '{"key": "value", "tags": ["a", "b"]}'
+);
+"""
+
+[[tests]]
+name = "select_json"
+query = "SELECT data_json, data_jsonb FROM json_types"
+description = "Select JSON types"
+
+[[tests]]
+name = "json_extraction_text"
+query = "SELECT data_json->>'key' as txt_val, data_jsonb->>'tags' as tags_txt FROM json_types"
+description = "Extract JSON field as text"
+
+[[tests]]
+name = "json_extraction_obj"
+query = "SELECT data_json->'list' as list_obj, data_jsonb->'tags' as tags_obj FROM json_types"
+description = "Extract JSON field as object"
+
+[[tests]]
+name = "json_path"
+query = "SELECT data_json#>>'{list,0}' as first_item FROM json_types"
+description = "Extract by path"
+
+[[tests]]
+name = "jsonb_containment"
+query = "SELECT data_jsonb @> '{\"key\": \"value\"}'::jsonb as contains_key FROM json_types"
+description = "JSONB containment operator"

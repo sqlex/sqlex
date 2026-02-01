@@ -1,0 +1,44 @@
+# PostgreSQL Character Types Tests
+
+[schema]
+dialect = "postgresql"
+migration = """
+CREATE TABLE char_types (
+    id SERIAL PRIMARY KEY,
+    varchar_col VARCHAR(50),
+    char_col CHAR(10),
+    text_col TEXT,
+    name_col NAME,
+    byte_char "char"
+);
+
+INSERT INTO char_types (
+    varchar_col, char_col, text_col, name_col, byte_char
+) VALUES (
+    'variable length string', 
+    'fixed len ', 
+    'unlimited length text data', 
+    'identifier_name',
+    'a'
+);
+"""
+
+[[tests]]
+name = "select_chars"
+query = "SELECT varchar_col, char_col, text_col FROM char_types"
+description = "Select standard character types"
+
+[[tests]]
+name = "select_special_chars"
+query = "SELECT name_col, byte_char FROM char_types"
+description = "Select Postgres specific char types"
+
+[[tests]]
+name = "string_concatenation"
+query = "SELECT varchar_col || ' ' || text_col as concatenated FROM char_types"
+description = "String concatenation operator"
+
+[[tests]]
+name = "string_functions_inference"
+query = "SELECT LENGTH(varchar_col) as len, UPPER(text_col) as upper_text FROM char_types"
+description = "Function return type inference for strings"

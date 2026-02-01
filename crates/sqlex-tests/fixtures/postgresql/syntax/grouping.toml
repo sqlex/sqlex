@@ -1,0 +1,32 @@
+# PostgreSQL Grouping Tests
+
+[schema]
+dialect = "postgresql"
+migration = """
+CREATE TABLE sales_data (
+    country VARCHAR(50),
+    region VARCHAR(50),
+    amount INT
+);
+
+INSERT INTO sales_data VALUES 
+('USA', 'East', 100),
+('USA', 'West', 200),
+('Canada', 'North', 150),
+('Canada', 'South', 120);
+"""
+
+[[tests]]
+name = "grouping_sets"
+query = "SELECT country, region, SUM(amount) FROM sales_data GROUP BY GROUPING SETS ((country, region), (country), ())"
+description = "Grouping Sets"
+
+[[tests]]
+name = "rollup"
+query = "SELECT country, region, SUM(amount) FROM sales_data GROUP BY ROLLUP (country, region)"
+description = "Rollup"
+
+[[tests]]
+name = "cube"
+query = "SELECT country, region, SUM(amount) FROM sales_data GROUP BY CUBE (country, region)"
+description = "Cube"
