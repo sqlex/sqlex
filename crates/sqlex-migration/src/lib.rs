@@ -12,7 +12,6 @@ mod migration;
 pub use error::MigrationError;
 pub use loader::load_migrations;
 pub use migration::Migration;
-
 use sqlex_schema::SchemaRegistry;
 use sqlex_types::Dialect;
 

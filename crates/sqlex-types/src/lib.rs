@@ -7,11 +7,11 @@
 //! - Result column metadata
 
 mod dialect;
+mod result;
 mod sql_type;
 mod table;
-mod result;
 
 pub use dialect::Dialect;
+pub use result::ResultColumn;
 pub use sql_type::SqlType;
 pub use table::{ColumnDef, TableDef};
-pub use result::ResultColumn;

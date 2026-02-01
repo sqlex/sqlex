@@ -1,11 +1,11 @@
 //! SQL parsing functions.
 
-use sqlparser::ast::Statement;
-use sqlparser::dialect::{
-    Dialect as SqlParserDialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect,
-};
-use sqlparser::parser::Parser;
 use sqlex_types::Dialect;
+use sqlparser::{
+    ast::Statement,
+    dialect::{Dialect as SqlParserDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect},
+    parser::Parser,
+};
 
 use crate::ParseError;
 
@@ -68,7 +68,8 @@ mod tests {
 
     #[test]
     fn test_parse_create_table_mysql() {
-        let sql = "CREATE TABLE users (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL)";
+        let sql =
+            "CREATE TABLE users (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL)";
         let stmts = parse(sql, Dialect::MySQL).unwrap();
         assert_eq!(stmts.len(), 1);
         assert!(matches!(&stmts[0], Statement::CreateTable(_)));

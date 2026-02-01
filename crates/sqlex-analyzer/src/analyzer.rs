@@ -1,13 +1,12 @@
 //! Main query analyzer.
 
-use sqlex_parser::{parse_one, sqlparser, Expr, Query, Select, SelectItem, SetExpr, Statement};
+use sqlex_parser::{Expr, Query, Select, SelectItem, SetExpr, Statement, parse_one, sqlparser};
 use sqlex_schema::SchemaRegistry;
-use sqlex_types::{Dialect, ResultColumn, SqlType};
+use sqlex_types::{Dialect, ResultColumn};
 
-use crate::error::AnalyzeError;
-use crate::resolver::FromResolver;
-use crate::scope::Scope;
-use crate::type_inference::TypeInference;
+use crate::{
+    error::AnalyzeError, resolver::FromResolver, scope::Scope, type_inference::TypeInference,
+};
 
 /// Result of query analysis.
 #[derive(Debug, Clone)]
@@ -46,11 +45,11 @@ impl<'a> QueryAnalyzer<'a> {
             SetExpr::SetOperation { left, .. } => {
                 // For UNION/INTERSECT/EXCEPT, use the left side's columns
                 self.analyze_set_expr(left)
-            }
+            },
             SetExpr::Values(_) => {
                 // VALUES clause - would need value type inference
                 Ok(AnalyzeResult { columns: vec![] })
-            }
+            },
             _ => Err(AnalyzeError::Unsupported("SetExpr type".to_string())),
         }
     }
@@ -77,11 +76,11 @@ impl<'a> QueryAnalyzer<'a> {
                 SelectItem::UnnamedExpr(expr) => {
                     let col = self.analyze_select_expr(&scope, expr, None)?;
                     columns.push(col);
-                }
+                },
                 SelectItem::ExprWithAlias { expr, alias } => {
                     let col = self.analyze_select_expr(&scope, expr, Some(&alias.value))?;
                     columns.push(col);
-                }
+                },
                 SelectItem::QualifiedWildcard(name, _) => {
                     // table.* - extract table name from the qualified wildcard
                     let table_alias = qualified_wildcard_to_string(name);
@@ -98,7 +97,7 @@ impl<'a> QueryAnalyzer<'a> {
                             &resolved.column_name,
                         ));
                     }
-                }
+                },
                 SelectItem::Wildcard(_) => {
                     // SELECT *
                     for resolved in scope.all_columns() {
@@ -110,7 +109,7 @@ impl<'a> QueryAnalyzer<'a> {
                             &resolved.column_name,
                         ));
                     }
-                }
+                },
             }
         }
 
@@ -136,7 +135,7 @@ impl<'a> QueryAnalyzer<'a> {
                     source.as_ref().map(|s| s.table_name.clone()),
                     source.map(|s| s.column_name),
                 )
-            }
+            },
             Expr::CompoundIdentifier(idents) if idents.len() == 2 => {
                 let table_alias = &idents[0].value;
                 let col = &idents[1].value;
@@ -147,14 +146,14 @@ impl<'a> QueryAnalyzer<'a> {
                     source.as_ref().map(|s| s.table_name.clone()),
                     source.map(|s| s.column_name),
                 )
-            }
+            },
             _ => {
                 // Expression - use alias or generate name
                 let name = alias
                     .map(|a| a.to_string())
                     .unwrap_or_else(|| expr_to_name(expr));
                 (name, None, None)
-            }
+            },
         };
 
         let mut result = ResultColumn::new(name, data_type, nullable);
@@ -172,9 +171,11 @@ impl<'a> QueryAnalyzer<'a> {
 /// Extract table name from QualifiedWildcard
 fn qualified_wildcard_to_string(kind: &sqlparser::ast::SelectItemQualifiedWildcardKind) -> String {
     match kind {
-        sqlparser::ast::SelectItemQualifiedWildcardKind::ObjectName(name) => {
-            name.0.last().map(|i| ident_to_string(i)).unwrap_or_default()
-        }
+        sqlparser::ast::SelectItemQualifiedWildcardKind::ObjectName(name) => name
+            .0
+            .last()
+            .map(|i| ident_to_string(i))
+            .unwrap_or_default(),
         sqlparser::ast::SelectItemQualifiedWildcardKind::Expr(_) => String::new(),
     }
 }
@@ -189,12 +190,16 @@ fn ident_to_string(ident: &sqlparser::ast::ObjectNamePart) -> String {
 fn expr_to_name(expr: &Expr) -> String {
     match expr {
         Expr::Identifier(ident) => ident.value.clone(),
-        Expr::CompoundIdentifier(idents) => {
-            idents.last().map(|i| i.value.clone()).unwrap_or_else(|| "?column?".to_string())
-        }
-        Expr::Function(func) => {
-            func.name.0.last().map(|i| ident_to_string(i)).unwrap_or_else(|| "?column?".to_string())
-        }
+        Expr::CompoundIdentifier(idents) => idents
+            .last()
+            .map(|i| i.value.clone())
+            .unwrap_or_else(|| "?column?".to_string()),
+        Expr::Function(func) => func
+            .name
+            .0
+            .last()
+            .map(|i| ident_to_string(i))
+            .unwrap_or_else(|| "?column?".to_string()),
         Expr::Value(_) => "?column?".to_string(),
         Expr::BinaryOp { .. } => "?column?".to_string(),
         Expr::UnaryOp { .. } => "?column?".to_string(),
@@ -206,6 +211,8 @@ fn expr_to_name(expr: &Expr) -> String {
 
 #[cfg(test)]
 mod tests {
+    use sqlex_types::SqlType;
+
     use super::*;
 
     fn create_test_schema() -> SchemaRegistry {

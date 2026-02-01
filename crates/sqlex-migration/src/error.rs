@@ -10,7 +10,9 @@ pub enum MigrationError {
     ReadDir(#[from] std::io::Error),
 
     /// Invalid migration filename
-    #[error("Invalid migration filename: {filename}. Expected format: V1__description.sql or 001_description.sql")]
+    #[error(
+        "Invalid migration filename: {filename}. Expected format: V1__description.sql or 001_description.sql"
+    )]
     InvalidFilename { filename: String },
 
     /// Duplicate migration version

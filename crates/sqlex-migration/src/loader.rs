@@ -1,13 +1,10 @@
 //! Migration file loader.
 
-use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
+use std::{collections::HashMap, fs, path::Path};
 
 use regex::Regex;
 
-use crate::error::MigrationError;
-use crate::migration::Migration;
+use crate::{error::MigrationError, migration::Migration};
 
 /// Load migrations from a directory.
 ///
@@ -92,6 +89,7 @@ pub fn load_migrations(dir: &Path) -> Result<Vec<Migration>, MigrationError> {
 }
 
 /// Load migrations from multiple SQL strings (for testing).
+#[allow(dead_code)]
 pub fn load_migrations_from_strings<'a>(
     sqls: impl IntoIterator<Item = (u64, &'a str, &'a str)>,
 ) -> Vec<Migration> {
@@ -105,10 +103,11 @@ pub fn load_migrations_from_strings<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::fs::File;
-    use std::io::Write;
+    use std::{fs::File, io::Write};
+
     use tempfile::tempdir;
+
+    use super::*;
 
     #[test]
     fn test_load_flyway_style() {
@@ -161,7 +160,10 @@ mod tests {
             .unwrap();
 
         let result = load_migrations(dir.path());
-        assert!(matches!(result, Err(MigrationError::DuplicateVersion { .. })));
+        assert!(matches!(
+            result,
+            Err(MigrationError::DuplicateVersion { .. })
+        ));
     }
 
     #[test]

@@ -12,8 +12,9 @@
 //! ## Example
 //!
 //! ```rust,no_run
-//! use sqlex::{Dialect, load_migrations, apply_migrations, QueryAnalyzer};
 //! use std::path::Path;
+//!
+//! use sqlex::{Dialect, QueryAnalyzer, apply_migrations, load_migrations};
 //!
 //! // Load migrations from directory
 //! let migrations = load_migrations(Path::new("./migrations")).unwrap();
@@ -26,26 +27,21 @@
 //! let result = analyzer.analyze("SELECT id, name FROM users").unwrap();
 //!
 //! for col in result.columns {
-//!     println!("{}: {} (nullable: {})", col.name, col.data_type, col.nullable);
+//!     println!(
+//!         "{}: {} (nullable: {})",
+//!         col.name, col.data_type, col.nullable
+//!     );
 //! }
 //! ```
 
 // Re-export types
-pub use sqlex_types::{
-    Dialect, SqlType, ColumnDef, TableDef, ResultColumn,
-};
-
-// Re-export schema
-pub use sqlex_schema::{SchemaRegistry, SchemaError};
-
-// Re-export migration
-pub use sqlex_migration::{
-    Migration, MigrationError,
-    load_migrations, apply_migrations,
-};
-
 // Re-export analyzer
-pub use sqlex_analyzer::{QueryAnalyzer, AnalyzeResult, AnalyzeError};
+pub use sqlex_analyzer::{AnalyzeError, AnalyzeResult, QueryAnalyzer};
+// Re-export migration
+pub use sqlex_migration::{Migration, MigrationError, apply_migrations, load_migrations};
+// Re-export schema
+pub use sqlex_schema::{SchemaError, SchemaRegistry};
+pub use sqlex_types::{ColumnDef, Dialect, ResultColumn, SqlType, TableDef};
 
 // Re-export parser (for advanced use)
 pub mod parser {
@@ -60,10 +56,16 @@ mod tests {
     fn test_end_to_end() {
         // Create migrations programmatically
         let migrations = vec![
-            Migration::new(1, "create_users", 
-                "CREATE TABLE users (id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL)"),
-            Migration::new(2, "create_orders",
-                "CREATE TABLE orders (id SERIAL PRIMARY KEY, user_id INT NOT NULL, amount DECIMAL(10,2))"),
+            Migration::new(
+                1,
+                "create_users",
+                "CREATE TABLE users (id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL)",
+            ),
+            Migration::new(
+                2,
+                "create_orders",
+                "CREATE TABLE orders (id SERIAL PRIMARY KEY, user_id INT NOT NULL, amount DECIMAL(10,2))",
+            ),
         ];
 
         // Build schema
@@ -72,7 +74,7 @@ mod tests {
 
         // Analyze query
         let analyzer = QueryAnalyzer::new(&schema, Dialect::PostgreSQL);
-        
+
         // Simple select
         let result = analyzer.analyze("SELECT id, name FROM users").unwrap();
         assert_eq!(result.columns.len(), 2);
@@ -80,9 +82,9 @@ mod tests {
         assert_eq!(result.columns[1].name, "name");
 
         // Join query
-        let result = analyzer.analyze(
-            "SELECT u.name, o.amount FROM users u JOIN orders o ON u.id = o.user_id"
-        ).unwrap();
+        let result = analyzer
+            .analyze("SELECT u.name, o.amount FROM users u JOIN orders o ON u.id = o.user_id")
+            .unwrap();
         assert_eq!(result.columns.len(), 2);
     }
 }

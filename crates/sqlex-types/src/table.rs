@@ -89,17 +89,25 @@ impl TableDef {
 
     /// Get a column by name.
     pub fn get_column(&self, name: &str) -> Option<&ColumnDef> {
-        self.columns.iter().find(|c| c.name.eq_ignore_ascii_case(name))
+        self.columns
+            .iter()
+            .find(|c| c.name.eq_ignore_ascii_case(name))
     }
 
     /// Get a mutable column by name.
     pub fn get_column_mut(&mut self, name: &str) -> Option<&mut ColumnDef> {
-        self.columns.iter_mut().find(|c| c.name.eq_ignore_ascii_case(name))
+        self.columns
+            .iter_mut()
+            .find(|c| c.name.eq_ignore_ascii_case(name))
     }
 
     /// Remove a column by name.
     pub fn remove_column(&mut self, name: &str) -> Option<ColumnDef> {
-        if let Some(pos) = self.columns.iter().position(|c| c.name.eq_ignore_ascii_case(name)) {
+        if let Some(pos) = self
+            .columns
+            .iter()
+            .position(|c| c.name.eq_ignore_ascii_case(name))
+        {
             self.primary_key.retain(|pk| !pk.eq_ignore_ascii_case(name));
             Some(self.columns.remove(pos))
         } else {

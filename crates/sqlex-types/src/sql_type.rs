@@ -80,10 +80,7 @@ impl SqlType {
 
     /// Returns true if this type is a string type.
     pub fn is_string(&self) -> bool {
-        matches!(
-            self,
-            SqlType::Char(_) | SqlType::Varchar(_) | SqlType::Text
-        )
+        matches!(self, SqlType::Char(_) | SqlType::Varchar(_) | SqlType::Text)
     }
 
     /// Returns true if this type is a date/time type.
@@ -103,12 +100,19 @@ impl SqlType {
             // If either is Real, result is Real (unless other is Double)
             (Real, _) | (_, Real) => Real,
             // Decimal propagates
-            (Decimal { precision: p1, scale: s1 }, Decimal { precision: p2, scale: s2 }) => {
+            (
                 Decimal {
-                    precision: (*p1).max(*p2),
-                    scale: (*s1).max(*s2),
-                }
-            }
+                    precision: p1,
+                    scale: s1,
+                },
+                Decimal {
+                    precision: p2,
+                    scale: s2,
+                },
+            ) => Decimal {
+                precision: (*p1).max(*p2),
+                scale: (*s1).max(*s2),
+            },
             (Decimal { precision, scale }, _) | (_, Decimal { precision, scale }) => Decimal {
                 precision: *precision,
                 scale: *scale,

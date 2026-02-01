@@ -1,0 +1,126 @@
+# rustfmt configuration for sqlex
+# Using nightly toolchain for advanced formatting options
+# Reference: https://rust-lang.github.io/rustfmt/
+
+# Edition to use for parsing
+edition = "2021"
+
+# Maximum width of each line
+max_width = 100
+
+# Number of spaces per tab
+tab_spaces = 4
+
+# Use spaces instead of tabs
+hard_tabs = false
+
+# Put single expression functions on a single line
+fn_single_line = false
+
+# Format string literals where necessary
+format_strings = false
+
+# Always use block indent (vs visual indent)
+indent_style = "Block"
+
+# Imports formatting - group and merge imports
+imports_granularity = "Crate"
+group_imports = "StdExternalCrate"
+reorder_imports = true
+reorder_modules = true
+
+# Brace style
+brace_style = "SameLineWhere"
+
+# Controls the trailing comma
+trailing_comma = "Vertical"
+
+# Put a trailing semicolon after break, continue and return
+trailing_semicolon = true
+
+# Use field initialize shorthand if possible
+use_field_init_shorthand = true
+
+# Replace uses of the try! macro by the ? shorthand
+use_try_shorthand = true
+
+# Force multiline closure and match arm bodies to be wrapped in a block
+force_multiline_blocks = false
+
+# Format code in doc comments
+format_code_in_doc_comments = true
+
+# Format macro matchers
+format_macro_matchers = true
+
+# Maximum width of the args of a function-like macro
+fn_call_width = 60
+
+# Function parameters layout
+fn_params_layout = "Tall"
+
+# Where to put the opening brace of conditional expressions
+control_brace_style = "AlwaysSameLine"
+
+# Convert /* */ comments to // comments where possible
+normalize_comments = false
+
+# Convert doc attributes to comments
+normalize_doc_attributes = false
+
+# Wrap comments to fit within max_width
+wrap_comments = false
+
+# Format generated files
+format_generated_files = true
+
+# Chain width threshold
+chain_width = 60
+
+# Single line if-else max width
+single_line_if_else_max_width = 50
+
+# Minimum number of blank lines between items
+blank_lines_lower_bound = 0
+
+# Maximum number of blank lines between items
+blank_lines_upper_bound = 1
+
+# Put small struct literals on a single line
+struct_lit_single_line = true
+
+# Max width of struct literal before falling back to vertical formatting
+struct_lit_width = 18
+
+# Max width for an array literal before falling back to vertical formatting
+array_width = 60
+
+# Match arm formatting
+match_arm_blocks = true
+match_arm_leading_pipes = "Never"
+match_block_trailing_comma = true
+
+# Newline style
+newline_style = "Auto"
+
+# Remove unnecessary nested parentheses
+remove_nested_parens = true
+
+# Short array element width threshold
+short_array_element_width_threshold = 10
+
+# Space between colon and type in type annotations
+space_after_colon = true
+space_before_colon = false
+
+# Spaces around ranges
+spaces_around_ranges = false
+
+# Put empty body macros on a single line
+empty_item_single_line = true
+
+# Hex literal case
+hex_literal_case = "Preserve"
+
+# Style edition for rustfmt formatting
+style_edition = "2024"

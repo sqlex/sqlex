@@ -1,6 +1,6 @@
 //! Expression type inference.
 
-use sqlex_parser::{sqlparser, Expr};
+use sqlex_parser::{Expr, sqlparser};
 use sqlex_types::SqlType;
 
 use crate::scope::Scope;
@@ -14,12 +14,10 @@ impl TypeInference {
     pub fn infer(scope: &Scope, expr: &Expr) -> (SqlType, bool) {
         match expr {
             // Column reference
-            Expr::Identifier(ident) => {
-                match scope.resolve_column(None, &ident.value) {
-                    Ok(col) => (col.data_type.clone(), col.nullable),
-                    Err(_) => (SqlType::Unknown, true),
-                }
-            }
+            Expr::Identifier(ident) => match scope.resolve_column(None, &ident.value) {
+                Ok(col) => (col.data_type.clone(), col.nullable),
+                Err(_) => (SqlType::Unknown, true),
+            },
             Expr::CompoundIdentifier(idents) => {
                 if idents.len() == 2 {
                     let table = &idents[0].value;
@@ -31,32 +29,35 @@ impl TypeInference {
                 } else {
                     (SqlType::Unknown, true)
                 }
-            }
+            },
 
             // Literals - sqlparser v0.55 uses ValueWithSpan
             Expr::Value(value_with_span) => Self::infer_value_with_span(value_with_span),
 
             // Binary operations
-            Expr::BinaryOp { left, op, right } => {
-                Self::infer_binary_op(scope, left, op, right)
-            }
+            Expr::BinaryOp { left, op, right } => Self::infer_binary_op(scope, left, op, right),
 
             // Unary operations
             Expr::UnaryOp { op, expr } => {
                 let (inner_type, nullable) = Self::infer(scope, expr);
                 match op {
                     sqlparser::ast::UnaryOperator::Not => (SqlType::Boolean, nullable),
-                    sqlparser::ast::UnaryOperator::Minus
-                    | sqlparser::ast::UnaryOperator::Plus => (inner_type, nullable),
+                    sqlparser::ast::UnaryOperator::Minus | sqlparser::ast::UnaryOperator::Plus => {
+                        (inner_type, nullable)
+                    },
                     _ => (inner_type, nullable),
                 }
-            }
+            },
 
             // Function calls
             Expr::Function(func) => Self::infer_function(scope, func),
 
             // CASE expression - in v0.55 it uses 'conditions' which are CaseWhen structs
-            Expr::Case { conditions, else_result, .. } => {
+            Expr::Case {
+                conditions,
+                else_result,
+                ..
+            } => {
                 // Type is the common type of all results
                 let mut result_type = SqlType::Unknown;
                 let mut nullable = else_result.is_none(); // Nullable if no ELSE
@@ -78,19 +79,20 @@ impl TypeInference {
                 }
 
                 (result_type, nullable)
-            }
+            },
 
             // CAST
             Expr::Cast { data_type, .. } => {
-                let sql_type = sqlex_parser::convert_data_type(data_type, sqlex_types::Dialect::PostgreSQL);
+                let sql_type =
+                    sqlex_parser::convert_data_type(data_type, sqlex_types::Dialect::PostgreSQL);
                 (sql_type, false)
-            }
+            },
 
             // Subquery
             Expr::Subquery(_) => {
                 // Would need recursive analysis
                 (SqlType::Unknown, true)
-            }
+            },
 
             // Nested expression
             Expr::Nested(inner) => Self::infer(scope, inner),
@@ -151,7 +153,7 @@ impl TypeInference {
                 } else {
                     (SqlType::Unknown, nullable)
                 }
-            }
+            },
 
             // String concatenation
             StringConcat => (SqlType::Text, nullable),
@@ -176,7 +178,7 @@ impl TypeInference {
             "SUM" => {
                 let inner_type = Self::infer_function_arg_type(scope, func);
                 (inner_type, true) // SUM returns NULL for empty set
-            }
+            },
 
             // AVG returns Double (or Decimal for Decimal input)
             "AVG" => (SqlType::Double, true),
@@ -185,24 +187,24 @@ impl TypeInference {
             "MIN" | "MAX" => {
                 let inner_type = Self::infer_function_arg_type(scope, func);
                 (inner_type, true)
-            }
+            },
 
             // String functions
             "LOWER" | "UPPER" | "TRIM" | "LTRIM" | "RTRIM" | "CONCAT" | "SUBSTRING" | "SUBSTR" => {
                 (SqlType::Text, true)
-            }
+            },
 
             // COALESCE - returns first non-null, type of first arg
             "COALESCE" => {
                 let inner_type = Self::infer_function_arg_type(scope, func);
                 (inner_type, false) // COALESCE with literals makes it non-null
-            }
+            },
 
             // NULLIF - makes result nullable
             "NULLIF" => {
                 let inner_type = Self::infer_function_arg_type(scope, func);
                 (inner_type, true)
-            }
+            },
 
             // NOW, CURRENT_TIMESTAMP
             "NOW" | "CURRENT_TIMESTAMP" => (SqlType::TimestampTz, false),
@@ -224,22 +226,22 @@ impl TypeInference {
                 if let Some(arg) = list.args.first() {
                     match arg {
                         sqlparser::ast::FunctionArg::Unnamed(
-                            sqlparser::ast::FunctionArgExpr::Expr(expr)
+                            sqlparser::ast::FunctionArgExpr::Expr(expr),
                         ) => {
                             return Self::infer(scope, expr).0;
-                        }
+                        },
                         sqlparser::ast::FunctionArg::Named {
                             arg: sqlparser::ast::FunctionArgExpr::Expr(expr),
                             ..
                         } => {
                             return Self::infer(scope, expr).0;
-                        }
-                        _ => {}
+                        },
+                        _ => {},
                     }
                 }
-            }
-            sqlparser::ast::FunctionArguments::Subquery(_) => {}
-            sqlparser::ast::FunctionArguments::None => {}
+            },
+            sqlparser::ast::FunctionArguments::Subquery(_) => {},
+            sqlparser::ast::FunctionArguments::None => {},
         }
         SqlType::Unknown
     }

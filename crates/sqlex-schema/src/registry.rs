@@ -3,10 +3,10 @@
 use std::collections::HashMap;
 
 use sqlex_parser::{
-    convert_data_type, parse, sqlparser, AlterColumnOperation, AlterTableOperation, ColumnOption,
-    CreateTable, ObjectName, ObjectType, Statement, TableConstraint,
+    AlterColumnOperation, AlterTableOperation, ColumnOption, CreateTable, ObjectName, ObjectType,
+    Statement, TableConstraint, convert_data_type, parse, sqlparser,
 };
-use sqlex_types::{ColumnDef, Dialect, SqlType, TableDef};
+use sqlex_types::{ColumnDef, Dialect, TableDef};
 
 use crate::SchemaError;
 
@@ -37,12 +37,15 @@ impl SchemaRegistry {
     pub fn apply_statement(&mut self, stmt: &Statement) -> Result<(), SchemaError> {
         match stmt {
             Statement::CreateTable(create) => self.apply_create_table(create),
-            Statement::Drop { object_type, names, if_exists, .. } => {
-                self.apply_drop(object_type, names, *if_exists)
-            }
-            Statement::AlterTable { name, operations, .. } => {
-                self.apply_alter_table(name, operations)
-            }
+            Statement::Drop {
+                object_type,
+                names,
+                if_exists,
+                ..
+            } => self.apply_drop(object_type, names, *if_exists),
+            Statement::AlterTable {
+                name, operations, ..
+            } => self.apply_alter_table(name, operations),
             // Ignore non-DDL statements
             _ => Ok(()),
         }
@@ -153,7 +156,11 @@ impl SchemaRegistry {
 
         for op in operations {
             match op {
-                AlterTableOperation::AddColumn { column_def, if_not_exists, .. } => {
+                AlterTableOperation::AddColumn {
+                    column_def,
+                    if_not_exists,
+                    ..
+                } => {
                     let col_name = column_def.name.value.clone();
                     if table.get_column(&col_name).is_some() {
                         if !if_not_exists {
@@ -166,8 +173,12 @@ impl SchemaRegistry {
                         let col_def = convert_column_def(column_def, self.dialect);
                         table.add_column(col_def);
                     }
-                }
-                AlterTableOperation::DropColumn { column_name, if_exists, .. } => {
+                },
+                AlterTableOperation::DropColumn {
+                    column_name,
+                    if_exists,
+                    ..
+                } => {
                     let col_name = column_name.value.clone();
                     if table.remove_column(&col_name).is_none() && !if_exists {
                         return Err(SchemaError::ColumnNotFound {
@@ -175,50 +186,54 @@ impl SchemaRegistry {
                             column: col_name,
                         });
                     }
-                }
-                AlterTableOperation::RenameColumn { old_column_name, new_column_name } => {
+                },
+                AlterTableOperation::RenameColumn {
+                    old_column_name,
+                    new_column_name,
+                } => {
                     let old_name = old_column_name.value.clone();
                     if let Some(col) = table.get_column_mut(&old_name) {
                         col.name = new_column_name.value.clone();
                     }
-                }
+                },
                 AlterTableOperation::AlterColumn { column_name, op } => {
                     let col_name = column_name.value.clone();
                     if let Some(col) = table.get_column_mut(&col_name) {
                         match op {
                             AlterColumnOperation::SetNotNull => {
                                 col.nullable = false;
-                            }
+                            },
                             AlterColumnOperation::DropNotNull => {
                                 col.nullable = true;
-                            }
+                            },
                             AlterColumnOperation::SetDataType { data_type, .. } => {
                                 col.data_type = convert_data_type(data_type, self.dialect);
-                            }
+                            },
                             AlterColumnOperation::SetDefault { value } => {
                                 col.default = Some(value.to_string());
-                            }
+                            },
                             AlterColumnOperation::DropDefault => {
                                 col.default = None;
-                            }
-                            _ => {}
+                            },
+                            _ => {},
                         }
                     }
-                }
-                AlterTableOperation::RenameTable { table_name: new_name } => {
+                },
+                AlterTableOperation::RenameTable {
+                    table_name: new_name,
+                } => {
                     let new_table_name = object_name_to_string(new_name);
                     table.name = new_table_name.clone();
                     // Note: We'd need to update the key too, but that's complex
                     // For now, just update the name in the definition
-                }
+                },
                 _ => {
                     // Ignore other operations
-                }
+                },
             }
         }
         Ok(())
     }
-
 }
 
 fn convert_column_def(col: &sqlex_parser::SqlColumnDef, dialect: Dialect) -> ColumnDef {
@@ -232,20 +247,20 @@ fn convert_column_def(col: &sqlex_parser::SqlColumnDef, dialect: Dialect) -> Col
         match &opt.option {
             ColumnOption::Null => {
                 col_def.nullable = true;
-            }
+            },
             ColumnOption::NotNull => {
                 col_def.nullable = false;
-            }
+            },
             ColumnOption::Default(expr) => {
                 col_def.default = Some(expr.to_string());
-            }
+            },
             ColumnOption::Unique { is_primary, .. } => {
                 if *is_primary {
                     col_def.is_primary_key = true;
                     col_def.nullable = false;
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 
@@ -253,7 +268,6 @@ fn convert_column_def(col: &sqlex_parser::SqlColumnDef, dialect: Dialect) -> Col
 }
 
 impl SchemaRegistry {
-
     fn apply_table_constraint(&self, table: &mut TableDef, constraint: &TableConstraint) {
         match constraint {
             TableConstraint::PrimaryKey { columns, .. } => {
@@ -265,14 +279,17 @@ impl SchemaRegistry {
                         col_def.nullable = false;
                     }
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 }
 
 fn object_name_to_string(name: &ObjectName) -> String {
-    name.0.last().map(|i| ident_to_string(i)).unwrap_or_default()
+    name.0
+        .last()
+        .map(|i| ident_to_string(i))
+        .unwrap_or_default()
 }
 
 fn ident_to_string(ident: &sqlparser::ast::ObjectNamePart) -> String {
@@ -283,6 +300,8 @@ fn ident_to_string(ident: &sqlparser::ast::ObjectNamePart) -> String {
 
 #[cfg(test)]
 mod tests {
+    use sqlex_types::SqlType;
+
     use super::*;
 
     #[test]

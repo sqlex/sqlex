@@ -1,10 +1,12 @@
 //! FROM clause resolver.
 
-use sqlex_parser::{sqlparser, TableFactor, TableWithJoins};
+use sqlex_parser::{TableFactor, TableWithJoins, sqlparser};
 use sqlex_schema::SchemaRegistry;
 
-use crate::error::AnalyzeError;
-use crate::scope::{Scope, ScopeTable};
+use crate::{
+    error::AnalyzeError,
+    scope::{Scope, ScopeTable},
+};
 
 /// Resolve FROM clause to build a scope.
 pub struct FromResolver<'a> {
@@ -66,7 +68,7 @@ impl<'a> FromResolver<'a> {
                 let mut scope_table = ScopeTable::from_table_def(table_def, alias_name);
                 scope_table.nullable_from_join = nullable_from_join;
                 scope.add_table(scope_table);
-            }
+            },
             TableFactor::Derived { alias, .. } => {
                 // TODO: Handle subqueries by analyzing them recursively
                 // For now, skip with a placeholder
@@ -74,8 +76,10 @@ impl<'a> FromResolver<'a> {
                     // We would need to analyze the subquery and create a scope table
                     // from its result columns
                 }
-            }
-            TableFactor::NestedJoin { table_with_joins, .. } => {
+            },
+            TableFactor::NestedJoin {
+                table_with_joins, ..
+            } => {
                 // Recursively resolve nested joins
                 self.resolve_table_factor(&table_with_joins.relation, scope, nullable_from_join)?;
                 for join in &table_with_joins.joins {
@@ -90,17 +94,20 @@ impl<'a> FromResolver<'a> {
                         );
                     self.resolve_table_factor(&join.relation, scope, join_nullable)?;
                 }
-            }
+            },
             _ => {
                 // Other table factors (UNNEST, etc.) - skip for now
-            }
+            },
         }
         Ok(())
     }
 }
 
 fn object_name_to_string(name: &sqlex_parser::ObjectName) -> String {
-    name.0.last().map(|i| ident_to_string(i)).unwrap_or_default()
+    name.0
+        .last()
+        .map(|i| ident_to_string(i))
+        .unwrap_or_default()
 }
 
 fn ident_to_string(ident: &sqlparser::ast::ObjectNamePart) -> String {

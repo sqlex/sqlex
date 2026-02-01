@@ -1,7 +1,8 @@
 //! Query scope for name resolution.
 
 use std::collections::HashMap;
-use sqlex_types::{ColumnDef, TableDef, SqlType};
+
+use sqlex_types::{ColumnDef, SqlType, TableDef};
 
 /// Information about a table in scope.
 #[derive(Debug, Clone)]
@@ -62,11 +63,6 @@ impl Scope {
         self.tables.get(&alias.to_lowercase())
     }
 
-    /// Get all tables.
-    pub fn tables(&self) -> impl Iterator<Item = &ScopeTable> {
-        self.tables.values()
-    }
-
     /// Resolve a column reference.
     /// Returns (table_alias, column_def, is_nullable).
     pub fn resolve_column(
@@ -85,7 +81,7 @@ impl Scope {
                 .ok_or_else(|| ColumnResolutionError::UnknownColumn(column_name.to_string()))?;
 
             Ok(ResolvedColumn {
-                table_alias: table.alias.clone(),
+                _table_alias: table.alias.clone(),
                 table_name: table.table_name.clone(),
                 column_name: column.name.clone(),
                 data_type: column.data_type.clone(),
@@ -102,7 +98,7 @@ impl Scope {
                         return Err(ColumnResolutionError::Ambiguous(column_name.to_string()));
                     }
                     found = Some(ResolvedColumn {
-                        table_alias: table.alias.clone(),
+                        _table_alias: table.alias.clone(),
                         table_name: table.table_name.clone(),
                         column_name: column.name.clone(),
                         data_type: column.data_type.clone(),
@@ -122,7 +118,7 @@ impl Scope {
             let table = self.tables.get(alias).unwrap();
             for col in &table.columns {
                 columns.push(ResolvedColumn {
-                    table_alias: table.alias.clone(),
+                    _table_alias: table.alias.clone(),
                     table_name: table.table_name.clone(),
                     column_name: col.name.clone(),
                     data_type: col.data_type.clone(),
@@ -141,7 +137,7 @@ impl Scope {
                 .columns
                 .iter()
                 .map(|col| ResolvedColumn {
-                    table_alias: table.alias.clone(),
+                    _table_alias: table.alias.clone(),
                     table_name: table.table_name.clone(),
                     column_name: col.name.clone(),
                     data_type: col.data_type.clone(),
@@ -156,7 +152,7 @@ impl Scope {
 #[derive(Debug, Clone)]
 pub struct ResolvedColumn {
     /// Table alias
-    pub table_alias: String,
+    pub _table_alias: String,
     /// Original table name
     pub table_name: String,
     /// Column name
@@ -169,6 +165,7 @@ pub struct ResolvedColumn {
 
 /// Errors during column resolution.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum ColumnResolutionError {
     UnknownTable(String),
     UnknownColumn(String),
