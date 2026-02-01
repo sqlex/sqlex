@@ -14,28 +14,23 @@ sqlex-migration = { workspace = true }
 sqlex-analyzer = { workspace = true }
 
 # Configuration parsing
-toml = "0.8"
-serde = { version = "1.0", features = ["derive"] }
+toml = { workspace = true }
+serde = { workspace = true }
 
 # Async runtime
-tokio = { version = "1", features = ["full"] }
-async-trait = "0.1"
+tokio = { workspace = true }
+async-trait = { workspace = true }
 
 # Database connections
-sqlx = { version = "0.8", features = [
-    "runtime-tokio",
-    "postgres",
-    "mysql",
-    "sqlite",
-] }
+sqlx = { workspace = true }
 
 # Error handling
 thiserror = { workspace = true }
 
 # Test containers
-testcontainers = "0.23"
-testcontainers-modules = { version = "0.11", features = ["postgres", "mysql"] }
-clap = { version = "4.4", features = ["derive", "env"] }
-colored = "2.0"
-walkdir = "2.3"
-uuid = { version = "1.0", features = ["v4"] }
+testcontainers = { workspace = true }
+testcontainers-modules = { workspace = true }
+clap = { workspace = true }
+colored = { workspace = true }
+walkdir = { workspace = true }
+uuid = { workspace = true }
