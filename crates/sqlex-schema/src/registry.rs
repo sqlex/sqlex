@@ -99,7 +99,7 @@ impl SchemaRegistry {
 
         // Extract schema if present
         if create.name.0.len() > 1 {
-            let parts: Vec<_> = create.name.0.iter().map(|i| ident_to_string(i)).collect();
+            let parts: Vec<_> = create.name.0.iter().map(ident_to_string).collect();
             table_def.schema = Some(parts[..parts.len() - 1].join("."));
         }
 
@@ -269,18 +269,15 @@ fn convert_column_def(col: &sqlex_parser::SqlColumnDef, dialect: Dialect) -> Col
 
 impl SchemaRegistry {
     fn apply_table_constraint(&self, table: &mut TableDef, constraint: &TableConstraint) {
-        match constraint {
-            TableConstraint::PrimaryKey { columns, .. } => {
-                for col in columns {
-                    let col_name = col.value.clone();
-                    table.primary_key.push(col_name.clone());
-                    if let Some(col_def) = table.get_column_mut(&col_name) {
-                        col_def.is_primary_key = true;
-                        col_def.nullable = false;
-                    }
+        if let TableConstraint::PrimaryKey { columns, .. } = constraint {
+            for col in columns {
+                let col_name = col.value.clone();
+                table.primary_key.push(col_name.clone());
+                if let Some(col_def) = table.get_column_mut(&col_name) {
+                    col_def.is_primary_key = true;
+                    col_def.nullable = false;
                 }
-            },
-            _ => {},
+            }
         }
     }
 }
@@ -288,7 +285,7 @@ impl SchemaRegistry {
 fn object_name_to_string(name: &ObjectName) -> String {
     name.0
         .last()
-        .map(|i| ident_to_string(i))
+        .map(ident_to_string)
         .unwrap_or_default()
 }
 

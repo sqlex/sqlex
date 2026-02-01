@@ -5,7 +5,6 @@
 
 mod analyzer;
 mod error;
-mod resolver;
 mod scope;
 mod type_inference;
 

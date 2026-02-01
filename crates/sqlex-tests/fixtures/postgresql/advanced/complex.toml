@@ -1,0 +1,30 @@
+# PostgreSQL Complex Query Tests
+
+[schema]
+dialect = "postgresql"
+migration = "CREATE TABLE dummy_complex (id int);"
+
+[[tests]]
+name = "complex_nested_queries"
+query = """
+WITH RECURSIVE recursive_cte(id) AS (
+    VALUES (1)
+    UNION ALL
+    SELECT id + 1 FROM recursive_cte WHERE id < 3
+)
+SELECT 
+    r.id,
+    v.val,
+    p.lead_val
+FROM recursive_cte r
+JOIN (VALUES (1, 'a'), (2, 'b'), (3, 'c')) v(id, val) ON r.id = v.id
+CROSS JOIN LATERAL (
+    SELECT 
+           LEAD(name) OVER (ORDER BY name) as lead_val
+    FROM (VALUES ('x'), ('y'), ('z')) sub(name)
+    WHERE sub.name > v.val -- Correlated to v.val
+    ORDER BY name
+    LIMIT 1
+) p
+"""
+description = "Complex query with Recursive CTE, VALUES, LATERAL JOIN, Correlated Subquery and Window Functions"

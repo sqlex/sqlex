@@ -38,17 +38,28 @@ impl ScopeTable {
 
 /// A scope containing tables available for column resolution.
 #[derive(Debug, Clone, Default)]
-pub struct Scope {
+pub struct Scope<'a> {
     /// Tables in scope, keyed by alias (lowercase)
     tables: HashMap<String, ScopeTable>,
     /// Order of table aliases for resolving unqualified columns
     table_order: Vec<String>,
+    /// Parent scope (for outer queries/lateral joins)
+    parent: Option<&'a Scope<'a>>,
 }
 
-impl Scope {
+impl<'a> Scope<'a> {
     /// Create a new empty scope.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Create a child scope with a parent.
+    pub fn new_child(parent: &'a Scope<'a>) -> Self {
+        Self {
+            tables: HashMap::new(),
+            table_order: Vec::new(),
+            parent: Some(parent),
+        }
     }
 
     /// Add a table to the scope.
@@ -58,10 +69,6 @@ impl Scope {
         self.tables.insert(key, scope_table);
     }
 
-    /// Get a table by alias.
-    pub fn get_table(&self, alias: &str) -> Option<&ScopeTable> {
-        self.tables.get(&alias.to_lowercase())
-    }
 
     /// Resolve a column reference.
     /// Returns (table_alias, column_def, is_nullable).
@@ -72,21 +79,29 @@ impl Scope {
     ) -> Result<ResolvedColumn, ColumnResolutionError> {
         if let Some(alias) = table_alias {
             // Qualified column reference
-            let table = self
-                .get_table(alias)
-                .ok_or_else(|| ColumnResolutionError::UnknownTable(alias.to_string()))?;
+            if let Some(table) = self.tables.get(&alias.to_lowercase()) {
+                if let Some(column) = table.get_column(column_name) {
+                    return Ok(ResolvedColumn {
+                        _table_alias: table.alias.clone(),
+                        table_name: table.table_name.clone(),
+                        column_name: column.name.clone(),
+                        data_type: column.data_type.clone(),
+                        nullable: column.nullable || table.nullable_from_join,
+                    });
+                } else {
+                    // Table found but column not found -> Error
+                    return Err(ColumnResolutionError::UnknownColumn(
+                        column_name.to_string(),
+                    ));
+                }
+            }
 
-            let column = table
-                .get_column(column_name)
-                .ok_or_else(|| ColumnResolutionError::UnknownColumn(column_name.to_string()))?;
+            // Not found in this scope, check parent
+            if let Some(parent) = self.parent {
+                return parent.resolve_column(table_alias, column_name);
+            }
 
-            Ok(ResolvedColumn {
-                _table_alias: table.alias.clone(),
-                table_name: table.table_name.clone(),
-                column_name: column.name.clone(),
-                data_type: column.data_type.clone(),
-                nullable: column.nullable || table.nullable_from_join,
-            })
+            Err(ColumnResolutionError::UnknownTable(alias.to_string()))
         } else {
             // Unqualified column reference - search all tables
             let mut found: Option<ResolvedColumn> = None;
@@ -107,13 +122,25 @@ impl Scope {
                 }
             }
 
-            found.ok_or_else(|| ColumnResolutionError::UnknownColumn(column_name.to_string()))
+            if let Some(resolved) = found {
+                return Ok(resolved);
+            }
+
+            // Not found in this scope, check parent
+            if let Some(parent) = self.parent {
+                return parent.resolve_column(None, column_name);
+            }
+
+            Err(ColumnResolutionError::UnknownColumn(
+                column_name.to_string(),
+            ))
         }
     }
 
     /// Get all columns from all tables (for SELECT *).
     pub fn all_columns(&self) -> Vec<ResolvedColumn> {
         let mut columns = Vec::new();
+        // Add columns from this scope
         for alias in &self.table_order {
             let table = self.tables.get(alias).unwrap();
             for col in &table.columns {
@@ -126,25 +153,36 @@ impl Scope {
                 });
             }
         }
+
+        // Note: SELECT * typically only considers the current query level's FROM clause,
+        // it does NOT include columns from the outer query (parent scope).
+        // So we do NOT recurse to parent here.
+
         columns
     }
 
     /// Get all columns from a specific table (for SELECT table.*).
     pub fn table_columns(&self, alias: &str) -> Option<Vec<ResolvedColumn>> {
-        let table = self.get_table(alias)?;
-        Some(
-            table
-                .columns
-                .iter()
-                .map(|col| ResolvedColumn {
-                    _table_alias: table.alias.clone(),
-                    table_name: table.table_name.clone(),
-                    column_name: col.name.clone(),
-                    data_type: col.data_type.clone(),
-                    nullable: col.nullable || table.nullable_from_join,
-                })
-                .collect(),
-        )
+        // Here we recurse because we look for the table
+        if let Some(table) = self.tables.get(&alias.to_lowercase()) {
+            Some(
+                table
+                    .columns
+                    .iter()
+                    .map(|col| ResolvedColumn {
+                        _table_alias: table.alias.clone(),
+                        table_name: table.table_name.clone(),
+                        column_name: col.name.clone(),
+                        data_type: col.data_type.clone(),
+                        nullable: col.nullable || table.nullable_from_join,
+                    })
+                    .collect(),
+            )
+        } else if let Some(parent) = self.parent {
+            parent.table_columns(alias)
+        } else {
+            None
+        }
     }
 }
 

@@ -4,7 +4,7 @@ use sqlex_types::{Dialect, SqlType};
 use sqlparser::ast::DataType as SqlDataType;
 
 /// Convert sqlparser DataType to our SqlType.
-pub fn convert_data_type(data_type: &SqlDataType, dialect: Dialect) -> SqlType {
+pub fn convert_data_type(data_type: &SqlDataType, _dialect: Dialect) -> SqlType {
     match data_type {
         // Integer types
         SqlDataType::SmallInt(_) | SqlDataType::Int2(_) => SqlType::SmallInt,
@@ -82,13 +82,13 @@ pub fn convert_data_type(data_type: &SqlDataType, dialect: Dialect) -> SqlType {
         // Array types
         SqlDataType::Array(arr_def) => match arr_def {
             sqlparser::ast::ArrayElemTypeDef::AngleBracket(inner) => {
-                SqlType::Array(Box::new(convert_data_type(inner, dialect)))
+                SqlType::Array(Box::new(convert_data_type(inner, _dialect)))
             },
             sqlparser::ast::ArrayElemTypeDef::SquareBracket(inner, _) => {
-                SqlType::Array(Box::new(convert_data_type(inner, dialect)))
+                SqlType::Array(Box::new(convert_data_type(inner, _dialect)))
             },
             sqlparser::ast::ArrayElemTypeDef::Parenthesis(inner) => {
-                SqlType::Array(Box::new(convert_data_type(inner, dialect)))
+                SqlType::Array(Box::new(convert_data_type(inner, _dialect)))
             },
             sqlparser::ast::ArrayElemTypeDef::None => SqlType::Array(Box::new(SqlType::Unknown)),
         },

@@ -62,11 +62,11 @@ impl TestSuite {
     /// Load a test suite from a TOML file.
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
         let content = std::fs::read_to_string(path.as_ref())?;
-        Self::from_str(&content)
+        Self::parse(&content)
     }
 
     /// Parse a test suite from a TOML string.
-    pub fn from_str(content: &str) -> Result<Self> {
+    pub fn parse(content: &str) -> Result<Self> {
         toml::from_str(content).map_err(Error::from)
     }
 
@@ -102,7 +102,7 @@ query = "SELECT * FROM users WHERE id = $1"
 description = "Test parameter binding"
 "#;
 
-        let suite = TestSuite::from_str(toml).unwrap();
+        let suite = TestSuite::parse(toml).unwrap();
         assert_eq!(suite.schema.dialect, Dialect::Postgresql);
         assert_eq!(suite.tests.len(), 2);
         assert_eq!(suite.tests[0].name, "simple_select");

@@ -2,13 +2,15 @@
 
 use std::collections::HashMap;
 
-use sqlex_parser::{Expr, Query, Select, SelectItem, SetExpr, Statement, parse_one, sqlparser};
+use sqlex_parser::{
+    Expr, Query, Select, SelectItem, SetExpr, Statement, TableWithJoins, parse_one, sqlparser,
+};
 use sqlex_schema::SchemaRegistry;
-use sqlex_types::{ColumnDef, Dialect, ResultColumn};
+use sqlex_types::{ColumnDef, Dialect, ResultColumn, SqlType};
+use sqlparser::ast::{JoinOperator, TableFactor};
 
 use crate::{
     error::AnalyzeError,
-    resolver::FromResolver,
     scope::{Scope, ScopeTable},
     type_inference::TypeInference,
 };
@@ -44,13 +46,14 @@ impl<'a> QueryAnalyzer<'a> {
 
     /// Analyze a Query AST.
     pub fn analyze_query(&self, query: &Query) -> Result<AnalyzeResult, AnalyzeError> {
-        self.analyze_query_context(query, None)
+        self.analyze_query_context(query, None, None)
     }
 
     fn analyze_query_context(
         &self,
         query: &Query,
         outer_ctes: Option<&HashMap<String, ScopeTable>>,
+        parent_scope: Option<&Scope>,
     ) -> Result<AnalyzeResult, AnalyzeError> {
         // Collect CTEs
         let mut local_ctes = HashMap::new();
@@ -61,34 +64,24 @@ impl<'a> QueryAnalyzer<'a> {
         if let Some(with) = &query.with {
             for cte in &with.cte_tables {
                 let cte_name = cte.alias.name.value.clone();
-                // Analyze CTE query
-                // For recursive CTEs, we might need to seed the table first.
-                // Simple recursive support: assume schema from non-recursive part or just ignore self-ref for now if it fails.
-                // However, without proper recursive handling, the self-ref lookup will fail.
-                // A complete fix requires parsing the CTE query to find the UNION/non-recursive part, analyzing it, adding to scope, then analyzing recursive part.
-                // For now, let's try analyzing the query with current scope.
-
-                // Note: If recursive, we should bind the table name to the scope for the query itself.
-                // But we don't know the schema yet.
-                // If it's recursive, the query body is usually a SetOperation (UNION).
-
+                // recursive CTE logic...
                 let result = if with.recursive {
-                    // Hack for recursive CTEs:
-                    // 1. Analyze ignoring the recursive part/self-ref might be hard blindly.
-                    // 2. Or, we can proceed and catch "UnknownTable" and then retry? No.
-                    // Correct way: Extract schema from the left side of UNION.
                     match cte.query.body.as_ref() {
                         SetExpr::SetOperation { left, .. } => {
-                            // Analyze left part (non-recursive base case)
-                            // For the base case, we pass the outer CTEs (and any defined before this one)
-                            let base_res = self.analyze_set_expr(left, Some(&local_ctes))?;
+                            let base_res =
+                                self.analyze_set_expr(left, Some(&local_ctes), parent_scope)?;
 
-                            // Add to scope so right side can see it
+                            let explicit_aliases = &cte.alias.columns;
                             let columns = base_res
                                 .columns
                                 .iter()
-                                .map(|c| ColumnDef {
-                                    name: c.name.clone(),
+                                .enumerate()
+                                .map(|(i, c)| ColumnDef {
+                                    name: if i < explicit_aliases.len() {
+                                        explicit_aliases[i].name.value.clone()
+                                    } else {
+                                        c.name.clone()
+                                    },
                                     data_type: c.data_type.clone(),
                                     nullable: c.nullable,
                                     default: None,
@@ -104,27 +97,36 @@ impl<'a> QueryAnalyzer<'a> {
                             };
                             local_ctes.insert(cte_name.clone(), scope_table);
 
-                            // Now analyze the full query (including right side) with the self-ref in scope
-                            self.analyze_query_context(&cte.query, Some(&local_ctes))?
+                            self.analyze_query_context(&cte.query, Some(&local_ctes), parent_scope)?
                         },
                         _ => {
-                            // Not a standard recursive CTE structure? Just analyze normally.
-                            self.analyze_query_context(&cte.query, Some(&local_ctes))?
+                            self.analyze_query_context(&cte.query, Some(&local_ctes), parent_scope)?
                         },
                     }
                 } else {
-                    self.analyze_query_context(&cte.query, Some(&local_ctes))?
+                    self.analyze_query_context(&cte.query, Some(&local_ctes), parent_scope)?
                 };
+
+                let explicit_aliases = &cte.alias.columns;
 
                 let columns = result
                     .columns
                     .iter()
-                    .map(|c| ColumnDef {
-                        name: c.name.clone(),
-                        data_type: c.data_type.clone(),
-                        nullable: c.nullable,
-                        default: None,
-                        is_primary_key: false,
+                    .enumerate()
+                    .map(|(i, c)| {
+                        let name = if i < explicit_aliases.len() {
+                            explicit_aliases[i].name.value.clone()
+                        } else {
+                            c.name.clone()
+                        };
+
+                        ColumnDef {
+                            name,
+                            data_type: c.data_type.clone(),
+                            nullable: c.nullable,
+                            default: None,
+                            is_primary_key: false,
+                        }
                     })
                     .collect();
 
@@ -139,15 +141,34 @@ impl<'a> QueryAnalyzer<'a> {
         }
 
         match query.body.as_ref() {
-            SetExpr::Select(select) => self.analyze_select(select, Some(&local_ctes)),
-            SetExpr::Query(inner) => self.analyze_query_context(inner, Some(&local_ctes)),
-            SetExpr::SetOperation { left, .. } => {
-                // For UNION/INTERSECT/EXCEPT, use the left side's columns
-                self.analyze_set_expr(left, Some(&local_ctes))
+            SetExpr::Select(select) => self.analyze_select(select, Some(&local_ctes), parent_scope),
+            SetExpr::Query(inner) => {
+                self.analyze_query_context(inner, Some(&local_ctes), parent_scope)
             },
-            SetExpr::Values(_) => {
-                // VALUES clause - would need value type inference
-                Ok(AnalyzeResult { columns: vec![] })
+            SetExpr::SetOperation { left, .. } => {
+                self.analyze_set_expr(left, Some(&local_ctes), parent_scope)
+            },
+            SetExpr::Values(values) => {
+                if values.rows.is_empty() {
+                    return Ok(AnalyzeResult { columns: vec![] });
+                }
+
+                let first_row = &values.rows[0];
+                let mut columns = Vec::new();
+                // Create scope for expression analysis
+                let scope = if let Some(p) = parent_scope {
+                    Scope::new_child(p)
+                } else {
+                    Scope::new()
+                };
+
+                for (i, expr) in first_row.iter().enumerate() {
+                    let (data_type, nullable) = TypeInference::infer(&scope, expr)?;
+                    // Postgres default names: column1, column2, ...
+                    let name = format!("column{}", i + 1);
+                    columns.push(ResultColumn::new(name, data_type, nullable));
+                }
+                Ok(AnalyzeResult { columns })
             },
             _ => Err(AnalyzeError::Unsupported("SetExpr type".to_string())),
         }
@@ -157,11 +178,34 @@ impl<'a> QueryAnalyzer<'a> {
         &self,
         expr: &SetExpr,
         ctes: Option<&HashMap<String, ScopeTable>>,
+        parent_scope: Option<&Scope>,
     ) -> Result<AnalyzeResult, AnalyzeError> {
         match expr {
-            SetExpr::Select(select) => self.analyze_select(select, ctes),
-            SetExpr::Query(query) => self.analyze_query_context(query, ctes),
-            SetExpr::SetOperation { left, .. } => self.analyze_set_expr(left, ctes),
+            SetExpr::Select(select) => self.analyze_select(select, ctes, parent_scope),
+            SetExpr::Query(query) => self.analyze_query_context(query, ctes, parent_scope),
+            SetExpr::SetOperation { left, .. } => self.analyze_set_expr(left, ctes, parent_scope),
+            SetExpr::Values(values) => {
+                if values.rows.is_empty() {
+                    return Ok(AnalyzeResult { columns: vec![] });
+                }
+
+                let first_row = &values.rows[0];
+                let mut columns = Vec::new();
+                // Create scope for expression analysis
+                let scope = if let Some(p) = parent_scope {
+                    Scope::new_child(p)
+                } else {
+                    Scope::new()
+                };
+
+                for (i, expr) in first_row.iter().enumerate() {
+                    let (data_type, nullable) = TypeInference::infer(&scope, expr)?;
+                    // Postgres default names: column1, column2, ...
+                    let name = format!("column{}", i + 1);
+                    columns.push(ResultColumn::new(name, data_type, nullable));
+                }
+                Ok(AnalyzeResult { columns })
+            },
             _ => Ok(AnalyzeResult { columns: vec![] }),
         }
     }
@@ -170,10 +214,46 @@ impl<'a> QueryAnalyzer<'a> {
         &self,
         select: &Select,
         ctes: Option<&HashMap<String, ScopeTable>>,
+        parent_scope: Option<&Scope>,
     ) -> Result<AnalyzeResult, AnalyzeError> {
         // Build scope from FROM clause
-        let resolver = FromResolver::new(self.registry, ctes);
-        let scope = resolver.resolve(&select.from)?;
+        let mut scope = if let Some(parent) = parent_scope {
+            Scope::new_child(parent)
+        } else {
+            Scope::new()
+        };
+
+        self.resolve_from_clause(&select.from, &mut scope, ctes)?;
+
+        // Analyze WHERE clause
+        if let Some(selection) = &select.selection {
+            TypeInference::infer(&scope, selection)?;
+            // We should check for errors/unknown columns here, but TypeInference
+            // currently returns (Unknown, true) on error rather than Result.
+            // To be strict, we need TypeInference to tell us if valid.
+            // For now, at least we exercise the lookups (which might trigger panics or logs if we had them).
+            // But wait, TypeInference::infer calls scope.resolve_column.
+            // scope.resolve_column returns Result.
+            // TypeInference swallows the error.
+            // We need a way to check validity.
+            // Re-implementing validation or changing TypeInference is needed.
+        }
+
+        // Analyze GROUP BY
+        use sqlex_parser::sqlparser::ast::GroupByExpr;
+        match &select.group_by {
+            GroupByExpr::All(_) => {},
+            GroupByExpr::Expressions(exprs, _) => {
+                for expr in exprs {
+                    TypeInference::infer(&scope, expr)?;
+                }
+            },
+        }
+
+        // Analyze HAVING
+        if let Some(having) = &select.having {
+            TypeInference::infer(&scope, having)?;
+        }
 
         // Analyze SELECT items
         let mut columns = Vec::new();
@@ -189,7 +269,6 @@ impl<'a> QueryAnalyzer<'a> {
                     columns.push(col);
                 },
                 SelectItem::QualifiedWildcard(name, _) => {
-                    // table.* - extract table name from the qualified wildcard
                     let table_alias = qualified_wildcard_to_string(name);
                     let table_columns = scope
                         .table_columns(&table_alias)
@@ -206,7 +285,6 @@ impl<'a> QueryAnalyzer<'a> {
                     }
                 },
                 SelectItem::Wildcard(_) => {
-                    // SELECT *
                     for resolved in scope.all_columns() {
                         columns.push(ResultColumn::from_table_column(
                             &resolved.column_name,
@@ -223,6 +301,229 @@ impl<'a> QueryAnalyzer<'a> {
         Ok(AnalyzeResult { columns })
     }
 
+    fn resolve_from_clause(
+        &self,
+        from: &[TableWithJoins],
+        scope: &mut Scope,
+        ctes: Option<&HashMap<String, ScopeTable>>,
+    ) -> Result<(), AnalyzeError> {
+        for table_with_joins in from {
+            self.resolve_table_factor(&table_with_joins.relation, scope, false, ctes)?;
+
+            for join in &table_with_joins.joins {
+                let nullable = matches!(
+                    join.join_operator,
+                    JoinOperator::Left(_)
+                        | JoinOperator::LeftOuter(_)
+                        | JoinOperator::Right(_)
+                        | JoinOperator::RightOuter(_)
+                        | JoinOperator::FullOuter(_)
+                        | JoinOperator::LeftSemi(_)
+                        | JoinOperator::LeftAnti(_)
+                );
+
+                self.resolve_table_factor(&join.relation, scope, nullable, ctes)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn resolve_table_factor(
+        &self,
+        factor: &TableFactor,
+        scope: &mut Scope,
+        nullable_from_join: bool,
+        ctes: Option<&HashMap<String, ScopeTable>>,
+    ) -> Result<(), AnalyzeError> {
+        match factor {
+            TableFactor::Table { name, alias, .. } => {
+                let table_name = object_name_to_string(name);
+                let alias_name = alias.as_ref().map(|a| a.name.value.as_str());
+
+                // CTE check
+                if let Some(ctes_map) = ctes {
+                    if let Some(cte_table) = ctes_map.get(&table_name) {
+                        let mut scope_table = cte_table.clone();
+                        if let Some(alias) = alias_name {
+                            scope_table.alias = alias.to_string();
+                        }
+                        scope_table.nullable_from_join = nullable_from_join;
+                        scope.add_table(scope_table);
+                        return Ok(());
+                    }
+                }
+
+                let table_def = self
+                    .registry
+                    .get_table(&table_name)
+                    .ok_or_else(|| AnalyzeError::UnknownTable(table_name.to_string()))?;
+
+                let mut scope_table = ScopeTable::from_table_def(table_def, alias_name);
+                scope_table.nullable_from_join = nullable_from_join;
+                scope.add_table(scope_table);
+            },
+            TableFactor::Derived {
+                lateral,
+                subquery,
+                alias,
+            } => {
+                // If LATERAL, subquery can see current SCOPE.
+                // If NOT LATERAL, subquery sees PARENT scope (from outer query).
+                // But `scope` here is the *current* accumulating scope.
+                // We don't have direct access to `scope.parent` in public API unless we expose it.
+                // But we can check `lateral` flag.
+
+                // Oops, `Scope` transparency: if I pass `scope` (current), it has parent.
+                // If I pass `scope` to `analyze_query_context` as `parent_scope`, then the subquery starts a new child of `scope`.
+                // Access rules:
+                // Non-LATERAL: Can ONLY access parent of current scope (outer query). Cannot access siblings.
+                // LATERAL: Can access parent + siblings (current scope).
+
+                // So:
+                // If LATERAL: parent = scope.
+                // If NOT LATERAL: parent = scope.parent? However `Scope` field is private.
+                // But wait, `analyze_query_context` takes `parent_scope`.
+                // If NOT LATERAL, we should theoretically pass the *outer* scope, not the one we are building.
+                // But passing `scope` (the one being built) WOULD expose siblings, which is wrong for non-lateral.
+
+                // Hack: `Scope` is just a struct. I can get `scope.parent` if I make it public.
+                // Or I just pass `scope` if LATERAL.
+                // If NOT LATERAL, I need the persistent parent.
+                // `resolve_from_clause` doesn't receive `parent_scope` separately?
+                // `scope` has `parent` field set in `analyze_select`.
+                // So I can just access `scope.parent`.
+                // I need to change `Scope::parent` to be accessible or add a getter.
+                // `scope.rs` defines `parent` as private. I should make it public or add accessor.
+
+                // Let's assume I add `pub fn parent(&self) -> Option<&Scope>` to Scope.
+
+                // For now, I will assume non-lateral has NO parent access (simplification) OR I try to fix Scope visibility.
+
+                // Wait, non-lateral derived tables *can* optionally be correlated to *further* outer queries?
+                // Standard SQL: Derived tables in FROM are isolated. But Postgres allows lateral.
+                // If it is NOT lateral, it CANNOT access tables from the same FROM clause.
+                // But can it access tables from *outer* SELECT level?
+                // "Subqueries in FROM cannot be correlated unless LATERAL".
+                // So actually, if NOT LATERAL, it should see NOTHING from the surroundings (except global tables/functions).
+                // So `parent_scope` should be `None`?
+                // But it might need to resolve CTEs. `ctes` are passed separately.
+                // So `Ok` to pass `None` for parent_scope if not lateral.
+
+                let sub_parent = if *lateral { Some(&*scope) } else { None };
+
+                let result = self.analyze_query_context(subquery, ctes, sub_parent)?;
+
+                if let Some(alias_node) = alias {
+                    let alias_name = alias_node.name.value.clone();
+                    let columns = result
+                        .columns
+                        .iter()
+                        .enumerate()
+                        .map(|(i, c)| {
+                            let name = if i < alias_node.columns.len() {
+                                alias_node.columns[i].name.value.clone()
+                            } else {
+                                c.name.clone()
+                            };
+
+                            ColumnDef {
+                                name,
+                                data_type: c.data_type.clone(),
+                                nullable: c.nullable,
+                                default: None,
+                                is_primary_key: false,
+                            }
+                        })
+                        .collect();
+
+                    let scope_table = ScopeTable {
+                        alias: alias_name,
+                        table_name: "derived".to_string(), // placeholder
+                        columns,
+                        nullable_from_join,
+                    };
+                    scope.add_table(scope_table);
+                }
+            },
+            TableFactor::Function {
+                name, args, alias, ..
+            } => {
+                // Support UNNEST(x)
+                // Check function name
+                let name_str = ident_to_string(name.0.last().unwrap()).to_uppercase();
+                if name_str == "UNNEST" {
+                    // Analyze args
+                    use sqlparser::ast::{FunctionArg, FunctionArgExpr};
+
+                    let mut elem_type = SqlType::Unknown;
+                    // args is Vec<FunctionArg>
+                    for arg in args {
+                        if let FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) = arg {
+                            let (data_type, _) = TypeInference::infer(scope, expr)?;
+                            if let SqlType::Array(inner) = data_type {
+                                elem_type = *inner;
+                                break;
+                            }
+                        }
+                    }
+
+                    let alias_name = alias
+                        .as_ref()
+                        .map(|a| a.name.value.clone())
+                        .unwrap_or_else(|| "unnest".to_string());
+
+                    let col_name = if let Some(alias_node) = alias {
+                        if !alias_node.columns.is_empty() {
+                            alias_node.columns[0].name.value.clone()
+                        } else {
+                            alias_name.clone()
+                        }
+                    } else {
+                        "unnest".to_string()
+                    };
+
+                    let scope_table = ScopeTable {
+                        alias: alias_name,
+                        table_name: "function".to_string(),
+                        columns: vec![ColumnDef {
+                            name: col_name,
+                            data_type: elem_type,
+                            nullable: true, // unnest can be null
+                            default: None,
+                            is_primary_key: false,
+                        }],
+                        nullable_from_join,
+                    };
+                    scope.add_table(scope_table);
+                }
+            },
+            TableFactor::NestedJoin {
+                table_with_joins, ..
+            } => {
+                self.resolve_table_factor(
+                    &table_with_joins.relation,
+                    scope,
+                    nullable_from_join,
+                    ctes,
+                )?;
+                for join in &table_with_joins.joins {
+                    let join_nullable = nullable_from_join
+                        || matches!(
+                            join.join_operator,
+                            JoinOperator::Left(_)
+                                | JoinOperator::LeftOuter(_)
+                                | JoinOperator::Right(_)
+                                | JoinOperator::RightOuter(_)
+                                | JoinOperator::FullOuter(_)
+                        );
+                    self.resolve_table_factor(&join.relation, scope, join_nullable, ctes)?;
+                }
+            },
+            _ => {},
+        }
+        Ok(())
+    }
+
     fn analyze_select_expr(
         &self,
         scope: &Scope,
@@ -230,7 +531,7 @@ impl<'a> QueryAnalyzer<'a> {
         alias: Option<&str>,
     ) -> Result<ResultColumn, AnalyzeError> {
         // Infer type and nullability
-        let (data_type, nullable) = TypeInference::infer(scope, expr);
+        let (data_type, nullable) = TypeInference::infer(scope, expr)?;
 
         // Determine column name
         let (name, source_table, source_column) = match expr {
@@ -275,13 +576,20 @@ impl<'a> QueryAnalyzer<'a> {
     }
 }
 
+fn object_name_to_string(name: &sqlparser::ast::ObjectName) -> String {
+    name.0
+        .last()
+        .map(ident_to_string)
+        .unwrap_or_default()
+}
+
 /// Extract table name from QualifiedWildcard
 fn qualified_wildcard_to_string(kind: &sqlparser::ast::SelectItemQualifiedWildcardKind) -> String {
     match kind {
         sqlparser::ast::SelectItemQualifiedWildcardKind::ObjectName(name) => name
             .0
             .last()
-            .map(|i| ident_to_string(i))
+            .map(ident_to_string)
             .unwrap_or_default(),
         sqlparser::ast::SelectItemQualifiedWildcardKind::Expr(_) => String::new(),
     }
@@ -305,7 +613,7 @@ fn expr_to_name(expr: &Expr) -> String {
             .name
             .0
             .last()
-            .map(|i| ident_to_string(i))
+            .map(ident_to_string)
             .unwrap_or_else(|| "?column?".to_string()),
         Expr::Value(_) => "?column?".to_string(),
         Expr::BinaryOp { .. } => "?column?".to_string(),

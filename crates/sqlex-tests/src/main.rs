@@ -70,7 +70,7 @@ async fn main() -> Result<()> {
         walkdir::WalkDir::new(&target_path)
             .into_iter()
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "toml"))
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "toml"))
             .map(|e| e.path().to_path_buf())
             .collect()
     };

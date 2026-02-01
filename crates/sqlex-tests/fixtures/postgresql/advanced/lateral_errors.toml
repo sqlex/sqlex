@@ -1,0 +1,35 @@
+# PostgreSQL Lateral Error Tests
+
+[schema]
+dialect = "postgresql"
+migration = """
+CREATE TABLE departments (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100)
+);
+CREATE TABLE employees (
+    id SERIAL PRIMARY KEY,
+    dept_id INTEGER,
+    name VARCHAR(100)
+);
+"""
+
+[[tests]]
+name = "missing_lateral_keyword"
+query = """
+SELECT * 
+FROM departments d, 
+(SELECT * FROM employees WHERE dept_id = d.id) e
+"""
+description = "Derived table cannot reference outer table without LATERAL"
+expect_error = true
+
+[[tests]]
+name = "lateral_invalid_column"
+query = """
+SELECT * 
+FROM departments d, 
+LATERAL (SELECT * FROM employees WHERE dept_id = d.non_existent_col) e
+"""
+description = "LATERAL subquery referencing non-existent column"
+expect_error = true

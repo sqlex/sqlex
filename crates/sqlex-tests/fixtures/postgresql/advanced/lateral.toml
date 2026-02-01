@@ -1,0 +1,95 @@
+# PostgreSQL Advanced Lateral Join Tests
+
+[schema]
+dialect = "postgresql"
+migration = """
+CREATE TABLE departments (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL
+);
+
+CREATE TABLE employees (
+    id SERIAL PRIMARY KEY,
+    dept_id INTEGER REFERENCES departments(id),
+    name VARCHAR(100) NOT NULL,
+    salary INTEGER,
+    skills TEXT[]
+);
+
+CREATE TABLE projects (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100),
+    leader_id INTEGER REFERENCES employees(id)
+);
+
+INSERT INTO departments (name) VALUES ('Engineering'), ('Sales');
+INSERT INTO employees (dept_id, name, salary, skills) VALUES 
+(1, 'Alice', 100000, ARRAY['Rust', 'SQL']),
+(1, 'Bob', 90000, ARRAY['Go', 'SQL']),
+(2, 'Charlie', 80000, ARRAY['Salesforce']);
+
+INSERT INTO projects (name, leader_id) VALUES ('Titan', 1), ('Olympians', 2);
+"""
+
+[[tests]]
+name = "simple_lateral"
+query = """
+SELECT d.name, e.name, e.salary
+FROM departments d
+CROSS JOIN LATERAL (
+    SELECT name, salary FROM employees WHERE dept_id = d.id
+) e
+"""
+description = "Simple CROSS JOIN LATERAL referencing outer table"
+
+[[tests]]
+name = "lateral_left_join"
+query = """
+SELECT d.name, e.top_earner
+FROM departments d
+LEFT JOIN LATERAL (
+    SELECT name as top_earner 
+    FROM employees 
+    WHERE dept_id = d.id 
+    ORDER BY salary DESC 
+    LIMIT 1
+) e ON true
+"""
+description = "LEFT JOIN LATERAL with limit and order by"
+
+[[tests]]
+name = "lateral_with_unnest"
+query = """
+SELECT e.name, s.skill
+FROM employees e,
+LATERAL unnest(e.skills) s(skill)
+WHERE s.skill = 'SQL'
+"""
+description = "Implicit LATERAL join with unnest function"
+
+[[tests]]
+name = "multi_level_lateral"
+query = """
+SELECT d.name as dept, p.name as project, l.name as leader
+FROM departments d
+CROSS JOIN LATERAL (
+    SELECT id, name, leader_id FROM projects
+    -- Ideally correlated to dept, but projects aren't directly linked to dept in this schema.
+    -- Let's assume we find projects led by someone in this dept.
+    WHERE leader_id IN (SELECT id FROM employees WHERE dept_id = d.id)
+) p
+CROSS JOIN LATERAL (
+    SELECT name FROM employees WHERE id = p.leader_id
+) l
+"""
+description = "Multi-level lateral join where T3 references T2"
+
+[[tests]]
+name = "correlated_scalar_subquery"
+query = """
+SELECT 
+    d.name,
+    (SELECT AVG(salary) FROM employees WHERE dept_id = d.id) as avg_salary
+FROM departments d
+"""
+description = "Correlated scalar subquery in projection"
