@@ -12,17 +12,55 @@ use crate::{Result, config::Dialect};
 pub struct MysqlBackend {
     pool: MySqlPool,
     #[allow(dead_code)]
-    container: ContainerAsync<Mysql>,
+    container: Option<ContainerAsync<Mysql>>,
 }
 
 impl MysqlBackend {
-    /// Create a new MySQL backend with a testcontainer.
-    pub async fn new() -> Result<Self> {
-        // Start MySQL container
+    /// Start a MySQL container.
+    pub async fn start_container() -> Result<ContainerAsync<Mysql>> {
         let container = Mysql::default()
             .start()
             .await
             .map_err(|e| crate::Error::Config(format!("Failed to start MySQL container: {}", e)))?;
+        Ok(container)
+    }
+
+    /// Connect to an existing MySQL database.
+    pub async fn connect(host: &str, port: u16, db: &str) -> Result<Self> {
+        let connection_string = format!("mysql://root@{}:{}/{}", host, port, db);
+
+        let pool = MySqlPoolOptions::new()
+            .max_connections(5)
+            .connect(&connection_string)
+            .await?;
+
+        Ok(Self {
+            pool,
+            container: None,
+        })
+    }
+
+    /// Create a new database on the MySQL instance.
+    pub async fn create_database(host: &str, port: u16, db_name: &str) -> Result<()> {
+        let connection_string = format!("mysql://root@{}:{}/test", host, port);
+        // We use a separate pool for admin tasks
+        let pool = MySqlPoolOptions::new()
+            .max_connections(1)
+            .connect(&connection_string)
+            .await?;
+
+        // MySQL requires backticks for identifiers
+        sqlx::query(&format!("CREATE DATABASE `{}`", db_name))
+            .execute(&pool)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Create a new MySQL backend with a testcontainer.
+    pub async fn new() -> Result<Self> {
+        // Start MySQL container
+        let container = Self::start_container().await?;
 
         let host = container
             .get_host()
@@ -40,7 +78,10 @@ impl MysqlBackend {
             .connect(&connection_string)
             .await?;
 
-        Ok(Self { pool, container })
+        Ok(Self {
+            pool,
+            container: Some(container),
+        })
     }
 }
 

@@ -1,11 +1,16 @@
-//! Test runner that executes test suites against real databases.
+use std::{path::Path, sync::Arc};
 
-use std::path::Path;
+use testcontainers::ContainerAsync;
+use testcontainers_modules::{mysql::Mysql, postgres::Postgres};
+use uuid::Uuid;
 
 use crate::{
     Error, Result,
     config::{Dialect, TestCase, TestSuite},
-    db::{self, ColumnMetadata, DatabaseBackend, QueryMetadata},
+    db::{
+        ColumnMetadata, DatabaseBackend, QueryMetadata, mysql::MysqlBackend,
+        postgres::PostgresBackend, sqlite::SqliteBackend,
+    },
 };
 
 /// Result of running a single test case.
@@ -53,13 +58,57 @@ impl TestSuiteResult {
 
 /// Test runner that executes test suites.
 pub struct TestRunner {
-    // Currently unused, but could cache backends in the future
+    postgres_container: Option<Arc<ContainerAsync<Postgres>>>,
+    mysql_container: Option<Arc<ContainerAsync<Mysql>>>,
 }
 
 impl TestRunner {
     /// Create a new test runner.
     pub fn new() -> Self {
-        Self {}
+        Self {
+            postgres_container: None,
+            mysql_container: None,
+        }
+    }
+
+    async fn get_postgres_host_port(&mut self) -> Result<(String, u16)> {
+        if self.postgres_container.is_none() {
+            println!("Starting PostgreSQL container...");
+            let container = PostgresBackend::start_container().await?;
+            self.postgres_container = Some(Arc::new(container));
+        }
+
+        let container = self.postgres_container.as_ref().unwrap();
+        let host = container
+            .get_host()
+            .await
+            .map_err(|e| crate::Error::Config(format!("Failed to get container host: {}", e)))?;
+        let port = container
+            .get_host_port_ipv4(5432)
+            .await
+            .map_err(|e| crate::Error::Config(format!("Failed to get container port: {}", e)))?;
+
+        Ok((host.to_string(), port))
+    }
+
+    async fn get_mysql_host_port(&mut self) -> Result<(String, u16)> {
+        if self.mysql_container.is_none() {
+            println!("Starting MySQL container...");
+            let container = MysqlBackend::start_container().await?;
+            self.mysql_container = Some(Arc::new(container));
+        }
+
+        let container = self.mysql_container.as_ref().unwrap();
+        let host = container
+            .get_host()
+            .await
+            .map_err(|e| crate::Error::Config(format!("Failed to get container host: {}", e)))?;
+        let port = container
+            .get_host_port_ipv4(3306)
+            .await
+            .map_err(|e| crate::Error::Config(format!("Failed to get container port: {}", e)))?;
+
+        Ok((host.to_string(), port))
     }
 
     /// Run a test suite from a file.
@@ -72,9 +121,28 @@ impl TestRunner {
     /// Run a test suite.
     pub async fn run_suite(&mut self, suite: &TestSuite, path: String) -> Result<TestSuiteResult> {
         let dialect = suite.dialect();
+        let db_name = format!("test_{}", Uuid::new_v4().simple());
 
-        // Create a fresh backend for each suite to ensure isolation
-        let backend = db::create_backend(dialect).await?;
+        // Create backend connected to a fresh database
+        let backend: Box<dyn DatabaseBackend> = match dialect {
+            Dialect::Postgresql => {
+                let (host, port) = self.get_postgres_host_port().await?;
+                PostgresBackend::create_database(&host, port, &db_name).await?;
+                let backend = PostgresBackend::connect(&host, port, &db_name).await?;
+                Box::new(backend)
+            },
+            Dialect::Mysql => {
+                let (host, port) = self.get_mysql_host_port().await?;
+                MysqlBackend::create_database(&host, port, &db_name).await?;
+                let backend = MysqlBackend::connect(&host, port, &db_name).await?;
+                Box::new(backend)
+            },
+            Dialect::Sqlite => {
+                // SQLite is fast enough to just create new every time
+                let backend = SqliteBackend::new().await?;
+                Box::new(backend)
+            },
+        };
 
         // Execute migrations
         backend.execute_migration(&suite.schema.migration).await?;

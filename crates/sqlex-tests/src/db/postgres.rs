@@ -12,16 +12,54 @@ use crate::{Result, config::Dialect};
 pub struct PostgresBackend {
     pool: PgPool,
     #[allow(dead_code)]
-    container: ContainerAsync<Postgres>,
+    container: Option<ContainerAsync<Postgres>>,
 }
 
 impl PostgresBackend {
-    /// Create a new PostgreSQL backend with a testcontainer.
-    pub async fn new() -> Result<Self> {
-        // Start PostgreSQL container
+    /// Start a PostgreSQL container.
+    pub async fn start_container() -> Result<ContainerAsync<Postgres>> {
         let container = Postgres::default().start().await.map_err(|e| {
             crate::Error::Config(format!("Failed to start PostgreSQL container: {}", e))
         })?;
+        Ok(container)
+    }
+
+    /// Connect to an existing PostgreSQL database.
+    pub async fn connect(host: &str, port: u16, db: &str) -> Result<Self> {
+        let connection_string = format!("postgres://postgres:postgres@{}:{}/{}", host, port, db);
+
+        let pool = PgPoolOptions::new()
+            .max_connections(5)
+            .connect(&connection_string)
+            .await?;
+
+        Ok(Self {
+            pool,
+            container: None,
+        })
+    }
+
+    /// Create a new database on the PostgreSQL instance.
+    pub async fn create_database(host: &str, port: u16, db_name: &str) -> Result<()> {
+        let connection_string = format!("postgres://postgres:postgres@{}:{}/postgres", host, port);
+        // We use a separate pool for admin tasks
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&connection_string)
+            .await?;
+
+        // Use raw_sql to avoid prepared statement issues with CREATE DATABASE if any
+        sqlx::query(&format!("CREATE DATABASE \"{}\"", db_name))
+            .execute(&pool)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Create a new PostgreSQL backend with a testcontainer.
+    pub async fn new() -> Result<Self> {
+        // Start PostgreSQL container
+        let container = Self::start_container().await?;
 
         let host = container
             .get_host()
@@ -39,7 +77,10 @@ impl PostgresBackend {
             .connect(&connection_string)
             .await?;
 
-        Ok(Self { pool, container })
+        Ok(Self {
+            pool,
+            container: Some(container),
+        })
     }
 }
 
