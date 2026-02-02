@@ -1,6 +1,6 @@
 mod config;
 
-use std::{fs, path::Path};
+use std::path::Path;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -8,6 +8,7 @@ use config::{AnalyzerMode, SqlexConfig};
 use sqlex_analyzer::Analyzer;
 use sqlex_database_analyzer::{DatabaseAnalyzer, DatabaseType};
 use sqlex_static_analyzer::StaticAnalyzer;
+use tokio::fs;
 
 #[derive(Parser)]
 #[command(name = "sqlex")]
@@ -43,6 +44,7 @@ async fn main() -> Result<()> {
 async fn run_analyze(config_path: &str) -> Result<()> {
     // 1. Load Config
     let config_content = fs::read_to_string(config_path)
+        .await
         .context(format!("Failed to read config file: {}", config_path))?;
     let config: SqlexConfig =
         serde_yaml::from_str(&config_content).context("Failed to parse config file")?;
@@ -50,15 +52,15 @@ async fn run_analyze(config_path: &str) -> Result<()> {
     println!("Loaded config: {:?}", config);
 
     // 2. Resolve Database Type
-    let db_type = match config.project.database.to_lowercase().as_str() {
+    let db_type = match config.database.to_lowercase().as_str() {
         "postgres" => DatabaseType::Postgres,
         "mysql" => DatabaseType::MySQL,
         "sqlite" => DatabaseType::SQLite,
-        _ => anyhow::bail!("Unsupported database type: {}", config.project.database),
+        _ => anyhow::bail!("Unsupported database type: {}", config.database),
     };
 
     // 3. Instantiate Analyzer
-    let mut analyzer: Box<dyn Analyzer> = match config.project.analyzer {
+    let mut analyzer: Box<dyn Analyzer> = match config.analyzer {
         AnalyzerMode::Database => {
             // TODO: Start container or use connection string
             // For now, assuming local DB or testcontainers helper is used.
@@ -80,19 +82,23 @@ async fn run_analyze(config_path: &str) -> Result<()> {
     };
 
     // 4. Run Migrations
-    let migrations_dir = config.project.migrations;
+    let migrations_dir = config.migrations;
     if Path::new(&migrations_dir).exists() {
-        let mut paths: Vec<_> = fs::read_dir(&migrations_dir)?
-            .filter_map(|r| r.ok())
-            .map(|e| e.path())
-            .filter(|p| p.extension().is_some_and(|ext| ext == "sql"))
-            .collect();
+        let mut paths = Vec::new();
+        let mut entries = fs::read_dir(&migrations_dir).await?;
+
+        while let Some(entry) = entries.next_entry().await? {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "sql") {
+                paths.push(path);
+            }
+        }
 
         paths.sort(); // Important: determinism
 
         for path in paths {
             println!("Applying migration: {:?}", path);
-            let sql = fs::read_to_string(&path)?;
+            let sql = fs::read_to_string(&path).await?;
             analyzer.execute(&sql).await?;
         }
     } else {
