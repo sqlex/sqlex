@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use rand::{Rng, distributions::Alphanumeric};
 use sqlex_analyzer::{Analyzer, AnalyzerError, ColumnInfo, DataType, Result, ResultSet, Table};
 use sqlx::{
     Column, Executor, Row, Statement, TypeInfo,
@@ -15,9 +16,17 @@ pub struct PostgresDatabaseAnalyzer {
 
 impl PostgresDatabaseAnalyzer {
     pub async fn new() -> Result<Self> {
+        // Use Alphanumeric to ensure password characters are safe for the connection URL
+        // without requiring percent-encoding.
+        let password: String = rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(16)
+            .map(char::from)
+            .collect();
+
         let image = GenericImage::new("postgres", "16-alpine")
-            .with_env_var("POSTGRES_PASSWORD", "postgres")
-            .with_env_var("POSTGRES_DB", "sqlex_test");
+            .with_env_var("POSTGRES_PASSWORD", &password)
+            .with_env_var("POSTGRES_DB", "sqlex");
 
         let container = image.start().await.map_err(|e| {
             AnalyzerError::ExecutionError(format!("Failed to start postgres container: {}", e))
@@ -31,7 +40,7 @@ impl PostgresDatabaseAnalyzer {
             .get_host_port_ipv4(5432)
             .await
             .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
-        let url = format!("postgres://postgres:postgres@{}:{}/sqlex_test", host, port);
+        let url = format!("postgres://postgres:{}@{}:{}/sqlex", password, host, port);
 
         let pool = parse_retry_connect(|| PgPoolOptions::new().connect(&url)).await?;
 

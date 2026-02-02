@@ -27,3 +27,4 @@ sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio",
 testcontainers = "0.23"
 notify = "8.2.0"
 serde_json = "1.0"
+rand = "0.8"
