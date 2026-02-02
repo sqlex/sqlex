@@ -39,12 +39,23 @@ impl Schema {
 
     /// Rebuild the foreign key reverse index
     pub fn rebuild_fk_index(&mut self) {
-        todo!("rebuild FK reverse index from all tables")
+        self.fk_reverse_index.clear();
+        for (table_name, table) in &self.tables {
+            for fk in &table.foreign_keys {
+                self.fk_reverse_index
+                    .entry(fk.ref_table.clone())
+                    .or_default()
+                    .push((table_name.clone(), fk.clone()));
+            }
+        }
     }
 
     /// Get all foreign keys that reference a given table
-    pub fn get_references_to(&self, _table: &str) -> Vec<&ForeignKeyDef> {
-        todo!("lookup FK reverse index")
+    pub fn get_references_to(&self, table: &str) -> Vec<&ForeignKeyDef> {
+        self.fk_reverse_index
+            .get(table)
+            .map(|fks| fks.iter().map(|(_, fk)| fk).collect())
+            .unwrap_or_default()
     }
 
     /// Get a table definition by name
