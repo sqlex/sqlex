@@ -2056,6 +2056,7 @@ dependencies = [
  "sqlex-analyzer",
  "sqlex-common",
  "sqlex-generator",
+ "sqlex-generator-console",
  "sqlex-generator-go",
  "sqlex-generator-java",
  "sqlex-generator-rust",
@@ -2080,6 +2081,18 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "sqlex-common",
+]
+
+[[package]]
+name = "sqlex-generator-console"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sqlex-common",
+ "sqlex-generator",
 ]
 
 [[package]]
