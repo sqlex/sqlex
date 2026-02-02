@@ -2136,6 +2136,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "sqlex-analyzer",
+ "sqlex-common",
  "sqlparser",
 ]
 

@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 # Internal
 sqlex-analyzer = { workspace = true }
+sqlex-common = { workspace = true }
 
 # External
 async-trait = { workspace = true }
