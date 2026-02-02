@@ -10,6 +10,12 @@ impl JavaGenerator {
     }
 }
 
+impl Default for JavaGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Generator for JavaGenerator {
     fn generate(&self, _input: &CompilationUnit) -> Result<String> {
         todo!("Implement Java code generation")

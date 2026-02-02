@@ -10,6 +10,12 @@ impl GoGenerator {
     }
 }
 
+impl Default for GoGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Generator for GoGenerator {
     fn generate(&self, _input: &CompilationUnit) -> Result<String> {
         todo!("Implement Go code generation")

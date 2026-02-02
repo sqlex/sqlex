@@ -10,6 +10,12 @@ impl RustGenerator {
     }
 }
 
+impl Default for RustGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Generator for RustGenerator {
     fn generate(&self, _input: &CompilationUnit) -> Result<String> {
         todo!("Implement Rust code generation")
