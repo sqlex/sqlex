@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-use crate::types::{ColumnInfo, DataType};
+use crate::types::{ColumnInfo, DataType, Table};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompilationUnit {
+    pub tables: Vec<Table>,
     pub queries: Vec<QueryDescriptor>,
 }
 
