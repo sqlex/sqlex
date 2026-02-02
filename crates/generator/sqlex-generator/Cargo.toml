@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 sqlex-common = { path = "../../common" }
 anyhow = "1.0"
+async-trait = { workspace = true }

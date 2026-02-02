@@ -7,3 +7,4 @@ edition = "2021"
 sqlex-common = { path = "../../common" }
 sqlex-generator = { path = "../sqlex-generator" }
 anyhow = "1.0"
+async-trait = { workspace = true }

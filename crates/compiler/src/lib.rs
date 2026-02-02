@@ -89,7 +89,7 @@ impl Compiler {
                     |e| anyhow::anyhow!("Failed to create generator '{}': {}", gen_config.name, e),
                 )?;
 
-            generator.generate(&compilation_unit)?;
+            generator.generate(&compilation_unit).await?;
 
             println!("Generator {} finished.", gen_config.name);
         }

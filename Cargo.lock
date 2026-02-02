@@ -2083,6 +2083,7 @@ name = "sqlex-generator"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "sqlex-common",
 ]
 
@@ -2091,6 +2092,7 @@ name = "sqlex-generator-debug"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -2103,6 +2105,7 @@ name = "sqlex-generator-go"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "sqlex-common",
  "sqlex-generator",
 ]
@@ -2112,6 +2115,7 @@ name = "sqlex-generator-java"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "sqlex-common",
  "sqlex-generator",
 ]
@@ -2121,6 +2125,7 @@ name = "sqlex-generator-rust"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "sqlex-common",
  "sqlex-generator",
 ]

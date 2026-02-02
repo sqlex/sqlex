@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use sqlex_common::ir::CompilationUnit;
 use sqlex_generator::Generator;
 
@@ -16,8 +17,9 @@ impl Default for RustGenerator {
     }
 }
 
+#[async_trait]
 impl Generator for RustGenerator {
-    fn generate(&self, _input: &CompilationUnit) -> Result<()> {
+    async fn generate(&self, _input: &CompilationUnit) -> Result<()> {
         todo!("Implement Rust code generation")
     }
 }

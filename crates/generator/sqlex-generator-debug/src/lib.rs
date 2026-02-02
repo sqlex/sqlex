@@ -1,6 +1,7 @@
 use std::{fs, path::PathBuf};
 
 use anyhow::Result;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use sqlex_common::ir::CompilationUnit;
 use sqlex_generator::Generator;
@@ -75,8 +76,9 @@ impl DebugGenerator {
     }
 }
 
+#[async_trait]
 impl Generator for DebugGenerator {
-    fn generate(&self, input: &CompilationUnit) -> Result<()> {
+    async fn generate(&self, input: &CompilationUnit) -> Result<()> {
         let content = match self.config.format {
             OutputFormat::Json => serde_json::to_string_pretty(input)?,
             OutputFormat::Yaml => serde_yaml::to_string(input)?,
