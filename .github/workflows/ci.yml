@@ -36,10 +36,10 @@ jobs:
       run: cargo fmt -- --check
 
     - name: Build
-      run: cargo build --verbose
+      run: cargo build
 
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo test
 
     - name: Lint with Clippy
       run: cargo clippy -- -D warnings
