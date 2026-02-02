@@ -1,17 +1,12 @@
 use async_trait::async_trait;
 use sqlex_analyzer::{Analyzer, AnalyzerError, ColumnInfo, DataType, Result, ResultSet};
+use sqlex_common::DatabaseType;
 use sqlx::{
     Column, Executor, Statement, TypeInfo,
     mysql::{MySqlPool, MySqlPoolOptions, MySqlTypeInfo},
     postgres::{PgPool, PgPoolOptions, PgTypeInfo},
     sqlite::{SqlitePool, SqlitePoolOptions, SqliteTypeInfo},
 };
-
-pub enum DatabaseType {
-    Postgres,
-    MySQL,
-    SQLite,
-}
 
 pub struct DatabaseAnalyzer {
     pool: AnyInternalPool,

@@ -9,3 +9,4 @@ tokio = { workspace = true }
 sqlx = { workspace = true, features = ["runtime-tokio", "tls-rustls", "postgres", "mysql", "sqlite"] }
 testcontainers = { workspace = true }
 async-trait = { workspace = true }
+sqlex-common = { version = "0.1.0", path = "../../common" }

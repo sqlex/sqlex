@@ -6,7 +6,8 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use config::{AnalyzerMode, SqlexConfig};
 use sqlex_analyzer::Analyzer;
-use sqlex_database_analyzer::{DatabaseAnalyzer, DatabaseType};
+use sqlex_common::DatabaseType;
+use sqlex_database_analyzer::DatabaseAnalyzer;
 use sqlex_static_analyzer::StaticAnalyzer;
 use tokio::fs;
 

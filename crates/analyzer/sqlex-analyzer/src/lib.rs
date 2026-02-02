@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -12,54 +11,7 @@ pub enum AnalyzerError {
 
 pub type Result<T> = std::result::Result<T, AnalyzerError>;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum DataType {
-    // Integers
-    Bool,
-    TinyInt,
-    SmallInt,
-    Int,
-    BigInt,
-
-    // Floats
-    Float,
-    Double,
-    Decimal,
-
-    // Strings
-    Char(Option<u32>),
-    Varchar(Option<u32>),
-    Text,
-
-    // Time
-    Date,
-    Time,
-    DateTime,
-    Timestamp,
-
-    // Others
-    Uuid,
-    Json,
-    Binary,
-
-    // Complex
-    Array(Box<DataType>),
-
-    // Fallback
-    Custom(String),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ColumnInfo {
-    pub name: String,
-    pub data_type: DataType,
-    pub nullability: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResultSet {
-    pub columns: Vec<ColumnInfo>,
-}
+pub use sqlex_common::{ColumnInfo, DataType, ResultSet};
 
 #[async_trait]
 pub trait Analyzer: Send + Sync {

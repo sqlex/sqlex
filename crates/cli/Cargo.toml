@@ -16,3 +16,4 @@ clap = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_yaml = { workspace = true }
+sqlex-common = { version = "0.1.0", path = "../common" }

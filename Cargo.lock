@@ -1934,6 +1934,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "serde",
+ "sqlex-common",
  "thiserror",
 ]
 
@@ -1946,9 +1947,17 @@ dependencies = [
  "serde",
  "serde_yaml",
  "sqlex-analyzer",
+ "sqlex-common",
  "sqlex-database-analyzer",
  "sqlex-static-analyzer",
  "tokio",
+]
+
+[[package]]
+name = "sqlex-common"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -1957,6 +1966,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "sqlex-analyzer",
+ "sqlex-common",
  "sqlx",
  "testcontainers",
  "tokio",

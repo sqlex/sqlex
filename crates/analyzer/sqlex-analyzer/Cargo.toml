@@ -7,3 +7,4 @@ edition = "2021"
 serde = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
+sqlex-common = { version = "0.1.0", path = "../../common" }

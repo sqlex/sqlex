@@ -1,10 +1,11 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/common",
     "crates/cli",
     "crates/analyzer/sqlex-analyzer",
     "crates/analyzer/sqlex-database-analyzer",
-    "crates/analyzer/sqlex-static-analyzer",
+    "crates/analyzer/sqlex-static-analyzer", 
 ]
 
 [workspace.dependencies]
