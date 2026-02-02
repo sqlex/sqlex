@@ -7,9 +7,10 @@ edition = "2021"
 sqlex-common = { path = "../common" }
 sqlex-compiler = { path = "../compiler" }
 # Analyzer deps are now transitive via compiler, but main.rs only uses compiler
-tokio = { version = "1.43", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.9"
-anyhow = "1.0"
-thiserror = "2.0"
-clap = { version = "4.5", features = ["derive"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+clap = { workspace = true }
+notify = { workspace = true }

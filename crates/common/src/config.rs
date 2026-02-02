@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SqlexConfig {
+    pub name: String,
     pub database: String, // postgres, mysql, sqlite
     #[serde(default)]
     pub analyzer: AnalyzerMode,

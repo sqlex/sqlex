@@ -24,3 +24,4 @@ async-trait = "0.1"
 sqlparser = "0.54"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "macros"] }
 testcontainers = "0.23"
+notify = "8.2.0"
