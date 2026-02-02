@@ -4,14 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-sqlex-common = { path = "../common" }
-sqlex-compiler = { path = "../compiler" }
-# Analyzer deps are now transitive via compiler, but main.rs only uses compiler
-tokio = { workspace = true }
-serde = { workspace = true }
-serde_yaml = { workspace = true }
+# Internal
+sqlex-common = { workspace = true }
+sqlex-compiler = { workspace = true }
+
+# External
 anyhow = { workspace = true }
-thiserror = { workspace = true }
 clap = { workspace = true }
 notify = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }

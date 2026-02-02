@@ -15,16 +15,40 @@ members = [
 ]
 
 [workspace.dependencies]
-tokio = { version = "1.43", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_yaml = "0.9"
+# Internal Crates
+sqlex-analyzer = { path = "crates/analyzer/sqlex-analyzer" }
+sqlex-cli = { path = "crates/cli" }
+sqlex-common = { path = "crates/common" }
+sqlex-compiler = { path = "crates/compiler" }
+sqlex-database-analyzer = { path = "crates/analyzer/sqlex-database-analyzer" }
+sqlex-generator = { path = "crates/generator/sqlex-generator" }
+sqlex-generator-debug = { path = "crates/generator/sqlex-generator-debug" }
+sqlex-generator-go = { path = "crates/generator/sqlex-generator-go" }
+sqlex-generator-java = { path = "crates/generator/sqlex-generator-java" }
+sqlex-generator-rust = { path = "crates/generator/sqlex-generator-rust" }
+sqlex-static-analyzer = { path = "crates/analyzer/sqlex-static-analyzer" }
+
+# Core
 anyhow = "1.0"
-thiserror = "2.0"
-clap = { version = "4.5", features = ["derive"] }
 async-trait = "0.1"
+thiserror = "2.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# Async/Runtime
+tokio = { version = "1.43", features = ["full"] }
+
+# Database
 sqlparser = "0.54"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "macros"] }
-testcontainers = "0.23"
+
+# CLI & Utilities
+clap = { version = "4.5", features = ["derive"] }
 notify = "8.2.0"
-serde_json = "1.0"
 rand = "0.8"
+
+# Testing
+testcontainers = "0.23"

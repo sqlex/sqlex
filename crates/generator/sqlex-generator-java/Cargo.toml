@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-sqlex-common = { path = "../../common" }
-sqlex-generator = { path = "../sqlex-generator" }
-anyhow = "1.0"
+# Internal
+sqlex-common = { workspace = true }
+sqlex-generator = { workspace = true }
+
+# External
+anyhow = { workspace = true }
 async-trait = { workspace = true }

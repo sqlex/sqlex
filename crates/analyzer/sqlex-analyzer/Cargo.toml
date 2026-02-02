@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# Internal
+sqlex-common = { workspace = true }
+
+# External
+async-trait = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
-async-trait = { workspace = true }
-sqlex-common = { version = "0.1.0", path = "../../common" }

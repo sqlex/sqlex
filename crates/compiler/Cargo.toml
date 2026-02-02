@@ -4,13 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-sqlex-common = { path = "../common" }
-sqlex-analyzer = { path = "../analyzer/sqlex-analyzer" }
-sqlex-generator = { path = "../generator/sqlex-generator" }
-sqlex-generator-debug = { path = "../generator/sqlex-generator-debug" }
-sqlex-generator-rust = { path = "../generator/sqlex-generator-rust" }
-sqlex-generator-go = { path = "../generator/sqlex-generator-go" }
-sqlex-generator-java = { path = "../generator/sqlex-generator-java" }
-anyhow = "1.0"
-tokio = { version = "1", features = ["full"] }
-serde_json.workspace = true
+# Internal
+sqlex-analyzer = { workspace = true }
+sqlex-common = { workspace = true }
+sqlex-generator = { workspace = true }
+sqlex-generator-debug = { workspace = true }
+sqlex-generator-go = { workspace = true }
+sqlex-generator-java = { workspace = true }
+sqlex-generator-rust = { workspace = true }
+
+# External
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }

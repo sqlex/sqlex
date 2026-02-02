@@ -4,13 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-sqlex-analyzer = { path = "../sqlex-analyzer" }
-tokio = { workspace = true }
-sqlx = { workspace = true, features = ["runtime-tokio", "tls-rustls", "postgres", "mysql", "sqlite"] }
-testcontainers = { workspace = true }
+# Internal
+sqlex-analyzer = { workspace = true }
+sqlex-common = { workspace = true }
+
+# External
 async-trait = { workspace = true }
 rand = { workspace = true }
-sqlex-common = { version = "0.1.0", path = "../../common" }
+sqlx = { workspace = true, features = ["runtime-tokio", "tls-rustls", "postgres", "mysql", "sqlite"] }
+testcontainers = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

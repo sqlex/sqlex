@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-sqlex-analyzer = { path = "../sqlex-analyzer" }
-sqlparser = { workspace = true }
+# Internal
+sqlex-analyzer = { workspace = true }
+
+# External
 async-trait = { workspace = true }
+sqlparser = { workspace = true }
