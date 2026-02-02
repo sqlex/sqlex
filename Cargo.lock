@@ -2053,10 +2053,11 @@ name = "sqlex-compiler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "serde_json",
  "sqlex-analyzer",
  "sqlex-common",
  "sqlex-generator",
- "sqlex-generator-console",
+ "sqlex-generator-debug",
  "sqlex-generator-go",
  "sqlex-generator-java",
  "sqlex-generator-rust",
@@ -2084,7 +2085,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sqlex-generator-console"
+name = "sqlex-generator-debug"
 version = "0.1.0"
 dependencies = [
  "anyhow",

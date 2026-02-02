@@ -7,9 +7,10 @@ edition = "2021"
 sqlex-common = { path = "../common" }
 sqlex-analyzer = { path = "../analyzer/sqlex-analyzer" }
 sqlex-generator = { path = "../generator/sqlex-generator" }
-sqlex-generator-console = { path = "../generator/sqlex-generator-console" }
+sqlex-generator-debug = { path = "../generator/sqlex-generator-debug" }
 sqlex-generator-rust = { path = "../generator/sqlex-generator-rust" }
 sqlex-generator-go = { path = "../generator/sqlex-generator-go" }
 sqlex-generator-java = { path = "../generator/sqlex-generator-java" }
 anyhow = "1.0"
 tokio = { version = "1", features = ["full"] }
+serde_json.workspace = true

@@ -17,11 +17,7 @@ impl Default for JavaGenerator {
 }
 
 impl Generator for JavaGenerator {
-    fn generate(&self, _input: &CompilationUnit) -> Result<String> {
+    fn generate(&self, _input: &CompilationUnit) -> Result<()> {
         todo!("Implement Java code generation")
-    }
-
-    fn extension(&self) -> &str {
-        "java"
     }
 }

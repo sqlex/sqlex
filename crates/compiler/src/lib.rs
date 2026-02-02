@@ -1,11 +1,11 @@
+mod factory;
+
 use anyhow::Result;
 use sqlex_common::{
     SqlexConfig,
     ir::{CompilationUnit, ParameterDescriptor, QueryDescriptor},
     types::{ColumnInfo, DataType, Table},
 };
-use sqlex_generator::Generator;
-use sqlex_generator_console::ConsoleGenerator;
 
 pub struct Compiler {
     #[allow(dead_code)]
@@ -84,22 +84,14 @@ impl Compiler {
                 "Running generator: {} ({})",
                 gen_config.name, gen_config.generator
             );
-            let generator: Box<dyn Generator> = match gen_config.generator.as_str() {
-                "console" => Box::new(ConsoleGenerator::new(gen_config.config.clone())?),
-                _ => {
-                    println!("Unknown generator type: {}", gen_config.generator);
-                    continue;
-                },
-            };
+            let generator =
+                factory::get_generator(&gen_config.generator, gen_config.config.clone()).map_err(
+                    |e| anyhow::anyhow!("Failed to create generator '{}': {}", gen_config.name, e),
+                )?;
 
-            let output = generator.generate(&compilation_unit)?;
+            generator.generate(&compilation_unit)?;
 
-            if gen_config.generator == "console" {
-                println!("{}", output);
-            } else {
-                // write to file... logic would go here
-                println!("(File writing not implemented for other generators yet)");
-            }
+            println!("Generator {} finished.", gen_config.name);
         }
 
         Ok(())

@@ -17,11 +17,7 @@ impl Default for GoGenerator {
 }
 
 impl Generator for GoGenerator {
-    fn generate(&self, _input: &CompilationUnit) -> Result<String> {
+    fn generate(&self, _input: &CompilationUnit) -> Result<()> {
         todo!("Implement Go code generation")
-    }
-
-    fn extension(&self) -> &str {
-        "go"
     }
 }

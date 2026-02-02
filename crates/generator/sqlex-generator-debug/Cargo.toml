@@ -1,5 +1,5 @@
 [package]
-name = "sqlex-generator-console"
+name = "sqlex-generator-debug"
 version = "0.1.0"
 edition = "2021"
 

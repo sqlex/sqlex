@@ -17,11 +17,7 @@ impl Default for RustGenerator {
 }
 
 impl Generator for RustGenerator {
-    fn generate(&self, _input: &CompilationUnit) -> Result<String> {
+    fn generate(&self, _input: &CompilationUnit) -> Result<()> {
         todo!("Implement Rust code generation")
-    }
-
-    fn extension(&self) -> &str {
-        "rs"
     }
 }
