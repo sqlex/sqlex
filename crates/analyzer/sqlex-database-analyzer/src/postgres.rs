@@ -17,7 +17,7 @@ impl PostgresDatabaseAnalyzer {
     pub async fn new() -> Result<Self> {
         let image = GenericImage::new("postgres", "16-alpine")
             .with_env_var("POSTGRES_PASSWORD", "postgres")
-            .with_env_var("POSTGRES_DB", "postgres");
+            .with_env_var("POSTGRES_DB", "sqlex_test");
 
         let container = image.start().await.map_err(|e| {
             AnalyzerError::ExecutionError(format!("Failed to start postgres container: {}", e))
@@ -31,7 +31,7 @@ impl PostgresDatabaseAnalyzer {
             .get_host_port_ipv4(5432)
             .await
             .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
-        let url = format!("postgres://postgres:postgres@{}:{}/postgres", host, port);
+        let url = format!("postgres://postgres:postgres@{}:{}/sqlex_test", host, port);
 
         let pool = parse_retry_connect(|| PgPoolOptions::new().connect(&url)).await?;
 
@@ -152,7 +152,8 @@ fn map_udt(udt: &str) -> DataType {
         "varchar" | "char" | "text" | "bpchar" => DataType::Text,
         "date" => DataType::Date,
         "time" | "timetz" => DataType::Time,
-        "timestamp" | "timestamptz" => DataType::Timestamp,
+        "timestamp" => DataType::DateTime,
+        "timestamptz" => DataType::Timestamp,
         "uuid" => DataType::Uuid,
         "json" | "jsonb" => DataType::Json,
         "bytea" => DataType::Binary,

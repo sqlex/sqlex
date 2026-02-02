@@ -2068,6 +2068,7 @@ dependencies = [
 name = "sqlex-database-analyzer"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "sqlex-analyzer",
  "sqlex-common",

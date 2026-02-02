@@ -17,7 +17,7 @@ impl MySqlDatabaseAnalyzer {
     pub async fn new() -> Result<Self> {
         let image = GenericImage::new("mysql", "8")
             .with_env_var("MYSQL_ROOT_PASSWORD", "mysql")
-            .with_env_var("MYSQL_DATABASE", "mysql");
+            .with_env_var("MYSQL_DATABASE", "sqlex_test");
 
         let container = image.start().await.map_err(|e| {
             AnalyzerError::ExecutionError(format!("Failed to start mysql container: {}", e))
@@ -31,7 +31,7 @@ impl MySqlDatabaseAnalyzer {
             .get_host_port_ipv4(3306)
             .await
             .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
-        let url = format!("mysql://root:mysql@{}:{}/mysql", host, port);
+        let url = format!("mysql://root:mysql@{}:{}/sqlex_test", host, port);
 
         let pool = parse_retry_connect(|| MySqlPoolOptions::new().connect(&url)).await?;
 
@@ -73,7 +73,11 @@ impl Analyzer for MySqlDatabaseAnalyzer {
 
     async fn get_all_tables(&self) -> Result<Vec<Table>> {
         let query = r#"
-            SELECT c.TABLE_NAME, c.COLUMN_NAME, c.DATA_TYPE, c.IS_NULLABLE
+            SELECT 
+                CAST(c.TABLE_NAME AS CHAR) as TABLE_NAME, 
+                CAST(c.COLUMN_NAME AS CHAR) as COLUMN_NAME, 
+                CAST(c.DATA_TYPE AS CHAR) as DATA_TYPE, 
+                CAST(c.IS_NULLABLE AS CHAR) as IS_NULLABLE
             FROM information_schema.COLUMNS c
             JOIN information_schema.TABLES t ON c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_SCHEMA = t.TABLE_SCHEMA
             WHERE c.TABLE_SCHEMA = DATABASE()

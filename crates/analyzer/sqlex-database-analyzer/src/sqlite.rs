@@ -116,6 +116,16 @@ fn map_string_type(t: &str) -> DataType {
         DataType::Binary
     } else if t.contains("real") || t.contains("floa") || t.contains("doub") {
         DataType::Double
+    } else if t.contains("bool") {
+        DataType::Bool
+    } else if t.contains("datetime") {
+        DataType::DateTime
+    } else if t.contains("timestamp") {
+        DataType::Timestamp
+    } else if t.contains("date") {
+        DataType::Date
+    } else if t.contains("time") {
+        DataType::Time
     } else {
         DataType::Custom(t)
     }
