@@ -1946,10 +1946,9 @@ dependencies = [
  "clap",
  "serde",
  "serde_yaml",
- "sqlex-analyzer",
  "sqlex-common",
- "sqlex-database-analyzer",
- "sqlex-static-analyzer",
+ "sqlex-compiler",
+ "thiserror",
  "tokio",
 ]
 
@@ -1958,6 +1957,20 @@ name = "sqlex-common"
 version = "0.1.0"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "sqlex-compiler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "sqlex-analyzer",
+ "sqlex-common",
+ "sqlex-generator",
+ "sqlex-generator-go",
+ "sqlex-generator-java",
+ "sqlex-generator-rust",
+ "tokio",
 ]
 
 [[package]]
@@ -1970,6 +1983,41 @@ dependencies = [
  "sqlx",
  "testcontainers",
  "tokio",
+]
+
+[[package]]
+name = "sqlex-generator"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "sqlex-common",
+]
+
+[[package]]
+name = "sqlex-generator-go"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "sqlex-common",
+ "sqlex-generator",
+]
+
+[[package]]
+name = "sqlex-generator-java"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "sqlex-common",
+ "sqlex-generator",
+]
+
+[[package]]
+name = "sqlex-generator-rust"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "sqlex-common",
+ "sqlex-generator",
 ]
 
 [[package]]

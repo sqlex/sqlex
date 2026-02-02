@@ -1,0 +1,9 @@
+[package]
+name = "sqlex-generator-java"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sqlex-common = { path = "../../common" }
+sqlex-generator = { path = "../sqlex-generator" }
+anyhow = "1.0"

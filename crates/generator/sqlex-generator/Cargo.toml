@@ -1,0 +1,8 @@
+[package]
+name = "sqlex-generator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sqlex-common = { path = "../../common" }
+anyhow = "1.0"
