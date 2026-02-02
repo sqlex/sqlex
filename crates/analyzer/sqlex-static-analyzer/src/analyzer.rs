@@ -91,7 +91,29 @@ impl<'a> QueryAnalyzer<'a> {
         if let Some(with) = &query.with {
             for cte in &with.cte_tables {
                 let cte_name = cte.alias.name.value.clone();
-                // Analyze CTE query
+
+                // For recursive CTEs, we need to bind the CTE name BEFORE processing
+                // the full CTE body, so recursive references can find it.
+                // We do this by first analyzing the anchor part (left side of UNION ALL).
+                if with.recursive {
+                    // Extract anchor columns from the first part of the UNION
+                    let anchor_cols =
+                        self.extract_anchor_columns(&cte.query, &cte_name, &cte.alias.columns)?;
+
+                    // Pre-register the CTE with anchor schema so recursive part can reference it
+                    self.cte_scope.insert(
+                        cte_name.clone(),
+                        ResolvedCTE {
+                            columns: anchor_cols,
+                            plan: Box::new(PlanNode::Values {
+                                rows: vec![],
+                                column_names: vec![],
+                            }), // Placeholder
+                        },
+                    );
+                }
+
+                // Now analyze the full CTE query (recursive refs will find pre-registered CTE)
                 let cte_plan = self.build_plan(&cte.query)?;
                 let scope = self.extract_scope_from_plan(&cte_plan)?;
 
@@ -448,9 +470,86 @@ impl<'a> QueryAnalyzer<'a> {
                 },
             };
 
-            // Merge scopes for result
+            // Merge scopes and adjust nullability based on JOIN type
             let mut merged_scope = scope.clone();
-            merged_scope.merge(right_scope);
+
+            // Check if there's an FK guarantee for this JOIN
+            let left_table_name = self.extract_table_name_from_plan(&plan);
+            let right_table_name = self.extract_table_name_from_plan(&right_plan);
+            let fk_guarantee = self.check_fk_guarantee_with_names(
+                join_kind,
+                left_table_name.as_deref(),
+                right_table_name.as_deref(),
+                &condition,
+            );
+
+            // Adjust nullability for OUTER JOINs
+            match join_kind {
+                JoinKind::Left => {
+                    // RIGHT table columns become nullable (unless FK guarantees otherwise)
+                    for (table_name, cols) in right_scope.tables {
+                        let nullable_cols: Vec<ResolvedColumn> = cols
+                            .into_iter()
+                            .map(|mut col| {
+                                // If FK guarantees the match, preserve nullability
+                                if !fk_guarantee {
+                                    col.nullable = true;
+                                }
+                                col
+                            })
+                            .collect();
+                        merged_scope.add_table(table_name, nullable_cols);
+                    }
+                },
+                JoinKind::Right => {
+                    // LEFT table columns become nullable (unless FK guarantees otherwise)
+                    for (table_name, cols) in merged_scope.tables.clone() {
+                        let nullable_cols: Vec<ResolvedColumn> = cols
+                            .into_iter()
+                            .map(|mut col| {
+                                // If FK guarantees the match, preserve nullability
+                                if !fk_guarantee {
+                                    col.nullable = true;
+                                }
+                                col
+                            })
+                            .collect();
+                        merged_scope.tables.insert(table_name, nullable_cols);
+                    }
+                    // Add right table as-is
+                    for (table_name, cols) in right_scope.tables {
+                        merged_scope.add_table(table_name, cols);
+                    }
+                },
+                JoinKind::Full => {
+                    // BOTH sides become nullable
+                    for (table_name, cols) in merged_scope.tables.clone() {
+                        let nullable_cols: Vec<ResolvedColumn> = cols
+                            .into_iter()
+                            .map(|mut col| {
+                                col.nullable = true;
+                                col
+                            })
+                            .collect();
+                        merged_scope.tables.insert(table_name, nullable_cols);
+                    }
+                    for (table_name, cols) in right_scope.tables {
+                        let nullable_cols: Vec<ResolvedColumn> = cols
+                            .into_iter()
+                            .map(|mut col| {
+                                col.nullable = true;
+                                col
+                            })
+                            .collect();
+                        merged_scope.add_table(table_name, nullable_cols);
+                    }
+                },
+                JoinKind::Inner | JoinKind::Cross => {
+                    // Preserve original nullability
+                    merged_scope.merge(right_scope);
+                },
+            }
+
             scope = merged_scope;
 
             plan = PlanNode::Join {
@@ -462,6 +561,76 @@ impl<'a> QueryAnalyzer<'a> {
         }
 
         Ok((plan, scope))
+    }
+
+    /// Extract table name from a PlanNode (if it's a TableScan)
+    fn extract_table_name_from_plan(&self, plan: &PlanNode) -> Option<String> {
+        match plan {
+            PlanNode::TableScan { table, .. } => Some(table.clone()),
+            PlanNode::Join { left, .. } => self.extract_table_name_from_plan(left),
+            _ => None,
+        }
+    }
+
+    /// Check FK guarantee using explicit table names
+    fn check_fk_guarantee_with_names(
+        &self,
+        join_kind: JoinKind,
+        left_table: Option<&str>,
+        right_table: Option<&str>,
+        condition: &Option<JoinCondition>,
+    ) -> bool {
+        match join_kind {
+            JoinKind::Left => {
+                // Check if LEFT table has FK to RIGHT table
+                if let (Some(left_tbl), Some(right_tbl)) = (left_table, right_table) {
+                    if let Some(table_def) = self.schema.tables.get(left_tbl) {
+                        for fk in &table_def.foreign_keys {
+                            if fk.ref_table == right_tbl {
+                                // Check if FK columns are NOT NULL
+                                let fk_cols_not_null = fk.columns.iter().all(|fk_col| {
+                                    table_def
+                                        .columns
+                                        .iter()
+                                        .any(|col| col.name == *fk_col && !col.nullable)
+                                });
+
+                                if fk_cols_not_null
+                                    && matches!(condition, Some(JoinCondition::On(_)))
+                                {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            JoinKind::Right => {
+                // Check if RIGHT table has FK to LEFT table
+                if let (Some(left_tbl), Some(right_tbl)) = (left_table, right_table) {
+                    if let Some(table_def) = self.schema.tables.get(right_tbl) {
+                        for fk in &table_def.foreign_keys {
+                            if fk.ref_table == left_tbl {
+                                let fk_cols_not_null = fk.columns.iter().all(|fk_col| {
+                                    table_def
+                                        .columns
+                                        .iter()
+                                        .any(|col| col.name == *fk_col && !col.nullable)
+                                });
+
+                                if fk_cols_not_null
+                                    && matches!(condition, Some(JoinCondition::On(_)))
+                                {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            _ => {},
+        }
+        false
     }
 
     fn build_join_constraint(
@@ -624,7 +793,51 @@ impl<'a> QueryAnalyzer<'a> {
                 let dt = types::unary_op_type(*op, e.data_type);
                 (dt, e.nullable)
             },
-            Expr::Function(func) => self.infer_function_type(func, scope)?,
+            Expr::Function(func) => {
+                // Check if it's NULLIF - NULLIF always returns nullable
+                let name_upper = name_to_string(&func.name).to_uppercase();
+                if name_upper == "NULLIF" {
+                    let (dt, _) = self.infer_function_type(func, scope)?;
+                    (dt, true) // NULLIF always nullable
+                } else {
+                    self.infer_function_type(func, scope)?
+                }
+            },
+            Expr::Case {
+                operand: _,
+                conditions: _,
+                results,
+                else_result,
+            } => {
+                // CASE expression type and nullability
+                // Type: use first result branch
+                let first_result = results.first().ok_or(AnalyzerError::AnalysisError(
+                    "CASE expression has no THEN branches".to_string(),
+                ))?;
+                let first_typed = self.build_typed_expr(first_result, scope)?;
+                let data_type = first_typed.data_type;
+
+                // Nullability: if no ELSE, it's nullable. Otherwise check all branches.
+                let mut nullable = else_result.is_none(); // No ELSE = implicit NULL
+
+                // Check all THEN branches
+                for result_expr in results {
+                    let typed = self.build_typed_expr(result_expr, scope)?;
+                    if typed.nullable {
+                        nullable = true;
+                    }
+                }
+
+                // Check ELSE branch if exists
+                if let Some(else_expr) = else_result {
+                    let typed = self.build_typed_expr(else_expr, scope)?;
+                    if typed.nullable {
+                        nullable = true;
+                    }
+                }
+
+                (data_type, nullable)
+            },
             Expr::Nested(e) => {
                 let t = self.build_typed_expr(e, scope)?;
                 (t.data_type, t.nullable)
@@ -636,7 +849,14 @@ impl<'a> QueryAnalyzer<'a> {
 
     fn infer_value_type(&self, v: &Value) -> DataType {
         match v {
-            Value::Number(_, _) => DataType::Double,
+            Value::Number(num, _) => {
+                // Check if it's an integer or float
+                if num.contains('.') || num.contains('e') || num.contains('E') {
+                    DataType::Double
+                } else {
+                    DataType::Int
+                }
+            },
             Value::SingleQuotedString(_) | Value::DoubleQuotedString(_) => DataType::Text,
             Value::Boolean(_) => DataType::Bool,
             Value::Null => DataType::Custom("NULL".to_string()),
@@ -675,12 +895,37 @@ impl<'a> QueryAnalyzer<'a> {
 
         let arg_types: Vec<DataType> = typed_args.iter().map(|a| a.data_type.clone()).collect();
 
-        let return_type = types::function_return_type(&name, &arg_types)
-            .unwrap_or(DataType::Custom("unknown".to_string()));
+        // Try to infer aggregate function types first
+        let upper_name = name.to_uppercase();
+        let return_type = match upper_name.as_str() {
+            "COUNT" => {
+                types::aggregate_return_type(&crate::plan::AggregateFunction::Count, DataType::Int)
+            },
+            "SUM" => {
+                let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
+                types::aggregate_return_type(&crate::plan::AggregateFunction::Sum, input_type)
+            },
+            "AVG" => {
+                let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
+                types::aggregate_return_type(&crate::plan::AggregateFunction::Avg, input_type)
+            },
+            "MIN" => {
+                let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
+                types::aggregate_return_type(&crate::plan::AggregateFunction::Min, input_type)
+            },
+            "MAX" => {
+                let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
+                types::aggregate_return_type(&crate::plan::AggregateFunction::Max, input_type)
+            },
+            _ => {
+                // Fall back to regular function type inference
+                types::function_return_type(&name, &arg_types)
+                    .unwrap_or(DataType::Custom("unknown".to_string()))
+            },
+        };
 
         let mut nullable = typed_args.iter().any(|a| a.nullable);
 
-        let upper_name = name.to_uppercase();
         match upper_name.as_str() {
             "COALESCE" => {
                 nullable = typed_args.iter().all(|a| a.nullable);
@@ -813,6 +1058,66 @@ impl<'a> QueryAnalyzer<'a> {
                 self.extract_scope_from_plan(left)
             },
             _ => Ok(Scope::default()),
+        }
+    }
+
+    /// Extract columns from the anchor (non-recursive) part of a recursive CTE
+    /// For a query like: SELECT ... UNION ALL SELECT ... (recursive)
+    /// We analyze only the left/anchor part to get the schema.
+    fn extract_anchor_columns(
+        &mut self,
+        query: &Query,
+        cte_name: &str,
+        column_aliases: &[sqlparser::ast::TableAliasColumnDef],
+    ) -> Result<Vec<ResolvedColumn>> {
+        // For recursive CTE, the body is typically a SetOperation (UNION ALL)
+        // We need to analyze just the anchor (left) part
+        let anchor_plan = match &*query.body {
+            SetExpr::SetOperation { left, .. } => {
+                // Analyze only the anchor (left) part
+                self.build_set_expr(left)?
+            },
+            // If it's not a set operation, just analyze the whole thing
+            other => self.build_set_expr(other)?,
+        };
+
+        let scope = self.extract_scope_from_plan(&anchor_plan)?;
+        let src_cols = scope
+            .tables
+            .values()
+            .next()
+            .ok_or(AnalyzerError::AnalysisError(
+                "Anchor query has no columns".to_string(),
+            ))?;
+
+        // Apply column aliases if provided
+        if !column_aliases.is_empty() {
+            if src_cols.len() != column_aliases.len() {
+                return Err(AnalyzerError::AnalysisError(format!(
+                    "CTE {} column count mismatch",
+                    cte_name
+                )));
+            }
+            Ok(src_cols
+                .iter()
+                .zip(column_aliases)
+                .map(|(c, alias)| ResolvedColumn {
+                    name: alias.name.value.clone(),
+                    data_type: c.data_type.clone(),
+                    nullable: c.nullable,
+                    source_alias: Some(cte_name.to_string()),
+                })
+                .collect())
+        } else {
+            Ok(src_cols
+                .iter()
+                .map(|c| ResolvedColumn {
+                    name: c.name.clone(),
+                    data_type: c.data_type.clone(),
+                    nullable: c.nullable,
+                    source_alias: Some(cte_name.to_string()),
+                })
+                .collect())
         }
     }
 
