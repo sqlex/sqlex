@@ -77,6 +77,10 @@ impl Analyzer for DatabaseAnalyzer {
             AnyInternalPool::SQLite(p) => analyze_sqlite(p, sql).await,
         }
     }
+
+    async fn get_all_tables(&self) -> Result<Vec<sqlex_analyzer::Table>> {
+        todo!()
+    }
 }
 
 async fn analyze_postgres(pool: &PgPool, sql: &str) -> Result<ResultSet> {

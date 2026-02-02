@@ -45,6 +45,12 @@ pub struct ColumnInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Table {
+    pub name: String,
+    pub columns: Vec<ColumnInfo>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResultSet {
     pub columns: Vec<ColumnInfo>,
 }

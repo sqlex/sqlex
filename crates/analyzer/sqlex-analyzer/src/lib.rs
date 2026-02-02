@@ -11,7 +11,7 @@ pub enum AnalyzerError {
 
 pub type Result<T> = std::result::Result<T, AnalyzerError>;
 
-pub use sqlex_common::{ColumnInfo, DataType, ResultSet};
+pub use sqlex_common::{ColumnInfo, DataType, ResultSet, Table};
 
 #[async_trait]
 pub trait Analyzer: Send + Sync {
@@ -20,4 +20,7 @@ pub trait Analyzer: Send + Sync {
 
     /// Analyze a query to determine its result set structure.
     async fn analyze(&self, sql: &str) -> Result<ResultSet>;
+
+    /// Get all tables schema
+    async fn get_all_tables(&self) -> Result<Vec<Table>>;
 }

@@ -28,4 +28,8 @@ impl Analyzer for StaticAnalyzer {
         // TODO: Implement query analysis
         Ok(ResultSet { columns: vec![] })
     }
+
+    async fn get_all_tables(&self) -> Result<Vec<sqlex_analyzer::Table>> {
+        todo!()
+    }
 }
