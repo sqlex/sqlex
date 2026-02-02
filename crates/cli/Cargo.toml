@@ -1,0 +1,18 @@
+[package]
+name = "sqlex-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sqlex"
+path = "src/main.rs"
+
+[dependencies]
+sqlex-analyzer = { path = "../analyzer/sqlex-analyzer" }
+sqlex-database-analyzer = { path = "../analyzer/sqlex-database-analyzer" }
+sqlex-static-analyzer = { path = "../analyzer/sqlex-static-analyzer" }
+tokio = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_yaml = { workspace = true }

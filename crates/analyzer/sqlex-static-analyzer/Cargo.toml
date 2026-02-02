@@ -1,0 +1,9 @@
+[package]
+name = "sqlex-static-analyzer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sqlex-analyzer = { path = "../sqlex-analyzer" }
+sqlparser = { workspace = true }
+async-trait = { workspace = true }

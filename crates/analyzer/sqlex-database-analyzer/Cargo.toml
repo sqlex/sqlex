@@ -1,0 +1,11 @@
+[package]
+name = "sqlex-database-analyzer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sqlex-analyzer = { path = "../sqlex-analyzer" }
+tokio = { workspace = true }
+sqlx = { workspace = true, features = ["runtime-tokio", "tls-rustls", "postgres", "mysql", "sqlite"] }
+testcontainers = { workspace = true }
+async-trait = { workspace = true }
