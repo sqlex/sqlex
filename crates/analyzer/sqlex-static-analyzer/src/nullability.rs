@@ -3,8 +3,6 @@
 //! Implements the rules for inferring whether expressions
 //! and result columns can be NULL.
 
-use sqlparser::ast::Expr;
-
 use crate::{
     plan::{AggregateFunction, JoinKind, PlanNode, TypedExpr, WindowFunction},
     schema::Schema,
@@ -27,49 +25,150 @@ pub enum JoinSide {
     Both,
 }
 
-/// Infer nullability for an expression
-pub fn infer_expr_nullability(expr: &Expr, _plan: &PlanNode, _schema: &Schema) -> bool {
-    match expr {
-        // Literals are never null
-        Expr::Value(sqlparser::ast::Value::Number(_, _))
-        | Expr::Value(sqlparser::ast::Value::SingleQuotedString(_))
-        | Expr::Value(sqlparser::ast::Value::DoubleQuotedString(_))
-        | Expr::Value(sqlparser::ast::Value::Boolean(_)) => false,
+/// Infer nullability for binary operation
+pub fn infer_binary_op_nullability(left_nullable: bool, right_nullable: bool) -> bool {
+    left_nullable || right_nullable
+}
 
-        // NULL literal is always null
-        Expr::Value(sqlparser::ast::Value::Null) => true,
-
-        // Column references: inherit from source
-        Expr::Identifier(_) | Expr::CompoundIdentifier(_) => {
-            todo!("lookup column nullability from scope")
-        },
-
-        // Binary operations: nullable if either operand is nullable
-        Expr::BinaryOp {
-            left: _, right: _, ..
-        } => {
-            todo!("infer nullability for binary operation: left.nullable || right.nullable")
-        },
-
-        // COALESCE: nullable only if ALL arguments are nullable
-        Expr::Function(func) if is_coalesce(&func.name) => {
-            todo!("COALESCE is nullable only if all args are nullable")
-        },
-
-        // NULLIF: always nullable
-        Expr::Function(func) if is_nullif(&func.name) => true,
-
-        // CASE: complex rules
-        Expr::Case { .. } => {
-            todo!("CASE nullability: no ELSE or any branch nullable")
-        },
-
-        // Subquery: always nullable (may return no rows)
-        Expr::Subquery(_) => true,
-
-        // Other expressions: default to nullable (conservative)
-        _ => true,
+/// Infer nullability for CASE expression
+pub fn infer_case_nullability(
+    has_else: bool,
+    when_branches_nullable: &[bool],
+    else_branch_nullable: Option<bool>,
+) -> bool {
+    // If no ELSE, implicitly NULL, so nullable
+    if !has_else {
+        return true;
     }
+
+    // Check if any WHEN branch is nullable
+    if when_branches_nullable.iter().any(|&n| n) {
+        return true;
+    }
+
+    // Check if ELSE branch is nullable
+    else_branch_nullable.unwrap_or(false)
+}
+
+/// Infer nullability for COALESCE
+pub fn infer_coalesce_nullability(args_nullable: &[bool]) -> bool {
+    // COALESCE is nullable only if ALL arguments are nullable
+    args_nullable.iter().all(|&n| n)
+}
+
+/// Infer nullability for NULLIF
+pub fn infer_nullif_nullability() -> bool {
+    // NULLIF is always nullable because it returns NULL if args are equal
+    true
+}
+
+/// Determine nullability for JOIN columns
+pub fn join_nullability(
+    join_kind: JoinKind,
+    left: &PlanNode,
+    right: &PlanNode,
+    condition: &Option<crate::plan::JoinCondition>,
+    schema: &Schema,
+) -> ColumnNullability {
+    match join_kind {
+        JoinKind::Inner | JoinKind::Cross => {
+            // INNER/CROSS JOIN: preserve original nullability
+            ColumnNullability::Preserve
+        },
+        JoinKind::Left => {
+            // LEFT JOIN: check for FK guarantee
+            if check_fk_guarantee(JoinKind::Left, left, right, condition, schema) {
+                ColumnNullability::Preserve
+            } else {
+                ColumnNullability::ForceNullable(JoinSide::Right)
+            }
+        },
+        JoinKind::Right => {
+            // RIGHT JOIN: symmetric to LEFT
+            if check_fk_guarantee(JoinKind::Right, left, right, condition, schema) {
+                ColumnNullability::Preserve
+            } else {
+                ColumnNullability::ForceNullable(JoinSide::Left)
+            }
+        },
+        JoinKind::Full => {
+            // FULL JOIN: both sides can be null
+            ColumnNullability::ForceNullable(JoinSide::Both)
+        },
+    }
+}
+
+/// Extract table name from a PlanNode (if it's a TableScan)
+fn extract_table_name_from_plan(plan: &PlanNode) -> Option<String> {
+    match plan {
+        PlanNode::TableScan { table, .. } => Some(table.clone()),
+        PlanNode::Join { left, .. } => extract_table_name_from_plan(left),
+        _ => None,
+    }
+}
+
+/// Check FK guarantee using plan nodes
+fn check_fk_guarantee(
+    join_kind: JoinKind,
+    left: &PlanNode,
+    right: &PlanNode,
+    condition: &Option<crate::plan::JoinCondition>,
+    schema: &Schema,
+) -> bool {
+    let left_table = extract_table_name_from_plan(left);
+    let right_table = extract_table_name_from_plan(right);
+
+    match join_kind {
+        JoinKind::Left => {
+            // Check if LEFT table has FK to RIGHT table
+            if let (Some(left_tbl), Some(right_tbl)) = (left_table, right_table) {
+                if let Some(table_def) = schema.tables.get(&left_tbl) {
+                    for fk in &table_def.foreign_keys {
+                        if fk.ref_table == right_tbl {
+                            // Check if FK columns are NOT NULL
+                            let fk_cols_not_null = fk.columns.iter().all(|fk_col| {
+                                table_def
+                                    .columns
+                                    .iter()
+                                    .any(|col| col.name == *fk_col && !col.nullable)
+                            });
+
+                            if fk_cols_not_null
+                                && matches!(condition, Some(crate::plan::JoinCondition::On(_)))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        JoinKind::Right => {
+            // Check if RIGHT table has FK to LEFT table
+            if let (Some(left_tbl), Some(right_tbl)) = (left_table, right_table) {
+                if let Some(table_def) = schema.tables.get(&right_tbl) {
+                    for fk in &table_def.foreign_keys {
+                        if fk.ref_table == left_tbl {
+                            let fk_cols_not_null = fk.columns.iter().all(|fk_col| {
+                                table_def
+                                    .columns
+                                    .iter()
+                                    .any(|col| col.name == *fk_col && !col.nullable)
+                            });
+
+                            if fk_cols_not_null
+                                && matches!(condition, Some(crate::plan::JoinCondition::On(_)))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        _ => {},
+    }
+    false
 }
 
 /// Infer nullability for an aggregate function
@@ -114,76 +213,4 @@ pub fn infer_window_nullability(func: &WindowFunction, args: &[TypedExpr]) -> bo
         // Aggregate as window function
         WindowFunction::Aggregate(agg) => infer_aggregate_nullability(agg, args),
     }
-}
-
-/// Determine nullability for JOIN columns
-pub fn join_nullability(
-    join_kind: JoinKind,
-    _left: &PlanNode,
-    _right: &PlanNode,
-    _condition: &Option<crate::plan::JoinCondition>,
-    _schema: &Schema,
-) -> ColumnNullability {
-    match join_kind {
-        JoinKind::Inner | JoinKind::Cross => {
-            // INNER/CROSS JOIN: preserve original nullability
-            ColumnNullability::Preserve
-        },
-        JoinKind::Left => {
-            // LEFT JOIN: check for FK guarantee
-            if has_fk_guarantee_right_to_left(_left, _right, _condition, _schema) {
-                ColumnNullability::Preserve
-            } else {
-                ColumnNullability::ForceNullable(JoinSide::Right)
-            }
-        },
-        JoinKind::Right => {
-            // RIGHT JOIN: symmetric to LEFT
-            if has_fk_guarantee_left_to_right(_left, _right, _condition, _schema) {
-                ColumnNullability::Preserve
-            } else {
-                ColumnNullability::ForceNullable(JoinSide::Left)
-            }
-        },
-        JoinKind::Full => {
-            // FULL JOIN: both sides can be null
-            ColumnNullability::ForceNullable(JoinSide::Both)
-        },
-    }
-}
-
-/// Check if there's a FK from right table to left table that guarantees matches
-fn has_fk_guarantee_right_to_left(
-    _left: &PlanNode,
-    _right: &PlanNode,
-    _condition: &Option<crate::plan::JoinCondition>,
-    _schema: &Schema,
-) -> bool {
-    todo!("check FK: right.join_col REFERENCES left.join_col AND right.join_col IS NOT NULL")
-}
-
-/// Check if there's a FK from left table to right table that guarantees matches
-fn has_fk_guarantee_left_to_right(
-    _left: &PlanNode,
-    _right: &PlanNode,
-    _condition: &Option<crate::plan::JoinCondition>,
-    _schema: &Schema,
-) -> bool {
-    todo!("check FK: left.join_col REFERENCES right.join_col AND left.join_col IS NOT NULL")
-}
-
-/// Check if function name is COALESCE
-fn is_coalesce(name: &sqlparser::ast::ObjectName) -> bool {
-    name.0
-        .last()
-        .map(|n| n.value.to_uppercase() == "COALESCE")
-        .unwrap_or(false)
-}
-
-/// Check if function name is NULLIF
-fn is_nullif(name: &sqlparser::ast::ObjectName) -> bool {
-    name.0
-        .last()
-        .map(|n| n.value.to_uppercase() == "NULLIF")
-        .unwrap_or(false)
 }

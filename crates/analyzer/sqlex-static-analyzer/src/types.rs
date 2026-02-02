@@ -3,14 +3,9 @@
 //! Implements the rules for inferring data types of expressions.
 
 use sqlex_common::DataType;
-use sqlparser::ast::{BinaryOperator, Expr, UnaryOperator};
+use sqlparser::ast::{BinaryOperator, UnaryOperator};
 
 use crate::plan::{AggregateFunction, WindowFunction};
-
-/// Infer the data type of an expression
-pub fn infer_expr_type(_expr: &Expr) -> DataType {
-    todo!("infer expression type based on context")
-}
 
 /// Infer type for binary operation
 pub fn binary_op_type(left: DataType, op: BinaryOperator, right: DataType) -> DataType {

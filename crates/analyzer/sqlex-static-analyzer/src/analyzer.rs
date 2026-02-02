@@ -18,6 +18,7 @@ use sqlparser::{
 };
 
 use crate::{
+    nullability,
     plan::{JoinCondition, JoinKind, OrderByExpr, PlanNode, ProjectColumn, SetOp, TypedExpr},
     schema::Schema,
     types,
@@ -273,8 +274,44 @@ impl<'a> QueryAnalyzer<'a> {
                     right: Box::new(right_plan),
                 })
             },
-            SetExpr::Values(_) => {
-                todo!("handle VALUES clause")
+            SetExpr::Values(values) => {
+                let mut rules_rows = Vec::new();
+                let mut num_cols = 0;
+                let scope = Scope::default();
+
+                for (row_idx, row) in values.rows.iter().enumerate() {
+                    let mut typed_row = Vec::new();
+                    for expr in row {
+                        typed_row.push(self.build_typed_expr(expr, &scope)?);
+                    }
+
+                    if row_idx == 0 {
+                        num_cols = typed_row.len();
+                    } else if typed_row.len() != num_cols {
+                        return Err(AnalyzerError::AnalysisError(format!(
+                            "VALUES clause has mismatched column counts: row {} has {}, expected {}",
+                            row_idx + 1,
+                            typed_row.len(),
+                            num_cols
+                        )));
+                    }
+
+                    rules_rows.push(typed_row);
+                }
+
+                if num_cols == 0 {
+                    return Err(AnalyzerError::AnalysisError(
+                        "VALUES clause must have at least one column".to_string(),
+                    ));
+                }
+
+                // Generate default column names: column1, column2, ...
+                let column_names = (1..=num_cols).map(|i| format!("column{}", i)).collect();
+
+                Ok(PlanNode::Values {
+                    rows: rules_rows,
+                    column_names,
+                })
             },
             _ => Err(AnalyzerError::AnalysisError(format!(
                 "Unsupported set expression: {:?}",
@@ -473,81 +510,41 @@ impl<'a> QueryAnalyzer<'a> {
             // Merge scopes and adjust nullability based on JOIN type
             let mut merged_scope = scope.clone();
 
-            // Check if there's an FK guarantee for this JOIN
-            let left_table_name = self.extract_table_name_from_plan(&plan);
-            let right_table_name = self.extract_table_name_from_plan(&right_plan);
-            let fk_guarantee = self.check_fk_guarantee_with_names(
+            // Determine nullability for JOIN columns
+            let nullability_result = nullability::join_nullability(
                 join_kind,
-                left_table_name.as_deref(),
-                right_table_name.as_deref(),
+                &plan,
+                &right_plan,
                 &condition,
+                self.schema,
             );
 
-            // Adjust nullability for OUTER JOINs
-            match join_kind {
-                JoinKind::Left => {
-                    // RIGHT table columns become nullable (unless FK guarantees otherwise)
-                    for (table_name, cols) in right_scope.tables {
-                        let nullable_cols: Vec<ResolvedColumn> = cols
-                            .into_iter()
-                            .map(|mut col| {
-                                // If FK guarantees the match, preserve nullability
-                                if !fk_guarantee {
-                                    col.nullable = true;
-                                }
-                                col
-                            })
-                            .collect();
-                        merged_scope.add_table(table_name, nullable_cols);
+            // Apply nullability to left side tables if needed
+            if let nullability::ColumnNullability::ForceNullable(side) = nullability_result {
+                if side == nullability::JoinSide::Left || side == nullability::JoinSide::Both {
+                    for (_, cols) in merged_scope.tables.iter_mut() {
+                        for col in cols.iter_mut() {
+                            col.nullable = true;
+                        }
                     }
+                }
+            }
+
+            // Apply nullability to right side tables if needed
+            let make_right_nullable = match nullability_result {
+                nullability::ColumnNullability::ForceNullable(side) => {
+                    side == nullability::JoinSide::Right || side == nullability::JoinSide::Both
                 },
-                JoinKind::Right => {
-                    // LEFT table columns become nullable (unless FK guarantees otherwise)
-                    for (table_name, cols) in merged_scope.tables.clone() {
-                        let nullable_cols: Vec<ResolvedColumn> = cols
-                            .into_iter()
-                            .map(|mut col| {
-                                // If FK guarantees the match, preserve nullability
-                                if !fk_guarantee {
-                                    col.nullable = true;
-                                }
-                                col
-                            })
-                            .collect();
-                        merged_scope.tables.insert(table_name, nullable_cols);
+                _ => false,
+            };
+
+            for (table_name, mut cols) in right_scope.tables {
+                if make_right_nullable {
+                    for col in cols.iter_mut() {
+                        col.nullable = true;
                     }
-                    // Add right table as-is
-                    for (table_name, cols) in right_scope.tables {
-                        merged_scope.add_table(table_name, cols);
-                    }
-                },
-                JoinKind::Full => {
-                    // BOTH sides become nullable
-                    for (table_name, cols) in merged_scope.tables.clone() {
-                        let nullable_cols: Vec<ResolvedColumn> = cols
-                            .into_iter()
-                            .map(|mut col| {
-                                col.nullable = true;
-                                col
-                            })
-                            .collect();
-                        merged_scope.tables.insert(table_name, nullable_cols);
-                    }
-                    for (table_name, cols) in right_scope.tables {
-                        let nullable_cols: Vec<ResolvedColumn> = cols
-                            .into_iter()
-                            .map(|mut col| {
-                                col.nullable = true;
-                                col
-                            })
-                            .collect();
-                        merged_scope.add_table(table_name, nullable_cols);
-                    }
-                },
-                JoinKind::Inner | JoinKind::Cross => {
-                    // Preserve original nullability
-                    merged_scope.merge(right_scope);
-                },
+                }
+                merged_scope.add_table(table_name, cols);
             }
 
             scope = merged_scope;
@@ -561,76 +558,6 @@ impl<'a> QueryAnalyzer<'a> {
         }
 
         Ok((plan, scope))
-    }
-
-    /// Extract table name from a PlanNode (if it's a TableScan)
-    fn extract_table_name_from_plan(&self, plan: &PlanNode) -> Option<String> {
-        match plan {
-            PlanNode::TableScan { table, .. } => Some(table.clone()),
-            PlanNode::Join { left, .. } => self.extract_table_name_from_plan(left),
-            _ => None,
-        }
-    }
-
-    /// Check FK guarantee using explicit table names
-    fn check_fk_guarantee_with_names(
-        &self,
-        join_kind: JoinKind,
-        left_table: Option<&str>,
-        right_table: Option<&str>,
-        condition: &Option<JoinCondition>,
-    ) -> bool {
-        match join_kind {
-            JoinKind::Left => {
-                // Check if LEFT table has FK to RIGHT table
-                if let (Some(left_tbl), Some(right_tbl)) = (left_table, right_table) {
-                    if let Some(table_def) = self.schema.tables.get(left_tbl) {
-                        for fk in &table_def.foreign_keys {
-                            if fk.ref_table == right_tbl {
-                                // Check if FK columns are NOT NULL
-                                let fk_cols_not_null = fk.columns.iter().all(|fk_col| {
-                                    table_def
-                                        .columns
-                                        .iter()
-                                        .any(|col| col.name == *fk_col && !col.nullable)
-                                });
-
-                                if fk_cols_not_null
-                                    && matches!(condition, Some(JoinCondition::On(_)))
-                                {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            JoinKind::Right => {
-                // Check if RIGHT table has FK to LEFT table
-                if let (Some(left_tbl), Some(right_tbl)) = (left_table, right_table) {
-                    if let Some(table_def) = self.schema.tables.get(right_tbl) {
-                        for fk in &table_def.foreign_keys {
-                            if fk.ref_table == left_tbl {
-                                let fk_cols_not_null = fk.columns.iter().all(|fk_col| {
-                                    table_def
-                                        .columns
-                                        .iter()
-                                        .any(|col| col.name == *fk_col && !col.nullable)
-                                });
-
-                                if fk_cols_not_null
-                                    && matches!(condition, Some(JoinCondition::On(_)))
-                                {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            _ => {},
-        }
-        false
     }
 
     fn build_join_constraint(
@@ -782,11 +709,9 @@ impl<'a> QueryAnalyzer<'a> {
             Expr::BinaryOp { left, op, right } => {
                 let l = self.build_typed_expr(left, scope)?;
                 let r = self.build_typed_expr(right, scope)?;
-                let dt =
-                    types::binary_op_type(l.data_type.clone(), op.clone(), r.data_type.clone());
-
-                let null = l.nullable || r.nullable;
-                (dt, null)
+                let dt = types::binary_op_type(l.data_type, op.clone(), r.data_type);
+                let nullable = nullability::infer_binary_op_nullability(l.nullable, r.nullable);
+                (dt, nullable)
             },
             Expr::UnaryOp { op, expr } => {
                 let e = self.build_typed_expr(expr, scope)?;
@@ -798,7 +723,7 @@ impl<'a> QueryAnalyzer<'a> {
                 let name_upper = name_to_string(&func.name).to_uppercase();
                 if name_upper == "NULLIF" {
                     let (dt, _) = self.infer_function_type(func, scope)?;
-                    (dt, true) // NULLIF always nullable
+                    (dt, nullability::infer_nullif_nullability())
                 } else {
                     self.infer_function_type(func, scope)?
                 }
@@ -817,24 +742,24 @@ impl<'a> QueryAnalyzer<'a> {
                 let first_typed = self.build_typed_expr(first_result, scope)?;
                 let data_type = first_typed.data_type;
 
-                // Nullability: if no ELSE, it's nullable. Otherwise check all branches.
-                let mut nullable = else_result.is_none(); // No ELSE = implicit NULL
-
-                // Check all THEN branches
+                // Nullability: use helper
+                let mut when_nullabilities = Vec::new();
                 for result_expr in results {
                     let typed = self.build_typed_expr(result_expr, scope)?;
-                    if typed.nullable {
-                        nullable = true;
-                    }
+                    when_nullabilities.push(typed.nullable);
                 }
 
-                // Check ELSE branch if exists
+                let mut else_nullable = None;
                 if let Some(else_expr) = else_result {
                     let typed = self.build_typed_expr(else_expr, scope)?;
-                    if typed.nullable {
-                        nullable = true;
-                    }
+                    else_nullable = Some(typed.nullable);
                 }
+
+                let nullable = nullability::infer_case_nullability(
+                    else_result.is_some(),
+                    &when_nullabilities,
+                    else_nullable,
+                );
 
                 (data_type, nullable)
             },
@@ -928,7 +853,8 @@ impl<'a> QueryAnalyzer<'a> {
 
         match upper_name.as_str() {
             "COALESCE" => {
-                nullable = typed_args.iter().all(|a| a.nullable);
+                let nullabilities: Vec<bool> = typed_args.iter().map(|a| a.nullable).collect();
+                nullable = nullability::infer_coalesce_nullability(&nullabilities);
             },
             "SUM" | "AVG" | "MIN" | "MAX" | "LEAD" | "LAG" | "FIRST_VALUE" | "LAST_VALUE"
             | "NTH_VALUE" => {
@@ -1006,6 +932,27 @@ impl<'a> QueryAnalyzer<'a> {
                     })
                     .collect();
                 scope.add_table("Default".to_string(), cols);
+                Ok(scope)
+            },
+            PlanNode::Values { rows, column_names } => {
+                let mut scope = Scope::default();
+                if let Some(first_row) = rows.first() {
+                    let cols = first_row
+                        .iter()
+                        .zip(column_names)
+                        .enumerate()
+                        .map(|(idx, (expr, name))| {
+                            let is_nullable = rows.iter().any(|r| r[idx].nullable);
+                            ResolvedColumn {
+                                name: name.clone(),
+                                data_type: expr.data_type.clone(),
+                                nullable: is_nullable,
+                                source_alias: None,
+                            }
+                        })
+                        .collect();
+                    scope.add_table("Default".to_string(), cols);
+                }
                 Ok(scope)
             },
             PlanNode::TableScan { table, alias } => {
