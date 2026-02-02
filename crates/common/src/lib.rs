@@ -3,6 +3,6 @@ pub mod database;
 pub mod ir;
 pub mod types;
 
-pub use config::{AnalyzerMode, SqlexConfig};
+pub use config::{AnalyzerMode, GeneratorConfig, SqlexConfig};
 pub use database::DatabaseType;
 pub use types::{ColumnInfo, DataType, ResultSet, Table};

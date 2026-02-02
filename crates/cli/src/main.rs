@@ -7,7 +7,7 @@ use std::{
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use notify::{RecursiveMode, Watcher};
-use sqlex_common::{AnalyzerMode, SqlexConfig};
+use sqlex_common::{AnalyzerMode, GeneratorConfig, SqlexConfig};
 use sqlex_compiler::Compiler;
 use tokio::fs;
 
@@ -73,9 +73,17 @@ async fn run_init(name: String) -> Result<()> {
     } else {
         let config = SqlexConfig {
             name: name.clone(),
-            database: "postgres".to_string(),
-            analyzer: AnalyzerMode::Database,
+            dialect: "postgres".to_string(),
             migrations: "migrations".to_string(),
+            analyzer: AnalyzerMode::Database,
+            generators: vec![GeneratorConfig {
+                name: "rust_entities".to_string(),
+                generator: "rust".to_string(),
+                config: serde_json::json!({
+                    "output_dir": "src/entities",
+                    "orm_mode": "sqlx"
+                }),
+            }],
         };
         let content = serde_yaml::to_string(&config)?;
         fs::write(&config_path, content)

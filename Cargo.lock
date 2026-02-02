@@ -2032,6 +2032,7 @@ dependencies = [
  "clap",
  "notify",
  "serde",
+ "serde_json",
  "serde_yaml",
  "sqlex-common",
  "sqlex-compiler",
@@ -2044,6 +2045,7 @@ name = "sqlex-common"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
 ]
 
 [[package]]

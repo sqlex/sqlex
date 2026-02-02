@@ -3,11 +3,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SqlexConfig {
     pub name: String,
-    pub database: String, // postgres, mysql, sqlite
-    #[serde(default)]
-    pub analyzer: AnalyzerMode,
+    pub dialect: String, // postgres, mysql, sqlite
     #[serde(default = "default_migrations_dir")]
     pub migrations: String,
+    #[serde(default)]
+    pub analyzer: AnalyzerMode,
+    #[serde(default)]
+    pub generators: Vec<GeneratorConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, PartialEq, Eq, Clone, Copy)]
@@ -16,6 +18,14 @@ pub enum AnalyzerMode {
     Static,
     #[default]
     Database,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GeneratorConfig {
+    pub name: String,
+    pub generator: String,
+    #[serde(default)]
+    pub config: serde_json::Value,
 }
 
 fn default_migrations_dir() -> String {
