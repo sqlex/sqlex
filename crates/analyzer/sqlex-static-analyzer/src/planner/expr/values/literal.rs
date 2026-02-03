@@ -26,6 +26,10 @@ impl LiteralExpr {
         let return_type = infer_literal_type(&value);
         Box::new(LiteralExpr { value, return_type })
     }
+
+    pub fn from_ast(value: &Value) -> Box<dyn Expression> {
+        Self::build(value.clone())
+    }
 }
 
 /// Infer the data type of a literal value

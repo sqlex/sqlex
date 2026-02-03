@@ -549,45 +549,18 @@ impl<'a> BuildContext<'a> {
         expr: &Expr,
         scope: &Scope,
     ) -> Result<Box<dyn super::expr::Expression>> {
-        use super::expr::{
-            ops::{BinaryExpr, UnaryExpr},
-            values::{ColumnExpr, LiteralExpr},
-        };
-
         match expr {
-            Expr::Identifier(ident) => {
-                let col = scope.resolve_column(None, &ident.value)?;
-                Ok(ColumnExpr::build(
-                    None,
-                    ident.value.clone(),
-                    col.data_type,
-                    col.nullable,
-                ))
+            Expr::Identifier(_) | Expr::CompoundIdentifier(_) => {
+                super::expr::values::ColumnExpr::from_ast(expr, scope)
             },
-            Expr::CompoundIdentifier(idents) => {
-                if idents.len() == 2 {
-                    let col = scope.resolve_column(Some(&idents[0].value), &idents[1].value)?;
-                    Ok(ColumnExpr::build(
-                        Some(idents[0].value.clone()),
-                        idents[1].value.clone(),
-                        col.data_type,
-                        col.nullable,
-                    ))
-                } else {
-                    Err(AnalyzerError::AnalysisError(
-                        "Deep compound identifiers not supported".to_string(),
-                    ))
-                }
-            },
-            Expr::Value(v) => Ok(LiteralExpr::build(v.clone())),
+            Expr::Value(v) => Ok(super::expr::LiteralExpr::from_ast(v)),
             Expr::BinaryOp { left, op, right } => {
-                let left_expr = self.build_expr(left, scope)?;
-                let right_expr = self.build_expr(right, scope)?;
-                Ok(BinaryExpr::build(left_expr, op.clone(), right_expr))
+                super::expr::BinaryExpr::from_ast(left, op, right, |expr| {
+                    self.build_expr(expr, scope)
+                })
             },
             Expr::UnaryOp { op, expr: inner } => {
-                let operand = self.build_expr(inner, scope)?;
-                Ok(UnaryExpr::build(*op, operand))
+                super::expr::UnaryExpr::from_ast(op, inner, |expr| self.build_expr(expr, scope))
             },
             Expr::Nested(inner) => self.build_expr(inner, scope),
             Expr::Function(func) => self.build_function_expr(func, scope),
@@ -596,36 +569,16 @@ impl<'a> BuildContext<'a> {
                 conditions,
                 results,
                 else_result,
-            } => {
-                use super::expr::control::CaseExpr;
-                let operand_expr = if let Some(op) = operand {
-                    Some(self.build_expr(op, scope)?)
-                } else {
-                    None
-                };
-                let mut cond_exprs = Vec::new();
-                for cond in conditions {
-                    cond_exprs.push(self.build_expr(cond, scope)?);
-                }
-                let mut result_exprs = Vec::new();
-                for res in results {
-                    result_exprs.push(self.build_expr(res, scope)?);
-                }
-                let else_expr = if let Some(el) = else_result {
-                    Some(self.build_expr(el, scope)?)
-                } else {
-                    None
-                };
-                Ok(CaseExpr::build(
-                    operand_expr,
-                    cond_exprs,
-                    result_exprs,
-                    else_expr,
-                ))
-            },
+            } => super::expr::control::CaseExpr::from_ast(
+                operand,
+                conditions,
+                results,
+                else_result,
+                |expr| self.build_expr(expr, scope),
+            ),
             _ => {
                 // Fallback: create a literal with unknown type
-                Ok(LiteralExpr::build(sqlparser::ast::Value::Null))
+                Ok(super::expr::LiteralExpr::build(sqlparser::ast::Value::Null))
             },
         }
     }

@@ -1,6 +1,10 @@
+use sqlex_analyzer::{AnalyzerError, Result};
 use sqlex_common::DataType;
 
-use crate::planner::expr::{Expression, ExpressionNode};
+use crate::planner::{
+    expr::{Expression, ExpressionNode},
+    scope::Scope,
+};
 
 /// Column reference expression
 #[derive(Debug, Clone)]
@@ -39,5 +43,37 @@ impl ColumnExpr {
             return_type: data_type,
             is_nullable: nullable,
         })
+    }
+
+    pub fn from_ast(expr: &sqlparser::ast::Expr, scope: &Scope) -> Result<Box<dyn Expression>> {
+        match expr {
+            sqlparser::ast::Expr::Identifier(ident) => {
+                let col = scope.resolve_column(None, &ident.value)?;
+                Ok(Self::build(
+                    None,
+                    ident.value.clone(),
+                    col.data_type,
+                    col.nullable,
+                ))
+            },
+            sqlparser::ast::Expr::CompoundIdentifier(idents) => {
+                if idents.len() == 2 {
+                    let col = scope.resolve_column(Some(&idents[0].value), &idents[1].value)?;
+                    Ok(Self::build(
+                        Some(idents[0].value.clone()),
+                        idents[1].value.clone(),
+                        col.data_type,
+                        col.nullable,
+                    ))
+                } else {
+                    Err(AnalyzerError::AnalysisError(
+                        "Deep compound identifiers not supported".to_string(),
+                    ))
+                }
+            },
+            _ => Err(AnalyzerError::AnalysisError(
+                "Invalid expression for ColumnExpr".to_string(),
+            )),
+        }
     }
 }

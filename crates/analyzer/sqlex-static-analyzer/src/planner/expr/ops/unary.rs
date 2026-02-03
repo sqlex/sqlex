@@ -1,3 +1,4 @@
+use sqlex_analyzer::Result;
 use sqlex_common::DataType;
 use sqlparser::ast::UnaryOperator;
 
@@ -33,6 +34,18 @@ impl UnaryExpr {
             return_type,
             is_nullable,
         })
+    }
+
+    pub fn from_ast<F>(
+        op: &UnaryOperator,
+        expr: &sqlparser::ast::Expr,
+        mut expr_builder: F,
+    ) -> Result<Box<dyn Expression>>
+    where
+        F: FnMut(&sqlparser::ast::Expr) -> Result<Box<dyn Expression>>,
+    {
+        let operand = expr_builder(expr)?;
+        Ok(Self::build(op.clone(), operand))
     }
 }
 

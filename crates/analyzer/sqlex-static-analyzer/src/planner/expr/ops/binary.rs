@@ -1,7 +1,9 @@
+use sqlex_analyzer::Result;
 use sqlex_common::DataType;
 use sqlparser::ast::BinaryOperator;
 
-use crate::planner::expr::{Expression, ExpressionNode};
+use crate::planner::expr::{Expression, ExpressionNode}; // Actually, build doesn't return Result, but from_ast might if builder fails.
+// But builder returns Result<Box<dyn Expression>>.
 
 /// Binary operation expression
 #[derive(Debug, Clone)]
@@ -39,6 +41,20 @@ impl BinaryExpr {
             return_type,
             is_nullable,
         })
+    }
+
+    pub fn from_ast<F>(
+        left: &sqlparser::ast::Expr,
+        op: &BinaryOperator,
+        right: &sqlparser::ast::Expr,
+        mut expr_builder: F,
+    ) -> Result<Box<dyn Expression>>
+    where
+        F: FnMut(&sqlparser::ast::Expr) -> Result<Box<dyn Expression>>,
+    {
+        let left_expr = expr_builder(left)?;
+        let right_expr = expr_builder(right)?;
+        Ok(Self::build(left_expr, op.clone(), right_expr))
     }
 }
 

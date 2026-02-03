@@ -1,3 +1,4 @@
+use sqlex_analyzer::Result;
 use sqlex_common::DataType;
 
 use crate::planner::expr::{Expression, ExpressionNode};
@@ -59,5 +60,41 @@ impl CaseExpr {
             return_type,
             is_nullable,
         })
+    }
+
+    pub fn from_ast<F>(
+        operand: &Option<Box<sqlparser::ast::Expr>>,
+        conditions: &[sqlparser::ast::Expr],
+        results: &[sqlparser::ast::Expr],
+        else_result: &Option<Box<sqlparser::ast::Expr>>,
+        mut expr_builder: F,
+    ) -> Result<Box<dyn Expression>>
+    where
+        F: FnMut(&sqlparser::ast::Expr) -> Result<Box<dyn Expression>>,
+    {
+        let operand_expr = if let Some(op) = operand {
+            Some(expr_builder(op)?)
+        } else {
+            None
+        };
+        let mut cond_exprs = Vec::new();
+        for cond in conditions {
+            cond_exprs.push(expr_builder(cond)?);
+        }
+        let mut result_exprs = Vec::new();
+        for res in results {
+            result_exprs.push(expr_builder(res)?);
+        }
+        let else_expr = if let Some(el) = else_result {
+            Some(expr_builder(el)?)
+        } else {
+            None
+        };
+        Ok(Self::build(
+            operand_expr,
+            cond_exprs,
+            result_exprs,
+            else_expr,
+        ))
     }
 }
