@@ -281,7 +281,10 @@ impl<'a> BuildContext<'a> {
                     if let Expr::Function(func) = expr {
                         use crate::planner::expr::ExprExt;
                         if expr.has_aggregate_function() {
-                            aggregate_exprs.push(self.build_aggregate_expr(func, &scope)?);
+                            aggregate_exprs.push(super::expr::AggregateFunctionExpr::from_ast(
+                                func,
+                                |expr| self.build_expr(expr, &scope),
+                            )?);
                         }
                     }
                 }
@@ -514,14 +517,6 @@ impl<'a> BuildContext<'a> {
         }
     }
 
-    fn build_aggregate_expr(
-        &mut self,
-        func: &sqlparser::ast::Function,
-        scope: &Scope,
-    ) -> Result<super::expr::AggregateExpr> {
-        super::expr::AggregateExpr::from_ast(func, |expr| self.build_expr(expr, scope))
-    }
-
     fn build_join_node(
         &mut self,
         left_plan: Box<dyn PlanNode>,
@@ -639,8 +634,10 @@ impl<'a> BuildContext<'a> {
         }
 
         // Check if it's an aggregate function
-        if let Some(agg_func) = AggregateFunction::from_name(&name) {
-            return Ok(AggregateFunctionExpr::build(agg_func, bound_args));
+        if AggregateFunction::from_name(&name).is_some() {
+            return Ok(Box::new(AggregateFunctionExpr::from_ast(func, |expr| {
+                self.build_expr(expr, scope)
+            })?));
         }
 
         // Default: treat as scalar function

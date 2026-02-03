@@ -1,5 +1,5 @@
 use crate::planner::{
-    expr::{AggregateExpr, Expression},
+    expr::{AggregateFunctionExpr, Expression},
     plan::{LogicalNode, PlanNode, PlanNodeColumn},
 };
 
@@ -15,7 +15,7 @@ pub enum GroupingMode {
 pub struct AggregateNode {
     pub input: Box<dyn PlanNode>,
     pub group_by: Vec<Box<dyn Expression>>,
-    pub aggregates: Vec<AggregateExpr>,
+    pub aggregates: Vec<AggregateFunctionExpr>,
     pub grouping_mode: Option<GroupingMode>,
     pub output_columns: Vec<PlanNodeColumn>,
 }
@@ -24,7 +24,7 @@ impl AggregateNode {
     pub fn build(
         input: Box<dyn PlanNode>,
         group_by: Vec<Box<dyn Expression>>,
-        aggregates: Vec<AggregateExpr>,
+        aggregates: Vec<AggregateFunctionExpr>,
         grouping_mode: Option<GroupingMode>,
     ) -> Self {
         let mut output_columns: Vec<PlanNodeColumn> = group_by

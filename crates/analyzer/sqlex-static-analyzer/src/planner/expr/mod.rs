@@ -12,8 +12,8 @@ pub use control::{CaseExpr, CastExpr};
 pub use extension::ExprExt;
 // Re-export from funcs
 pub use funcs::{
-    AggregateExpr, AggregateFunction, AggregateFunctionExpr, ScalarFunction, ScalarFunctionExpr,
-    WindowFrame, WindowFrameBound, WindowFrameUnits, WindowFunctionExpr, WindowFunctionName,
+    AggregateFunction, AggregateFunctionExpr, ScalarFunction, ScalarFunctionExpr, WindowFrame,
+    WindowFrameBound, WindowFrameUnits, WindowFunctionExpr, WindowFunctionName,
 };
 pub use ops::{BinaryExpr, UnaryExpr};
 pub use order_by::OrderByExpr;

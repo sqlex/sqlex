@@ -1,9 +1,9 @@
-use sqlex_analyzer::{ObjectNameExt, Result};
+use sqlex_analyzer::Result;
 use sqlex_common::DataType;
 
-use super::super::{Expression, ExpressionNode};
+use super::super::order_by::OrderByExpr;
+use crate::planner::expr::{Expression, ExpressionNode};
 
-/// Aggregate function
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AggregateFunction {
     Count,
@@ -11,21 +11,13 @@ pub enum AggregateFunction {
     Avg,
     Min,
     Max,
-    ArrayAgg,
-    StringAgg,
-    JsonAgg,
     First,
     Last,
+    ArrayAgg,
+    JsonArrayAgg,
+    JsonObjectAgg,
+    StringAgg,
     Custom(String),
-}
-
-fn promote_to_large(t: DataType) -> DataType {
-    use DataType::*;
-    match t {
-        TinyInt | SmallInt | Int => BigInt,
-        Float => Double,
-        other => other,
-    }
 }
 
 impl AggregateFunction {
@@ -36,28 +28,45 @@ impl AggregateFunction {
             "AVG" => Some(Self::Avg),
             "MIN" => Some(Self::Min),
             "MAX" => Some(Self::Max),
+            "FIRST" => Some(Self::First),
+            "LAST" => Some(Self::Last),
             "ARRAY_AGG" => Some(Self::ArrayAgg),
-            "STRING_AGG" => Some(Self::StringAgg),
-            "JSON_AGG" => Some(Self::JsonAgg),
-            "FIRST_VALUE" | "FIRST" => Some(Self::First),
-            "LAST_VALUE" | "LAST" => Some(Self::Last),
+            "JSON_AGG" | "JSON_ARRAYAGG" => Some(Self::JsonArrayAgg),
+            "JSON_OBJECT_AGG" | "JSON_OBJECTAGG" => Some(Self::JsonObjectAgg),
+            "STRING_AGG" | "GROUP_CONCAT" | "LISTAGG" => Some(Self::StringAgg),
             _ => None,
         }
     }
 
-    /// Infer type for the new Expression system (takes DataType slices)
-    pub fn infer_type(&self, arg_types: &[DataType], _arg_nullables: &[bool]) -> (DataType, bool) {
+    /// Infer result type and nullability
+    pub fn infer_type(&self, arg_types: &[DataType], arg_nullables: &[bool]) -> (DataType, bool) {
         let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
+        // Default nullability: if input is nullable, output is nullable.
+        // Except COUNT which is never null.
+        // Default nullability: if input is nullable, output is nullable.
+        // Except COUNT which is never null.
+        let _input_nullable = arg_nullables.first().cloned().unwrap_or(true);
 
         match self {
             AggregateFunction::Count => (DataType::BigInt, false),
-            AggregateFunction::Sum => (promote_to_large(input_type), true),
+            AggregateFunction::Sum => {
+                let ret_type = match input_type {
+                    DataType::TinyInt | DataType::SmallInt | DataType::Int | DataType::BigInt => {
+                        DataType::BigInt
+                    },
+                    DataType::Float | DataType::Double | DataType::Decimal => DataType::Double,
+                    _ => input_type,
+                };
+                (ret_type, true) // SUM always returns NULL on empty set
+            },
             AggregateFunction::Avg => (DataType::Double, true),
             AggregateFunction::Min | AggregateFunction::Max => (input_type, true),
-            AggregateFunction::ArrayAgg => (DataType::Array(Box::new(input_type)), true),
-            AggregateFunction::StringAgg => (DataType::Text, true),
-            AggregateFunction::JsonAgg => (DataType::Json, true),
             AggregateFunction::First | AggregateFunction::Last => (input_type, true),
+            AggregateFunction::ArrayAgg => (DataType::Array(Box::new(input_type)), true),
+            AggregateFunction::JsonArrayAgg | AggregateFunction::JsonObjectAgg => {
+                (DataType::Json, true)
+            },
+            AggregateFunction::StringAgg => (DataType::Text, true),
             AggregateFunction::Custom(_) => (input_type, true),
         }
     }
@@ -68,6 +77,9 @@ impl AggregateFunction {
 pub struct AggregateFunctionExpr {
     pub function: AggregateFunction,
     pub args: Vec<Box<dyn Expression>>,
+    pub distinct: bool,
+    pub filter: Option<Box<dyn Expression>>,
+    pub order_by: Vec<OrderByExpr>,
     pub return_type: DataType,
     pub is_nullable: bool,
 }
@@ -87,47 +99,22 @@ impl AggregateFunctionExpr {
     pub fn build(
         function: AggregateFunction,
         args: Vec<Box<dyn Expression>>,
-    ) -> Box<dyn Expression> {
-        // Infer return type using the aggregate function's logic
-        let arg_types: Vec<DataType> = args.iter().map(|e| e.data_type()).collect();
-        let arg_nullables: Vec<bool> = args.iter().map(|e| e.nullable()).collect();
-        let (return_type, is_nullable) = function.infer_type(&arg_types, &arg_nullables);
-
-        Box::new(AggregateFunctionExpr {
-            function,
-            args,
-            return_type,
-            is_nullable,
-        })
-    }
-}
-
-use super::super::order_by::OrderByExpr;
-
-/// Legacy Aggregate expression (updated to use new Expression system)
-#[derive(Debug, Clone)]
-pub struct AggregateExpr {
-    pub function: AggregateFunction,
-    pub args: Vec<Box<dyn Expression>>,
-    pub distinct: bool,
-    pub filter: Option<Box<dyn Expression>>,
-    pub order_by: Vec<OrderByExpr>,
-}
-
-impl AggregateExpr {
-    pub fn build(
-        function: AggregateFunction,
-        args: Vec<Box<dyn Expression>>,
         distinct: bool,
         filter: Option<Box<dyn Expression>>,
         order_by: Vec<OrderByExpr>,
     ) -> Self {
+        let arg_types: Vec<DataType> = args.iter().map(|e| e.data_type()).collect();
+        let arg_nullables: Vec<bool> = args.iter().map(|e| e.nullable()).collect();
+        let (return_type, is_nullable) = function.infer_type(&arg_types, &arg_nullables);
+
         Self {
             function,
             args,
             distinct,
             filter,
             order_by,
+            return_type,
+            is_nullable,
         }
     }
 
@@ -135,6 +122,7 @@ impl AggregateExpr {
     where
         F: FnMut(&sqlparser::ast::Expr) -> Result<Box<dyn Expression>>,
     {
+        use sqlex_analyzer::ObjectNameExt;
         use sqlparser::ast::{
             DuplicateTreatment, FunctionArg, FunctionArgExpr, FunctionArguments, Value,
         };
@@ -170,22 +158,14 @@ impl AggregateExpr {
             distinct = list.duplicate_treatment == Some(DuplicateTreatment::Distinct);
         }
 
-        if args.is_empty() && matches!(function, AggregateFunction::Count) {
-            args.push(LiteralExpr::build(Value::Number("1".to_string(), false)));
-        }
-
         let filter = if let Some(filter) = &func.filter {
             Some(expr_builder(filter)?)
         } else {
             None
         };
 
-        Ok(Self::build(
-            function,
-            args,
-            distinct,
-            filter,
-            Vec::new(), // TODO: Order By support
-        ))
+        let order_by = Vec::new();
+
+        Ok(Self::build(function, args, distinct, filter, order_by))
     }
 }
