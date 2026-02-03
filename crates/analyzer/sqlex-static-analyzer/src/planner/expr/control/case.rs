@@ -31,37 +31,6 @@ impl ExpressionNode for CaseExpr {
 }
 
 impl CaseExpr {
-    /// Build a CASE expression
-    pub fn build(
-        operand: Option<Box<dyn Expression>>,
-        conditions: Vec<Box<dyn Expression>>,
-        results: Vec<Box<dyn Expression>>,
-        else_result: Option<Box<dyn Expression>>,
-    ) -> Box<dyn Expression> {
-        // Return type is the type of the first THEN clause
-        let return_type = results
-            .first()
-            .map(|r| r.data_type())
-            .unwrap_or(DataType::Custom("unknown".to_string()));
-
-        // Nullability: if no ELSE, or any branch is nullable
-        let is_nullable = if else_result.is_none() {
-            true
-        } else {
-            results.iter().any(|r| r.nullable())
-                || else_result.as_ref().map(|e| e.nullable()).unwrap_or(false)
-        };
-
-        Box::new(CaseExpr {
-            operand,
-            conditions,
-            results,
-            else_result,
-            return_type,
-            is_nullable,
-        })
-    }
-
     pub fn from_ast<F>(
         operand: &Option<Box<sqlparser::ast::Expr>>,
         conditions: &[sqlparser::ast::Expr],
@@ -90,11 +59,28 @@ impl CaseExpr {
         } else {
             None
         };
-        Ok(Self::build(
-            operand_expr,
-            cond_exprs,
-            result_exprs,
-            else_expr,
-        ))
+
+        // Return type is the type of the first THEN clause
+        let return_type = result_exprs
+            .first()
+            .map(|r| r.data_type())
+            .unwrap_or(DataType::Custom("unknown".to_string()));
+
+        // Nullability: if no ELSE, or any branch is nullable
+        let is_nullable = if else_expr.is_none() {
+            true
+        } else {
+            result_exprs.iter().any(|r| r.nullable())
+                || else_expr.as_ref().map(|e| e.nullable()).unwrap_or(false)
+        };
+
+        Ok(Box::new(CaseExpr {
+            operand: operand_expr,
+            conditions: cond_exprs,
+            results: result_exprs,
+            else_result: else_expr,
+            return_type,
+            is_nullable,
+        }))
     }
 }

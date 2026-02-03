@@ -26,23 +26,6 @@ impl ExpressionNode for BinaryExpr {
 }
 
 impl BinaryExpr {
-    /// Build a binary expression from pre-built children
-    pub fn build(
-        left: Box<dyn Expression>,
-        op: BinaryOperator,
-        right: Box<dyn Expression>,
-    ) -> Box<dyn Expression> {
-        let return_type = analyze_binary_type(&left.data_type(), &op, &right.data_type());
-        let is_nullable = left.nullable() || right.nullable();
-        Box::new(BinaryExpr {
-            left,
-            op,
-            right,
-            return_type,
-            is_nullable,
-        })
-    }
-
     pub fn from_ast<F>(
         left: &sqlparser::ast::Expr,
         op: &BinaryOperator,
@@ -54,7 +37,17 @@ impl BinaryExpr {
     {
         let left_expr = expr_builder(left)?;
         let right_expr = expr_builder(right)?;
-        Ok(Self::build(left_expr, op.clone(), right_expr))
+
+        let return_type = analyze_binary_type(&left_expr.data_type(), op, &right_expr.data_type());
+        let is_nullable = left_expr.nullable() || right_expr.nullable();
+
+        Ok(Box::new(BinaryExpr {
+            left: left_expr,
+            op: op.clone(),
+            right: right_expr,
+            return_type,
+            is_nullable,
+        }))
     }
 }
 

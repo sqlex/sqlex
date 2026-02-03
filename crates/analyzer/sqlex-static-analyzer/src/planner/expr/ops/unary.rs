@@ -24,18 +24,6 @@ impl ExpressionNode for UnaryExpr {
 }
 
 impl UnaryExpr {
-    /// Build a unary expression from a pre-built operand
-    pub fn build(op: UnaryOperator, operand: Box<dyn Expression>) -> Box<dyn Expression> {
-        let return_type = analyze_unary_type(&op, &operand.data_type());
-        let is_nullable = operand.nullable();
-        Box::new(UnaryExpr {
-            op,
-            operand,
-            return_type,
-            is_nullable,
-        })
-    }
-
     pub fn from_ast<F>(
         op: &UnaryOperator,
         expr: &sqlparser::ast::Expr,
@@ -45,7 +33,16 @@ impl UnaryExpr {
         F: FnMut(&sqlparser::ast::Expr) -> Result<Box<dyn Expression>>,
     {
         let operand = expr_builder(expr)?;
-        Ok(Self::build(*op, operand))
+
+        let return_type = analyze_unary_type(op, &operand.data_type());
+        let is_nullable = operand.nullable();
+
+        Ok(Box::new(UnaryExpr {
+            op: *op,
+            operand,
+            return_type,
+            is_nullable,
+        }))
     }
 }
 

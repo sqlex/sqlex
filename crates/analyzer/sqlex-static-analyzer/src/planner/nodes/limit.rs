@@ -18,7 +18,12 @@ impl LimitNode {
     ) -> Self {
         let limit = limit_expr.and_then(Self::parse_limit_expr);
         let offset = offset_expr.and_then(|o| Self::parse_limit_expr(&o.value));
-        Self::build(input, limit, offset)
+
+        Self {
+            input,
+            limit,
+            offset,
+        }
     }
 
     /// Parse a constant number from an expression
@@ -26,14 +31,6 @@ impl LimitNode {
         match expr {
             Expr::Value(Value::Number(n, _)) => n.parse().ok(),
             _ => None, // Only constant values supported
-        }
-    }
-
-    pub fn build(input: Box<dyn PlanNode>, limit: Option<u64>, offset: Option<u64>) -> Self {
-        Self {
-            input,
-            limit,
-            offset,
         }
     }
 }

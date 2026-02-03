@@ -92,69 +92,6 @@ impl ExpressionNode for WindowFunctionExpr {
 }
 
 impl WindowFunctionExpr {
-    /// Build a window function expression
-    pub fn build(
-        function: WindowFunctionName,
-        args: Vec<Box<dyn Expression>>,
-        partition_by: Vec<Box<dyn Expression>>,
-        order_by: Vec<OrderByExpr>,
-        frame: Option<WindowFrame>,
-    ) -> Box<dyn Expression> {
-        // Infer return type using local logic (logic moved from WindowFunction::infer_type)
-        let arg_types: Vec<DataType> = args.iter().map(|e| e.data_type()).collect();
-        let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
-        let (return_type, is_nullable) = match &function {
-            WindowFunctionName::Aggregate(agg) => match agg {
-                AggregateFunctionName::Count => (DataType::BigInt, false),
-                AggregateFunctionName::Sum => {
-                    let ret_type = match input_type {
-                        DataType::TinyInt
-                        | DataType::SmallInt
-                        | DataType::Int
-                        | DataType::BigInt => DataType::BigInt,
-                        DataType::Float | DataType::Double | DataType::Decimal => DataType::Double,
-                        _ => input_type,
-                    };
-                    (ret_type, true)
-                },
-                AggregateFunctionName::Avg => (DataType::Double, true),
-                AggregateFunctionName::Min | AggregateFunctionName::Max => (input_type, true),
-                AggregateFunctionName::First | AggregateFunctionName::Last => (input_type, true),
-                AggregateFunctionName::ArrayAgg => (DataType::Array(Box::new(input_type)), true),
-                AggregateFunctionName::JsonArrayAgg | AggregateFunctionName::JsonObjectAgg => {
-                    (DataType::Json, true)
-                },
-                AggregateFunctionName::StringAgg => (DataType::Text, true),
-                AggregateFunctionName::Custom(_) => (input_type, true),
-            },
-            WindowFunctionName::RowNumber
-            | WindowFunctionName::Rank
-            | WindowFunctionName::DenseRank
-            | WindowFunctionName::NTile => (DataType::BigInt, false),
-            WindowFunctionName::Lead
-            | WindowFunctionName::Lag
-            | WindowFunctionName::FirstValue
-            | WindowFunctionName::LastValue
-            | WindowFunctionName::NthValue => {
-                let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
-                (input_type, true)
-            },
-            WindowFunctionName::PercentRank | WindowFunctionName::CumeDist => {
-                (DataType::Double, false)
-            },
-        };
-
-        Box::new(WindowFunctionExpr {
-            function,
-            args,
-            partition_by,
-            order_by,
-            frame,
-            return_type,
-            is_nullable,
-        })
-    }
-
     pub fn from_ast<F>(
         func: &sqlparser::ast::Function,
         args: Vec<Box<dyn Expression>>,
@@ -238,12 +175,58 @@ impl WindowFunctionExpr {
             },
         };
 
-        Ok(Self::build(
-            window_func,
+        // Infer return type using local logic (logic moved from WindowFunction::infer_type)
+        let arg_types: Vec<DataType> = args.iter().map(|e| e.data_type()).collect();
+        let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
+        let (return_type, is_nullable) = match &window_func {
+            WindowFunctionName::Aggregate(agg) => match agg {
+                AggregateFunctionName::Count => (DataType::BigInt, false),
+                AggregateFunctionName::Sum => {
+                    let ret_type = match input_type {
+                        DataType::TinyInt
+                        | DataType::SmallInt
+                        | DataType::Int
+                        | DataType::BigInt => DataType::BigInt,
+                        DataType::Float | DataType::Double | DataType::Decimal => DataType::Double,
+                        _ => input_type,
+                    };
+                    (ret_type, true)
+                },
+                AggregateFunctionName::Avg => (DataType::Double, true),
+                AggregateFunctionName::Min | AggregateFunctionName::Max => (input_type, true),
+                AggregateFunctionName::First | AggregateFunctionName::Last => (input_type, true),
+                AggregateFunctionName::ArrayAgg => (DataType::Array(Box::new(input_type)), true),
+                AggregateFunctionName::JsonArrayAgg | AggregateFunctionName::JsonObjectAgg => {
+                    (DataType::Json, true)
+                },
+                AggregateFunctionName::StringAgg => (DataType::Text, true),
+                AggregateFunctionName::Custom(_) => (input_type, true),
+            },
+            WindowFunctionName::RowNumber
+            | WindowFunctionName::Rank
+            | WindowFunctionName::DenseRank
+            | WindowFunctionName::NTile => (DataType::BigInt, false),
+            WindowFunctionName::Lead
+            | WindowFunctionName::Lag
+            | WindowFunctionName::FirstValue
+            | WindowFunctionName::LastValue
+            | WindowFunctionName::NthValue => {
+                let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
+                (input_type, true)
+            },
+            WindowFunctionName::PercentRank | WindowFunctionName::CumeDist => {
+                (DataType::Double, false)
+            },
+        };
+
+        Ok(Box::new(WindowFunctionExpr {
+            function: window_func,
             args,
-            partition_by_exprs,
-            order_by_exprs,
-            window_frame,
-        ))
+            partition_by: partition_by_exprs,
+            order_by: order_by_exprs,
+            frame: window_frame,
+            return_type,
+            is_nullable,
+        }))
     }
 }
