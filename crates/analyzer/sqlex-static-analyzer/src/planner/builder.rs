@@ -266,7 +266,8 @@ impl<'a> BuildContext<'a> {
                 _ => None,
             };
             if let Some(e) = expr {
-                if super::expr::has_aggregate_function(e) {
+                use crate::planner::expr::ExprExt;
+                if e.has_aggregate_function() {
                     has_aggregates_in_select = true;
                     break;
                 }
@@ -301,8 +302,10 @@ impl<'a> BuildContext<'a> {
                     _ => None,
                 } {
                     if let Expr::Function(func) = expr {
-                        if super::expr::has_aggregate_function(expr) {
-                            aggregate_exprs.push(super::expr::build_aggregate_expr(func, &scope)?);
+                        use crate::planner::expr::ExprExt;
+                        if expr.has_aggregate_function() {
+                            aggregate_exprs
+                                .push(super::expr::AggregateExpr::from_ast(func, &scope)?);
                         }
                     }
                 }

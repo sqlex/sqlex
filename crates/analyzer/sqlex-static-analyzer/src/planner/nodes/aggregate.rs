@@ -1,5 +1,5 @@
 use crate::planner::{
-    expr::{AggregateExpr, TypedExpr, aggregate_result_type},
+    expr::{AggregateExpr, TypedExpr},
     plan::{LogicalNode, PlanNode, PlanNodeColumn},
 };
 
@@ -40,7 +40,7 @@ impl AggregateNode {
             .collect();
 
         for (i, agg) in aggregates.iter().enumerate() {
-            let (data_type, _nullable) = aggregate_result_type(&agg.function, &agg.args);
+            let (data_type, _nullable) = agg.function.result_type(&agg.args);
             output_columns.push(PlanNodeColumn {
                 name: format!("agg_{}", i),
                 data_type,

@@ -5,7 +5,6 @@
 mod builder;
 
 mod plan;
-mod types;
 
 // Re-export BuildContext for external use
 pub use builder::BuildContext;
