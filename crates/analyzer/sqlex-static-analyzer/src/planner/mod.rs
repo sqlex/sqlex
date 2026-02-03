@@ -13,3 +13,5 @@ pub use plan::*;
 pub mod expr;
 pub use expr::*;
 pub mod nodes;
+pub mod scope;
+pub use scope::*;
