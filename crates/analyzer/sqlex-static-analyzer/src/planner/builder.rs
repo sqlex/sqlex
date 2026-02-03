@@ -7,20 +7,15 @@ use std::collections::HashMap;
 use sqlex_analyzer::AnalyzerError;
 use sqlparser::{
     ast::{
-        Expr, Ident, JoinConstraint, JoinOperator, ObjectName, Query, Select, SelectItem, SetExpr,
-        Statement, TableFactor, TableWithJoins, Value,
+        Expr, Ident, ObjectName, Query, Select, SelectItem, SetExpr, Statement, TableFactor,
+        TableWithJoins,
     },
     parser::Parser,
 };
 
 use super::{
-    expr::{OrderByExpr, TypedExpr},
-    nodes::{
-        join::{JoinCondition, JoinKind},
-        project::ProjectColumn,
-        set_operation::SetOp,
-        *,
-    },
+    expr::TypedExpr,
+    nodes::{join::JoinKind, project::ProjectColumn, *},
     plan::PlanNode,
     scope::{ResolvedColumn, Scope},
 };
@@ -164,38 +159,16 @@ impl<'a> BuildContext<'a> {
         // ORDER BY
         if let Some(order_by) = &query.order_by {
             let scope = self.extract_scope_from_plan(plan.as_ref())?;
-            let mut order_by_exprs = Vec::new();
-            for ob in &order_by.exprs {
-                let expr = self.build_typed_expr(&ob.expr, &scope)?;
-                order_by_exprs.push(OrderByExpr {
-                    expr,
-                    asc: ob.asc.unwrap_or(true),
-                    nulls_first: ob.nulls_first,
-                });
-            }
-            plan = Box::new(SortNode::build(plan, order_by_exprs));
+            plan = Box::new(SortNode::from_ast(plan, &order_by.exprs, &scope)?);
         }
 
         // LIMIT / OFFSET
         if query.limit.is_some() || query.offset.is_some() {
-            let limit = if let Some(l) = &query.limit {
-                match l {
-                    Expr::Value(Value::Number(n, _)) => Some(n.parse().unwrap_or(0)),
-                    _ => None, // Only constant limit supported
-                }
-            } else {
-                None
-            };
-            let offset = if let Some(o) = &query.offset {
-                match &o.value {
-                    Expr::Value(Value::Number(n, _)) => Some(n.parse().unwrap_or(0)),
-                    _ => None,
-                }
-            } else {
-                None
-            };
-
-            plan = Box::new(LimitNode::build(plan, limit, offset));
+            plan = Box::new(LimitNode::from_ast(
+                plan,
+                query.limit.as_ref(),
+                query.offset.as_ref(),
+            ));
         }
 
         Ok(plan)
@@ -215,28 +188,12 @@ impl<'a> BuildContext<'a> {
                 let left_plan = self.build_set_expr(left)?;
                 let right_plan = self.build_set_expr(right)?;
 
-                use sqlparser::ast::SetOperator;
-
-                let set_op = match op {
-                    SetOperator::Union => SetOp::Union,
-                    SetOperator::Intersect => SetOp::Intersect,
-                    SetOperator::Except => SetOp::Except,
-                    _ => {
-                        return Err(AnalyzerError::AnalysisError(
-                            "Unsupported set operator".to_string(),
-                        ));
-                    },
-                };
-
-                use sqlparser::ast::SetQuantifier;
-                let all = matches!(
+                Ok(Box::new(SetOperationNode::from_ast(
+                    op,
                     set_quantifier,
-                    SetQuantifier::All | SetQuantifier::AllByName
-                );
-
-                Ok(Box::new(SetOperationNode::build(
-                    set_op, all, left_plan, right_plan,
-                )))
+                    left_plan,
+                    right_plan,
+                )?))
             },
             SetExpr::Values(values) => {
                 let mut rules_rows = Vec::new();
@@ -433,65 +390,21 @@ impl<'a> BuildContext<'a> {
         for join in &table_with_joins.joins {
             let (right_plan, right_scope) = self.build_table_factor(&join.relation)?;
 
-            let (join_kind, condition) = match &join.join_operator {
-                JoinOperator::Inner(constraint) => (
-                    JoinKind::Inner,
-                    Some(self.build_join_constraint(constraint, &scope, &right_scope)?),
-                ),
-                JoinOperator::LeftOuter(constraint) => (
-                    JoinKind::Left,
-                    Some(self.build_join_constraint(constraint, &scope, &right_scope)?),
-                ),
-                JoinOperator::RightOuter(constraint) => (
-                    JoinKind::Right,
-                    Some(self.build_join_constraint(constraint, &scope, &right_scope)?),
-                ),
-                JoinOperator::FullOuter(constraint) => (
-                    JoinKind::Full,
-                    Some(self.build_join_constraint(constraint, &scope, &right_scope)?),
-                ),
-                JoinOperator::CrossJoin => (JoinKind::Cross, None),
-                _ => {
-                    return Err(AnalyzerError::AnalysisError(
-                        "Unsupported join type".to_string(),
-                    ));
-                },
-            };
-
-            // Merge scopes and adjust nullability based on JOIN type
-            // New logic: Build the JoinNode (which calculates nullability internally)
-            // then extract the updated scope from the resulting plan columns.
-            let join_node = JoinNode::build(self.schema, plan, right_plan, join_kind, condition);
+            // Use JoinNode::from_ast to handle all conversion logic
+            let join_node = JoinNode::from_ast(
+                self.schema,
+                plan,
+                right_plan,
+                &join.join_operator,
+                &scope,
+                &right_scope,
+            )?;
 
             scope = self.extract_scope_from_plan(&join_node)?;
             plan = Box::new(join_node);
         }
 
         Ok((plan, scope))
-    }
-
-    fn build_join_constraint(
-        &mut self,
-        constraint: &JoinConstraint,
-        left_scope: &Scope,
-        right_scope: &Scope,
-    ) -> Result<JoinCondition> {
-        let mut combined_scope = left_scope.clone();
-        combined_scope.merge(right_scope.clone());
-
-        match constraint {
-            JoinConstraint::On(expr) => {
-                let typed = self.build_typed_expr(expr, &combined_scope)?;
-                Ok(JoinCondition::On(Box::new(typed)))
-            },
-            JoinConstraint::Using(idents) => Ok(JoinCondition::Using(
-                idents.iter().map(name_to_string).collect(),
-            )),
-            JoinConstraint::Natural => Ok(JoinCondition::Natural),
-            JoinConstraint::None => {
-                panic!("Constraints None shouldn't happen for Inner/Outer join")
-            },
-        }
     }
 
     /// Build PlanNode for a single table reference

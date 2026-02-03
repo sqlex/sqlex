@@ -1,10 +1,16 @@
+use sqlex_analyzer::AnalyzerError;
+use sqlparser::ast::{JoinConstraint, JoinOperator};
+
 use crate::{
     planner::{
         expr::TypedExpr,
         plan::{LogicalNode, PlanNode, PlanNodeColumn},
+        scope::Scope,
     },
     schema::Schema,
 };
+
+type Result<T> = std::result::Result<T, AnalyzerError>;
 
 /// Join type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +43,75 @@ pub struct JoinNode {
 }
 
 impl JoinNode {
+    /// Build from AST JoinOperator
+    pub fn from_ast(
+        schema: &Schema,
+        left: Box<dyn PlanNode>,
+        right: Box<dyn PlanNode>,
+        join_operator: &JoinOperator,
+        left_scope: &Scope,
+        right_scope: &Scope,
+    ) -> Result<Self> {
+        // Convert JoinOperator to JoinKind and extract constraint
+        let (kind, constraint) = match join_operator {
+            JoinOperator::Inner(constraint) => (JoinKind::Inner, Some(constraint)),
+            JoinOperator::LeftOuter(constraint) => (JoinKind::Left, Some(constraint)),
+            JoinOperator::RightOuter(constraint) => (JoinKind::Right, Some(constraint)),
+            JoinOperator::FullOuter(constraint) => (JoinKind::Full, Some(constraint)),
+            JoinOperator::CrossJoin => (JoinKind::Cross, None),
+            _ => {
+                return Err(AnalyzerError::AnalysisError(
+                    "Unsupported join type".to_string(),
+                ));
+            },
+        };
+
+        // Convert JoinConstraint to JoinCondition
+        let condition = if let Some(constraint) = constraint {
+            Some(Self::build_join_condition(
+                constraint,
+                left_scope,
+                right_scope,
+            )?)
+        } else {
+            None
+        };
+
+        Ok(Self::build(schema, left, right, kind, condition))
+    }
+
+    /// Build join condition from AST constraint
+    fn build_join_condition(
+        constraint: &JoinConstraint,
+        left_scope: &Scope,
+        right_scope: &Scope,
+    ) -> Result<JoinCondition> {
+        let mut combined_scope = left_scope.clone();
+        combined_scope.merge(right_scope.clone());
+
+        match constraint {
+            JoinConstraint::On(expr) => {
+                let typed = TypedExpr::from_expr(expr, &combined_scope)?;
+                Ok(JoinCondition::On(Box::new(typed)))
+            },
+            JoinConstraint::Using(idents) => Ok(JoinCondition::Using(
+                idents
+                    .iter()
+                    .map(|id| {
+                        id.0.iter()
+                            .map(|i| i.value.clone())
+                            .collect::<Vec<_>>()
+                            .join(".")
+                    })
+                    .collect(),
+            )),
+            JoinConstraint::Natural => Ok(JoinCondition::Natural),
+            JoinConstraint::None => {
+                panic!("Constraints None shouldn't happen for Inner/Outer join")
+            },
+        }
+    }
+
     pub fn build(
         schema: &Schema,
         left: Box<dyn PlanNode>,
