@@ -42,6 +42,8 @@ pub struct ColumnInfo {
     pub name: String,
     pub data_type: DataType,
     pub nullability: bool,
+    pub origin_table: Option<String>,
+    pub origin_column: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

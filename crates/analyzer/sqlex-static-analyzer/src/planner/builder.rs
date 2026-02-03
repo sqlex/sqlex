@@ -16,6 +16,7 @@ use sqlparser::{
 };
 
 use super::{
+    nodes::*,
     nullability,
     plan::{JoinCondition, JoinKind, OrderByExpr, PlanNode, ProjectColumn, SetOp, TypedExpr},
     types,
@@ -38,7 +39,7 @@ pub struct BuildContext<'a> {
 pub(crate) struct ResolvedCTE {
     pub(crate) columns: Vec<ResolvedColumn>,
     #[allow(dead_code)]
-    pub(crate) plan: Box<PlanNode>,
+    pub(crate) plan: Box<dyn PlanNode>,
 }
 
 /// Resolved column information (internal)
@@ -59,9 +60,30 @@ impl<'a> BuildContext<'a> {
         }
     }
 
+    /// Get CTE context for LogicalNode calls
+    fn get_cte_context(&self) -> super::plan::CTEContext {
+        self.cte_scope
+            .iter()
+            .map(|(name, cte)| {
+                let cols = cte
+                    .columns
+                    .iter()
+                    .map(|rc| sqlex_common::ColumnInfo {
+                        name: rc.name.clone(),
+                        data_type: rc.data_type.clone(),
+                        nullability: rc.nullable,
+                        origin_table: rc.source_alias.clone(),
+                        origin_column: None,
+                    })
+                    .collect();
+                (name.clone(), cols)
+            })
+            .collect()
+    }
+
     /// Build a PlanNode tree from SQL string.
     /// Consumes self to ensure the context is not reused.
-    pub fn build(mut self, sql: &str) -> Result<PlanNode> {
+    pub fn build(mut self, sql: &str) -> Result<Box<dyn PlanNode>> {
         let dialect = self.schema.get_sqlparser_dialect();
         let statements = Parser::parse_sql(dialect.as_ref(), sql)
             .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
@@ -81,7 +103,7 @@ impl<'a> BuildContext<'a> {
     }
 
     /// Build PlanNode from parsed Query
-    fn build_plan(&mut self, query: &Query) -> Result<PlanNode> {
+    fn build_plan(&mut self, query: &Query) -> Result<Box<dyn PlanNode>> {
         // Handle WITH clause first (CTEs)
         if let Some(with) = &query.with {
             for cte in &with.cte_tables {
@@ -100,7 +122,7 @@ impl<'a> BuildContext<'a> {
                         cte_name.clone(),
                         ResolvedCTE {
                             columns: anchor_cols,
-                            plan: Box::new(PlanNode::Values {
+                            plan: Box::new(ValuesNode {
                                 rows: vec![],
                                 column_names: vec![],
                             }), // Placeholder
@@ -108,21 +130,17 @@ impl<'a> BuildContext<'a> {
                     );
                 }
 
-                // Now analyze the full CTE query (recursive refs will find pre-registered CTE)
+                // Now analyze the full CTE query
                 let cte_plan = self.build_plan(&cte.query)?;
-                let scope = self.extract_scope_from_plan(&cte_plan)?;
+                let scope = self.extract_scope_from_plan(cte_plan.as_ref())?;
 
-                // Handle column aliases if provided: WITH t(a, b) AS ...
+                // Extract columns from the first table in the scope (usually "Default")
+                let src_cols = scope.tables.values().next().ok_or_else(|| {
+                    AnalyzerError::AnalysisError("CTE query has no columns".to_string())
+                })?;
+
+                // Handle column aliases if provided
                 if !cte.alias.columns.is_empty() {
-                    let src_cols =
-                        scope
-                            .tables
-                            .values()
-                            .next()
-                            .ok_or(AnalyzerError::AnalysisError(
-                                "CTE query has no columns".to_string(),
-                            ))?;
-
                     if src_cols.len() != cte.alias.columns.len() {
                         return Err(AnalyzerError::AnalysisError(format!(
                             "CTE {} column count mismatch",
@@ -145,19 +163,11 @@ impl<'a> BuildContext<'a> {
                         cte_name.clone(),
                         ResolvedCTE {
                             columns: new_cols,
-                            plan: Box::new(cte_plan),
+                            plan: cte_plan,
                         },
                     );
                 } else {
                     // No aliases provided, use inferred names
-                    let src_cols =
-                        scope
-                            .tables
-                            .values()
-                            .next()
-                            .ok_or(AnalyzerError::AnalysisError(
-                                "CTE query has no columns".to_string(),
-                            ))?;
                     let new_cols = src_cols
                         .iter()
                         .map(|c| ResolvedColumn {
@@ -172,7 +182,7 @@ impl<'a> BuildContext<'a> {
                         cte_name.clone(),
                         ResolvedCTE {
                             columns: new_cols,
-                            plan: Box::new(cte_plan),
+                            plan: cte_plan,
                         },
                     );
                 }
@@ -183,7 +193,7 @@ impl<'a> BuildContext<'a> {
 
         // ORDER BY
         if let Some(order_by) = &query.order_by {
-            let scope = self.extract_scope_from_plan(&plan)?;
+            let scope = self.extract_scope_from_plan(plan.as_ref())?;
             let mut order_by_exprs = Vec::new();
             for ob in &order_by.exprs {
                 let expr = self.build_typed_expr(&ob.expr, &scope)?;
@@ -193,10 +203,10 @@ impl<'a> BuildContext<'a> {
                     nulls_first: ob.nulls_first,
                 });
             }
-            plan = PlanNode::Sort {
-                input: Box::new(plan),
+            plan = Box::new(SortNode {
+                input: plan,
                 order_by: order_by_exprs,
-            };
+            });
         }
 
         // LIMIT / OFFSET
@@ -218,18 +228,18 @@ impl<'a> BuildContext<'a> {
                 None
             };
 
-            plan = PlanNode::Limit {
-                input: Box::new(plan),
+            plan = Box::new(LimitNode {
+                input: plan,
                 limit,
                 offset,
-            };
+            });
         }
 
         Ok(plan)
     }
 
     /// Build PlanNode from SetExpr (handles SELECT, UNION, etc.)
-    fn build_set_expr(&mut self, set_expr: &SetExpr) -> Result<PlanNode> {
+    fn build_set_expr(&mut self, set_expr: &SetExpr) -> Result<Box<dyn PlanNode>> {
         match set_expr {
             SetExpr::Select(select) => self.build_select(select),
             SetExpr::Query(query) => self.build_plan(query),
@@ -261,12 +271,12 @@ impl<'a> BuildContext<'a> {
                     SetQuantifier::All | SetQuantifier::AllByName
                 );
 
-                Ok(PlanNode::SetOperation {
+                Ok(Box::new(SetOperationNode {
                     op: set_op,
                     all,
-                    left: Box::new(left_plan),
-                    right: Box::new(right_plan),
-                })
+                    left: left_plan,
+                    right: right_plan,
+                }))
             },
             SetExpr::Values(values) => {
                 let mut rules_rows = Vec::new();
@@ -302,10 +312,10 @@ impl<'a> BuildContext<'a> {
                 // Generate default column names: column1, column2, ...
                 let column_names = (1..=num_cols).map(|i| format!("column{}", i)).collect();
 
-                Ok(PlanNode::Values {
+                Ok(Box::new(ValuesNode {
                     rows: rules_rows,
                     column_names,
-                })
+                }))
             },
             _ => Err(AnalyzerError::AnalysisError(format!(
                 "Unsupported set expression: {:?}",
@@ -315,17 +325,17 @@ impl<'a> BuildContext<'a> {
     }
 
     /// Build PlanNode from SELECT statement
-    fn build_select(&mut self, select: &Select) -> Result<PlanNode> {
+    fn build_select(&mut self, select: &Select) -> Result<Box<dyn PlanNode>> {
         // 1. FROM clause
         let (mut plan, scope) = self.build_from(&select.from)?;
 
         // 2. WHERE clause
         if let Some(selection) = &select.selection {
             let predicate = self.build_typed_expr(selection, &scope)?;
-            plan = PlanNode::Filter {
-                input: Box::new(plan),
+            plan = Box::new(FilterNode {
+                input: plan,
                 predicate: Box::new(predicate),
-            };
+            });
         }
 
         // 3. GROUP BY
@@ -418,33 +428,31 @@ impl<'a> BuildContext<'a> {
 
         // 6. DISTINCT
         if select.distinct.is_some() {
-            plan = PlanNode::Distinct {
-                input: Box::new(plan),
-            };
+            plan = Box::new(DistinctNode { input: plan });
         }
 
         // Wrap in Project for projection
-        plan = PlanNode::Project {
-            input: Box::new(plan),
+        plan = Box::new(ProjectNode {
+            input: plan,
             columns: project_cols,
-        };
+        });
 
         Ok(plan)
     }
 
     /// Build PlanNode from FROM clause
-    fn build_from(&mut self, from: &[TableWithJoins]) -> Result<(PlanNode, Scope)> {
+    fn build_from(&mut self, from: &[TableWithJoins]) -> Result<(Box<dyn PlanNode>, Scope)> {
         if from.is_empty() {
             return Ok((
-                PlanNode::Values {
+                Box::new(ValuesNode {
                     rows: vec![],
                     column_names: vec![],
-                },
+                }),
                 Scope::default(),
             ));
         }
 
-        let mut plan: Option<PlanNode> = None;
+        let mut plan: Option<Box<dyn PlanNode>> = None;
         let mut scope = Scope::default();
 
         for item in from {
@@ -452,12 +460,12 @@ impl<'a> BuildContext<'a> {
 
             if let Some(current_plan) = plan {
                 // Implicit cross join for comma-separated tables
-                plan = Some(PlanNode::Join {
+                plan = Some(Box::new(JoinNode {
                     kind: JoinKind::Cross,
-                    left: Box::new(current_plan),
-                    right: Box::new(relation),
+                    left: current_plan,
+                    right: relation,
                     condition: None,
-                });
+                }));
             } else {
                 plan = Some(relation);
             }
@@ -470,7 +478,7 @@ impl<'a> BuildContext<'a> {
     fn build_table_with_joins(
         &mut self,
         table_with_joins: &TableWithJoins,
-    ) -> Result<(PlanNode, Scope)> {
+    ) -> Result<(Box<dyn PlanNode>, Scope)> {
         let (mut plan, mut scope) = self.build_table_factor(&table_with_joins.relation)?;
 
         for join in &table_with_joins.joins {
@@ -507,8 +515,8 @@ impl<'a> BuildContext<'a> {
             // Determine nullability for JOIN columns
             let nullability_result = nullability::join_nullability(
                 join_kind,
-                &plan,
-                &right_plan,
+                plan.as_ref(),
+                right_plan.as_ref(),
                 &condition,
                 self.schema,
             );
@@ -543,12 +551,12 @@ impl<'a> BuildContext<'a> {
 
             scope = merged_scope;
 
-            plan = PlanNode::Join {
+            plan = Box::new(JoinNode {
                 kind: join_kind,
-                left: Box::new(plan),
-                right: Box::new(right_plan),
+                left: plan,
+                right: right_plan,
                 condition,
-            };
+            });
         }
 
         Ok((plan, scope))
@@ -579,7 +587,7 @@ impl<'a> BuildContext<'a> {
     }
 
     /// Build PlanNode for a single table reference
-    fn build_table_factor(&mut self, table: &TableFactor) -> Result<(PlanNode, Scope)> {
+    fn build_table_factor(&mut self, table: &TableFactor) -> Result<(Box<dyn PlanNode>, Scope)> {
         match table {
             TableFactor::Table { name, alias, .. } => {
                 let table_name = name_to_string(name);
@@ -590,10 +598,10 @@ impl<'a> BuildContext<'a> {
 
                 // Check CTEs first
                 if let Some(cte) = self.cte_scope.get(&table_name) {
-                    let plan = PlanNode::CTERef {
+                    let plan = Box::new(CTERefNode {
                         name: table_name.clone(),
                         alias: Some(effective_alias.clone()),
-                    };
+                    });
 
                     let mut scope = Scope::default();
                     let cols = cte
@@ -629,10 +637,10 @@ impl<'a> BuildContext<'a> {
                 let mut scope = Scope::default();
                 scope.add_table(effective_alias.clone(), columns);
 
-                let plan = PlanNode::TableScan {
+                let plan = Box::new(TableScanNode {
                     table: table_name,
                     alias: Some(effective_alias),
-                };
+                });
 
                 Ok((plan, scope))
             },
@@ -643,7 +651,7 @@ impl<'a> BuildContext<'a> {
                 ..
             } => {
                 let (sub_plan, sub_scope) = self.build_plan(subquery).and_then(|p| {
-                    let scope = self.extract_scope_from_plan(&p)?;
+                    let scope = self.extract_scope_from_plan(p.as_ref())?;
                     Ok((p, scope))
                 })?;
 
@@ -667,10 +675,10 @@ impl<'a> BuildContext<'a> {
                 derived_scope.add_table(effective_alias.clone(), resolved_cols);
 
                 Ok((
-                    PlanNode::Subquery {
-                        query: Box::new(sub_plan),
+                    Box::new(SubqueryNode {
+                        query: sub_plan,
                         alias: effective_alias,
-                    },
+                    }),
                     derived_scope,
                 ))
             },
@@ -861,99 +869,41 @@ impl<'a> BuildContext<'a> {
                 // Default: nullable if any arg is nullable
             },
         }
-
         Ok((return_type, nullable))
     }
 
     // Helper to get scope from a plan node (re-deriving it)
-    fn extract_scope_from_plan(&self, plan: &PlanNode) -> Result<Scope> {
-        match plan {
-            PlanNode::Project { columns, .. } => {
-                let mut scope = Scope::default();
-                let cols = columns
-                    .iter()
-                    .map(|c| ResolvedColumn {
-                        name: c.alias.clone().unwrap_or_else(|| "unnamed".to_string()),
-                        data_type: c.expr.data_type.clone(),
-                        nullable: c.expr.nullable,
-                        source_alias: None,
-                    })
-                    .collect();
-                scope.add_table("Default".to_string(), cols);
-                Ok(scope)
-            },
-            PlanNode::Values { rows, column_names } => {
-                let mut scope = Scope::default();
-                if let Some(first_row) = rows.first() {
-                    let cols = first_row
-                        .iter()
-                        .zip(column_names)
-                        .enumerate()
-                        .map(|(idx, (expr, name))| {
-                            let is_nullable = rows.iter().any(|r| r[idx].nullable);
-                            ResolvedColumn {
-                                name: name.clone(),
-                                data_type: expr.data_type.clone(),
-                                nullable: is_nullable,
-                                source_alias: None,
-                            }
-                        })
-                        .collect();
-                    scope.add_table("Default".to_string(), cols);
-                }
-                Ok(scope)
-            },
-            PlanNode::TableScan { table, alias } => {
-                let table_def = self.schema.tables.get(table).ok_or_else(|| {
-                    AnalyzerError::AnalysisError(format!("Table {} not found", table))
-                })?;
-                let mut scope = Scope::default();
-                let effective_alias = alias.as_ref().unwrap_or(table);
-                let cols = table_def
-                    .columns
-                    .iter()
-                    .map(|c| ResolvedColumn {
-                        name: c.name.clone(),
-                        data_type: c.data_type.clone(),
-                        nullable: c.nullable,
-                        source_alias: Some(effective_alias.clone()),
-                    })
-                    .collect();
-                scope.add_table(effective_alias.clone(), cols);
-                Ok(scope)
-            },
-            PlanNode::CTERef { name, alias } => {
-                if let Some(cte) = self.cte_scope.get(name) {
-                    let mut scope = Scope::default();
-                    let effective_alias = alias.as_ref().unwrap_or(name);
-                    let cols = cte
-                        .columns
-                        .iter()
-                        .map(|c| ResolvedColumn {
-                            name: c.name.clone(),
-                            data_type: c.data_type.clone(),
-                            nullable: c.nullable,
-                            source_alias: Some(effective_alias.clone()),
-                        })
-                        .collect();
-                    scope.add_table(effective_alias.clone(), cols);
-                    Ok(scope)
-                } else {
-                    Err(AnalyzerError::AnalysisError(format!(
-                        "CTE {} not found in scope during extraction",
-                        name
-                    )))
-                }
-            },
-            PlanNode::Filter { input, .. } => self.extract_scope_from_plan(input),
-            PlanNode::Sort { input, .. } => self.extract_scope_from_plan(input),
-            PlanNode::Limit { input, .. } => self.extract_scope_from_plan(input),
-            PlanNode::SetOperation { left, .. } => {
-                // Union/except/intersect: return left scope (assuming compatibility)
-                self.extract_scope_from_plan(left)
-            },
-            _ => Ok(Scope::default()),
+    fn extract_scope_from_plan(&self, plan: &dyn PlanNode) -> Result<Scope> {
+        let mut scope = Scope::default();
+        let cte_ctx = self.get_cte_context();
+        let cols = plan.columns(self.schema, &cte_ctx);
+
+        let mut columns_by_table: std::collections::HashMap<String, Vec<ResolvedColumn>> =
+            std::collections::HashMap::new();
+
+        for col in cols {
+            let resolved_col = ResolvedColumn {
+                name: col.name,
+                data_type: col.data_type,
+                nullable: col.nullability,
+                source_alias: col.origin_table.clone(),
+            };
+            let table_name = resolved_col
+                .source_alias
+                .clone()
+                .unwrap_or_else(|| "Default".to_string());
+
+            columns_by_table
+                .entry(table_name)
+                .or_default()
+                .push(resolved_col);
         }
+
+        for (table, cols) in columns_by_table {
+            scope.add_table(table, cols);
+        }
+
+        Ok(scope)
     }
 
     /// Extract columns from the anchor (non-recursive) part of a recursive CTE
@@ -976,7 +926,7 @@ impl<'a> BuildContext<'a> {
             other => self.build_set_expr(other)?,
         };
 
-        let scope = self.extract_scope_from_plan(&anchor_plan)?;
+        let scope = self.extract_scope_from_plan(anchor_plan.as_ref())?;
         let src_cols = scope
             .tables
             .values()

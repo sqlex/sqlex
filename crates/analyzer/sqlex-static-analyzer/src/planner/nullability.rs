@@ -63,8 +63,8 @@ pub fn infer_nullif_nullability() -> bool {
 /// Determine nullability for JOIN columns
 pub fn join_nullability(
     join_kind: JoinKind,
-    left: &PlanNode,
-    right: &PlanNode,
+    left: &dyn PlanNode,
+    right: &dyn PlanNode,
     condition: &Option<super::plan::JoinCondition>,
     schema: &Schema,
 ) -> ColumnNullability {
@@ -97,19 +97,21 @@ pub fn join_nullability(
 }
 
 /// Extract table name from a PlanNode (if it's a TableScan)
-fn extract_table_name_from_plan(plan: &PlanNode) -> Option<String> {
-    match plan {
-        PlanNode::TableScan { table, .. } => Some(table.clone()),
-        PlanNode::Join { left, .. } => extract_table_name_from_plan(left),
-        _ => None,
-    }
+/// Extract table name from a PlanNode (if it's a TableScan)
+fn extract_table_name_from_plan(plan: &dyn PlanNode) -> Option<String> {
+    use crate::planner::nodes::{join::JoinNode, table_scan::TableScanNode};
+    crate::match_plan!(plan, {
+        ts: TableScanNode => Some(ts.table.clone()),
+        join: JoinNode => extract_table_name_from_plan(join.left.as_ref()),
+        _ => None
+    })
 }
 
 /// Check FK guarantee using plan nodes
 fn check_fk_guarantee(
     join_kind: JoinKind,
-    left: &PlanNode,
-    right: &PlanNode,
+    left: &dyn PlanNode,
+    right: &dyn PlanNode,
     condition: &Option<super::plan::JoinCondition>,
     schema: &Schema,
 ) -> bool {

@@ -37,7 +37,7 @@ fn test_int_plus_bigint() {
     let plan = BuildContext::new(&schema)
         .build("SELECT int_val + bigint_val FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::BigInt);
 }
@@ -48,7 +48,7 @@ fn test_int_plus_float() {
     let plan = BuildContext::new(&schema)
         .build("SELECT int_val + float_val FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::Float);
 }
@@ -59,7 +59,7 @@ fn test_float_plus_double() {
     let plan = BuildContext::new(&schema)
         .build("SELECT float_val + double_val FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::Double);
 }
@@ -70,7 +70,7 @@ fn test_int_plus_decimal() {
     let plan = BuildContext::new(&schema)
         .build("SELECT int_val + decimal_val FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::Decimal);
 }
@@ -85,7 +85,7 @@ fn test_division_returns_double() {
     let plan = BuildContext::new(&schema)
         .build("SELECT int_val / 2 FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::Double);
 }
@@ -100,7 +100,7 @@ fn test_comparison_returns_bool() {
     let plan = BuildContext::new(&schema)
         .build("SELECT int_val > 0 FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::Bool);
 }
@@ -111,7 +111,7 @@ fn test_equality_returns_bool() {
     let plan = BuildContext::new(&schema)
         .build("SELECT int_val = bigint_val FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::Bool);
 }
@@ -122,7 +122,7 @@ fn test_logical_and_returns_bool() {
     let plan = BuildContext::new(&schema)
         .build("SELECT bool_val AND TRUE FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::Bool);
 }
@@ -137,7 +137,7 @@ fn test_count_returns_bigint() {
     let plan = BuildContext::new(&schema)
         .build("SELECT COUNT(*) FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::BigInt);
 }
@@ -148,7 +148,7 @@ fn test_sum_int_returns_bigint() {
     let plan = BuildContext::new(&schema)
         .build("SELECT SUM(int_val) FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::BigInt);
 }
@@ -159,7 +159,7 @@ fn test_sum_float_returns_double() {
     let plan = BuildContext::new(&schema)
         .build("SELECT SUM(float_val) FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::Double);
 }
@@ -170,7 +170,7 @@ fn test_avg_returns_double() {
     let plan = BuildContext::new(&schema)
         .build("SELECT AVG(int_val) FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::Double);
 }
@@ -181,7 +181,7 @@ fn test_min_preserves_type() {
     let plan = BuildContext::new(&schema)
         .build("SELECT MIN(int_val) FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::Int);
 }
@@ -192,7 +192,7 @@ fn test_max_preserves_type() {
     let plan = BuildContext::new(&schema)
         .build("SELECT MAX(text_val) FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::Text);
 }
@@ -207,7 +207,7 @@ fn test_string_concat() {
     let plan = BuildContext::new(&schema)
         .build("SELECT text_val || ' suffix' FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::Text);
 }
@@ -222,7 +222,7 @@ fn test_integer_literal_type() {
     let plan = BuildContext::new(&schema)
         .build("SELECT 42 FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::Int);
 }
@@ -233,7 +233,7 @@ fn test_float_literal_type() {
     let plan = BuildContext::new(&schema)
         .build("SELECT 3.14 FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::Double);
 }
@@ -244,7 +244,7 @@ fn test_string_literal_type() {
     let plan = BuildContext::new(&schema)
         .build("SELECT 'hello' FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::Text);
 }
@@ -255,7 +255,7 @@ fn test_bool_literal_type() {
     let plan = BuildContext::new(&schema)
         .build("SELECT TRUE FROM data")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].data_type, DataType::Bool);
 }

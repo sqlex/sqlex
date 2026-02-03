@@ -35,7 +35,7 @@ fn test_not_null_column_is_not_nullable() {
     let plan = BuildContext::new(&schema)
         .build("SELECT id FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert!(!result[0].nullability);
 }
@@ -46,7 +46,7 @@ fn test_nullable_column_is_nullable() {
     let plan = BuildContext::new(&schema)
         .build("SELECT email FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert!(result[0].nullability);
 }
@@ -57,7 +57,7 @@ fn test_mixed_nullability() {
     let plan = BuildContext::new(&schema)
         .build("SELECT id, name, email FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert!(!result[0].nullability); // id: NOT NULL
     assert!(!result[1].nullability); // name: NOT NULL
@@ -74,7 +74,7 @@ fn test_binary_op_with_nullable() {
     let plan = BuildContext::new(&schema)
         .build("SELECT age + 1 FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     // age is nullable, so age + 1 is nullable
     assert!(result[0].nullability);
@@ -86,7 +86,7 @@ fn test_binary_op_not_null() {
     let plan = BuildContext::new(&schema)
         .build("SELECT id + 1 FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     // id is NOT NULL, so id + 1 is NOT NULL
     assert!(!result[0].nullability);
@@ -98,7 +98,7 @@ fn test_binary_op_both_nullable() {
     let plan = BuildContext::new(&schema)
         .build("SELECT age + score FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     // Both age and score are nullable
     assert!(result[0].nullability);
@@ -114,7 +114,7 @@ fn test_coalesce_with_not_null() {
     let plan = BuildContext::new(&schema)
         .build("SELECT COALESCE(age, 0) FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     // COALESCE(nullable, not_null_literal) => not nullable
     assert!(!result[0].nullability);
@@ -126,7 +126,7 @@ fn test_coalesce_all_nullable() {
     let plan = BuildContext::new(&schema)
         .build("SELECT COALESCE(age, score) FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     // COALESCE(nullable, nullable) => nullable
     assert!(result[0].nullability);
@@ -138,7 +138,7 @@ fn test_coalesce_multiple_args() {
     let plan = BuildContext::new(&schema)
         .build("SELECT COALESCE(age, score, 0) FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     // COALESCE(nullable, nullable, not_null) => not nullable
     assert!(!result[0].nullability);
@@ -154,7 +154,7 @@ fn test_nullif_always_nullable() {
     let plan = BuildContext::new(&schema)
         .build("SELECT NULLIF(id, 0) FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     // NULLIF can always return NULL
     assert!(result[0].nullability);
@@ -170,7 +170,7 @@ fn test_case_with_else_all_not_null() {
     let plan = BuildContext::new(&schema)
         .build("SELECT CASE WHEN id > 0 THEN 'positive' ELSE 'zero' END FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     // CASE with ELSE and all branches NOT NULL => not nullable
     assert!(!result[0].nullability);
@@ -182,7 +182,7 @@ fn test_case_without_else() {
     let plan = BuildContext::new(&schema)
         .build("SELECT CASE WHEN id > 0 THEN 'positive' END FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     // CASE without ELSE => nullable (implicit NULL)
     assert!(result[0].nullability);
@@ -194,7 +194,7 @@ fn test_case_with_nullable_branch() {
     let plan = BuildContext::new(&schema)
         .build("SELECT CASE WHEN id > 0 THEN age ELSE 0 END FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     // CASE with nullable branch => nullable
     assert!(result[0].nullability);
@@ -210,7 +210,7 @@ fn test_scalar_subquery_nullable() {
     let plan = BuildContext::new(&schema)
         .build("SELECT (SELECT id FROM users WHERE id = 999) FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     // Scalar subquery can return no rows => nullable
     assert!(result[0].nullability);
@@ -226,7 +226,7 @@ fn test_count_star_not_nullable() {
     let plan = BuildContext::new(&schema)
         .build("SELECT COUNT(*) FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert!(!result[0].nullability); // COUNT(*) never returns NULL
 }
@@ -237,7 +237,7 @@ fn test_count_column_not_nullable() {
     let plan = BuildContext::new(&schema)
         .build("SELECT COUNT(age) FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert!(!result[0].nullability); // COUNT(col) never returns NULL
 }
@@ -248,7 +248,7 @@ fn test_sum_nullable() {
     let plan = BuildContext::new(&schema)
         .build("SELECT SUM(age) FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert!(result[0].nullability); // SUM returns NULL for empty set
 }
@@ -259,7 +259,7 @@ fn test_avg_nullable() {
     let plan = BuildContext::new(&schema)
         .build("SELECT AVG(age) FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert!(result[0].nullability);
 }
@@ -270,7 +270,7 @@ fn test_min_max_nullable() {
     let plan = BuildContext::new(&schema)
         .build("SELECT MIN(age), MAX(age) FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert!(result[0].nullability);
     assert!(result[1].nullability);
@@ -282,7 +282,7 @@ fn test_mixed_aggregates() {
     let plan = BuildContext::new(&schema)
         .build("SELECT COUNT(*), SUM(age), AVG(age) FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert!(!result[0].nullability); // COUNT
     assert!(result[1].nullability); // SUM

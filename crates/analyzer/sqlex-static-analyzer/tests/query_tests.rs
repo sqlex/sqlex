@@ -53,7 +53,7 @@ fn test_select_all_columns() {
     let plan = BuildContext::new(&schema)
         .build("SELECT * FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result.len(), 4);
     assert_eq!(result[0].name, "id");
@@ -68,7 +68,7 @@ fn test_select_specific_columns() {
     let plan = BuildContext::new(&schema)
         .build("SELECT id, name FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result.len(), 2);
     assert_eq!(result[0].name, "id");
@@ -81,7 +81,7 @@ fn test_select_with_alias() {
     let plan = BuildContext::new(&schema)
         .build("SELECT id AS user_id, name AS user_name FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result[0].name, "user_id");
     assert_eq!(result[1].name, "user_name");
@@ -93,7 +93,7 @@ fn test_select_with_table_alias() {
     let plan = BuildContext::new(&schema)
         .build("SELECT u.id, u.name FROM users u")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result.len(), 2);
 }
@@ -104,7 +104,7 @@ fn test_select_literal_values() {
     let plan = BuildContext::new(&schema)
         .build("SELECT 1, 'hello', 3.14, TRUE FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result.len(), 4);
     // Literals are never null
@@ -120,7 +120,7 @@ fn test_select_null_literal() {
     let plan = BuildContext::new(&schema)
         .build("SELECT NULL FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result.len(), 1);
     assert!(result[0].nullability); // NULL is always nullable
@@ -132,7 +132,7 @@ fn test_select_expression() {
     let plan = BuildContext::new(&schema)
         .build("SELECT age + 1 FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result.len(), 1);
     // age is nullable, so age + 1 is nullable
@@ -145,7 +145,7 @@ fn test_select_from_subquery() {
     let plan = BuildContext::new(&schema)
         .build("SELECT sub.id FROM (SELECT id FROM users) sub")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].name, "id");
@@ -161,7 +161,7 @@ fn test_select_with_where() {
     let plan = BuildContext::new(&schema)
         .build("SELECT id, name FROM users WHERE id > 0")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result.len(), 2);
 }
@@ -172,7 +172,7 @@ fn test_select_with_complex_where() {
     let plan = BuildContext::new(&schema)
         .build("SELECT id FROM users WHERE id > 0 AND name IS NOT NULL")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result.len(), 1);
 }
@@ -187,7 +187,7 @@ fn test_select_with_order_by() {
     let plan = BuildContext::new(&schema)
         .build("SELECT id, name FROM users ORDER BY id DESC")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result.len(), 2);
 }
@@ -198,7 +198,7 @@ fn test_select_with_limit() {
     let plan = BuildContext::new(&schema)
         .build("SELECT id FROM users LIMIT 10 OFFSET 5")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result.len(), 1);
 }
@@ -213,7 +213,7 @@ fn test_select_distinct() {
     let plan = BuildContext::new(&schema)
         .build("SELECT DISTINCT name FROM users")
         .unwrap();
-    let result = plan.columns(&schema);
+    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
 
     assert_eq!(result.len(), 1);
 }
