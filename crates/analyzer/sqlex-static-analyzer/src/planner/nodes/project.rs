@@ -1,26 +1,36 @@
-use crate::{
-    planner::plan::{CTEContext, LogicalNode, PlanNode, PlanNodeColumn, ProjectColumn},
-    schema::Schema,
-};
+use crate::planner::plan::{LogicalNode, PlanNode, PlanNodeColumn, ProjectColumn};
 
 #[derive(Debug, Clone)]
 pub struct ProjectNode {
     pub input: Box<dyn PlanNode>,
     pub columns: Vec<ProjectColumn>,
+    pub output_columns: Vec<PlanNodeColumn>,
 }
 
-impl LogicalNode for ProjectNode {
-    fn columns(&self, _schema: &Schema, _ctx: &CTEContext) -> Vec<PlanNodeColumn> {
-        self.columns
+impl ProjectNode {
+    pub fn build(input: Box<dyn PlanNode>, columns: Vec<ProjectColumn>) -> Self {
+        let output_columns = columns
             .iter()
             .enumerate()
-            .map(|(i, c)| PlanNodeColumn {
-                name: c.alias.clone().unwrap_or_else(|| format!("col_{}", i)),
-                data_type: c.expr.data_type.clone(),
-                nullability: c.expr.nullable,
+            .map(|(i, col)| PlanNodeColumn {
+                name: col.alias.clone().unwrap_or_else(|| format!("col_{}", i)),
+                data_type: col.expr.data_type.clone(),
+                nullability: col.expr.nullable,
                 origin_table: None, // Projection mostly obscures origin unless we track it
                 origin_column: None,
             })
-            .collect()
+            .collect();
+
+        Self {
+            input,
+            columns,
+            output_columns,
+        }
+    }
+}
+
+impl LogicalNode for ProjectNode {
+    fn columns(&self) -> &[PlanNodeColumn] {
+        &self.output_columns
     }
 }

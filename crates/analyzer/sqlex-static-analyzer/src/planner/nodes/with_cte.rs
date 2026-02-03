@@ -1,34 +1,25 @@
-use crate::{
-    planner::plan::{CTEContext, CTEDef, LogicalNode, PlanNode, PlanNodeColumn},
-    schema::Schema,
-};
+use crate::planner::plan::{CTEDef, LogicalNode, PlanNode, PlanNodeColumn};
 
 #[derive(Debug, Clone)]
 pub struct WithCTENode {
     pub ctes: Vec<CTEDef>,
     pub body: Box<dyn PlanNode>,
+    pub output_columns: Vec<PlanNodeColumn>,
+}
+
+impl WithCTENode {
+    pub fn build(ctes: Vec<CTEDef>, body: Box<dyn PlanNode>) -> Self {
+        let output_columns = body.columns().to_vec();
+        Self {
+            ctes,
+            body,
+            output_columns,
+        }
+    }
 }
 
 impl LogicalNode for WithCTENode {
-    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<PlanNodeColumn> {
-        let mut new_ctx = ctx.clone();
-        for cte in &self.ctes {
-            let cte_cols = cte.query.columns(schema, &new_ctx);
-            // Apply column aliases if specified
-            let final_cols = if let Some(ref aliases) = cte.columns {
-                cte_cols
-                    .into_iter()
-                    .zip(aliases.iter())
-                    .map(|(mut c, alias)| {
-                        c.name = alias.clone();
-                        c
-                    })
-                    .collect()
-            } else {
-                cte_cols
-            };
-            new_ctx.insert(cte.name.clone(), final_cols);
-        }
-        self.body.columns(schema, &new_ctx)
+    fn columns(&self) -> &[PlanNodeColumn] {
+        &self.output_columns
     }
 }

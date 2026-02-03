@@ -1,5 +1,7 @@
+use sqlex_analyzer::AnalyzerError;
+
 use crate::{
-    planner::plan::{CTEContext, LogicalNode, PlanNodeColumn},
+    planner::plan::{LogicalNode, PlanNodeColumn},
     schema::Schema,
 };
 
@@ -7,24 +9,43 @@ use crate::{
 pub struct TableScanNode {
     pub table: String,
     pub alias: Option<String>,
+    pub output_columns: Vec<PlanNodeColumn>,
+}
+
+impl TableScanNode {
+    pub fn build(
+        schema: &Schema,
+        table_name: String,
+        alias: Option<String>,
+    ) -> Result<Self, AnalyzerError> {
+        let effective_alias = alias.as_deref().unwrap_or(&table_name).to_string();
+
+        let table_def = schema.tables.get(&table_name).ok_or_else(|| {
+            AnalyzerError::AnalysisError(format!("Table {} not found", table_name))
+        })?;
+
+        let output_columns = table_def
+            .columns
+            .iter()
+            .map(|c| PlanNodeColumn {
+                name: c.name.clone(),
+                data_type: c.data_type.clone(),
+                nullability: c.nullable,
+                origin_table: Some(effective_alias.clone()),
+                origin_column: Some(c.name.clone()),
+            })
+            .collect();
+
+        Ok(Self {
+            table: table_name,
+            alias,
+            output_columns,
+        })
+    }
 }
 
 impl LogicalNode for TableScanNode {
-    fn columns(&self, schema: &Schema, _ctx: &CTEContext) -> Vec<PlanNodeColumn> {
-        schema
-            .get_table(&self.table)
-            .map(|t| {
-                t.columns
-                    .iter()
-                    .map(|c| PlanNodeColumn {
-                        name: c.name.clone(),
-                        data_type: c.data_type.clone(),
-                        nullability: c.nullable,
-                        origin_table: self.alias.clone().or_else(|| Some(self.table.clone())),
-                        origin_column: Some(c.name.clone()),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default()
+    fn columns(&self) -> &[PlanNodeColumn] {
+        &self.output_columns
     }
 }

@@ -1,16 +1,25 @@
-use crate::{
-    planner::plan::{CTEContext, LogicalNode, PlanNode, PlanNodeColumn, TypedExpr},
-    schema::Schema,
-};
+use crate::planner::plan::{LogicalNode, PlanNode, PlanNodeColumn, TypedExpr};
 
 #[derive(Debug, Clone)]
 pub struct DistinctOnNode {
     pub input: Box<dyn PlanNode>,
     pub on_exprs: Vec<TypedExpr>,
+    pub output_columns: Vec<PlanNodeColumn>,
+}
+
+impl DistinctOnNode {
+    pub fn build(input: Box<dyn PlanNode>, on_exprs: Vec<TypedExpr>) -> Self {
+        let output_columns = input.columns().to_vec();
+        Self {
+            input,
+            on_exprs,
+            output_columns,
+        }
+    }
 }
 
 impl LogicalNode for DistinctOnNode {
-    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<PlanNodeColumn> {
-        self.input.columns(schema, ctx)
+    fn columns(&self) -> &[PlanNodeColumn] {
+        &self.output_columns
     }
 }

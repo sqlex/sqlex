@@ -8,7 +8,7 @@ pub mod schema;
 
 // Re-exports
 use async_trait::async_trait;
-pub use planner::{BuildContext, JoinKind, PlanNode, TypedExpr};
+pub use planner::{BuildContext, JoinKind, LogicalNode, PlanNode, PlanNodeColumn, TypedExpr};
 pub use schema::{ColumnDef, Dialect, ForeignKeyDef, Schema, TableDef};
 use sqlex_analyzer::{Analyzer, AnalyzerError, Result, ResultSet, Table};
 
@@ -54,11 +54,11 @@ impl Analyzer for StaticAnalyzer {
         let ctx = BuildContext::new(&self.schema);
         let plan = ctx.build(sql)?;
         let columns = plan
-            .columns(&self.schema, &planner::CTEContext::new())
-            .into_iter()
+            .columns()
+            .iter()
             .map(|c| sqlex_common::ColumnInfo {
-                name: c.name,
-                data_type: c.data_type,
+                name: c.name.clone(),
+                data_type: c.data_type.clone(),
                 nullability: c.nullability,
             })
             .collect();

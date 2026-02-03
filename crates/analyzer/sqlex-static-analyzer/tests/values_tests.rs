@@ -11,7 +11,7 @@ fn test_values_clause_infer_types() {
     let plan = BuildContext::new(&schema)
         .build("VALUES (1, 'hello')")
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert_eq!(result.len(), 2);
     assert_eq!(result[0].data_type, DataType::Int);
@@ -26,7 +26,7 @@ fn test_values_clause_multiple_rows() {
     let plan = BuildContext::new(&schema)
         .build("VALUES (1, 10), (2, 20)")
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert_eq!(result.len(), 2);
     assert_eq!(result[0].data_type, DataType::Int);
@@ -41,7 +41,7 @@ fn test_values_clause_nullability() {
     let plan = BuildContext::new(&schema)
         .build("VALUES (1), (NULL)")
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].data_type, DataType::Int);

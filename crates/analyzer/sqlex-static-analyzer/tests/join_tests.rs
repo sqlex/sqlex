@@ -51,7 +51,7 @@ fn test_inner_join_preserves_nullability() {
              INNER JOIN orders o ON u.id = o.user_id",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert!(!result[0].nullability); // u.id: NOT NULL
     assert!(!result[1].nullability); // u.name: NOT NULL
@@ -68,7 +68,7 @@ fn test_left_join_right_columns_nullable() {
              LEFT JOIN orders o ON u.id = o.user_id",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert!(!result[0].nullability); // u.id: left table keeps nullability
     assert!(result[1].nullability); // o.id: forced nullable (no FK)
@@ -85,7 +85,7 @@ fn test_right_join_left_columns_nullable() {
              RIGHT JOIN orders o ON u.id = o.user_id",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert!(result[0].nullability); // u.id: forced nullable
     assert!(result[1].nullability); // u.name: forced nullable
@@ -102,7 +102,7 @@ fn test_full_join_both_sides_nullable() {
              FULL OUTER JOIN orders o ON u.id = o.user_id",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert!(result[0].nullability); // u.id: forced nullable
     assert!(result[1].nullability); // o.id: forced nullable
@@ -118,7 +118,7 @@ fn test_cross_join_preserves_nullability() {
              CROSS JOIN orders o",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert!(!result[0].nullability); // preserves original
     assert!(!result[1].nullability); // preserves original
@@ -174,7 +174,7 @@ fn test_left_join_fk_preserves_right_nullability() {
              LEFT JOIN users u ON o.user_id = u.id",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert!(!result[0].nullability); // o.id: NOT NULL
     assert!(!result[1].nullability); // u.id: FK guarantees match!
@@ -191,7 +191,7 @@ fn test_left_join_no_fk_forces_nullable() {
              LEFT JOIN orders o ON u.id = o.user_id",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert!(!result[0].nullability); // u.id: left table
     assert!(result[1].nullability); // o.id: nullable (no FK guarantee)
@@ -208,7 +208,7 @@ fn test_right_join_fk_preserves_left_nullability() {
              RIGHT JOIN orders o ON u.id = o.user_id",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert!(!result[0].nullability); // u.id: FK guarantees match!
     assert!(!result[1].nullability); // u.name: FK guarantees match!
@@ -280,7 +280,7 @@ fn test_multiple_left_joins_with_fk() {
              LEFT JOIN products p ON o.product_id = p.id",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert!(!result[0].nullability); // o.id
     assert!(!result[1].nullability); // u.name: FK guarantee
@@ -298,7 +298,7 @@ fn test_chained_joins() {
              INNER JOIN products p ON o.product_id = p.id",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert!(!result[0].nullability);
 }
@@ -317,7 +317,7 @@ fn test_join_using_clause() {
              INNER JOIN (SELECT id, amount FROM orders) o USING (id)",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert_eq!(result.len(), 2);
 }
@@ -350,7 +350,7 @@ fn test_self_join() {
              LEFT JOIN employees m ON e.manager_id = m.id",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert!(!result[0].nullability); // e.name
     assert!(result[1].nullability); // m.name (no FK guarantee)

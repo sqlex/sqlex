@@ -1,9 +1,6 @@
-use crate::{
-    planner::plan::{
-        AggregateExpr, CTEContext, GroupingMode, LogicalNode, PlanNode, PlanNodeColumn, TypedExpr,
-        aggregate_result_type,
-    },
-    schema::Schema,
+use crate::planner::plan::{
+    AggregateExpr, GroupingMode, LogicalNode, PlanNode, PlanNodeColumn, TypedExpr,
+    aggregate_result_type,
 };
 
 #[derive(Debug, Clone)]
@@ -12,12 +9,17 @@ pub struct AggregateNode {
     pub group_by: Vec<TypedExpr>,
     pub aggregates: Vec<AggregateExpr>,
     pub grouping_mode: Option<GroupingMode>,
+    pub output_columns: Vec<PlanNodeColumn>,
 }
 
-impl LogicalNode for AggregateNode {
-    fn columns(&self, _schema: &Schema, _ctx: &CTEContext) -> Vec<PlanNodeColumn> {
-        let mut cols: Vec<PlanNodeColumn> = self
-            .group_by
+impl AggregateNode {
+    pub fn build(
+        input: Box<dyn PlanNode>,
+        group_by: Vec<TypedExpr>,
+        aggregates: Vec<AggregateExpr>,
+        grouping_mode: Option<GroupingMode>,
+    ) -> Self {
+        let mut output_columns: Vec<PlanNodeColumn> = group_by
             .iter()
             .enumerate()
             .map(|(i, expr)| PlanNodeColumn {
@@ -29,17 +31,29 @@ impl LogicalNode for AggregateNode {
             })
             .collect();
 
-        for (i, agg) in self.aggregates.iter().enumerate() {
+        for (i, agg) in aggregates.iter().enumerate() {
             let (data_type, _nullable) = aggregate_result_type(&agg.function, &agg.args);
-            cols.push(PlanNodeColumn {
+            output_columns.push(PlanNodeColumn {
                 name: format!("agg_{}", i),
                 data_type,
-                nullability: false,
+                nullability: false, // Aggregates usually handle nulls or produce specific types. Keeping logic same as before.
                 origin_table: None,
                 origin_column: None,
             });
         }
 
-        cols
+        Self {
+            input,
+            group_by,
+            aggregates,
+            grouping_mode,
+            output_columns,
+        }
+    }
+}
+
+impl LogicalNode for AggregateNode {
+    fn columns(&self) -> &[PlanNodeColumn] {
+        &self.output_columns
     }
 }

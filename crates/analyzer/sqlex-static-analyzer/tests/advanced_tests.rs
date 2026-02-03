@@ -76,7 +76,7 @@ fn test_simple_cte() {
             SELECT id, name FROM active_users",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert_eq!(result.len(), 2);
     assert!(!result[0].nullability); // id from CTE
@@ -94,7 +94,7 @@ fn test_cte_with_column_aliases() {
             SELECT user_id, user_name FROM renamed",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert_eq!(result[0].name, "user_id");
     assert_eq!(result[1].name, "user_name");
@@ -111,7 +111,7 @@ fn test_multiple_ctes() {
             SELECT cte1.id, cte2.name FROM cte1, cte2",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert_eq!(result.len(), 2);
 }
@@ -133,7 +133,7 @@ fn test_recursive_cte() {
             SELECT id, name, level FROM hierarchy",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert_eq!(result.len(), 3);
 }
@@ -152,7 +152,7 @@ fn test_union_nullability() {
              SELECT id, value FROM table_b",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert!(!result[0].nullability); // id: NOT NULL in both
     assert!(result[1].nullability); // value: nullable in table_a
@@ -168,7 +168,7 @@ fn test_union_all() {
              SELECT id FROM table_b",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert_eq!(result.len(), 1);
 }
@@ -183,7 +183,7 @@ fn test_intersect() {
              SELECT id FROM table_b",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert_eq!(result.len(), 1);
 }
@@ -198,7 +198,7 @@ fn test_except() {
              SELECT id FROM table_b",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert_eq!(result.len(), 1);
 }
@@ -213,7 +213,7 @@ fn test_row_number_not_nullable() {
     let plan = BuildContext::new(&schema)
         .build("SELECT id, ROW_NUMBER() OVER (ORDER BY id) FROM sales")
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert!(!result[0].nullability);
     assert!(!result[1].nullability); // ROW_NUMBER never null
@@ -225,7 +225,7 @@ fn test_rank_not_nullable() {
     let plan = BuildContext::new(&schema)
         .build("SELECT id, RANK() OVER (ORDER BY amount) FROM sales")
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert!(!result[1].nullability);
 }
@@ -236,7 +236,7 @@ fn test_dense_rank_not_nullable() {
     let plan = BuildContext::new(&schema)
         .build("SELECT id, DENSE_RANK() OVER (ORDER BY amount) FROM sales")
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert!(!result[1].nullability);
 }
@@ -252,7 +252,7 @@ fn test_lead_lag_nullable() {
              FROM sales",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert!(result[1].nullability); // LEAD
     assert!(result[2].nullability); // LAG
@@ -264,7 +264,7 @@ fn test_sum_over_window() {
     let plan = BuildContext::new(&schema)
         .build("SELECT id, SUM(amount) OVER (PARTITION BY region ORDER BY id) FROM sales")
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     // Window aggregate - conservatively nullable
     assert!(result[1].nullability);
@@ -280,7 +280,7 @@ fn test_partition_by() {
              FROM sales",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert_eq!(result.len(), 3);
 }
@@ -299,7 +299,7 @@ fn test_group_by_with_aggregates() {
              GROUP BY region",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert_eq!(result.len(), 3);
     assert!(!result[0].nullability); // region
@@ -318,7 +318,7 @@ fn test_having_clause() {
              HAVING SUM(amount) > 100",
         )
         .unwrap();
-    let result = plan.columns(&schema, &sqlex_static_analyzer::planner::CTEContext::new());
+    let result = plan.columns();
 
     assert_eq!(result.len(), 2);
 }

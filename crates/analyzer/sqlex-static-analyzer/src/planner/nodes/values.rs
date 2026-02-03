@@ -1,29 +1,27 @@
-use crate::{
-    planner::plan::{CTEContext, LogicalNode, PlanNodeColumn, TypedExpr},
-    schema::Schema,
-};
+use crate::planner::plan::{LogicalNode, PlanNodeColumn, TypedExpr};
 
 #[derive(Debug, Clone)]
 pub struct ValuesNode {
     pub rows: Vec<Vec<TypedExpr>>,
     pub column_names: Vec<String>,
+    pub output_columns: Vec<PlanNodeColumn>,
 }
 
-impl LogicalNode for ValuesNode {
-    fn columns(&self, _schema: &Schema, _ctx: &CTEContext) -> Vec<PlanNodeColumn> {
-        if let Some(first_row) = self.rows.first() {
-            first_row
+impl ValuesNode {
+    pub fn build(rows: Vec<Vec<TypedExpr>>, column_names: Vec<String>) -> Self {
+        let mut output_columns = vec![];
+
+        if let Some(first_row) = rows.first() {
+            output_columns = first_row
                 .iter()
                 .enumerate()
                 .map(|(i, expr)| {
-                    let name = self
-                        .column_names
+                    let name = column_names
                         .get(i)
                         .cloned()
                         .unwrap_or_else(|| format!("column{}", i + 1));
                     // Check if any row has NULL at this position
-                    let nullable = self
-                        .rows
+                    let nullable = rows
                         .iter()
                         .any(|r| r.get(i).map(|e| e.nullable).unwrap_or(true));
                     PlanNodeColumn {
@@ -34,9 +32,19 @@ impl LogicalNode for ValuesNode {
                         origin_column: None,
                     }
                 })
-                .collect()
-        } else {
-            vec![]
+                .collect();
         }
+
+        Self {
+            rows,
+            column_names,
+            output_columns,
+        }
+    }
+}
+
+impl LogicalNode for ValuesNode {
+    fn columns(&self) -> &[PlanNodeColumn] {
+        &self.output_columns
     }
 }

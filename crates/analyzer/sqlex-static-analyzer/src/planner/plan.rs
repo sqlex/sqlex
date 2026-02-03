@@ -10,8 +10,6 @@ use std::{collections::HashMap, fmt::Debug};
 use sqlex_common::DataType;
 use sqlparser::ast::Expr;
 
-use crate::schema::Schema;
-
 /// CTE columns context for resolving CTERef nodes
 /// Column information specific to the internal query plan
 #[derive(Debug, Clone)]
@@ -35,7 +33,7 @@ pub type CTEContext = HashMap<String, Vec<PlanNodeColumn>>;
 /// such as how to infer its output schema.
 pub trait LogicalNode: Debug + Clone + Send + Sync + 'static {
     /// Recursively derive the output columns of this plan node.
-    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<PlanNodeColumn>;
+    fn columns(&self) -> &[PlanNodeColumn];
 }
 
 /// The main object-safe trait for query plan nodes.
@@ -45,7 +43,7 @@ pub trait LogicalNode: Debug + Clone + Send + Sync + 'static {
 /// exposes the core logic methods.
 pub trait PlanNode: Debug + Send + Sync + 'static {
     fn as_any(&self) -> &dyn Any;
-    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<PlanNodeColumn>;
+    fn columns(&self) -> &[PlanNodeColumn];
     fn box_clone(&self) -> Box<dyn PlanNode>;
 }
 
@@ -58,8 +56,8 @@ where
         self
     }
 
-    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<PlanNodeColumn> {
-        self.columns(schema, ctx)
+    fn columns(&self) -> &[PlanNodeColumn] {
+        self.columns()
     }
 
     fn box_clone(&self) -> Box<dyn PlanNode> {
