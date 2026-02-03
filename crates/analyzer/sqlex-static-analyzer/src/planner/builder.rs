@@ -203,40 +203,10 @@ impl<'a> BuildContext<'a> {
                 )?))
             },
             SetExpr::Values(values) => {
-                let mut rules_rows = Vec::new();
-                let mut num_cols = 0;
                 let scope = Scope::default();
-
-                for (row_idx, row) in values.rows.iter().enumerate() {
-                    let mut typed_row = Vec::new();
-                    for expr in row {
-                        typed_row.push(self.build_expr(expr, &scope)?);
-                    }
-
-                    if row_idx == 0 {
-                        num_cols = typed_row.len();
-                    } else if typed_row.len() != num_cols {
-                        return Err(AnalyzerError::AnalysisError(format!(
-                            "VALUES clause has mismatched column counts: row {} has {}, expected {}",
-                            row_idx + 1,
-                            typed_row.len(),
-                            num_cols
-                        )));
-                    }
-
-                    rules_rows.push(typed_row);
-                }
-
-                if num_cols == 0 {
-                    return Err(AnalyzerError::AnalysisError(
-                        "VALUES clause must have at least one column".to_string(),
-                    ));
-                }
-
-                // Generate default column names: column1, column2, ...
-                let column_names = (1..=num_cols).map(|i| format!("column{}", i)).collect();
-
-                Ok(Box::new(ValuesNode::build(rules_rows, column_names)))
+                super::nodes::values::ValuesNode::from_ast(values, |expr| {
+                    self.build_expr(expr, &scope)
+                })
             },
             _ => Err(AnalyzerError::AnalysisError(format!(
                 "Unsupported set expression: {:?}",
@@ -549,64 +519,7 @@ impl<'a> BuildContext<'a> {
         func: &sqlparser::ast::Function,
         scope: &Scope,
     ) -> Result<super::expr::AggregateExpr> {
-        use sqlparser::ast::{
-            DuplicateTreatment, FunctionArg, FunctionArgExpr, FunctionArguments, Value,
-        };
-
-        use super::expr::{AggregateExpr, AggregateFunction};
-
-        let name = func.name.to_dotted_string().to_uppercase();
-        let function =
-            AggregateFunction::from_name(&name).unwrap_or(AggregateFunction::Custom(name));
-
-        let mut args = Vec::new();
-        let mut distinct = false;
-        // let mut order_by = Vec::new(); // TODO: Add support for ORDER BY in aggregates if supported by sqlparser
-
-        if let FunctionArguments::List(ref list) = func.args {
-            for arg in &list.args {
-                match arg {
-                    FunctionArg::Named {
-                        arg: FunctionArgExpr::Expr(e),
-                        ..
-                    } => {
-                        args.push(self.build_expr(e, scope)?);
-                    },
-                    FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => {
-                        args.push(self.build_expr(e, scope)?);
-                    },
-                    FunctionArg::Unnamed(FunctionArgExpr::Wildcard) => {
-                        // COUNT(*) -> 1
-                        use super::expr::values::LiteralExpr;
-                        args.push(LiteralExpr::build(Value::Number("1".to_string(), false)));
-                    },
-                    _ => {},
-                }
-            }
-            distinct = list.duplicate_treatment == Some(DuplicateTreatment::Distinct);
-
-            // Accessing order_by on list failed, maybe it's in clauses?
-            // Ignoring for now to fix build.
-        }
-
-        if args.is_empty() && matches!(function, AggregateFunction::Count) {
-            use super::expr::values::LiteralExpr;
-            args.push(LiteralExpr::build(Value::Number("1".to_string(), false)));
-        }
-
-        let filter = if let Some(filter) = &func.filter {
-            Some(self.build_expr(filter, scope)?)
-        } else {
-            None
-        };
-
-        Ok(AggregateExpr::build(
-            function,
-            args,
-            distinct,
-            filter,
-            Vec::new(),
-        ))
+        super::expr::AggregateExpr::from_ast(func, |expr| self.build_expr(expr, scope))
     }
 
     fn build_join_node(
@@ -617,57 +530,17 @@ impl<'a> BuildContext<'a> {
         left_scope: &Scope,
         right_scope: &Scope,
     ) -> Result<Box<dyn PlanNode>> {
-        use sqlparser::ast::{JoinConstraint, JoinOperator};
+        use super::nodes::join::JoinNode;
 
-        use super::nodes::join::{JoinCondition, JoinKind, JoinNode};
-
-        // Convert JoinOperator to JoinKind and extract constraint
-        let (kind, constraint) = match join_operator {
-            JoinOperator::Inner(constraint) => (JoinKind::Inner, Some(constraint)),
-            JoinOperator::LeftOuter(constraint) => (JoinKind::Left, Some(constraint)),
-            JoinOperator::RightOuter(constraint) => (JoinKind::Right, Some(constraint)),
-            JoinOperator::FullOuter(constraint) => (JoinKind::Full, Some(constraint)),
-            JoinOperator::CrossJoin => (JoinKind::Cross, None),
-            _ => {
-                return Err(AnalyzerError::AnalysisError(
-                    "Unsupported join type".to_string(),
-                ));
-            },
-        };
-
-        // Convert JoinConstraint to JoinCondition
-        let condition = if let Some(constraint) = constraint {
-            let mut combined_scope = left_scope.clone();
-            combined_scope.merge(right_scope.clone());
-
-            Some(match constraint {
-                JoinConstraint::On(expr) => {
-                    let expr = self.build_expr(expr, &combined_scope)?;
-                    JoinCondition::On(expr)
-                },
-                JoinConstraint::Using(idents) => {
-                    JoinCondition::Using(idents.iter().map(|id| id.to_string()).collect())
-                },
-                JoinConstraint::Natural => JoinCondition::Natural,
-                JoinConstraint::None => {
-                    // This case might strictly be unreachable for Inner/Outer,
-                    // but good to handle safely
-                    return Err(AnalyzerError::AnalysisError(
-                        "Invalid join constraint: None".to_string(),
-                    ));
-                },
-            })
-        } else {
-            None
-        };
-
-        Ok(Box::new(JoinNode::build(
+        JoinNode::from_ast(
             self.schema,
             left_plan,
             right_plan,
-            kind,
-            condition,
-        )))
+            join_operator,
+            left_scope,
+            right_scope,
+            |expr, scope| self.build_expr(expr, scope),
+        )
     }
 
     /// Build a Box<dyn Expression> from an AST expression
@@ -764,11 +637,10 @@ impl<'a> BuildContext<'a> {
         func: &sqlparser::ast::Function,
         scope: &Scope,
     ) -> Result<Box<dyn super::expr::Expression>> {
-        use sqlparser::ast::{FunctionArg, FunctionArgExpr, FunctionArguments, WindowType};
+        use sqlparser::ast::{FunctionArg, FunctionArgExpr, FunctionArguments};
 
         use super::expr::{
-            AggregateFunction, AggregateFunctionExpr, OrderByExpr, WindowFrame, WindowFrameBound,
-            WindowFrameUnits, WindowFunctionExpr, WindowFunctionName, funcs::ScalarFunctionExpr,
+            AggregateFunction, AggregateFunctionExpr, WindowFunctionExpr, funcs::ScalarFunctionExpr,
         };
 
         let name = func.name.to_dotted_string();
@@ -807,82 +679,10 @@ impl<'a> BuildContext<'a> {
         }
 
         // Check for Window Function (OVER clause)
-        if let Some(over) = &func.over {
-            let window_func = if let Some(wf) = WindowFunctionName::from_name(&name) {
-                wf
-            } else if let Some(af) = AggregateFunction::from_name(&name) {
-                WindowFunctionName::Aggregate(af)
-            } else {
-                return Err(AnalyzerError::AnalysisError(format!(
-                    "Unknown window function: {}",
-                    name
-                )));
-            };
-
-            let (partition_by_exprs, order_by_exprs, window_frame) = match over {
-                WindowType::WindowSpec(spec) => {
-                    let mut partition_by = Vec::new();
-                    for expr in &spec.partition_by {
-                        partition_by.push(self.build_expr(expr, scope)?);
-                    }
-
-                    let mut order_by = Vec::new();
-                    for ob in &spec.order_by {
-                        let expr = self.build_expr(&ob.expr, scope)?;
-                        order_by.push(OrderByExpr::build(
-                            expr,
-                            ob.asc.unwrap_or(true),
-                            ob.nulls_first,
-                        ));
-                    }
-
-                    let frame = if let Some(frame) = &spec.window_frame {
-                        let units = match frame.units {
-                            sqlparser::ast::WindowFrameUnits::Rows => WindowFrameUnits::Rows,
-                            sqlparser::ast::WindowFrameUnits::Range => WindowFrameUnits::Range,
-                            sqlparser::ast::WindowFrameUnits::Groups => WindowFrameUnits::Groups,
-                        };
-
-                        let convert_bound = |b: &sqlparser::ast::WindowFrameBound| {
-                            match b {
-                                sqlparser::ast::WindowFrameBound::CurrentRow => {
-                                    WindowFrameBound::CurrentRow
-                                },
-                                sqlparser::ast::WindowFrameBound::Preceding(_) => {
-                                    // Simplifying frame bound handling for now
-                                    WindowFrameBound::Preceding(None)
-                                },
-                                sqlparser::ast::WindowFrameBound::Following(_) => {
-                                    WindowFrameBound::Following(None)
-                                },
-                            }
-                        };
-
-                        Some(WindowFrame {
-                            units,
-                            start: convert_bound(&frame.start_bound),
-                            end: frame.end_bound.as_ref().map(convert_bound),
-                        })
-                    } else {
-                        None
-                    };
-
-                    (partition_by, order_by, frame)
-                },
-                WindowType::NamedWindow(_) => {
-                    return Err(AnalyzerError::AnalysisError(
-                        "Named windows not yet supported".to_string(),
-                    ));
-                },
-            };
-
-            return Ok(WindowFunctionExpr::build(
-                window_func,
-                bound_args,
-                partition_by_exprs,
-                order_by_exprs,
-                window_frame,
-            ));
+        if func.over.is_some() {
+            return WindowFunctionExpr::from_ast(func, bound_args, |expr| {
+                self.build_expr(expr, scope)
+            });
         }
 
         // Check if it's an aggregate function

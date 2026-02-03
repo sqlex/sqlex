@@ -1,3 +1,4 @@
+use sqlex_analyzer::{ObjectNameExt, Result};
 use sqlex_common::DataType;
 
 use super::super::{Expression, ExpressionNode};
@@ -128,5 +129,63 @@ impl AggregateExpr {
             filter,
             order_by,
         }
+    }
+
+    pub fn from_ast<F>(func: &sqlparser::ast::Function, mut expr_builder: F) -> Result<Self>
+    where
+        F: FnMut(&sqlparser::ast::Expr) -> Result<Box<dyn Expression>>,
+    {
+        use sqlparser::ast::{
+            DuplicateTreatment, FunctionArg, FunctionArgExpr, FunctionArguments, Value,
+        };
+
+        use super::super::values::LiteralExpr;
+
+        let name = func.name.to_dotted_string().to_uppercase();
+        let function =
+            AggregateFunction::from_name(&name).unwrap_or(AggregateFunction::Custom(name));
+
+        let mut args = Vec::new();
+        let mut distinct = false;
+
+        if let FunctionArguments::List(ref list) = func.args {
+            for arg in &list.args {
+                match arg {
+                    FunctionArg::Named {
+                        arg: FunctionArgExpr::Expr(e),
+                        ..
+                    } => {
+                        args.push(expr_builder(e)?);
+                    },
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => {
+                        args.push(expr_builder(e)?);
+                    },
+                    FunctionArg::Unnamed(FunctionArgExpr::Wildcard) => {
+                        // COUNT(*) -> 1
+                        args.push(LiteralExpr::build(Value::Number("1".to_string(), false)));
+                    },
+                    _ => {},
+                }
+            }
+            distinct = list.duplicate_treatment == Some(DuplicateTreatment::Distinct);
+        }
+
+        if args.is_empty() && matches!(function, AggregateFunction::Count) {
+            args.push(LiteralExpr::build(Value::Number("1".to_string(), false)));
+        }
+
+        let filter = if let Some(filter) = &func.filter {
+            Some(expr_builder(filter)?)
+        } else {
+            None
+        };
+
+        Ok(Self::build(
+            function,
+            args,
+            distinct,
+            filter,
+            Vec::new(), // TODO: Order By support
+        ))
     }
 }

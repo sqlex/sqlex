@@ -166,7 +166,7 @@ impl ScalarFunction {
     }
 
     /// Infer type for the new Expression system (takes DataType slices)
-    pub fn infer_type(&self, arg_types: &[DataType]) -> (DataType, bool) {
+    pub fn infer_type(&self, arg_types: &[DataType], arg_nullables: &[bool]) -> (DataType, bool) {
         let input_type = arg_types.first().cloned().unwrap_or(DataType::Text);
 
         match self {
@@ -231,7 +231,24 @@ impl ScalarFunction {
                 (DataType::Json, true)
             },
 
-            Self::Coalesce | Self::Ifnull | Self::Nvl => (input_type, true),
+            Self::Coalesce | Self::Ifnull | Self::Nvl => {
+                // Returns first non-null value.
+                // If any argument is non-nullable, the result is non-nullable
+                // (because we will hit that argument or one before it).
+                // Actually, more precisely: if all args are nullable, result is nullable.
+                // If NOT all args are nullable (i.e. at least one is NOT NULL),
+                // then COALESCE is NOT NULL *provided* we eventually hit a non-null implementation.
+                // Standard SQL: COALESCE(a, b, c) is NOT NULL if a is NOT NULL, or b is NOT NULL, etc.
+                // Wait, if a is NULL and b is NOT NULL, COALESCE(a, b) returns b, so it is NOT NULL.
+                // So if *any* argument is NOT NULL, the result is NOT NULL?
+                // Yes, provided that we reach it. But since COALESCE returns the *first* non-null,
+                // if we have (NULL, NOT_NULL_VAL), it returns NOT_NULL_VAL.
+                // If we have (NOT_NULL_VAL, NULL), it returns NOT_NULL_VAL.
+                // So yes, if any arg is non-nullable, the result is non-nullable.
+
+                let is_nullable = arg_nullables.iter().all(|&n| n);
+                (input_type, is_nullable)
+            },
             Self::Nullif => (input_type, true),
 
             Self::Cast | Self::Convert => (input_type, true),
@@ -273,7 +290,8 @@ impl ScalarFunctionExpr {
 
         // Infer return type using the helper
         let arg_types: Vec<DataType> = args.iter().map(|e| e.data_type()).collect();
-        let (return_type, is_nullable) = function.infer_type(&arg_types);
+        let arg_nullables: Vec<bool> = args.iter().map(|e| e.nullable()).collect();
+        let (return_type, is_nullable) = function.infer_type(&arg_types, &arg_nullables);
 
         Box::new(ScalarFunctionExpr {
             name,

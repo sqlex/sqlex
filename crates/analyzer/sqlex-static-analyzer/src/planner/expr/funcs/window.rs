@@ -1,3 +1,4 @@
+use sqlex_analyzer::{AnalyzerError, ObjectNameExt, Result};
 use sqlex_common::DataType;
 
 use super::{
@@ -129,5 +130,97 @@ impl WindowFunctionExpr {
             return_type,
             is_nullable,
         })
+    }
+
+    pub fn from_ast<F>(
+        func: &sqlparser::ast::Function,
+        args: Vec<Box<dyn Expression>>,
+        mut expr_builder: F,
+    ) -> Result<Box<dyn Expression>>
+    where
+        F: FnMut(&sqlparser::ast::Expr) -> Result<Box<dyn Expression>>,
+    {
+        use sqlparser::ast::{WindowFrameUnits as SQLWindowFrameUnits, WindowType};
+
+        let name = func.name.to_dotted_string();
+        let over = func.over.as_ref().ok_or_else(|| {
+            AnalyzerError::AnalysisError("Window function requires OVER clause".to_string())
+        })?;
+
+        let window_func = if let Some(wf) = WindowFunctionName::from_name(&name) {
+            wf
+        } else if let Some(af) = AggregateFunction::from_name(&name) {
+            WindowFunctionName::Aggregate(af)
+        } else {
+            return Err(AnalyzerError::AnalysisError(format!(
+                "Unknown window function: {}",
+                name
+            )));
+        };
+
+        let (partition_by_exprs, order_by_exprs, window_frame) = match over {
+            WindowType::WindowSpec(spec) => {
+                let mut partition_by = Vec::new();
+                for expr in &spec.partition_by {
+                    partition_by.push(expr_builder(expr)?);
+                }
+
+                let mut order_by = Vec::new();
+                for ob in &spec.order_by {
+                    let expr = expr_builder(&ob.expr)?;
+                    order_by.push(OrderByExpr::build(
+                        expr,
+                        ob.asc.unwrap_or(true),
+                        ob.nulls_first,
+                    ));
+                }
+
+                let frame = if let Some(frame) = &spec.window_frame {
+                    let units = match frame.units {
+                        SQLWindowFrameUnits::Rows => WindowFrameUnits::Rows,
+                        SQLWindowFrameUnits::Range => WindowFrameUnits::Range,
+                        SQLWindowFrameUnits::Groups => WindowFrameUnits::Groups,
+                    };
+
+                    let convert_bound = |b: &sqlparser::ast::WindowFrameBound| {
+                        match b {
+                            sqlparser::ast::WindowFrameBound::CurrentRow => {
+                                WindowFrameBound::CurrentRow
+                            },
+                            sqlparser::ast::WindowFrameBound::Preceding(_) => {
+                                // Simplifying frame bound handling for now
+                                WindowFrameBound::Preceding(None)
+                            },
+                            sqlparser::ast::WindowFrameBound::Following(_) => {
+                                WindowFrameBound::Following(None)
+                            },
+                        }
+                    };
+
+                    Some(WindowFrame {
+                        units,
+                        start: convert_bound(&frame.start_bound),
+                        end: frame.end_bound.as_ref().map(convert_bound),
+                    })
+                } else {
+                    None
+                };
+
+                (partition_by, order_by, frame)
+            },
+            WindowType::NamedWindow(_) => {
+                return Err(AnalyzerError::AnalysisError(
+                    "Named windows not yet supported".to_string(),
+                ));
+            },
+        };
+
+        Ok(Self::build(
+            window_func,
+            args,
+            partition_by_exprs,
+            order_by_exprs,
+            window_frame,
+        ))
     }
 }

@@ -1,7 +1,10 @@
+use sqlex_analyzer::AnalyzerError;
+
 use crate::{
     planner::{
         expr::Expression,
         plan::{LogicalNode, PlanNode, PlanNodeColumn},
+        scope::Scope,
     },
     schema::Schema,
 };
@@ -101,6 +104,61 @@ impl JoinNode {
             condition,
             output_columns,
         }
+    }
+
+    pub fn from_ast<F>(
+        schema: &Schema,
+        left: Box<dyn PlanNode>,
+        right: Box<dyn PlanNode>,
+        join_operator: &sqlparser::ast::JoinOperator,
+        left_scope: &Scope,
+        right_scope: &Scope,
+        mut expr_builder: F,
+    ) -> Result<Box<dyn PlanNode>, AnalyzerError>
+    where
+        F: FnMut(&sqlparser::ast::Expr, &Scope) -> Result<Box<dyn Expression>, AnalyzerError>,
+    {
+        use sqlparser::ast::{JoinConstraint, JoinOperator};
+
+        // Convert JoinOperator to JoinKind and extract constraint
+        let (kind, constraint) = match join_operator {
+            JoinOperator::Inner(constraint) => (JoinKind::Inner, Some(constraint)),
+            JoinOperator::LeftOuter(constraint) => (JoinKind::Left, Some(constraint)),
+            JoinOperator::RightOuter(constraint) => (JoinKind::Right, Some(constraint)),
+            JoinOperator::FullOuter(constraint) => (JoinKind::Full, Some(constraint)),
+            JoinOperator::CrossJoin => (JoinKind::Cross, None),
+            _ => {
+                return Err(AnalyzerError::AnalysisError(
+                    "Unsupported join type".to_string(),
+                ));
+            },
+        };
+
+        // Convert JoinConstraint to JoinCondition
+        let condition = if let Some(constraint) = constraint {
+            let mut combined_scope = left_scope.clone();
+            combined_scope.merge(right_scope.clone());
+
+            Some(match constraint {
+                JoinConstraint::On(expr) => {
+                    let expr = expr_builder(expr, &combined_scope)?;
+                    JoinCondition::On(expr)
+                },
+                JoinConstraint::Using(idents) => {
+                    JoinCondition::Using(idents.iter().map(|id| id.to_string()).collect())
+                },
+                JoinConstraint::Natural => JoinCondition::Natural,
+                JoinConstraint::None => {
+                    return Err(AnalyzerError::AnalysisError(
+                        "Invalid join constraint: None".to_string(),
+                    ));
+                },
+            })
+        } else {
+            None
+        };
+
+        Ok(Box::new(Self::build(schema, left, right, kind, condition)))
     }
 }
 
