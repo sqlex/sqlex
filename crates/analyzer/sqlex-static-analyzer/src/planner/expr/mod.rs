@@ -12,7 +12,7 @@ pub use control::{CaseExpr, CastExpr};
 pub use extension::ExprExt;
 // Re-export from funcs
 pub use funcs::{
-    AggregateFunction, AggregateFunctionExpr, ScalarFunction, ScalarFunctionExpr, WindowFrame,
+    AggregateFunctionExpr, AggregateFunctionName, ScalarFunction, ScalarFunctionExpr, WindowFrame,
     WindowFrameBound, WindowFrameUnits, WindowFunctionExpr, WindowFunctionName,
 };
 pub use ops::{BinaryExpr, UnaryExpr};

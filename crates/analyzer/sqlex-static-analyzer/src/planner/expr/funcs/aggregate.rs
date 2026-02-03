@@ -5,7 +5,7 @@ use super::super::order_by::OrderByExpr;
 use crate::planner::expr::{Expression, ExpressionNode};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AggregateFunction {
+pub enum AggregateFunctionName {
     Count,
     Sum,
     Avg,
@@ -20,7 +20,7 @@ pub enum AggregateFunction {
     Custom(String),
 }
 
-impl AggregateFunction {
+impl AggregateFunctionName {
     pub fn from_name(name: &str) -> Option<Self> {
         match name.to_uppercase().as_str() {
             "COUNT" => Some(Self::Count),
@@ -37,45 +37,12 @@ impl AggregateFunction {
             _ => None,
         }
     }
-
-    /// Infer result type and nullability
-    pub fn infer_type(&self, arg_types: &[DataType], arg_nullables: &[bool]) -> (DataType, bool) {
-        let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
-        // Default nullability: if input is nullable, output is nullable.
-        // Except COUNT which is never null.
-        // Default nullability: if input is nullable, output is nullable.
-        // Except COUNT which is never null.
-        let _input_nullable = arg_nullables.first().cloned().unwrap_or(true);
-
-        match self {
-            AggregateFunction::Count => (DataType::BigInt, false),
-            AggregateFunction::Sum => {
-                let ret_type = match input_type {
-                    DataType::TinyInt | DataType::SmallInt | DataType::Int | DataType::BigInt => {
-                        DataType::BigInt
-                    },
-                    DataType::Float | DataType::Double | DataType::Decimal => DataType::Double,
-                    _ => input_type,
-                };
-                (ret_type, true) // SUM always returns NULL on empty set
-            },
-            AggregateFunction::Avg => (DataType::Double, true),
-            AggregateFunction::Min | AggregateFunction::Max => (input_type, true),
-            AggregateFunction::First | AggregateFunction::Last => (input_type, true),
-            AggregateFunction::ArrayAgg => (DataType::Array(Box::new(input_type)), true),
-            AggregateFunction::JsonArrayAgg | AggregateFunction::JsonObjectAgg => {
-                (DataType::Json, true)
-            },
-            AggregateFunction::StringAgg => (DataType::Text, true),
-            AggregateFunction::Custom(_) => (input_type, true),
-        }
-    }
 }
 
 /// Aggregate function expression
 #[derive(Debug, Clone)]
 pub struct AggregateFunctionExpr {
-    pub function: AggregateFunction,
+    pub function: AggregateFunctionName,
     pub args: Vec<Box<dyn Expression>>,
     pub distinct: bool,
     pub filter: Option<Box<dyn Expression>>,
@@ -97,7 +64,7 @@ impl ExpressionNode for AggregateFunctionExpr {
 impl AggregateFunctionExpr {
     /// Build an aggregate function expression
     pub fn build(
-        function: AggregateFunction,
+        function: AggregateFunctionName,
         args: Vec<Box<dyn Expression>>,
         distinct: bool,
         filter: Option<Box<dyn Expression>>,
@@ -105,7 +72,33 @@ impl AggregateFunctionExpr {
     ) -> Self {
         let arg_types: Vec<DataType> = args.iter().map(|e| e.data_type()).collect();
         let arg_nullables: Vec<bool> = args.iter().map(|e| e.nullable()).collect();
-        let (return_type, is_nullable) = function.infer_type(&arg_types, &arg_nullables);
+
+        // Infer return type and nullability
+        let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
+        let _input_nullable = arg_nullables.first().cloned().unwrap_or(true);
+
+        let (return_type, is_nullable) = match &function {
+            AggregateFunctionName::Count => (DataType::BigInt, false),
+            AggregateFunctionName::Sum => {
+                let ret_type = match input_type {
+                    DataType::TinyInt | DataType::SmallInt | DataType::Int | DataType::BigInt => {
+                        DataType::BigInt
+                    },
+                    DataType::Float | DataType::Double | DataType::Decimal => DataType::Double,
+                    _ => input_type,
+                };
+                (ret_type, true) // SUM always returns NULL on empty set
+            },
+            AggregateFunctionName::Avg => (DataType::Double, true),
+            AggregateFunctionName::Min | AggregateFunctionName::Max => (input_type, true),
+            AggregateFunctionName::First | AggregateFunctionName::Last => (input_type, true),
+            AggregateFunctionName::ArrayAgg => (DataType::Array(Box::new(input_type)), true),
+            AggregateFunctionName::JsonArrayAgg | AggregateFunctionName::JsonObjectAgg => {
+                (DataType::Json, true)
+            },
+            AggregateFunctionName::StringAgg => (DataType::Text, true),
+            AggregateFunctionName::Custom(_) => (input_type, true),
+        };
 
         Self {
             function,
@@ -131,7 +124,7 @@ impl AggregateFunctionExpr {
 
         let name = func.name.to_dotted_string().to_uppercase();
         let function =
-            AggregateFunction::from_name(&name).unwrap_or(AggregateFunction::Custom(name));
+            AggregateFunctionName::from_name(&name).unwrap_or(AggregateFunctionName::Custom(name));
 
         let mut args = Vec::new();
         let mut distinct = false;

@@ -41,9 +41,7 @@ impl AggregateNode {
 
         for (i, agg) in aggregates.iter().enumerate() {
             let name = format!("agg_{}", i);
-            let arg_types: Vec<_> = agg.args.iter().map(|a| a.data_type()).collect();
-            let arg_nullables: Vec<_> = agg.args.iter().map(|a| a.nullable()).collect();
-            let (data_type, nullable) = agg.function.infer_type(&arg_types, &arg_nullables);
+            let (data_type, nullable) = (agg.return_type.clone(), agg.is_nullable);
 
             output_columns.push(PlanNodeColumn {
                 name,

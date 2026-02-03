@@ -588,7 +588,8 @@ impl<'a> BuildContext<'a> {
         use sqlparser::ast::{FunctionArg, FunctionArgExpr, FunctionArguments};
 
         use super::expr::{
-            AggregateFunction, AggregateFunctionExpr, WindowFunctionExpr, funcs::ScalarFunctionExpr,
+            AggregateFunctionExpr, AggregateFunctionName, WindowFunctionExpr,
+            funcs::ScalarFunctionExpr,
         };
 
         let name = func.name.to_dotted_string();
@@ -634,7 +635,7 @@ impl<'a> BuildContext<'a> {
         }
 
         // Check if it's an aggregate function
-        if AggregateFunction::from_name(&name).is_some() {
+        if AggregateFunctionName::from_name(&name).is_some() {
             return Ok(Box::new(AggregateFunctionExpr::from_ast(func, |expr| {
                 self.build_expr(expr, scope)
             })?));

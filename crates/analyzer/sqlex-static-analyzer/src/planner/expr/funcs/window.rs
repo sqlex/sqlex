@@ -3,7 +3,7 @@ use sqlex_common::DataType;
 
 use super::{
     super::{Expression, ExpressionNode, order_by::OrderByExpr},
-    aggregate::AggregateFunction,
+    aggregate::AggregateFunctionName,
 };
 
 /// Window frame specification
@@ -34,7 +34,7 @@ pub enum WindowFrameBound {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WindowFunctionName {
     /// Aggregate function used as window function
-    Aggregate(AggregateFunction),
+    Aggregate(AggregateFunctionName),
     /// Dedicated window functions
     RowNumber,
     Rank,
@@ -102,8 +102,31 @@ impl WindowFunctionExpr {
     ) -> Box<dyn Expression> {
         // Infer return type using local logic (logic moved from WindowFunction::infer_type)
         let arg_types: Vec<DataType> = args.iter().map(|e| e.data_type()).collect();
+        let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
         let (return_type, is_nullable) = match &function {
-            WindowFunctionName::Aggregate(agg) => agg.infer_type(&arg_types, &[]),
+            WindowFunctionName::Aggregate(agg) => match agg {
+                AggregateFunctionName::Count => (DataType::BigInt, false),
+                AggregateFunctionName::Sum => {
+                    let ret_type = match input_type {
+                        DataType::TinyInt
+                        | DataType::SmallInt
+                        | DataType::Int
+                        | DataType::BigInt => DataType::BigInt,
+                        DataType::Float | DataType::Double | DataType::Decimal => DataType::Double,
+                        _ => input_type,
+                    };
+                    (ret_type, true)
+                },
+                AggregateFunctionName::Avg => (DataType::Double, true),
+                AggregateFunctionName::Min | AggregateFunctionName::Max => (input_type, true),
+                AggregateFunctionName::First | AggregateFunctionName::Last => (input_type, true),
+                AggregateFunctionName::ArrayAgg => (DataType::Array(Box::new(input_type)), true),
+                AggregateFunctionName::JsonArrayAgg | AggregateFunctionName::JsonObjectAgg => {
+                    (DataType::Json, true)
+                },
+                AggregateFunctionName::StringAgg => (DataType::Text, true),
+                AggregateFunctionName::Custom(_) => (input_type, true),
+            },
             WindowFunctionName::RowNumber
             | WindowFunctionName::Rank
             | WindowFunctionName::DenseRank
@@ -149,7 +172,7 @@ impl WindowFunctionExpr {
 
         let window_func = if let Some(wf) = WindowFunctionName::from_name(&name) {
             wf
-        } else if let Some(af) = AggregateFunction::from_name(&name) {
+        } else if let Some(af) = AggregateFunctionName::from_name(&name) {
             WindowFunctionName::Aggregate(af)
         } else {
             return Err(AnalyzerError::AnalysisError(format!(
