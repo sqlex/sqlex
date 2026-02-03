@@ -3,10 +3,8 @@
 //! Implements the rules for inferring whether expressions
 //! and result columns can be NULL.
 
-use crate::{
-    plan::{AggregateFunction, JoinKind, PlanNode, TypedExpr, WindowFunction},
-    schema::Schema,
-};
+use super::plan::{JoinKind, PlanNode};
+use crate::schema::Schema;
 
 /// Result of nullability analysis for JOIN columns
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,7 +65,7 @@ pub fn join_nullability(
     join_kind: JoinKind,
     left: &PlanNode,
     right: &PlanNode,
-    condition: &Option<crate::plan::JoinCondition>,
+    condition: &Option<super::plan::JoinCondition>,
     schema: &Schema,
 ) -> ColumnNullability {
     match join_kind {
@@ -112,7 +110,7 @@ fn check_fk_guarantee(
     join_kind: JoinKind,
     left: &PlanNode,
     right: &PlanNode,
-    condition: &Option<crate::plan::JoinCondition>,
+    condition: &Option<super::plan::JoinCondition>,
     schema: &Schema,
 ) -> bool {
     let left_table = extract_table_name_from_plan(left);
@@ -134,7 +132,7 @@ fn check_fk_guarantee(
                             });
 
                             if fk_cols_not_null
-                                && matches!(condition, Some(crate::plan::JoinCondition::On(_)))
+                                && matches!(condition, Some(super::plan::JoinCondition::On(_)))
                             {
                                 return true;
                             }
@@ -157,7 +155,7 @@ fn check_fk_guarantee(
                             });
 
                             if fk_cols_not_null
-                                && matches!(condition, Some(crate::plan::JoinCondition::On(_)))
+                                && matches!(condition, Some(super::plan::JoinCondition::On(_)))
                             {
                                 return true;
                             }
@@ -169,48 +167,4 @@ fn check_fk_guarantee(
         _ => {},
     }
     false
-}
-
-/// Infer nullability for an aggregate function
-pub fn infer_aggregate_nullability(func: &AggregateFunction, _args: &[TypedExpr]) -> bool {
-    match func {
-        // COUNT is never null (returns 0 for empty set)
-        AggregateFunction::Count => false,
-
-        // Other aggregates return NULL for empty set
-        AggregateFunction::Sum
-        | AggregateFunction::Avg
-        | AggregateFunction::Min
-        | AggregateFunction::Max
-        | AggregateFunction::ArrayAgg
-        | AggregateFunction::StringAgg
-        | AggregateFunction::JsonAgg
-        | AggregateFunction::First
-        | AggregateFunction::Last
-        | AggregateFunction::Custom(_) => true,
-    }
-}
-
-/// Infer nullability for a window function
-pub fn infer_window_nullability(func: &WindowFunction, args: &[TypedExpr]) -> bool {
-    match func {
-        // ROW_NUMBER, RANK, etc. are never null
-        WindowFunction::RowNumber
-        | WindowFunction::Rank
-        | WindowFunction::DenseRank
-        | WindowFunction::NTile
-        | WindowFunction::PercentRank
-        | WindowFunction::CumeDist => false,
-
-        // LEAD/LAG can return NULL (beyond partition bounds)
-        WindowFunction::Lead | WindowFunction::Lag => true,
-
-        // FIRST_VALUE/LAST_VALUE/NTH_VALUE inherit from input
-        WindowFunction::FirstValue | WindowFunction::LastValue | WindowFunction::NthValue => {
-            args.first().map(|a| a.nullable).unwrap_or(true)
-        },
-
-        // Aggregate as window function
-        WindowFunction::Aggregate(agg) => infer_aggregate_nullability(agg, args),
-    }
 }

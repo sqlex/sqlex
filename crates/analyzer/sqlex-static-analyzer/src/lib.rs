@@ -2,27 +2,13 @@
 //!
 //! A static SQL analyzer that infers result set types and nullability
 //! without requiring a database connection.
-//!
-//! # Architecture
-//!
-//! - [`schema`]: Database schema representation (tables, columns, constraints)
-//! - [`plan`]: Query plan node tree for representing SQL queries
-//! - [`ddl`]: DDL statement parser for building schema
-//! - [`analyzer`]: Query analyzer for building plan trees
-//! - [`nullability`]: Nullability inference rules
-//! - [`types`]: Type inference rules
 
-pub mod analyzer;
-pub mod ddl;
-pub mod nullability;
-pub mod plan;
+pub mod planner;
 pub mod schema;
-pub mod types;
 
 // Re-exports
-pub use analyzer::QueryAnalyzer;
 use async_trait::async_trait;
-pub use plan::{JoinKind, PlanNode, TypedExpr};
+pub use planner::{BuildContext, JoinKind, PlanNode, TypedExpr};
 pub use schema::{ColumnDef, Dialect, ForeignKeyDef, Schema, TableDef};
 use sqlex_analyzer::{Analyzer, AnalyzerError, Result, ResultSet, Table};
 
@@ -65,8 +51,10 @@ impl Analyzer for StaticAnalyzer {
     }
 
     async fn analyze(&self, sql: &str) -> Result<ResultSet> {
-        let mut analyzer = QueryAnalyzer::new(&self.schema);
-        analyzer.analyze(sql)
+        let ctx = BuildContext::new(&self.schema);
+        let plan = ctx.build(sql)?;
+        let columns = plan.columns(&self.schema);
+        Ok(ResultSet { columns })
     }
 
     async fn get_all_tables(&self) -> Result<Vec<Table>> {

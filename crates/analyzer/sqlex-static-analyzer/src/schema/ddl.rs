@@ -14,7 +14,7 @@ use sqlparser::{
     parser::Parser,
 };
 
-use crate::schema::{ColumnDef, Dialect, ForeignKeyDef, ReferentialAction, Schema, TableDef};
+use super::{ColumnDef, Dialect, ForeignKeyDef, ReferentialAction, Schema, TableDef};
 
 type Result<T> = std::result::Result<T, AnalyzerError>;
 
@@ -161,7 +161,7 @@ impl Schema {
     }
 
     /// Get the sqlparser dialect for the current schema dialect
-    fn get_sqlparser_dialect(&self) -> Box<dyn SqlParserDialect> {
+    pub(crate) fn get_sqlparser_dialect(&self) -> Box<dyn SqlParserDialect> {
         match self.dialect {
             Dialect::PostgreSQL => Box::new(PostgreSqlDialect {}),
             Dialect::MySQL => Box::new(MySqlDialect {}),
@@ -250,17 +250,6 @@ fn map_referential_action(
         sqlparser::ast::ReferentialAction::Restrict => ReferentialAction::Restrict,
         sqlparser::ast::ReferentialAction::NoAction => ReferentialAction::NoAction,
     })
-}
-
-/// Parse a foreign key constraint
-pub fn parse_foreign_key(_constraint: &TableConstraint) -> Result<ForeignKeyDef> {
-    // This function is kept for ABI compatibility or future use, but currently we use parse_table_constraint
-    // Since we don't have a specific constraint to parse here detached from a table, we can return error or todo.
-    // Given tests don't use it, we can leave Todo or implement a dummy.
-    // However, if we want to fully support it, we'd need to assume it's a ForeignKey variant.
-    Err(AnalyzerError::AnalysisError(
-        "parse_foreign_key is deprecated/internal".to_string(),
-    ))
 }
 
 /// Map sqlparser DataType to our DataType

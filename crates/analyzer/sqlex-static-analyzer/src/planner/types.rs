@@ -5,7 +5,7 @@
 use sqlex_common::DataType;
 use sqlparser::ast::{BinaryOperator, UnaryOperator};
 
-use crate::plan::{AggregateFunction, WindowFunction};
+use super::plan::AggregateFunction;
 
 /// Infer type for binary operation
 pub fn binary_op_type(left: DataType, op: BinaryOperator, right: DataType) -> DataType {
@@ -108,23 +108,6 @@ pub fn aggregate_return_type(func: &AggregateFunction, input: DataType) -> DataT
         AggregateFunction::JsonAgg => DataType::Json,
         AggregateFunction::First | AggregateFunction::Last => input,
         AggregateFunction::Custom(_) => DataType::Custom("unknown".to_string()),
-    }
-}
-
-/// Infer return type of window function
-pub fn window_return_type(func: &WindowFunction, input: DataType) -> DataType {
-    match func {
-        WindowFunction::RowNumber | WindowFunction::Rank | WindowFunction::DenseRank => {
-            DataType::BigInt
-        },
-        WindowFunction::NTile => DataType::Int,
-        WindowFunction::PercentRank | WindowFunction::CumeDist => DataType::Double,
-        WindowFunction::Lead
-        | WindowFunction::Lag
-        | WindowFunction::FirstValue
-        | WindowFunction::LastValue
-        | WindowFunction::NthValue => input,
-        WindowFunction::Aggregate(agg) => aggregate_return_type(agg, input),
     }
 }
 

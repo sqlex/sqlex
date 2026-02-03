@@ -3,7 +3,7 @@
 //! Tests for expression nullability analysis
 
 use sqlex_common::DataType;
-use sqlex_static_analyzer::{ColumnDef, Dialect, QueryAnalyzer, Schema, TableDef};
+use sqlex_static_analyzer::{BuildContext, ColumnDef, Dialect, Schema, TableDef};
 
 fn setup_schema() -> Schema {
     let mut schema = Schema::new(Dialect::PostgreSQL);
@@ -32,35 +32,36 @@ fn setup_schema() -> Schema {
 #[test]
 fn test_not_null_column_is_not_nullable() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT id FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
-    let result = analyzer.analyze("SELECT id FROM users").unwrap();
-
-    assert!(!result.columns[0].nullability);
+    assert!(!result[0].nullability);
 }
 
 #[test]
 fn test_nullable_column_is_nullable() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT email FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
-    let result = analyzer.analyze("SELECT email FROM users").unwrap();
-
-    assert!(result.columns[0].nullability);
+    assert!(result[0].nullability);
 }
 
 #[test]
 fn test_mixed_nullability() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
-
-    let result = analyzer
-        .analyze("SELECT id, name, email FROM users")
+    let plan = BuildContext::new(&schema)
+        .build("SELECT id, name, email FROM users")
         .unwrap();
+    let result = plan.columns(&schema);
 
-    assert!(!result.columns[0].nullability); // id: NOT NULL
-    assert!(!result.columns[1].nullability); // name: NOT NULL
-    assert!(result.columns[2].nullability); // email: nullable
+    assert!(!result[0].nullability); // id: NOT NULL
+    assert!(!result[1].nullability); // name: NOT NULL
+    assert!(result[2].nullability); // email: nullable
 }
 
 // =============================================================================
@@ -70,31 +71,37 @@ fn test_mixed_nullability() {
 #[test]
 fn test_binary_op_with_nullable() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT age + 1 FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
     // age is nullable, so age + 1 is nullable
-    let result = analyzer.analyze("SELECT age + 1 FROM users").unwrap();
-    assert!(result.columns[0].nullability);
+    assert!(result[0].nullability);
 }
 
 #[test]
 fn test_binary_op_not_null() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT id + 1 FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
     // id is NOT NULL, so id + 1 is NOT NULL
-    let result = analyzer.analyze("SELECT id + 1 FROM users").unwrap();
-    assert!(!result.columns[0].nullability);
+    assert!(!result[0].nullability);
 }
 
 #[test]
 fn test_binary_op_both_nullable() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT age + score FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
     // Both age and score are nullable
-    let result = analyzer.analyze("SELECT age + score FROM users").unwrap();
-    assert!(result.columns[0].nullability);
+    assert!(result[0].nullability);
 }
 
 // =============================================================================
@@ -104,37 +111,37 @@ fn test_binary_op_both_nullable() {
 #[test]
 fn test_coalesce_with_not_null() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT COALESCE(age, 0) FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
     // COALESCE(nullable, not_null_literal) => not nullable
-    let result = analyzer
-        .analyze("SELECT COALESCE(age, 0) FROM users")
-        .unwrap();
-    assert!(!result.columns[0].nullability);
+    assert!(!result[0].nullability);
 }
 
 #[test]
 fn test_coalesce_all_nullable() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT COALESCE(age, score) FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
     // COALESCE(nullable, nullable) => nullable
-    let result = analyzer
-        .analyze("SELECT COALESCE(age, score) FROM users")
-        .unwrap();
-    assert!(result.columns[0].nullability);
+    assert!(result[0].nullability);
 }
 
 #[test]
 fn test_coalesce_multiple_args() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT COALESCE(age, score, 0) FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
     // COALESCE(nullable, nullable, not_null) => not nullable
-    let result = analyzer
-        .analyze("SELECT COALESCE(age, score, 0) FROM users")
-        .unwrap();
-    assert!(!result.columns[0].nullability);
+    assert!(!result[0].nullability);
 }
 
 // =============================================================================
@@ -144,11 +151,13 @@ fn test_coalesce_multiple_args() {
 #[test]
 fn test_nullif_always_nullable() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT NULLIF(id, 0) FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
     // NULLIF can always return NULL
-    let result = analyzer.analyze("SELECT NULLIF(id, 0) FROM users").unwrap();
-    assert!(result.columns[0].nullability);
+    assert!(result[0].nullability);
 }
 
 // =============================================================================
@@ -158,37 +167,37 @@ fn test_nullif_always_nullable() {
 #[test]
 fn test_case_with_else_all_not_null() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT CASE WHEN id > 0 THEN 'positive' ELSE 'zero' END FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
     // CASE with ELSE and all branches NOT NULL => not nullable
-    let result = analyzer
-        .analyze("SELECT CASE WHEN id > 0 THEN 'positive' ELSE 'zero' END FROM users")
-        .unwrap();
-    assert!(!result.columns[0].nullability);
+    assert!(!result[0].nullability);
 }
 
 #[test]
 fn test_case_without_else() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT CASE WHEN id > 0 THEN 'positive' END FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
     // CASE without ELSE => nullable (implicit NULL)
-    let result = analyzer
-        .analyze("SELECT CASE WHEN id > 0 THEN 'positive' END FROM users")
-        .unwrap();
-    assert!(result.columns[0].nullability);
+    assert!(result[0].nullability);
 }
 
 #[test]
 fn test_case_with_nullable_branch() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT CASE WHEN id > 0 THEN age ELSE 0 END FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
     // CASE with nullable branch => nullable
-    let result = analyzer
-        .analyze("SELECT CASE WHEN id > 0 THEN age ELSE 0 END FROM users")
-        .unwrap();
-    assert!(result.columns[0].nullability);
+    assert!(result[0].nullability);
 }
 
 // =============================================================================
@@ -198,13 +207,13 @@ fn test_case_with_nullable_branch() {
 #[test]
 fn test_scalar_subquery_nullable() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT (SELECT id FROM users WHERE id = 999) FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
     // Scalar subquery can return no rows => nullable
-    let result = analyzer
-        .analyze("SELECT (SELECT id FROM users WHERE id = 999) FROM users")
-        .unwrap();
-    assert!(result.columns[0].nullability);
+    assert!(result[0].nullability);
 }
 
 // =============================================================================
@@ -214,66 +223,68 @@ fn test_scalar_subquery_nullable() {
 #[test]
 fn test_count_star_not_nullable() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT COUNT(*) FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
-    let result = analyzer.analyze("SELECT COUNT(*) FROM users").unwrap();
-
-    assert!(!result.columns[0].nullability); // COUNT(*) never returns NULL
+    assert!(!result[0].nullability); // COUNT(*) never returns NULL
 }
 
 #[test]
 fn test_count_column_not_nullable() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT COUNT(age) FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
-    let result = analyzer.analyze("SELECT COUNT(age) FROM users").unwrap();
-
-    assert!(!result.columns[0].nullability); // COUNT(col) never returns NULL
+    assert!(!result[0].nullability); // COUNT(col) never returns NULL
 }
 
 #[test]
 fn test_sum_nullable() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT SUM(age) FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
-    let result = analyzer.analyze("SELECT SUM(age) FROM users").unwrap();
-
-    assert!(result.columns[0].nullability); // SUM returns NULL for empty set
+    assert!(result[0].nullability); // SUM returns NULL for empty set
 }
 
 #[test]
 fn test_avg_nullable() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
+    let plan = BuildContext::new(&schema)
+        .build("SELECT AVG(age) FROM users")
+        .unwrap();
+    let result = plan.columns(&schema);
 
-    let result = analyzer.analyze("SELECT AVG(age) FROM users").unwrap();
-
-    assert!(result.columns[0].nullability);
+    assert!(result[0].nullability);
 }
 
 #[test]
 fn test_min_max_nullable() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
-
-    let result = analyzer
-        .analyze("SELECT MIN(age), MAX(age) FROM users")
+    let plan = BuildContext::new(&schema)
+        .build("SELECT MIN(age), MAX(age) FROM users")
         .unwrap();
+    let result = plan.columns(&schema);
 
-    assert!(result.columns[0].nullability);
-    assert!(result.columns[1].nullability);
+    assert!(result[0].nullability);
+    assert!(result[1].nullability);
 }
 
 #[test]
 fn test_mixed_aggregates() {
     let schema = setup_schema();
-    let mut analyzer = QueryAnalyzer::new(&schema);
-
-    let result = analyzer
-        .analyze("SELECT COUNT(*), SUM(age), AVG(age) FROM users")
+    let plan = BuildContext::new(&schema)
+        .build("SELECT COUNT(*), SUM(age), AVG(age) FROM users")
         .unwrap();
+    let result = plan.columns(&schema);
 
-    assert!(!result.columns[0].nullability); // COUNT
-    assert!(result.columns[1].nullability); // SUM
-    assert!(result.columns[2].nullability); // AVG
+    assert!(!result[0].nullability); // COUNT
+    assert!(result[1].nullability); // SUM
+    assert!(result[2].nullability); // AVG
 }

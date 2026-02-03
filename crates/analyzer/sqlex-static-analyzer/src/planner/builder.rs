@@ -1,11 +1,10 @@
-//! Query analyzer for building PlanNode trees
+//! Query builder for converting SQL to PlanNode trees
 //!
-//! Converts SQL SELECT statements into PlanNode trees
-//! for type and nullability inference.
+//! Provides BuildContext for constructing PlanNode trees from SQL.
 
 use std::collections::HashMap;
 
-use sqlex_analyzer::{AnalyzerError, ResultSet};
+use sqlex_analyzer::AnalyzerError;
 use sqlex_common::DataType;
 use sqlparser::{
     ast::{
@@ -13,46 +12,46 @@ use sqlparser::{
         JoinOperator, ObjectName, Query, Select, SelectItem, SetExpr, Statement, TableFactor,
         TableWithJoins, Value,
     },
-    dialect::Dialect as SqlParserDialect,
     parser::Parser,
 };
 
-use crate::{
+use super::{
     nullability,
     plan::{JoinCondition, JoinKind, OrderByExpr, PlanNode, ProjectColumn, SetOp, TypedExpr},
-    schema::Schema,
     types,
 };
+use crate::schema::Schema;
 
 type Result<T> = std::result::Result<T, AnalyzerError>;
 
-/// Query analyzer that builds PlanNode trees from SQL
-pub struct QueryAnalyzer<'a> {
+/// Build context for constructing a PlanNode tree from SQL.
+///
+/// Each build operation consumes the context to ensure clean state.
+pub struct BuildContext<'a> {
     schema: &'a Schema,
     /// CTE scope for WITH clause resolution
-    #[allow(dead_code)]
     cte_scope: HashMap<String, ResolvedCTE>,
 }
 
-/// Resolved CTE information
+/// Resolved CTE information (internal)
 #[derive(Debug, Clone)]
-pub struct ResolvedCTE {
-    pub columns: Vec<ResolvedColumn>,
-    pub plan: Box<PlanNode>,
+pub(crate) struct ResolvedCTE {
+    pub(crate) columns: Vec<ResolvedColumn>,
+    #[allow(dead_code)]
+    pub(crate) plan: Box<PlanNode>,
 }
 
-/// Resolved column information
+/// Resolved column information (internal)
 #[derive(Debug, Clone)]
-pub struct ResolvedColumn {
-    pub name: String,
-    pub data_type: DataType,
-    pub nullable: bool,
-    /// Source table alias (if available)
-    pub source_alias: Option<String>,
+pub(crate) struct ResolvedColumn {
+    pub(crate) name: String,
+    pub(crate) data_type: DataType,
+    pub(crate) nullable: bool,
+    pub(crate) source_alias: Option<String>,
 }
 
-impl<'a> QueryAnalyzer<'a> {
-    /// Create a new query analyzer with the given schema
+impl<'a> BuildContext<'a> {
+    /// Create a new build context with the given schema.
     pub fn new(schema: &'a Schema) -> Self {
         Self {
             schema,
@@ -60,15 +59,10 @@ impl<'a> QueryAnalyzer<'a> {
         }
     }
 
-    /// Analyze a SQL query and return the result set metadata
-    pub fn analyze(&mut self, sql: &str) -> Result<ResultSet> {
-        let plan = self.build_plan_from_sql(sql)?;
-        self.extract_result_set(&plan)
-    }
-
-    /// Build a PlanNode tree from SQL string
-    pub fn build_plan_from_sql(&mut self, sql: &str) -> Result<PlanNode> {
-        let dialect = self.get_sqlparser_dialect();
+    /// Build a PlanNode tree from SQL string.
+    /// Consumes self to ensure the context is not reused.
+    pub fn build(mut self, sql: &str) -> Result<PlanNode> {
+        let dialect = self.schema.get_sqlparser_dialect();
         let statements = Parser::parse_sql(dialect.as_ref(), sql)
             .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
 
@@ -824,23 +818,23 @@ impl<'a> QueryAnalyzer<'a> {
         let upper_name = name.to_uppercase();
         let return_type = match upper_name.as_str() {
             "COUNT" => {
-                types::aggregate_return_type(&crate::plan::AggregateFunction::Count, DataType::Int)
+                types::aggregate_return_type(&super::plan::AggregateFunction::Count, DataType::Int)
             },
             "SUM" => {
                 let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
-                types::aggregate_return_type(&crate::plan::AggregateFunction::Sum, input_type)
+                types::aggregate_return_type(&super::plan::AggregateFunction::Sum, input_type)
             },
             "AVG" => {
                 let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
-                types::aggregate_return_type(&crate::plan::AggregateFunction::Avg, input_type)
+                types::aggregate_return_type(&super::plan::AggregateFunction::Avg, input_type)
             },
             "MIN" => {
                 let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
-                types::aggregate_return_type(&crate::plan::AggregateFunction::Min, input_type)
+                types::aggregate_return_type(&super::plan::AggregateFunction::Min, input_type)
             },
             "MAX" => {
                 let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
-                types::aggregate_return_type(&crate::plan::AggregateFunction::Max, input_type)
+                types::aggregate_return_type(&super::plan::AggregateFunction::Max, input_type)
             },
             _ => {
                 // Fall back to regular function type inference
@@ -869,52 +863,6 @@ impl<'a> QueryAnalyzer<'a> {
         }
 
         Ok((return_type, nullable))
-    }
-
-    /// Extract ResultSet from the final PlanNode
-    fn extract_result_set(&self, plan: &PlanNode) -> Result<ResultSet> {
-        let scope = self.extract_scope_from_plan(plan)?;
-        let mut columns = Vec::new();
-
-        match plan {
-            PlanNode::Project { columns: cols, .. } => {
-                for c in cols {
-                    columns.push(sqlex_common::ColumnInfo {
-                        name: c.alias.clone().unwrap_or_else(|| "unnamed".to_string()),
-                        data_type: c.expr.data_type.clone(),
-                        nullability: c.expr.nullable,
-                    });
-                }
-            },
-            PlanNode::TableScan { alias, table } => {
-                let name = alias.as_ref().unwrap_or(table);
-                if let Some(cols) = scope.tables.get(name) {
-                    for c in cols {
-                        columns.push(sqlex_common::ColumnInfo {
-                            name: c.name.clone(),
-                            data_type: c.data_type.clone(),
-                            nullability: c.nullable,
-                        });
-                    }
-                }
-            },
-            PlanNode::Sort { input, .. } | PlanNode::Limit { input, .. } => {
-                return self.extract_result_set(input);
-            },
-            _ => {
-                if let Some(cols) = scope.tables.values().next() {
-                    for c in cols {
-                        columns.push(sqlex_common::ColumnInfo {
-                            name: c.name.clone(),
-                            data_type: c.data_type.clone(),
-                            nullability: c.nullable,
-                        });
-                    }
-                }
-            },
-        }
-
-        Ok(ResultSet { columns })
     }
 
     // Helper to get scope from a plan node (re-deriving it)
@@ -1065,17 +1013,6 @@ impl<'a> QueryAnalyzer<'a> {
                     source_alias: Some(cte_name.to_string()),
                 })
                 .collect())
-        }
-    }
-
-    /// Get the sqlparser dialect
-    fn get_sqlparser_dialect(&self) -> Box<dyn SqlParserDialect> {
-        use sqlparser::dialect::{MySqlDialect, PostgreSqlDialect, SQLiteDialect};
-
-        match self.schema.dialect {
-            crate::schema::Dialect::PostgreSQL => Box::new(PostgreSqlDialect {}),
-            crate::schema::Dialect::MySQL => Box::new(MySqlDialect {}),
-            crate::schema::Dialect::SQLite => Box::new(SQLiteDialect {}),
         }
     }
 }
