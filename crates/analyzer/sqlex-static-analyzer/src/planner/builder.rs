@@ -249,9 +249,81 @@ impl<'a> BuildContext<'a> {
             plan = Box::new(FilterNode::build(plan, Box::new(predicate)));
         }
 
-        // 3. GROUP BY
+        // 3. GROUP BY and Aggregation
+        // Check if we need aggregation (has GROUP BY or aggregate functions in SELECT)
+        let has_group_by = matches!(
+            select.group_by,
+            sqlparser::ast::GroupByExpr::Expressions(ref exprs, _) if !exprs.is_empty()
+        ) || matches!(select.group_by, sqlparser::ast::GroupByExpr::All(_));
+
+        let mut has_aggregates_in_select = false;
+
+        // First pass: check for aggregates in SELECT list
+        for item in &select.projection {
+            let expr = match item {
+                SelectItem::UnnamedExpr(e) => Some(e),
+                SelectItem::ExprWithAlias { expr: e, .. } => Some(e),
+                _ => None,
+            };
+            if let Some(e) = expr {
+                if super::expr::has_aggregate_function(e) {
+                    has_aggregates_in_select = true;
+                    break;
+                }
+            }
+        }
+
+        // If we have aggregates or GROUP BY, build an AggregateNode
+        if has_group_by || has_aggregates_in_select {
+            let mut group_by_exprs = Vec::new();
+            let mut aggregate_exprs = Vec::new();
+
+            // Parse GROUP BY expressions
+            match &select.group_by {
+                sqlparser::ast::GroupByExpr::Expressions(exprs, _) => {
+                    for expr in exprs {
+                        group_by_exprs.push(self.build_typed_expr(expr, &scope)?);
+                    }
+                },
+                sqlparser::ast::GroupByExpr::All(_) => {
+                    // GROUP BY ALL - not yet supported, would require special handling
+                    return Err(AnalyzerError::AnalysisError(
+                        "GROUP BY ALL is not yet supported".to_string(),
+                    ));
+                },
+            }
+
+            // Extract aggregate expressions from SELECT list
+            for item in &select.projection {
+                if let Some(expr) = match item {
+                    SelectItem::UnnamedExpr(e) => Some(e),
+                    SelectItem::ExprWithAlias { expr: e, .. } => Some(e),
+                    _ => None,
+                } {
+                    if let Expr::Function(func) = expr {
+                        if super::expr::has_aggregate_function(expr) {
+                            aggregate_exprs.push(super::expr::build_aggregate_expr(func, &scope)?);
+                        }
+                    }
+                }
+            }
+
+            // Build AggregateNode
+            plan = Box::new(AggregateNode::build(
+                plan,
+                group_by_exprs,
+                aggregate_exprs,
+                None,
+            ));
+        }
+
         // 4. HAVING
-        // (Skipping for now to focus on simple SELECT)
+        if let Some(ref having) = select.having {
+            // HAVING uses the original scope (before aggregation) because
+            // it can contain aggregate functions that reference original columns
+            let predicate = self.build_typed_expr(having, &scope)?;
+            plan = Box::new(FilterNode::build(plan, Box::new(predicate)));
+        }
 
         // 5. Projection (SELECT list)
         let mut project_cols = Vec::new();

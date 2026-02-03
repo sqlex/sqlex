@@ -292,3 +292,123 @@ pub fn aggregate_result_type(func: &AggregateFunction, args: &[TypedExpr]) -> (D
         AggregateFunction::Custom(_) => (input_type, true),
     }
 }
+
+/// Check if an expression contains aggregate functions
+pub fn has_aggregate_function(expr: &Expr) -> bool {
+    fn name_to_string(name: &ObjectName) -> String {
+        name.0
+            .iter()
+            .map(|i| i.value.clone())
+            .collect::<Vec<_>>()
+            .join(".")
+    }
+
+    match expr {
+        Expr::Function(func) => {
+            let name = name_to_string(&func.name).to_uppercase();
+            matches!(
+                name.as_str(),
+                "COUNT" | "SUM" | "AVG" | "MIN" | "MAX" | "ARRAY_AGG" | "STRING_AGG" | "JSON_AGG"
+            )
+        },
+        Expr::BinaryOp { left, right, .. } => {
+            has_aggregate_function(left) || has_aggregate_function(right)
+        },
+        Expr::UnaryOp { expr, .. } => has_aggregate_function(expr),
+        Expr::Nested(e) => has_aggregate_function(e),
+        Expr::Case {
+            operand,
+            conditions,
+            results,
+            else_result,
+        } => {
+            operand.as_ref().is_some_and(|e| has_aggregate_function(e))
+                || conditions.iter().any(has_aggregate_function)
+                || results.iter().any(has_aggregate_function)
+                || else_result
+                    .as_ref()
+                    .is_some_and(|e| has_aggregate_function(e))
+        },
+        _ => false,
+    }
+}
+
+/// Build AggregateExpr from a Function
+pub fn build_aggregate_expr(
+    func: &sqlparser::ast::Function,
+    scope: &Scope,
+) -> Result<AggregateExpr> {
+    let name_to_string = |name: &ObjectName| -> String {
+        name.0
+            .iter()
+            .map(|i| i.value.clone())
+            .collect::<Vec<_>>()
+            .join(".")
+    };
+
+    let name = name_to_string(&func.name).to_uppercase();
+
+    let agg_func = match name.as_str() {
+        "COUNT" => AggregateFunction::Count,
+        "SUM" => AggregateFunction::Sum,
+        "AVG" => AggregateFunction::Avg,
+        "MIN" => AggregateFunction::Min,
+        "MAX" => AggregateFunction::Max,
+        "ARRAY_AGG" => AggregateFunction::ArrayAgg,
+        "STRING_AGG" => AggregateFunction::StringAgg,
+        "JSON_AGG" => AggregateFunction::JsonAgg,
+        other => AggregateFunction::Custom(other.to_string()),
+    };
+
+    // Parse function arguments
+    let mut typed_args = Vec::new();
+    if let sqlparser::ast::FunctionArguments::List(ref list) = func.args {
+        for arg in &list.args {
+            match arg {
+                sqlparser::ast::FunctionArg::Named {
+                    arg: sqlparser::ast::FunctionArgExpr::Expr(e),
+                    ..
+                } => {
+                    typed_args.push(TypedExpr::from_expr(e, scope)?);
+                },
+                sqlparser::ast::FunctionArg::Unnamed(sqlparser::ast::FunctionArgExpr::Expr(e)) => {
+                    typed_args.push(TypedExpr::from_expr(e, scope)?);
+                },
+                sqlparser::ast::FunctionArg::Unnamed(sqlparser::ast::FunctionArgExpr::Wildcard) => {
+                    // COUNT(*) case - use a dummy expression
+                    typed_args.push(TypedExpr::new(
+                        Expr::Value(Value::Number("1".to_string(), false)),
+                        DataType::Int,
+                        false,
+                    ));
+                },
+                _ => {},
+            }
+        }
+
+        // Check for DISTINCT
+        let distinct =
+            list.duplicate_treatment == Some(sqlparser::ast::DuplicateTreatment::Distinct);
+
+        Ok(AggregateExpr {
+            function: agg_func,
+            args: typed_args,
+            distinct,
+            filter: None,
+            order_by: Vec::new(),
+        })
+    } else {
+        // No arguments (e.g., COUNT(*))
+        Ok(AggregateExpr {
+            function: agg_func,
+            args: vec![TypedExpr::new(
+                Expr::Value(Value::Number("1".to_string(), false)),
+                DataType::Int,
+                false,
+            )],
+            distinct: false,
+            filter: None,
+            order_by: Vec::new(),
+        })
+    }
+}
