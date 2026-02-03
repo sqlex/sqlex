@@ -7,22 +7,16 @@ use crate::planner::{
 pub struct FilterNode {
     pub input: Box<dyn PlanNode>,
     pub predicate: Box<TypedExpr>,
-    pub output_columns: Vec<PlanNodeColumn>,
 }
 
 impl FilterNode {
     pub fn build(input: Box<dyn PlanNode>, predicate: Box<TypedExpr>) -> Self {
-        let output_columns = input.columns().to_vec();
-        Self {
-            input,
-            predicate,
-            output_columns,
-        }
+        Self { input, predicate }
     }
 }
 
 impl LogicalNode for FilterNode {
     fn columns(&self) -> &[PlanNodeColumn] {
-        &self.output_columns
+        self.input.columns()
     }
 }
