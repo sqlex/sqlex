@@ -768,7 +768,7 @@ impl<'a> BuildContext<'a> {
 
         use super::expr::{
             AggregateFunction, AggregateFunctionExpr, OrderByExpr, WindowFrame, WindowFrameBound,
-            WindowFrameUnits, WindowFunction, WindowFunctionExpr, funcs::ScalarFunctionExpr,
+            WindowFrameUnits, WindowFunctionExpr, WindowFunctionName, funcs::ScalarFunctionExpr,
         };
 
         let name = func.name.to_dotted_string();
@@ -808,10 +808,10 @@ impl<'a> BuildContext<'a> {
 
         // Check for Window Function (OVER clause)
         if let Some(over) = &func.over {
-            let window_func = if let Some(wf) = WindowFunction::from_name(&name) {
+            let window_func = if let Some(wf) = WindowFunctionName::from_name(&name) {
                 wf
             } else if let Some(af) = AggregateFunction::from_name(&name) {
-                WindowFunction::Aggregate(af)
+                WindowFunctionName::Aggregate(af)
             } else {
                 return Err(AnalyzerError::AnalysisError(format!(
                     "Unknown window function: {}",

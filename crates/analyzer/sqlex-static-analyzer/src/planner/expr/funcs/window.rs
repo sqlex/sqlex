@@ -29,9 +29,9 @@ pub enum WindowFrameBound {
     Following(Option<u64>),
 }
 
-/// Window function
+/// Window function name
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WindowFunction {
+pub enum WindowFunctionName {
     /// Aggregate function used as window function
     Aggregate(AggregateFunction),
     /// Dedicated window functions
@@ -48,7 +48,7 @@ pub enum WindowFunction {
     CumeDist,
 }
 
-impl WindowFunction {
+impl WindowFunctionName {
     pub fn from_name(name: &str) -> Option<Self> {
         let name_upper = name.to_uppercase();
         match name_upper.as_str() {
@@ -66,32 +66,12 @@ impl WindowFunction {
             _ => None,
         }
     }
-
-    /// Infer type for the new Expression system (takes DataType slices)
-    pub fn infer_type(&self, arg_types: &[DataType]) -> (DataType, bool) {
-        match self {
-            WindowFunction::Aggregate(agg) => agg.infer_type(arg_types, &[]),
-            WindowFunction::RowNumber
-            | WindowFunction::Rank
-            | WindowFunction::DenseRank
-            | WindowFunction::NTile => (DataType::BigInt, false),
-            WindowFunction::Lead
-            | WindowFunction::Lag
-            | WindowFunction::FirstValue
-            | WindowFunction::LastValue
-            | WindowFunction::NthValue => {
-                let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
-                (input_type, true)
-            },
-            WindowFunction::PercentRank | WindowFunction::CumeDist => (DataType::Double, false),
-        }
-    }
 }
 
 /// Window function expression
 #[derive(Debug, Clone)]
 pub struct WindowFunctionExpr {
-    pub function: WindowFunction,
+    pub function: WindowFunctionName,
     pub args: Vec<Box<dyn Expression>>,
     pub partition_by: Vec<Box<dyn Expression>>,
     pub order_by: Vec<OrderByExpr>,
@@ -113,15 +93,32 @@ impl ExpressionNode for WindowFunctionExpr {
 impl WindowFunctionExpr {
     /// Build a window function expression
     pub fn build(
-        function: WindowFunction,
+        function: WindowFunctionName,
         args: Vec<Box<dyn Expression>>,
         partition_by: Vec<Box<dyn Expression>>,
         order_by: Vec<OrderByExpr>,
         frame: Option<WindowFrame>,
     ) -> Box<dyn Expression> {
-        // Infer return type using the window function's logic
+        // Infer return type using local logic (logic moved from WindowFunction::infer_type)
         let arg_types: Vec<DataType> = args.iter().map(|e| e.data_type()).collect();
-        let (return_type, is_nullable) = function.infer_type(&arg_types);
+        let (return_type, is_nullable) = match &function {
+            WindowFunctionName::Aggregate(agg) => agg.infer_type(&arg_types, &[]),
+            WindowFunctionName::RowNumber
+            | WindowFunctionName::Rank
+            | WindowFunctionName::DenseRank
+            | WindowFunctionName::NTile => (DataType::BigInt, false),
+            WindowFunctionName::Lead
+            | WindowFunctionName::Lag
+            | WindowFunctionName::FirstValue
+            | WindowFunctionName::LastValue
+            | WindowFunctionName::NthValue => {
+                let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
+                (input_type, true)
+            },
+            WindowFunctionName::PercentRank | WindowFunctionName::CumeDist => {
+                (DataType::Double, false)
+            },
+        };
 
         Box::new(WindowFunctionExpr {
             function,
