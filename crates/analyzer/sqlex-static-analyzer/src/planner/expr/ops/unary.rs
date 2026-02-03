@@ -45,7 +45,7 @@ impl UnaryExpr {
         F: FnMut(&sqlparser::ast::Expr) -> Result<Box<dyn Expression>>,
     {
         let operand = expr_builder(expr)?;
-        Ok(Self::build(op.clone(), operand))
+        Ok(Self::build(*op, operand))
     }
 }
 
