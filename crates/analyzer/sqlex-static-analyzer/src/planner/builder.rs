@@ -4,11 +4,10 @@
 
 use std::collections::HashMap;
 
-use sqlex_analyzer::AnalyzerError;
+use sqlex_analyzer::{AnalyzerError, ObjectNameExt};
 use sqlparser::{
     ast::{
-        Expr, Ident, ObjectName, Query, Select, SelectItem, SetExpr, Statement, TableFactor,
-        TableWithJoins,
+        Expr, Ident, Query, Select, SelectItem, SetExpr, Statement, TableFactor, TableWithJoins,
     },
     parser::Parser,
 };
@@ -388,7 +387,7 @@ impl<'a> BuildContext<'a> {
                     }
                 },
                 SelectItem::QualifiedWildcard(obj_name, _opts) => {
-                    let table_alias = name_to_string(obj_name);
+                    let table_alias = obj_name.to_dotted_string();
                     if let Some(cols) = scope.tables.get(&table_alias) {
                         for col in cols {
                             let expr = Expr::CompoundIdentifier(vec![
@@ -486,7 +485,7 @@ impl<'a> BuildContext<'a> {
     fn build_table_factor(&mut self, table: &TableFactor) -> Result<(Box<dyn PlanNode>, Scope)> {
         match table {
             TableFactor::Table { name, alias, .. } => {
-                let table_name = name_to_string(name);
+                let table_name = name.to_dotted_string();
                 let effective_alias = alias
                     .as_ref()
                     .map(|a| a.name.value.clone())
@@ -635,13 +634,4 @@ impl<'a> BuildContext<'a> {
 
         Ok(new_cols)
     }
-}
-
-/// Helper to extract table name from object name
-fn name_to_string(name: &ObjectName) -> String {
-    name.0
-        .iter()
-        .map(|i| i.value.clone())
-        .collect::<Vec<_>>()
-        .join(".")
 }

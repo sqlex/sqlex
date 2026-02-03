@@ -3,12 +3,12 @@
 //! Parses CREATE TABLE, ALTER TABLE, and DROP TABLE statements
 //! to build and maintain the schema.
 
-use sqlex_analyzer::AnalyzerError;
+use sqlex_analyzer::{AnalyzerError, ObjectNameExt};
 use sqlex_common::DataType;
 use sqlparser::{
     ast::{
         AlterTableOperation, CharacterLength, ColumnOption, CreateTable, DataType as SqlDataType,
-        ObjectName, Statement, TableConstraint,
+        Statement, TableConstraint,
     },
     dialect::{Dialect as SqlParserDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect},
     parser::Parser,
@@ -52,7 +52,7 @@ impl Schema {
             ..
         } = create_table;
 
-        let table_name = name_to_string(name);
+        let table_name = name.to_dotted_string();
         let mut table = TableDef::new(&table_name);
 
         // Parse columns
@@ -82,7 +82,7 @@ impl Schema {
                     } => {
                         let fk = ForeignKeyDef::new(
                             vec![col.name.value.clone()],
-                            name_to_string(foreign_table),
+                            foreign_table.to_dotted_string(),
                             referred_columns.iter().map(|id| id.value.clone()).collect(),
                         );
                         table.foreign_keys.push(fk);
@@ -108,7 +108,7 @@ impl Schema {
             name, operations, ..
         } = stmt
         {
-            let table_name = name_to_string(name);
+            let table_name = name.to_dotted_string();
             if let Some(table) = self.tables.get_mut(&table_name) {
                 for op in operations {
                     match op {
@@ -153,7 +153,7 @@ impl Schema {
     fn handle_drop(&mut self, stmt: &Statement) -> Result<()> {
         if let Statement::Drop { names, .. } = stmt {
             for name in names {
-                let table_name = name_to_string(name);
+                let table_name = name.to_dotted_string();
                 self.tables.remove(&table_name);
             }
         }
@@ -168,15 +168,6 @@ impl Schema {
             Dialect::SQLite => Box::new(SQLiteDialect {}),
         }
     }
-}
-
-/// Helper to convert ObjectName to String
-fn name_to_string(name: &ObjectName) -> String {
-    name.0
-        .iter()
-        .map(|ident| ident.value.clone())
-        .collect::<Vec<_>>()
-        .join(".")
 }
 
 /// Parse a column definition from sqlparser AST
@@ -228,7 +219,7 @@ pub fn parse_table_constraint(constraint: &TableConstraint, table: &mut TableDef
         } => {
             let mut fk = ForeignKeyDef::new(
                 columns.iter().map(|c| c.value.clone()).collect(),
-                name_to_string(foreign_table),
+                foreign_table.to_dotted_string(),
                 referred_columns.iter().map(|c| c.value.clone()).collect(),
             );
             fk.on_delete = map_referential_action(on_delete);

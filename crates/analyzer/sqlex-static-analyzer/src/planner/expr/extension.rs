@@ -1,4 +1,5 @@
-use sqlparser::ast::{Expr, ObjectName};
+use sqlex_analyzer::ObjectNameExt;
+use sqlparser::ast::Expr;
 
 /// Extension trait for sqlparser Expr
 pub trait ExprExt {
@@ -7,17 +8,9 @@ pub trait ExprExt {
 
 impl ExprExt for Expr {
     fn has_aggregate_function(&self) -> bool {
-        fn name_to_string(name: &ObjectName) -> String {
-            name.0
-                .iter()
-                .map(|i| i.value.clone())
-                .collect::<Vec<_>>()
-                .join(".")
-        }
-
         match self {
             Expr::Function(func) => {
-                let name = name_to_string(&func.name).to_uppercase();
+                let name = func.name.to_dotted_string().to_uppercase();
                 matches!(
                     name.as_str(),
                     "COUNT"

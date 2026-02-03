@@ -1,4 +1,6 @@
+mod extension;
 use async_trait::async_trait;
+pub use extension::ObjectNameExt;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

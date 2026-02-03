@@ -1,21 +1,12 @@
-use sqlex_analyzer::{AnalyzerError, Result};
+use sqlex_analyzer::{AnalyzerError, ObjectNameExt, Result};
 use sqlex_common::DataType;
 use sqlparser::ast::{
-    BinaryOperator, Expr, Function, FunctionArg, FunctionArgExpr, FunctionArguments, ObjectName,
-    UnaryOperator, Value,
+    BinaryOperator, Expr, Function, FunctionArg, FunctionArgExpr, FunctionArguments, UnaryOperator,
+    Value,
 };
 
 use super::{aggregate::AggregateFunction, scalar::ScalarFunction, window::WindowFunction};
 use crate::planner::scope::Scope;
-
-/// Helper to extract table name from object name
-fn name_to_string(name: &ObjectName) -> String {
-    name.0
-        .iter()
-        .map(|i| i.value.clone())
-        .collect::<Vec<String>>()
-        .join(".")
-}
 
 /// Expression with inferred type information
 #[derive(Debug, Clone)]
@@ -71,7 +62,7 @@ impl TypedExpr {
             },
             Expr::Function(func) => {
                 // Check if it's NULLIF - NULLIF always returns nullable
-                let name_upper = name_to_string(&func.name).to_uppercase();
+                let name_upper = func.name.to_dotted_string().to_uppercase();
                 if name_upper == "NULLIF" {
                     let (dt, _) = Self::infer_function_type(func, scope)?;
                     // NULLIF is always nullable because it returns NULL if args are equal
@@ -149,7 +140,7 @@ impl TypedExpr {
     }
 
     fn infer_function_type(func: &Function, scope: &Scope) -> Result<(DataType, bool)> {
-        let name = name_to_string(&func.name);
+        let name = func.name.to_dotted_string();
 
         let args_vec = if matches!(func.args, FunctionArguments::None) {
             Vec::new()

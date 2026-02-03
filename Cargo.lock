@@ -2021,6 +2021,7 @@ dependencies = [
  "async-trait",
  "serde",
  "sqlex-common",
+ "sqlparser",
  "thiserror",
 ]
 
