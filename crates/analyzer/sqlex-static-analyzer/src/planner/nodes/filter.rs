@@ -1,16 +1,16 @@
 use crate::planner::{
-    expr::TypedExpr,
+    expr::Expression,
     plan::{LogicalNode, PlanNode, PlanNodeColumn},
 };
 
 #[derive(Debug, Clone)]
 pub struct FilterNode {
     pub input: Box<dyn PlanNode>,
-    pub predicate: Box<TypedExpr>,
+    pub predicate: Box<dyn Expression>,
 }
 
 impl FilterNode {
-    pub fn build(input: Box<dyn PlanNode>, predicate: Box<TypedExpr>) -> Self {
+    pub fn build(input: Box<dyn PlanNode>, predicate: Box<dyn Expression>) -> Self {
         Self { input, predicate }
     }
 }

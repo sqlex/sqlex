@@ -1,16 +1,9 @@
 use sqlex_common::DataType;
 
-use super::{aggregate::AggregateFunction, order_by::OrderByExpr, typed::TypedExpr};
-
-/// Window expression
-#[derive(Debug, Clone)]
-pub struct WindowExpr {
-    pub function: WindowFunction,
-    pub args: Vec<TypedExpr>,
-    pub partition_by: Vec<TypedExpr>,
-    pub order_by: Vec<OrderByExpr>,
-    pub frame: Option<WindowFrame>,
-}
+use super::{
+    super::{Expression, ExpressionNode, order_by::OrderByExpr},
+    aggregate::AggregateFunction,
+};
 
 /// Window frame specification
 #[derive(Debug, Clone)]
@@ -74,10 +67,10 @@ impl WindowFunction {
         }
     }
 
-    /// Determine the result type and nullability of a window function.
-    pub fn result_type(&self, args: &[TypedExpr]) -> (DataType, bool) {
+    /// Infer type for the new Expression system (takes DataType slices)
+    pub fn infer_type(&self, arg_types: &[DataType]) -> (DataType, bool) {
         match self {
-            WindowFunction::Aggregate(agg) => agg.result_type(args),
+            WindowFunction::Aggregate(agg) => agg.infer_type(arg_types, &[]),
             WindowFunction::RowNumber
             | WindowFunction::Rank
             | WindowFunction::DenseRank
@@ -87,13 +80,57 @@ impl WindowFunction {
             | WindowFunction::FirstValue
             | WindowFunction::LastValue
             | WindowFunction::NthValue => {
-                let input_type = args
-                    .first()
-                    .map(|a| a.data_type.clone())
-                    .unwrap_or(DataType::Int);
-                (input_type, true) // These can return NULL
+                let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
+                (input_type, true)
             },
             WindowFunction::PercentRank | WindowFunction::CumeDist => (DataType::Double, false),
         }
+    }
+}
+
+/// Window function expression
+#[derive(Debug, Clone)]
+pub struct WindowFunctionExpr {
+    pub function: WindowFunction,
+    pub args: Vec<Box<dyn Expression>>,
+    pub partition_by: Vec<Box<dyn Expression>>,
+    pub order_by: Vec<OrderByExpr>,
+    pub frame: Option<WindowFrame>,
+    pub return_type: DataType,
+    pub is_nullable: bool,
+}
+
+impl ExpressionNode for WindowFunctionExpr {
+    fn data_type(&self) -> DataType {
+        self.return_type.clone()
+    }
+
+    fn nullable(&self) -> bool {
+        self.is_nullable
+    }
+}
+
+impl WindowFunctionExpr {
+    /// Build a window function expression
+    pub fn build(
+        function: WindowFunction,
+        args: Vec<Box<dyn Expression>>,
+        partition_by: Vec<Box<dyn Expression>>,
+        order_by: Vec<OrderByExpr>,
+        frame: Option<WindowFrame>,
+    ) -> Box<dyn Expression> {
+        // Infer return type using the window function's logic
+        let arg_types: Vec<DataType> = args.iter().map(|e| e.data_type()).collect();
+        let (return_type, is_nullable) = function.infer_type(&arg_types);
+
+        Box::new(WindowFunctionExpr {
+            function,
+            args,
+            partition_by,
+            order_by,
+            frame,
+            return_type,
+            is_nullable,
+        })
     }
 }

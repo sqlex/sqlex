@@ -1,12 +1,12 @@
 use crate::planner::{
-    expr::{AggregateExpr, TypedExpr},
+    expr::{AggregateExpr, Expression},
     plan::{LogicalNode, PlanNode, PlanNodeColumn},
 };
 
 /// Grouping mode for advanced GROUP BY
 #[derive(Debug, Clone)]
 pub enum GroupingMode {
-    GroupingSets(Vec<Vec<TypedExpr>>),
+    GroupingSets(Vec<Vec<Box<dyn Expression>>>),
     Cube,
     Rollup,
 }
@@ -14,7 +14,7 @@ pub enum GroupingMode {
 #[derive(Debug, Clone)]
 pub struct AggregateNode {
     pub input: Box<dyn PlanNode>,
-    pub group_by: Vec<TypedExpr>,
+    pub group_by: Vec<Box<dyn Expression>>,
     pub aggregates: Vec<AggregateExpr>,
     pub grouping_mode: Option<GroupingMode>,
     pub output_columns: Vec<PlanNodeColumn>,
@@ -23,7 +23,7 @@ pub struct AggregateNode {
 impl AggregateNode {
     pub fn build(
         input: Box<dyn PlanNode>,
-        group_by: Vec<TypedExpr>,
+        group_by: Vec<Box<dyn Expression>>,
         aggregates: Vec<AggregateExpr>,
         grouping_mode: Option<GroupingMode>,
     ) -> Self {
@@ -32,19 +32,23 @@ impl AggregateNode {
             .enumerate()
             .map(|(i, expr)| PlanNodeColumn {
                 name: format!("group_{}", i),
-                data_type: expr.data_type.clone(),
-                nullability: expr.nullable,
+                data_type: expr.data_type(),
+                nullability: expr.nullable(),
                 origin_table: None,
                 origin_column: None,
             })
             .collect();
 
         for (i, agg) in aggregates.iter().enumerate() {
-            let (data_type, _nullable) = agg.function.result_type(&agg.args);
+            let name = format!("agg_{}", i);
+            let arg_types: Vec<_> = agg.args.iter().map(|a| a.data_type()).collect();
+            let arg_nullables: Vec<_> = agg.args.iter().map(|a| a.nullable()).collect();
+            let (data_type, nullable) = agg.function.infer_type(&arg_types, &arg_nullables);
+
             output_columns.push(PlanNodeColumn {
-                name: format!("agg_{}", i),
+                name,
                 data_type,
-                nullability: false, // Aggregates usually handle nulls or produce specific types. Keeping logic same as before.
+                nullability: nullable,
                 origin_table: None,
                 origin_column: None,
             });

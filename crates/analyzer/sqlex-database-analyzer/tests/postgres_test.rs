@@ -47,11 +47,11 @@ async fn test_postgres_analyzer_basic() -> anyhow::Result<()> {
 
     let username_col = columns.iter().find(|c| c.name == "username").unwrap();
     assert_eq!(username_col.data_type, DataType::Text);
-    assert_eq!(username_col.nullability, false);
+    assert!(!username_col.nullability);
 
     let email_col = columns.iter().find(|c| c.name == "email").unwrap();
     assert_eq!(email_col.data_type, DataType::Text);
-    assert_eq!(email_col.nullability, true);
+    assert!(email_col.nullability);
 
     let is_active_col = columns.iter().find(|c| c.name == "is_active").unwrap();
     assert_eq!(is_active_col.data_type, DataType::Bool);

@@ -1,16 +1,16 @@
 use crate::planner::{
-    expr::TypedExpr,
+    expr::Expression,
     plan::{LogicalNode, PlanNode, PlanNodeColumn},
 };
 
 #[derive(Debug, Clone)]
 pub struct DistinctOnNode {
     pub input: Box<dyn PlanNode>,
-    pub on_exprs: Vec<TypedExpr>,
+    pub on_exprs: Vec<Box<dyn Expression>>,
 }
 
 impl DistinctOnNode {
-    pub fn build(input: Box<dyn PlanNode>, on_exprs: Vec<TypedExpr>) -> Self {
+    pub fn build(input: Box<dyn PlanNode>, on_exprs: Vec<Box<dyn Expression>>) -> Self {
         Self { input, on_exprs }
     }
 }

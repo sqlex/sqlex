@@ -1,5 +1,5 @@
 use crate::planner::{
-    expr::TypedExpr,
+    expr::Expression,
     plan::{LogicalNode, PlanNode, PlanNodeColumn},
 };
 
@@ -7,7 +7,7 @@ use crate::planner::{
 #[derive(Debug, Clone)]
 pub struct ProjectColumn {
     pub alias: Option<String>,
-    pub expr: TypedExpr,
+    pub expr: Box<dyn Expression>,
 }
 
 #[derive(Debug, Clone)]
@@ -24,9 +24,9 @@ impl ProjectNode {
             .enumerate()
             .map(|(i, col)| PlanNodeColumn {
                 name: col.alias.clone().unwrap_or_else(|| format!("col_{}", i)),
-                data_type: col.expr.data_type.clone(),
-                nullability: col.expr.nullable,
-                origin_table: None, // Projection mostly obscures origin unless we track it
+                data_type: col.expr.data_type(),
+                nullability: col.expr.nullable(),
+                origin_table: None,
                 origin_column: None,
             })
             .collect();

@@ -1,6 +1,7 @@
 use sqlex_common::DataType;
+use sqlparser::dialect::Dialect;
 
-use super::typed::TypedExpr;
+use crate::planner::expr::{Expression, ExpressionNode};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScalarFunction {
@@ -78,7 +79,8 @@ pub enum ScalarFunction {
     Ifnull,
     Nvl,
 
-    // Fallback
+    // Fallback / Unknown
+    Unknown,
     Custom(String),
 }
 
@@ -112,7 +114,6 @@ impl ScalarFunction {
             "CEIL" => Some(Self::Ceil),
             "CEILING" => Some(Self::Ceiling),
             "FLOOR" => Some(Self::Floor),
-            "ROUND" => Some(Self::Round),
             "TRUNCATE" => Some(Self::Truncate),
             "TRUNC" => Some(Self::Trunc),
             "SQRT" => Some(Self::Sqrt),
@@ -157,23 +158,18 @@ impl ScalarFunction {
             "IFNULL" => Some(Self::Ifnull),
             "NVL" => Some(Self::Nvl),
 
-            // Don't treat unkwown as Custom here immediately, allow caller to decide
-            // or we can allow Custom here.
+            // Handling functions that might map to multiple variants or direct parsing
+            "ROUND" => Some(Self::Round),
+
             _ => None,
         }
     }
 
-    pub fn result_type(&self, args: &[TypedExpr]) -> (DataType, bool) {
-        let input_type = args
-            .first()
-            .map(|a| a.data_type.clone())
-            .unwrap_or(DataType::Text); // Default fallback
-
-        // Default nullability: result is nullable if any arg is nullable
-        let any_arg_nullable = args.iter().any(|a| a.nullable);
+    /// Infer type for the new Expression system (takes DataType slices)
+    pub fn infer_type(&self, arg_types: &[DataType]) -> (DataType, bool) {
+        let input_type = arg_types.first().cloned().unwrap_or(DataType::Text);
 
         match self {
-            // String -> Text
             Self::Concat
             | Self::ConcatWs
             | Self::Upper
@@ -186,18 +182,16 @@ impl ScalarFunction {
             | Self::Replace
             | Self::Left
             | Self::Right
-            | Self::Repeat => (DataType::Text, any_arg_nullable),
+            | Self::Repeat => (DataType::Text, true),
 
-            // String -> Int
             Self::Length
             | Self::CharLength
             | Self::CharacterLength
             | Self::OctetLength
             | Self::BitLength
             | Self::Position
-            | Self::Strpos => (DataType::Int, any_arg_nullable),
+            | Self::Strpos => (DataType::Int, true),
 
-            // Numeric -> Same as input (or promote?)
             Self::Abs
             | Self::Ceil
             | Self::Ceiling
@@ -205,9 +199,8 @@ impl ScalarFunction {
             | Self::Round
             | Self::Truncate
             | Self::Trunc
-            | Self::Mod => (input_type, any_arg_nullable),
+            | Self::Mod => (input_type, true),
 
-            // Numeric -> Double
             Self::Sqrt
             | Self::Exp
             | Self::Log
@@ -217,57 +210,77 @@ impl ScalarFunction {
             | Self::Power
             | Self::Pow
             | Self::Random
-            | Self::Rand => (DataType::Double, any_arg_nullable),
+            | Self::Rand => (DataType::Double, true),
 
-            // Numeric -> Int
-            Self::Sign => (DataType::Int, any_arg_nullable),
+            Self::Sign => (DataType::Int, true),
 
-            // Date/Time
-            Self::Now | Self::CurrentTimestamp => (DataType::Timestamp, any_arg_nullable),
-            Self::CurrentDate => (DataType::Date, any_arg_nullable),
-            Self::CurrentTime => (DataType::Time, any_arg_nullable),
-            Self::Date => (DataType::Date, any_arg_nullable),
-            Self::Time => (DataType::Time, any_arg_nullable),
-
+            Self::Now | Self::CurrentTimestamp => (DataType::Timestamp, false),
+            Self::CurrentDate => (DataType::Date, false),
+            Self::CurrentTime => (DataType::Time, false),
+            Self::Date => (DataType::Date, true),
+            Self::Time => (DataType::Time, true),
             Self::Year
             | Self::Month
             | Self::Day
             | Self::Hour
             | Self::Minute
             | Self::Second
-            | Self::Extract => (DataType::Int, any_arg_nullable),
+            | Self::Extract => (DataType::Int, true),
 
-            // JSON
             Self::JsonObject | Self::JsonArray | Self::ToJson | Self::ToJsonb => {
-                (DataType::Json, any_arg_nullable)
+                (DataType::Json, true)
             },
 
-            // Control
-            Self::Coalesce => {
-                // Return type is first arg type (simplified)
-                // Nullable if ALL args are nullable
-                let all_nullable = args.iter().all(|a| a.nullable);
-                (input_type, all_nullable)
-            },
-            Self::Nullif => {
-                // Returns same type as first arg
-                // Nullable because it returns NULL if args are equal
-                (input_type, true)
-            },
-            Self::Ifnull | Self::Nvl => {
-                // Like Coalesce but usually 2 args
-                let all_nullable = args.iter().all(|a| a.nullable);
-                (input_type, all_nullable)
-            },
+            Self::Coalesce | Self::Ifnull | Self::Nvl => (input_type, true),
+            Self::Nullif => (input_type, true),
 
-            // Conversion
-            Self::Cast | Self::Convert => {
-                // Depends on target type which we don't have here easily
-                // For now, identity
-                (input_type, any_arg_nullable)
-            },
+            Self::Cast | Self::Convert => (input_type, true),
 
-            Self::Custom(_) => (DataType::Custom("unknown".to_string()), true),
+            Self::Custom(_) | Self::Unknown => (DataType::Custom("unknown".to_string()), true),
         }
+    }
+}
+
+/// Scalar function expression
+#[derive(Debug, Clone)]
+pub struct ScalarFunctionExpr {
+    pub name: String,
+    pub function: ScalarFunction,
+    pub args: Vec<Box<dyn Expression>>,
+    pub return_type: DataType,
+    pub is_nullable: bool,
+}
+
+impl ExpressionNode for ScalarFunctionExpr {
+    fn data_type(&self) -> DataType {
+        self.return_type.clone()
+    }
+
+    fn nullable(&self) -> bool {
+        self.is_nullable
+    }
+}
+
+impl ScalarFunctionExpr {
+    /// Build a scalar function expression
+    pub fn build(
+        _dialect: &dyn Dialect,
+        name: String,
+        args: Vec<Box<dyn Expression>>,
+    ) -> Box<dyn Expression> {
+        // Try to match the function
+        let function = ScalarFunction::from_name(&name).unwrap_or(ScalarFunction::Unknown);
+
+        // Infer return type using the helper
+        let arg_types: Vec<DataType> = args.iter().map(|e| e.data_type()).collect();
+        let (return_type, is_nullable) = function.infer_type(&arg_types);
+
+        Box::new(ScalarFunctionExpr {
+            name,
+            function,
+            args,
+            return_type,
+            is_nullable,
+        })
     }
 }

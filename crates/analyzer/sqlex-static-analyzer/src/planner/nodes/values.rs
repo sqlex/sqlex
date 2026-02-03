@@ -1,17 +1,17 @@
 use crate::planner::{
-    expr::TypedExpr,
+    expr::Expression,
     plan::{LogicalNode, PlanNodeColumn},
 };
 
 #[derive(Debug, Clone)]
 pub struct ValuesNode {
-    pub rows: Vec<Vec<TypedExpr>>,
+    pub rows: Vec<Vec<Box<dyn Expression>>>,
     pub column_names: Vec<String>,
     pub output_columns: Vec<PlanNodeColumn>,
 }
 
 impl ValuesNode {
-    pub fn build(rows: Vec<Vec<TypedExpr>>, column_names: Vec<String>) -> Self {
+    pub fn build(rows: Vec<Vec<Box<dyn Expression>>>, column_names: Vec<String>) -> Self {
         let mut output_columns: Vec<PlanNodeColumn> = vec![];
 
         if let Some(first_row) = rows.first() {
@@ -26,10 +26,10 @@ impl ValuesNode {
                     // Check if any row has NULL at this position
                     let nullable = rows
                         .iter()
-                        .any(|r| r.get(i).map(|e| e.nullable).unwrap_or(true));
+                        .any(|r| r.get(i).map(|e| e.nullable()).unwrap_or(true));
                     PlanNodeColumn {
                         name,
-                        data_type: expr.data_type.clone(),
+                        data_type: expr.data_type(),
                         nullability: nullable,
                         origin_table: None,
                         origin_column: None,

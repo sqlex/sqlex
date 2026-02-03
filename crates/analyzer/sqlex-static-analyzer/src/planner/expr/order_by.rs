@@ -1,24 +1,20 @@
-use sqlex_analyzer::Result;
-
-use super::typed::TypedExpr;
-use crate::planner::scope::Scope;
+use super::Expression;
 
 /// ORDER BY expression
 #[derive(Debug, Clone)]
 pub struct OrderByExpr {
-    pub expr: TypedExpr,
+    pub expr: Box<dyn Expression>,
     pub asc: bool,
     pub nulls_first: Option<bool>,
 }
 
 impl OrderByExpr {
-    /// Build from AST OrderByExpr
-    pub fn from_ast(ast_order_by: &sqlparser::ast::OrderByExpr, scope: &Scope) -> Result<Self> {
-        let expr = TypedExpr::from_expr(&ast_order_by.expr, scope)?;
-        Ok(Self {
+    /// Build OrderByExpr (logic-only, no AST parsing)
+    pub fn build(expr: Box<dyn Expression>, asc: bool, nulls_first: Option<bool>) -> Self {
+        Self {
             expr,
-            asc: ast_order_by.asc.unwrap_or(true),
-            nulls_first: ast_order_by.nulls_first,
-        })
+            asc,
+            nulls_first,
+        }
     }
 }
