@@ -17,7 +17,6 @@ use sqlparser::{
 
 use super::{
     nodes::*,
-    nullability,
     plan::{JoinCondition, JoinKind, OrderByExpr, PlanNode, ProjectColumn, SetOp, TypedExpr},
     types,
 };
@@ -577,7 +576,7 @@ impl<'a> BuildContext<'a> {
                 let l = self.build_typed_expr(left, scope)?;
                 let r = self.build_typed_expr(right, scope)?;
                 let dt = types::binary_op_type(l.data_type, op.clone(), r.data_type);
-                let nullable = nullability::infer_binary_op_nullability(l.nullable, r.nullable);
+                let nullable = l.nullable || r.nullable;
                 (dt, nullable)
             },
             Expr::UnaryOp { op, expr } => {
@@ -590,7 +589,8 @@ impl<'a> BuildContext<'a> {
                 let name_upper = name_to_string(&func.name).to_uppercase();
                 if name_upper == "NULLIF" {
                     let (dt, _) = self.infer_function_type(func, scope)?;
-                    (dt, nullability::infer_nullif_nullability())
+                    // NULLIF is always nullable because it returns NULL if args are equal
+                    (dt, true)
                 } else {
                     self.infer_function_type(func, scope)?
                 }
@@ -622,11 +622,18 @@ impl<'a> BuildContext<'a> {
                     else_nullable = Some(typed.nullable);
                 }
 
-                let nullable = nullability::infer_case_nullability(
-                    else_result.is_some(),
-                    &when_nullabilities,
-                    else_nullable,
-                );
+                // If no ELSE, implicitly NULL, so nullable
+                let nullable = if else_result.is_none() {
+                    true
+                } else {
+                    // Check if any WHEN branch is nullable
+                    if when_nullabilities.iter().any(|&n| n) {
+                        true
+                    } else {
+                        // Check if ELSE branch is nullable
+                        else_nullable.unwrap_or(false)
+                    }
+                };
 
                 (data_type, nullable)
             },
@@ -720,8 +727,8 @@ impl<'a> BuildContext<'a> {
 
         match upper_name.as_str() {
             "COALESCE" => {
-                let nullabilities: Vec<bool> = typed_args.iter().map(|a| a.nullable).collect();
-                nullable = nullability::infer_coalesce_nullability(&nullabilities);
+                // COALESCE is nullable only if ALL arguments are nullable
+                nullable = typed_args.iter().all(|a| a.nullable);
             },
             "SUM" | "AVG" | "MIN" | "MAX" | "LEAD" | "LAG" | "FIRST_VALUE" | "LAST_VALUE"
             | "NTH_VALUE" => {
@@ -799,35 +806,40 @@ impl<'a> BuildContext<'a> {
                 "Anchor query has no columns".to_string(),
             ))?;
 
-        // Apply column aliases if provided
+        let mut alias_map = HashMap::new();
         if !column_aliases.is_empty() {
             if src_cols.len() != column_aliases.len() {
                 return Err(AnalyzerError::AnalysisError(format!(
-                    "CTE {} column count mismatch",
-                    cte_name
+                    "CTE {} column count mismatch in anchor: got {}, expected {}",
+                    cte_name,
+                    src_cols.len(),
+                    column_aliases.len()
                 )));
             }
-            Ok(src_cols
-                .iter()
-                .zip(column_aliases)
-                .map(|(c, alias)| ResolvedColumn {
-                    name: alias.name.value.clone(),
-                    data_type: c.data_type.clone(),
-                    nullable: c.nullable,
-                    source_alias: Some(cte_name.to_string()),
-                })
-                .collect())
-        } else {
-            Ok(src_cols
-                .iter()
-                .map(|c| ResolvedColumn {
-                    name: c.name.clone(),
-                    data_type: c.data_type.clone(),
-                    nullable: c.nullable,
-                    source_alias: Some(cte_name.to_string()),
-                })
-                .collect())
+            for (i, alias) in column_aliases.iter().enumerate() {
+                alias_map.insert(src_cols[i].name.clone(), alias.name.value.clone());
+            }
         }
+
+        let new_cols = src_cols
+            .iter()
+            .enumerate()
+            .map(|(i, c)| {
+                let final_name = if !column_aliases.is_empty() {
+                    column_aliases[i].name.value.clone()
+                } else {
+                    c.name.clone() // Keep original name
+                };
+                ResolvedColumn {
+                    name: final_name,
+                    data_type: c.data_type.clone(),
+                    nullable: c.nullable,
+                    source_alias: Some(cte_name.to_string()),
+                }
+            })
+            .collect();
+
+        Ok(new_cols)
     }
 }
 
@@ -886,11 +898,11 @@ impl Scope {
     }
 }
 
-/// Helper to convert ObjectName to String
+/// Helper to extract table name from object name
 fn name_to_string(name: &ObjectName) -> String {
     name.0
         .iter()
-        .map(|ident| ident.value.clone())
+        .map(|i| i.value.clone())
         .collect::<Vec<_>>()
         .join(".")
 }

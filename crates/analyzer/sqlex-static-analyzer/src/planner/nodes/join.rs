@@ -1,8 +1,5 @@
 use crate::{
-    planner::{
-        nullability::{self, ColumnNullability},
-        plan::{JoinCondition, JoinKind, LogicalNode, PlanNode, PlanNodeColumn},
-    },
+    planner::plan::{JoinCondition, JoinKind, LogicalNode, PlanNode, PlanNodeColumn},
     schema::Schema,
 };
 
@@ -27,27 +24,44 @@ impl JoinNode {
         let mut right_cols = right.columns().to_vec();
 
         // Determine nullability for JOIN columns
-        let nullability_result =
-            nullability::join_nullability(kind, left.as_ref(), right.as_ref(), &condition, schema);
-
-        // Apply nullability to left side tables if needed
-        if let ColumnNullability::ForceNullable(side) = nullability_result {
-            if side == nullability::JoinSide::Left || side == nullability::JoinSide::Both {
-                for col in &mut left_cols {
-                    col.nullability = true;
+        let (force_left_nullable, force_right_nullable) = match kind {
+            JoinKind::Inner | JoinKind::Cross => (false, false),
+            JoinKind::Left => {
+                if check_fk_guarantee(
+                    JoinKind::Left,
+                    left.as_ref(),
+                    right.as_ref(),
+                    &condition,
+                    schema,
+                ) {
+                    (false, false)
+                } else {
+                    (false, true)
                 }
+            },
+            JoinKind::Right => {
+                if check_fk_guarantee(
+                    JoinKind::Right,
+                    left.as_ref(),
+                    right.as_ref(),
+                    &condition,
+                    schema,
+                ) {
+                    (false, false)
+                } else {
+                    (true, false)
+                }
+            },
+            JoinKind::Full => (true, true),
+        };
+
+        if force_left_nullable {
+            for col in &mut left_cols {
+                col.nullability = true;
             }
         }
 
-        // Apply nullability to right side tables if needed
-        let make_right_nullable = match nullability_result {
-            ColumnNullability::ForceNullable(side) => {
-                side == nullability::JoinSide::Right || side == nullability::JoinSide::Both
-            },
-            _ => false,
-        };
-
-        if make_right_nullable {
+        if force_right_nullable {
             for col in &mut right_cols {
                 col.nullability = true;
             }
@@ -70,4 +84,74 @@ impl LogicalNode for JoinNode {
     fn columns(&self) -> &[PlanNodeColumn] {
         &self.output_columns
     }
+}
+
+/// Extract table name from a PlanNode (if it's a TableScan)
+fn extract_table_name_from_plan(plan: &dyn PlanNode) -> Option<String> {
+    use crate::planner::nodes::table_scan::TableScanNode;
+    crate::match_plan!(plan, {
+        ts: TableScanNode => Some(ts.table.clone()),
+        join: JoinNode => extract_table_name_from_plan(join.left.as_ref()),
+        _ => None
+    })
+}
+
+/// Check FK guarantee using plan nodes
+fn check_fk_guarantee(
+    join_kind: JoinKind,
+    left: &dyn PlanNode,
+    right: &dyn PlanNode,
+    condition: &Option<JoinCondition>,
+    schema: &Schema,
+) -> bool {
+    let left_table = extract_table_name_from_plan(left);
+    let right_table = extract_table_name_from_plan(right);
+
+    match join_kind {
+        JoinKind::Left => {
+            // Check if LEFT table has FK to RIGHT table
+            if let (Some(left_tbl), Some(right_tbl)) = (left_table, right_table) {
+                if let Some(table_def) = schema.tables.get(&left_tbl) {
+                    for fk in &table_def.foreign_keys {
+                        if fk.ref_table == right_tbl {
+                            // Check if FK columns are NOT NULL
+                            let fk_cols_not_null = fk.columns.iter().all(|fk_col| {
+                                table_def
+                                    .columns
+                                    .iter()
+                                    .any(|col| col.name == *fk_col && !col.nullable)
+                            });
+
+                            if fk_cols_not_null && matches!(condition, Some(JoinCondition::On(_))) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        JoinKind::Right => {
+            // Check if RIGHT table has FK to LEFT table
+            if let (Some(left_tbl), Some(right_tbl)) = (left_table, right_table) {
+                if let Some(table_def) = schema.tables.get(&right_tbl) {
+                    for fk in &table_def.foreign_keys {
+                        if fk.ref_table == left_tbl {
+                            let fk_cols_not_null = fk.columns.iter().all(|fk_col| {
+                                table_def
+                                    .columns
+                                    .iter()
+                                    .any(|col| col.name == *fk_col && !col.nullable)
+                            });
+
+                            if fk_cols_not_null && matches!(condition, Some(JoinCondition::On(_))) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        _ => {},
+    }
+    false
 }
