@@ -1,7 +1,5 @@
-use sqlex_common::ColumnInfo;
-
 use crate::{
-    planner::plan::{CTEContext, LogicalNode, PlanNode, SetOp},
+    planner::plan::{CTEContext, LogicalNode, PlanNode, PlanNodeColumn, SetOp},
     schema::Schema,
 };
 
@@ -14,7 +12,7 @@ pub struct SetOperationNode {
 }
 
 impl LogicalNode for SetOperationNode {
-    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<ColumnInfo> {
+    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<PlanNodeColumn> {
         // Use left side's columns (SQL standard: names come from left)
         self.left.columns(schema, ctx)
     }

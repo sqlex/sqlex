@@ -53,7 +53,15 @@ impl Analyzer for StaticAnalyzer {
     async fn analyze(&self, sql: &str) -> Result<ResultSet> {
         let ctx = BuildContext::new(&self.schema);
         let plan = ctx.build(sql)?;
-        let columns = plan.columns(&self.schema, &planner::CTEContext::new());
+        let columns = plan
+            .columns(&self.schema, &planner::CTEContext::new())
+            .into_iter()
+            .map(|c| sqlex_common::ColumnInfo {
+                name: c.name,
+                data_type: c.data_type,
+                nullability: c.nullability,
+            })
+            .collect();
         Ok(ResultSet { columns })
     }
 
@@ -71,8 +79,6 @@ impl Analyzer for StaticAnalyzer {
                         name: c.name.clone(),
                         data_type: c.data_type.clone(),
                         nullability: c.nullable,
-                        origin_table: None,
-                        origin_column: None,
                     })
                     .collect(),
             })

@@ -1,7 +1,5 @@
-use sqlex_common::ColumnInfo;
-
 use crate::{
-    planner::plan::{CTEContext, LogicalNode, PlanNode, TypedExpr},
+    planner::plan::{CTEContext, LogicalNode, PlanNode, PlanNodeColumn, TypedExpr},
     schema::Schema,
 };
 
@@ -12,7 +10,7 @@ pub struct DistinctOnNode {
 }
 
 impl LogicalNode for DistinctOnNode {
-    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<ColumnInfo> {
+    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<PlanNodeColumn> {
         self.input.columns(schema, ctx)
     }
 }

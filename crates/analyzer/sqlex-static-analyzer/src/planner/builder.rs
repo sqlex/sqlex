@@ -68,7 +68,7 @@ impl<'a> BuildContext<'a> {
                 let cols = cte
                     .columns
                     .iter()
-                    .map(|rc| sqlex_common::ColumnInfo {
+                    .map(|rc| super::plan::PlanNodeColumn {
                         name: rc.name.clone(),
                         data_type: rc.data_type.clone(),
                         nullability: rc.nullable,

@@ -1,7 +1,5 @@
-use sqlex_common::ColumnInfo;
-
 use crate::{
-    planner::plan::{CTEContext, JoinCondition, JoinKind, LogicalNode, PlanNode},
+    planner::plan::{CTEContext, JoinCondition, JoinKind, LogicalNode, PlanNode, PlanNodeColumn},
     schema::Schema,
 };
 
@@ -14,7 +12,7 @@ pub struct JoinNode {
 }
 
 impl LogicalNode for JoinNode {
-    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<ColumnInfo> {
+    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<PlanNodeColumn> {
         let mut left_cols = self.left.columns(schema, ctx);
         let mut right_cols = self.right.columns(schema, ctx);
 

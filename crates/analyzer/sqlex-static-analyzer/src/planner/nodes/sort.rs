@@ -1,7 +1,5 @@
-use sqlex_common::ColumnInfo;
-
 use crate::{
-    planner::plan::{CTEContext, LogicalNode, OrderByExpr, PlanNode},
+    planner::plan::{CTEContext, LogicalNode, OrderByExpr, PlanNode, PlanNodeColumn},
     schema::Schema,
 };
 
@@ -12,7 +10,7 @@ pub struct SortNode {
 }
 
 impl LogicalNode for SortNode {
-    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<ColumnInfo> {
+    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<PlanNodeColumn> {
         self.input.columns(schema, ctx)
     }
 }

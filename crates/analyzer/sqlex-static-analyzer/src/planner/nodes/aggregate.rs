@@ -1,8 +1,6 @@
-use sqlex_common::ColumnInfo;
-
 use crate::{
     planner::plan::{
-        AggregateExpr, CTEContext, GroupingMode, LogicalNode, PlanNode, TypedExpr,
+        AggregateExpr, CTEContext, GroupingMode, LogicalNode, PlanNode, PlanNodeColumn, TypedExpr,
         aggregate_result_type,
     },
     schema::Schema,
@@ -17,12 +15,12 @@ pub struct AggregateNode {
 }
 
 impl LogicalNode for AggregateNode {
-    fn columns(&self, _schema: &Schema, _ctx: &CTEContext) -> Vec<ColumnInfo> {
-        let mut cols: Vec<ColumnInfo> = self
+    fn columns(&self, _schema: &Schema, _ctx: &CTEContext) -> Vec<PlanNodeColumn> {
+        let mut cols: Vec<PlanNodeColumn> = self
             .group_by
             .iter()
             .enumerate()
-            .map(|(i, expr)| ColumnInfo {
+            .map(|(i, expr)| PlanNodeColumn {
                 name: format!("group_{}", i),
                 data_type: expr.data_type.clone(),
                 nullability: expr.nullable,
@@ -33,7 +31,7 @@ impl LogicalNode for AggregateNode {
 
         for (i, agg) in self.aggregates.iter().enumerate() {
             let (data_type, _nullable) = aggregate_result_type(&agg.function, &agg.args);
-            cols.push(ColumnInfo {
+            cols.push(PlanNodeColumn {
                 name: format!("agg_{}", i),
                 data_type,
                 nullability: false,

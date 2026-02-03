@@ -1,7 +1,5 @@
-use sqlex_common::ColumnInfo;
-
 use crate::{
-    planner::plan::{CTEContext, LogicalNode, TypedExpr},
+    planner::plan::{CTEContext, LogicalNode, PlanNodeColumn, TypedExpr},
     schema::Schema,
 };
 
@@ -12,7 +10,7 @@ pub struct ValuesNode {
 }
 
 impl LogicalNode for ValuesNode {
-    fn columns(&self, _schema: &Schema, _ctx: &CTEContext) -> Vec<ColumnInfo> {
+    fn columns(&self, _schema: &Schema, _ctx: &CTEContext) -> Vec<PlanNodeColumn> {
         if let Some(first_row) = self.rows.first() {
             first_row
                 .iter()
@@ -28,7 +26,7 @@ impl LogicalNode for ValuesNode {
                         .rows
                         .iter()
                         .any(|r| r.get(i).map(|e| e.nullable).unwrap_or(true));
-                    ColumnInfo {
+                    PlanNodeColumn {
                         name,
                         data_type: expr.data_type.clone(),
                         nullability: nullable,

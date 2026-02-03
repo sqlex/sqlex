@@ -1,7 +1,5 @@
-use sqlex_common::ColumnInfo;
-
 use crate::{
-    planner::plan::{CTEContext, CTEDef, LogicalNode, PlanNode},
+    planner::plan::{CTEContext, CTEDef, LogicalNode, PlanNode, PlanNodeColumn},
     schema::Schema,
 };
 
@@ -12,7 +10,7 @@ pub struct WithCTENode {
 }
 
 impl LogicalNode for WithCTENode {
-    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<ColumnInfo> {
+    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<PlanNodeColumn> {
         let mut new_ctx = ctx.clone();
         for cte in &self.ctes {
             let cte_cols = cte.query.columns(schema, &new_ctx);

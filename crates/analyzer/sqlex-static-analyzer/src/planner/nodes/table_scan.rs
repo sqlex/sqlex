@@ -1,7 +1,5 @@
-use sqlex_common::ColumnInfo;
-
 use crate::{
-    planner::plan::{CTEContext, LogicalNode},
+    planner::plan::{CTEContext, LogicalNode, PlanNodeColumn},
     schema::Schema,
 };
 
@@ -12,13 +10,13 @@ pub struct TableScanNode {
 }
 
 impl LogicalNode for TableScanNode {
-    fn columns(&self, schema: &Schema, _ctx: &CTEContext) -> Vec<ColumnInfo> {
+    fn columns(&self, schema: &Schema, _ctx: &CTEContext) -> Vec<PlanNodeColumn> {
         schema
             .get_table(&self.table)
             .map(|t| {
                 t.columns
                     .iter()
-                    .map(|c| ColumnInfo {
+                    .map(|c| PlanNodeColumn {
                         name: c.name.clone(),
                         data_type: c.data_type.clone(),
                         nullability: c.nullable,

@@ -1,7 +1,5 @@
-use sqlex_common::ColumnInfo;
-
 use crate::{
-    planner::plan::{CTEContext, LogicalNode, PlanNode},
+    planner::plan::{CTEContext, LogicalNode, PlanNode, PlanNodeColumn},
     schema::Schema,
 };
 
@@ -12,7 +10,7 @@ pub struct SubqueryNode {
 }
 
 impl LogicalNode for SubqueryNode {
-    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<ColumnInfo> {
+    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<PlanNodeColumn> {
         self.query.columns(schema, ctx)
     }
 }

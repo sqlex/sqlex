@@ -1,7 +1,5 @@
-use sqlex_common::ColumnInfo;
-
 use crate::{
-    planner::plan::{CTEContext, LogicalNode, PlanNode},
+    planner::plan::{CTEContext, LogicalNode, PlanNode, PlanNodeColumn},
     schema::Schema,
 };
 
@@ -13,7 +11,7 @@ pub struct LimitNode {
 }
 
 impl LogicalNode for LimitNode {
-    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<ColumnInfo> {
+    fn columns(&self, schema: &Schema, ctx: &CTEContext) -> Vec<PlanNodeColumn> {
         self.input.columns(schema, ctx)
     }
 }

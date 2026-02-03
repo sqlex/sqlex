@@ -75,8 +75,6 @@ impl Analyzer for MySqlDatabaseAnalyzer {
                 name,
                 data_type,
                 nullability: true,
-                origin_table: None,
-                origin_column: None,
             });
         }
         Ok(ResultSet { columns })
@@ -128,8 +126,6 @@ impl Analyzer for MySqlDatabaseAnalyzer {
                 name: column_name,
                 data_type,
                 nullability,
-                origin_table: None,
-                origin_column: None,
             };
 
             if !tables_map.contains_key(&table_name) {

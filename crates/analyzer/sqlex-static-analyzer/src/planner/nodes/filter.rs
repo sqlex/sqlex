@@ -1,7 +1,5 @@
-use sqlex_common::ColumnInfo;
-
 use crate::{
-    planner::plan::{CTEContext, LogicalNode, PlanNode, TypedExpr},
+    planner::plan::{CTEContext, LogicalNode, PlanNode, PlanNodeColumn, TypedExpr},
     schema::Schema,
 };
 
@@ -12,7 +10,7 @@ pub struct FilterNode {
 }
 
 impl LogicalNode for FilterNode {
-    fn columns(&self, schema: &Schema, cte_ctx: &CTEContext) -> Vec<ColumnInfo> {
+    fn columns(&self, schema: &Schema, cte_ctx: &CTEContext) -> Vec<PlanNodeColumn> {
         self.input.columns(schema, cte_ctx)
     }
 }

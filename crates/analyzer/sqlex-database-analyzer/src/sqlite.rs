@@ -43,8 +43,6 @@ impl Analyzer for SqliteDatabaseAnalyzer {
                 name,
                 data_type,
                 nullability: true,
-                origin_table: None,
-                origin_column: None,
             });
         }
         Ok(ResultSet { columns })
@@ -90,8 +88,6 @@ impl Analyzer for SqliteDatabaseAnalyzer {
                     name,
                     data_type,
                     nullability,
-                    origin_table: None,
-                    origin_column: None,
                 });
             }
 

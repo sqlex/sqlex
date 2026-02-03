@@ -1,7 +1,5 @@
-use sqlex_common::ColumnInfo;
-
 use crate::{
-    planner::plan::{CTEContext, LogicalNode, PlanNode, ProjectColumn},
+    planner::plan::{CTEContext, LogicalNode, PlanNode, PlanNodeColumn, ProjectColumn},
     schema::Schema,
 };
 
@@ -12,11 +10,11 @@ pub struct ProjectNode {
 }
 
 impl LogicalNode for ProjectNode {
-    fn columns(&self, _schema: &Schema, _ctx: &CTEContext) -> Vec<ColumnInfo> {
+    fn columns(&self, _schema: &Schema, _ctx: &CTEContext) -> Vec<PlanNodeColumn> {
         self.columns
             .iter()
             .enumerate()
-            .map(|(i, c)| ColumnInfo {
+            .map(|(i, c)| PlanNodeColumn {
                 name: c.alias.clone().unwrap_or_else(|| format!("col_{}", i)),
                 data_type: c.expr.data_type.clone(),
                 nullability: c.expr.nullable,

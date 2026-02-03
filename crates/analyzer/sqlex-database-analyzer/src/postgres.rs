@@ -77,8 +77,6 @@ impl Analyzer for PostgresDatabaseAnalyzer {
                 name,
                 data_type,
                 nullability: true,
-                origin_table: None,
-                origin_column: None,
             });
         }
 
@@ -125,8 +123,6 @@ impl Analyzer for PostgresDatabaseAnalyzer {
                 name: column_name,
                 data_type,
                 nullability,
-                origin_table: None,
-                origin_column: None,
             };
 
             if !tables_map.contains_key(&table_name) {
