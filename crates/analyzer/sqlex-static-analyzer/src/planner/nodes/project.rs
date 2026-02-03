@@ -1,4 +1,14 @@
-use crate::planner::plan::{LogicalNode, PlanNode, PlanNodeColumn, ProjectColumn};
+use crate::planner::{
+    expr::TypedExpr,
+    plan::{LogicalNode, PlanNode, PlanNodeColumn},
+};
+
+/// Project column (SELECT item)
+#[derive(Debug, Clone)]
+pub struct ProjectColumn {
+    pub alias: Option<String>,
+    pub expr: TypedExpr,
+}
 
 #[derive(Debug, Clone)]
 pub struct ProjectNode {

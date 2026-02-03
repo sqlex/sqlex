@@ -1,4 +1,7 @@
-use crate::planner::plan::{LogicalNode, PlanNode, PlanNodeColumn, TypedExpr};
+use crate::planner::{
+    expr::TypedExpr,
+    plan::{LogicalNode, PlanNode, PlanNodeColumn},
+};
 
 #[derive(Debug, Clone)]
 pub struct FilterNode {

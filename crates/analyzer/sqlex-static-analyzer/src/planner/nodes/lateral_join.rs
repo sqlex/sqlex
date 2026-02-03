@@ -1,4 +1,7 @@
-use crate::planner::plan::{JoinKind, LogicalNode, PlanNode, PlanNodeColumn};
+use crate::planner::{
+    nodes::join::JoinKind,
+    plan::{LogicalNode, PlanNode, PlanNodeColumn},
+};
 
 #[derive(Debug, Clone)]
 pub struct LateralJoinNode {

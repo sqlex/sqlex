@@ -1,4 +1,7 @@
-use crate::planner::plan::{LogicalNode, OrderByExpr, PlanNode, PlanNodeColumn};
+use crate::planner::{
+    expr::OrderByExpr,
+    plan::{LogicalNode, PlanNode, PlanNodeColumn},
+};
 
 #[derive(Debug, Clone)]
 pub struct SortNode {

@@ -8,7 +8,9 @@ pub mod schema;
 
 // Re-exports
 use async_trait::async_trait;
-pub use planner::{BuildContext, JoinKind, LogicalNode, PlanNode, PlanNodeColumn, TypedExpr};
+pub use planner::{
+    BuildContext, LogicalNode, PlanNode, PlanNodeColumn, TypedExpr, nodes::join::JoinKind,
+};
 pub use schema::{ColumnDef, Dialect, ForeignKeyDef, Schema, TableDef};
 use sqlex_analyzer::{Analyzer, AnalyzerError, Result, ResultSet, Table};
 

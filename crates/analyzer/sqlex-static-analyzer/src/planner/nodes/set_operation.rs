@@ -1,4 +1,12 @@
-use crate::planner::plan::{LogicalNode, PlanNode, PlanNodeColumn, SetOp};
+use crate::planner::plan::{LogicalNode, PlanNode, PlanNodeColumn};
+
+/// Set operation type
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetOp {
+    Union,
+    Intersect,
+    Except,
+}
 
 #[derive(Debug, Clone)]
 pub struct SetOperationNode {

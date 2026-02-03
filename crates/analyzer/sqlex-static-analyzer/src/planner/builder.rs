@@ -16,8 +16,14 @@ use sqlparser::{
 };
 
 use super::{
-    nodes::*,
-    plan::{JoinCondition, JoinKind, OrderByExpr, PlanNode, ProjectColumn, SetOp, TypedExpr},
+    expr::{AggregateFunction, OrderByExpr, TypedExpr},
+    nodes::{
+        join::{JoinCondition, JoinKind},
+        project::ProjectColumn,
+        set_operation::SetOp,
+        *,
+    },
+    plan::PlanNode,
     types,
 };
 use crate::schema::Schema;
@@ -697,24 +703,22 @@ impl<'a> BuildContext<'a> {
         // Try to infer aggregate function types first
         let upper_name = name.to_uppercase();
         let return_type = match upper_name.as_str() {
-            "COUNT" => {
-                types::aggregate_return_type(&super::plan::AggregateFunction::Count, DataType::Int)
-            },
+            "COUNT" => types::aggregate_return_type(&AggregateFunction::Count, DataType::Int),
             "SUM" => {
                 let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
-                types::aggregate_return_type(&super::plan::AggregateFunction::Sum, input_type)
+                types::aggregate_return_type(&AggregateFunction::Sum, input_type)
             },
             "AVG" => {
                 let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
-                types::aggregate_return_type(&super::plan::AggregateFunction::Avg, input_type)
+                types::aggregate_return_type(&AggregateFunction::Avg, input_type)
             },
             "MIN" => {
                 let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
-                types::aggregate_return_type(&super::plan::AggregateFunction::Min, input_type)
+                types::aggregate_return_type(&AggregateFunction::Min, input_type)
             },
             "MAX" => {
                 let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
-                types::aggregate_return_type(&super::plan::AggregateFunction::Max, input_type)
+                types::aggregate_return_type(&AggregateFunction::Max, input_type)
             },
             _ => {
                 // Fall back to regular function type inference

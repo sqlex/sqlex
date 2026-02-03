@@ -1,7 +1,15 @@
-use crate::planner::plan::{
-    AggregateExpr, GroupingMode, LogicalNode, PlanNode, PlanNodeColumn, TypedExpr,
-    aggregate_result_type,
+use crate::planner::{
+    expr::{AggregateExpr, TypedExpr, aggregate_result_type},
+    plan::{LogicalNode, PlanNode, PlanNodeColumn},
 };
+
+/// Grouping mode for advanced GROUP BY
+#[derive(Debug, Clone)]
+pub enum GroupingMode {
+    GroupingSets(Vec<Vec<TypedExpr>>),
+    Cube,
+    Rollup,
+}
 
 #[derive(Debug, Clone)]
 pub struct AggregateNode {

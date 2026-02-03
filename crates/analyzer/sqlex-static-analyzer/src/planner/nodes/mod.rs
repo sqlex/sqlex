@@ -42,6 +42,3 @@ pub use values::ValuesNode;
 
 pub mod window;
 pub use window::WindowNode;
-
-pub mod with_cte;
-pub use with_cte::WithCTENode;

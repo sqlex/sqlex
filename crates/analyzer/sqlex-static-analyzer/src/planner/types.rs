@@ -5,7 +5,7 @@
 use sqlex_common::DataType;
 use sqlparser::ast::{BinaryOperator, UnaryOperator};
 
-use super::plan::AggregateFunction;
+use super::expr::AggregateFunction;
 
 /// Infer type for binary operation
 pub fn binary_op_type(left: DataType, op: BinaryOperator, right: DataType) -> DataType {

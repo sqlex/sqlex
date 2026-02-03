@@ -1,7 +1,31 @@
 use crate::{
-    planner::plan::{JoinCondition, JoinKind, LogicalNode, PlanNode, PlanNodeColumn},
+    planner::{
+        expr::TypedExpr,
+        plan::{LogicalNode, PlanNode, PlanNodeColumn},
+    },
     schema::Schema,
 };
+
+/// Join type
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JoinKind {
+    Inner,
+    Left,
+    Right,
+    Full,
+    Cross,
+}
+
+/// Join condition
+#[derive(Debug, Clone)]
+pub enum JoinCondition {
+    /// ON expr
+    On(Box<TypedExpr>),
+    /// USING (col1, col2)
+    Using(Vec<String>),
+    /// NATURAL JOIN
+    Natural,
+}
 
 #[derive(Debug, Clone)]
 pub struct JoinNode {

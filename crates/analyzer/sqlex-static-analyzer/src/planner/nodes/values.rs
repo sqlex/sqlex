@@ -1,4 +1,7 @@
-use crate::planner::plan::{LogicalNode, PlanNodeColumn, TypedExpr};
+use crate::planner::{
+    expr::TypedExpr,
+    plan::{LogicalNode, PlanNodeColumn},
+};
 
 #[derive(Debug, Clone)]
 pub struct ValuesNode {
@@ -9,7 +12,7 @@ pub struct ValuesNode {
 
 impl ValuesNode {
     pub fn build(rows: Vec<Vec<TypedExpr>>, column_names: Vec<String>) -> Self {
-        let mut output_columns = vec![];
+        let mut output_columns: Vec<PlanNodeColumn> = vec![];
 
         if let Some(first_row) = rows.first() {
             output_columns = first_row
