@@ -23,7 +23,7 @@ impl CTERefNode {
             None => return Ok(None),
         };
 
-        let mut output_columns = cte
+        let mut output_columns: Vec<PlanNodeColumn> = cte
             .columns
             .iter()
             .map(|c| PlanNodeColumn {
