@@ -1,0 +1,61 @@
+dialect: sqlite
+migrations:
+  - |
+    CREATE TABLE users (
+      id INT NOT NULL,
+      name TEXT NOT NULL
+    )
+  - |
+    CREATE TABLE orders (
+      id INT NOT NULL,
+      user_id INT,
+      total DECIMAL
+    )
+
+tables:
+  - name: users
+    columns:
+      - name: id
+        type: Int
+        nullability: false
+      - name: name
+        type: Text
+        nullability: false
+  - name: orders
+    columns:
+      - name: id
+        type: Int
+        nullability: false
+      - name: user_id
+        type: Int
+        nullability: true
+      - name: total
+        type: Decimal
+        nullability: true
+
+queries:
+  - name: left_join_derived
+    sql: |
+      SELECT u.id, t.total
+      FROM users u
+      LEFT JOIN (SELECT user_id, total FROM orders) t ON u.id = t.user_id
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: total
+        type: Decimal
+        nullability: true
+
+  - name: inner_join_derived
+    sql: |
+      SELECT u.id, t.total
+      FROM users u
+      INNER JOIN (SELECT user_id, total FROM orders) t ON u.id = t.user_id
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: total
+        type: Decimal
+        nullability: true

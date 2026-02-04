@@ -1,0 +1,59 @@
+dialect: mysql
+migrations:
+  - |
+    CREATE TABLE data (
+      a INT NOT NULL,
+      b INT,
+      c TEXT,
+      d TEXT,
+      e DECIMAL
+    )
+
+tables:
+  - name: data
+    columns:
+      - name: a
+        type: Int
+        nullability: false
+      - name: b
+        type: Int
+        nullability: true
+      - name: c
+        type: Text
+        nullability: true
+      - name: d
+        type: Text
+        nullability: true
+      - name: e
+        type: Decimal
+        nullability: true
+
+queries:
+  - name: boolean_expr_nullable
+    sql: SELECT (b > 0) AS v FROM data
+    expected:
+      - name: v
+        type: Bool
+        nullability: true
+
+  - name: case_mixed_types
+    sql: |
+      SELECT CASE WHEN a > 0 THEN e ELSE 0 END AS v FROM data
+    expected:
+      - name: v
+        type: Decimal
+        nullability: true
+
+  - name: coalesce_text_constant
+    sql: SELECT COALESCE(c, 'x') AS v FROM data
+    expected:
+      - name: v
+        type: Text
+        nullability: false
+
+  - name: arithmetic_nullable_chain
+    sql: SELECT (a + b + 1) AS v FROM data
+    expected:
+      - name: v
+        type: Int
+        nullability: true

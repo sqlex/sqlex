@@ -1,0 +1,46 @@
+dialect: mysql
+migrations:
+  - |
+    CREATE TABLE a (
+      id INT NOT NULL,
+      value TEXT
+    )
+  - |
+    CREATE TABLE b (
+      id INT NOT NULL,
+      value TEXT NOT NULL
+    )
+
+tables:
+  - name: a
+    columns:
+      - name: id
+        type: Int
+        nullability: false
+      - name: value
+        type: Text
+        nullability: true
+  - name: b
+    columns:
+      - name: id
+        type: Int
+        nullability: false
+      - name: value
+        type: Text
+        nullability: false
+
+queries:
+  - name: join_using
+    sql: |
+      SELECT id, a.value, b.value
+      FROM a JOIN b USING (id)
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: value
+        type: Text
+        nullability: true
+      - name: value
+        type: Text
+        nullability: false

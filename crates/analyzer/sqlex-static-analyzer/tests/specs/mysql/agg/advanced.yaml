@@ -1,0 +1,50 @@
+dialect: mysql
+migrations:
+  - |
+    CREATE TABLE sales (
+      id INT NOT NULL,
+      region TEXT,
+      amount DECIMAL
+    )
+
+tables:
+  - name: sales
+    columns:
+      - name: id
+        type: Int
+        nullability: false
+      - name: region
+        type: Text
+        nullability: true
+      - name: amount
+        type: Decimal
+        nullability: true
+
+queries:
+  - name: avg_amount
+    sql: SELECT AVG(amount) AS avg_amount FROM sales
+    expected:
+      - name: avg_amount
+        type: Double
+        nullability: true
+
+  - name: count_distinct
+    sql: SELECT COUNT(DISTINCT region) AS cnt FROM sales
+    expected:
+      - name: cnt
+        type: BigInt
+        nullability: false
+
+  - name: group_by_having_nullable_group
+    sql: |
+      SELECT region, COUNT(*) AS cnt
+      FROM sales
+      GROUP BY region
+      HAVING region IS NOT NULL
+    expected:
+      - name: region
+        type: Text
+        nullability: true
+      - name: cnt
+        type: BigInt
+        nullability: false

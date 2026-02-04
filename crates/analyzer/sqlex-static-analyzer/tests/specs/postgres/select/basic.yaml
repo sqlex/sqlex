@@ -1,0 +1,97 @@
+dialect: postgres
+migrations:
+  - |
+    CREATE TABLE users (
+      id INT NOT NULL,
+      name TEXT NOT NULL,
+      email TEXT,
+      age INT,
+      score DOUBLE PRECISION
+    )
+  - |
+    CREATE TABLE orders (
+      id INT NOT NULL,
+      user_id INT NOT NULL,
+      total DECIMAL,
+      status TEXT
+    )
+
+tables:
+  - name: users
+    columns:
+      - name: id
+        type: Int
+        nullability: false
+      - name: name
+        type: Text
+        nullability: false
+      - name: email
+        type: Text
+        nullability: true
+      - name: age
+        type: Int
+        nullability: true
+      - name: score
+        type: Double
+        nullability: true
+  - name: orders
+    columns:
+      - name: id
+        type: Int
+        nullability: false
+      - name: user_id
+        type: Int
+        nullability: false
+      - name: total
+        type: Decimal
+        nullability: true
+      - name: status
+        type: Text
+        nullability: true
+
+queries:
+  - name: select_basic_columns
+    sql: SELECT id, name, email FROM users
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: name
+        type: Text
+        nullability: false
+      - name: email
+        type: Text
+        nullability: true
+
+  - name: select_aliases
+    sql: SELECT id AS user_id, name AS user_name FROM users
+    expected:
+      - name: user_id
+        type: Int
+        nullability: false
+      - name: user_name
+        type: Text
+        nullability: false
+
+  - name: select_literals
+    sql: SELECT 1 as c1, 'hello' as c2, 3.14 as c3, TRUE as c4 FROM users
+    expected:
+      - name: c1
+        type: Int
+        nullability: false
+      - name: c2
+        type: Text
+        nullability: false
+      - name: c3
+        type: Decimal
+        nullability: false
+      - name: c4
+        type: Bool
+        nullability: false
+
+  - name: select_expression_nullable
+    sql: SELECT age + 1 as age_plus FROM users
+    expected:
+      - name: age_plus
+        type: Int
+        nullability: true

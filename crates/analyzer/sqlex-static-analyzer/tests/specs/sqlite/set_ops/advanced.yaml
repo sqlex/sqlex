@@ -1,0 +1,44 @@
+dialect: sqlite
+migrations:
+  - |
+    CREATE TABLE nums (
+      id INT NOT NULL,
+      val INT
+    )
+  - |
+    CREATE TABLE nums_big (
+      id BIGINT NOT NULL,
+      val BIGINT
+    )
+
+tables:
+  - name: nums
+    columns:
+      - name: id
+        type: Int
+        nullability: false
+      - name: val
+        type: Int
+        nullability: true
+  - name: nums_big
+    columns:
+      - name: id
+        type: BigInt
+        nullability: false
+      - name: val
+        type: BigInt
+        nullability: true
+
+queries:
+  - name: union_type_promotion
+    sql: |
+      SELECT id, val FROM nums
+      UNION ALL
+      SELECT id, val FROM nums_big
+    expected:
+      - name: id
+        type: BigInt
+        nullability: false
+      - name: val
+        type: BigInt
+        nullability: true

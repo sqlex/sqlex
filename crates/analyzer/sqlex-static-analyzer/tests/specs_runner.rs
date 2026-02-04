@@ -1,9 +1,10 @@
-use std::{fs, path::Path};
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use sqlex_analyzer::Analyzer;
 use sqlex_common::{dialect::Dialect, types::DataType};
 use sqlex_static_analyzer::StaticAnalyzer;
+use tokio::fs as tokio_fs;
 
 #[derive(Debug, Deserialize)]
 struct YamlTestSuite {
@@ -40,25 +41,58 @@ struct YamlOutputColumn {
 #[tokio::test]
 async fn run_specs_tests() {
     let specs_dir = Path::new("tests/specs");
-    if !specs_dir.exists() {
+    let specs_meta = tokio_fs::metadata(specs_dir).await;
+    let is_dir = match specs_meta {
+        Ok(meta) => meta.is_dir(),
+        Err(_) => false,
+    };
+    if !is_dir {
         return;
     }
 
-    for entry in fs::read_dir(specs_dir).expect("Failed to read specs directory") {
-        let entry = entry.expect("Failed to read directory entry");
-        let path = entry.path();
+    let mut files = Vec::new();
+    collect_yaml_files(specs_dir, &mut files).await;
+    for path in files {
+        let display_path = path
+            .strip_prefix(specs_dir)
+            .unwrap_or(&path)
+            .display()
+            .to_string();
+        println!("Running tests from: {}", display_path);
+        run_test_file(&path, specs_dir).await;
+    }
+}
 
-        if path.extension().is_some_and(|ext| ext == "yaml") {
-            println!("Running tests from: {:?}", path);
-            run_test_file(&path).await;
+async fn collect_yaml_files(dir: &Path, out: &mut Vec<PathBuf>) {
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(current) = stack.pop() {
+        let mut entries = match tokio_fs::read_dir(&current).await {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
+
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|ext| ext == "yaml") {
+                out.push(path);
+            }
         }
     }
 }
 
-async fn run_test_file(path: &Path) {
-    let content = fs::read_to_string(path).expect("Failed to read file");
+async fn run_test_file(path: &Path, specs_dir: &Path) {
+    let display_path = path
+        .strip_prefix(specs_dir)
+        .unwrap_or(path)
+        .display()
+        .to_string();
+    let content = tokio_fs::read_to_string(path)
+        .await
+        .expect("Failed to read file");
     let suite: YamlTestSuite = serde_yaml::from_str(&content)
-        .unwrap_or_else(|e| panic!("Failed to parse YAML file {:?}: {}", path, e));
+        .unwrap_or_else(|e| panic!("Failed to parse YAML file {}: {}", display_path, e));
 
     let mut analyzer = StaticAnalyzer::new(suite.dialect);
 
@@ -68,8 +102,8 @@ async fn run_test_file(path: &Path) {
         if !sql.is_empty() {
             analyzer.execute(sql).await.unwrap_or_else(|e| {
                 panic!(
-                    "Failed to apply migration in {:?}:\nSQL: {}\nError: {}",
-                    path, sql, e
+                    "Failed to apply migration in {}:\nSQL: {}\nError: {}",
+                    display_path, sql, e
                 )
             });
         }
@@ -78,8 +112,8 @@ async fn run_test_file(path: &Path) {
     if !suite.tables.is_empty() {
         let mut actual_tables = analyzer.get_all_tables().await.unwrap_or_else(|e| {
             panic!(
-                "Failed to get tables for schema validation in {:?}: {}",
-                path, e
+                "Failed to get tables for schema validation in {}: {}",
+                display_path, e
             )
         });
         actual_tables.sort_by(|a, b| a.name.cmp(&b.name));
@@ -90,8 +124,8 @@ async fn run_test_file(path: &Path) {
         assert_eq!(
             actual_tables.len(),
             expected_tables.len(),
-            "Schema in {:?}: table count mismatch. Expected {} tables, got {}. Expected: [{}], Actual: [{}]",
-            path,
+            "Schema in {}: table count mismatch. Expected {} tables, got {}. Expected: [{}], Actual: [{}]",
+            display_path,
             expected_tables.len(),
             actual_tables.len(),
             expected_tables
@@ -109,14 +143,14 @@ async fn run_test_file(path: &Path) {
         for (actual, expected) in actual_tables.iter().zip(expected_tables.iter()) {
             assert_eq!(
                 actual.name, expected.name,
-                "Schema in {:?}: table name mismatch. Expected {}, got {}",
-                path, expected.name, actual.name
+                "Schema in {}: table name mismatch. Expected {}, got {}",
+                display_path, expected.name, actual.name
             );
             assert_eq!(
                 actual.columns.len(),
                 expected.columns.len(),
-                "Schema in {:?}: column count mismatch for table {}. Expected {} columns, got {}. Expected: [{}], Actual: [{}]",
-                path,
+                "Schema in {}: column count mismatch for table {}. Expected {} columns, got {}. Expected: [{}], Actual: [{}]",
+                display_path,
                 expected.name,
                 expected.columns.len(),
                 actual.columns.len(),
@@ -142,18 +176,23 @@ async fn run_test_file(path: &Path) {
             {
                 assert_eq!(
                     actual_col.name, expected_col.name,
-                    "Schema in {:?}: column {} name mismatch for table {} (Expected: {}, Actual: {})",
-                    path, i, expected.name, expected_col.name, actual_col.name
+                    "Schema in {}: column {} name mismatch for table {} (Expected: {}, Actual: {})",
+                    display_path, i, expected.name, expected_col.name, actual_col.name
                 );
                 assert_eq!(
                     actual_col.data_type, expected_col.data_type,
-                    "Schema in {:?}: column {} type mismatch for table {} (Expected: {:?}, Actual: {:?})",
-                    path, i, expected.name, expected_col.data_type, actual_col.data_type
+                    "Schema in {}: column {} type mismatch for table {} (Expected: {:?}, Actual: {:?})",
+                    display_path, i, expected.name, expected_col.data_type, actual_col.data_type
                 );
                 assert_eq!(
-                    actual_col.nullability, expected_col.nullability,
-                    "Schema in {:?}: column {} nullability mismatch for table {} (Expected: {}, Actual: {})",
-                    path, i, expected.name, expected_col.nullability, actual_col.nullability
+                    actual_col.nullability,
+                    expected_col.nullability,
+                    "Schema in {}: column {} nullability mismatch for table {} (Expected: {}, Actual: {})",
+                    display_path,
+                    i,
+                    expected.name,
+                    expected_col.nullability,
+                    actual_col.nullability
                 );
             }
         }
@@ -167,25 +206,25 @@ async fn run_test_file(path: &Path) {
             let result = analyzer.analyze(&test.sql).await;
             assert!(
                 result.is_err(),
-                "Test '{}' in {:?}: Expected error containing '{}', but analysis succeeded",
+                "Test '{}' in {}: Expected error containing '{}', but analysis succeeded",
                 test.name,
-                path,
+                display_path,
                 expected_error
             );
             let message = result.unwrap_err().to_string();
             assert!(
                 message.contains(&expected_error),
-                "Test '{}' in {:?}: Expected error containing '{}', got '{}'",
+                "Test '{}' in {}: Expected error containing '{}', got '{}'",
                 test.name,
-                path,
+                display_path,
                 expected_error,
                 message
             );
         } else if let Some(expected_columns) = test.expected {
             let result = analyzer.analyze(&test.sql).await.unwrap_or_else(|e| {
                 panic!(
-                    "Test '{}' in {:?}: Expected success, got error: {}",
-                    test.name, path, e
+                    "Test '{}' in {}: Expected success, got error: {}",
+                    test.name, display_path, e
                 )
             });
             let columns = result.columns;
@@ -193,9 +232,9 @@ async fn run_test_file(path: &Path) {
             assert_eq!(
                 columns.len(),
                 expected_columns.len(),
-                "Test '{}' in {:?}: output column count mismatch. Expected {}, got {}",
+                "Test '{}' in {}: output column count mismatch. Expected {}, got {}",
                 test.name,
-                path,
+                display_path,
                 expected_columns.len(),
                 columns.len()
             );
@@ -203,24 +242,24 @@ async fn run_test_file(path: &Path) {
             for (i, (actual, expected)) in columns.iter().zip(expected_columns.iter()).enumerate() {
                 assert_eq!(
                     actual.name, expected.name,
-                    "Test '{}' in {:?}: Column {} name mismatch",
-                    test.name, path, i
+                    "Test '{}' in {}: Column {} name mismatch",
+                    test.name, display_path, i
                 );
                 assert_eq!(
                     actual.data_type, expected.data_type,
-                    "Test '{}' in {:?}: Column {} type mismatch",
-                    test.name, path, i
+                    "Test '{}' in {}: Column {} type mismatch",
+                    test.name, display_path, i
                 );
                 assert_eq!(
                     actual.nullability, expected.nullability,
-                    "Test '{}' in {:?}: Column {} nullability mismatch (Expected nullability: {}, Actual: {})",
-                    test.name, path, i, expected.nullability, actual.nullability
+                    "Test '{}' in {}: Column {} nullability mismatch (Expected nullability: {}, Actual: {})",
+                    test.name, display_path, i, expected.nullability, actual.nullability
                 );
             }
         } else {
             panic!(
-                "Test '{}' in {:?} must have either 'expected' or 'error'",
-                test.name, path
+                "Test '{}' in {} must have either 'expected' or 'error'",
+                test.name, display_path
             );
         }
     }

@@ -1,0 +1,69 @@
+dialect: sqlite
+migrations:
+  - |
+    CREATE TABLE sales (
+      id INT NOT NULL,
+      region TEXT NOT NULL,
+      amount DECIMAL NOT NULL
+    )
+
+tables:
+  - name: sales
+    columns:
+      - name: id
+        type: Int
+        nullability: false
+      - name: region
+        type: Text
+        nullability: false
+      - name: amount
+        type: Decimal
+        nullability: false
+
+queries:
+  - name: row_number
+    sql: SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS row_number FROM sales
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: row_number
+        type: BigInt
+        nullability: false
+
+  - name: rank
+    sql: SELECT id, RANK() OVER (ORDER BY amount) AS rank FROM sales
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: rank
+        type: BigInt
+        nullability: false
+
+  - name: dense_rank
+    sql: SELECT id, DENSE_RANK() OVER (ORDER BY amount) AS dense_rank FROM sales
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: dense_rank
+        type: BigInt
+        nullability: false
+
+  - name: lead_lag
+    sql: |
+      SELECT id,
+        LEAD(amount) OVER (ORDER BY id) AS lead,
+        LAG(amount) OVER (ORDER BY id) AS lag
+      FROM sales
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: lead
+        type: Decimal
+        nullability: true
+      - name: lag
+        type: Decimal
+        nullability: true

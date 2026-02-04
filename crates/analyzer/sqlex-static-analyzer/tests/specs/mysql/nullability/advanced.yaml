@@ -1,0 +1,56 @@
+dialect: mysql
+migrations:
+  - |
+    CREATE TABLE data (
+      a INT NOT NULL,
+      b INT,
+      c TEXT,
+      d TEXT
+    )
+
+tables:
+  - name: data
+    columns:
+      - name: a
+        type: Int
+        nullability: false
+      - name: b
+        type: Int
+        nullability: true
+      - name: c
+        type: Text
+        nullability: true
+      - name: d
+        type: Text
+        nullability: true
+
+queries:
+  - name: case_all_not_null
+    sql: |
+      SELECT CASE WHEN a > 0 THEN a ELSE 1 END AS v FROM data
+    expected:
+      - name: v
+        type: Int
+        nullability: false
+
+  - name: case_nullable_branch
+    sql: |
+      SELECT CASE WHEN a > 0 THEN b ELSE a END AS v FROM data
+    expected:
+      - name: v
+        type: Int
+        nullability: true
+
+  - name: nullif_nullable
+    sql: SELECT NULLIF(a, b) AS v FROM data
+    expected:
+      - name: v
+        type: Int
+        nullability: true
+
+  - name: coalesce_chain
+    sql: SELECT COALESCE(b, a, 0) AS v FROM data
+    expected:
+      - name: v
+        type: Int
+        nullability: false

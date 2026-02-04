@@ -1,0 +1,71 @@
+dialect: mysql
+migrations:
+  - |
+    CREATE TABLE sales (
+      id INT NOT NULL,
+      region TEXT NOT NULL,
+      amount DECIMAL
+    )
+
+tables:
+  - name: sales
+    columns:
+      - name: id
+        type: Int
+        nullability: false
+      - name: region
+        type: Text
+        nullability: false
+      - name: amount
+        type: Decimal
+        nullability: true
+
+queries:
+  - name: group_by_sum
+    sql: |
+      SELECT region, SUM(amount) AS sum
+      FROM sales
+      GROUP BY region
+    expected:
+      - name: region
+        type: Text
+        nullability: false
+      - name: sum
+        type: Double
+        nullability: true
+
+  - name: group_by_count
+    sql: |
+      SELECT region, COUNT(*) AS cnt
+      FROM sales
+      GROUP BY region
+    expected:
+      - name: region
+        type: Text
+        nullability: false
+      - name: cnt
+        type: BigInt
+        nullability: false
+
+  - name: having_clause
+    sql: |
+      SELECT region, COUNT(*) AS cnt
+      FROM sales
+      GROUP BY region
+      HAVING COUNT(*) > 1
+    expected:
+      - name: region
+        type: Text
+        nullability: false
+      - name: cnt
+        type: BigInt
+        nullability: false
+
+  - name: count_nullable_column
+    sql: |
+      SELECT COUNT(amount) AS cnt
+      FROM sales
+    expected:
+      - name: cnt
+        type: BigInt
+        nullability: false

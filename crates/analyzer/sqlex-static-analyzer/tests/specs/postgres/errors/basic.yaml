@@ -1,0 +1,38 @@
+dialect: postgres
+migrations:
+  - |
+    CREATE TABLE users (
+      id INT NOT NULL,
+      name TEXT NOT NULL,
+      age INT
+    )
+
+tables:
+  - name: users
+    columns:
+      - name: id
+        type: Int
+        nullability: false
+      - name: name
+        type: Text
+        nullability: false
+      - name: age
+        type: Int
+        nullability: true
+
+queries:
+  - name: missing_table
+    sql: SELECT id FROM missing_table
+    error: "table"
+
+  - name: missing_column
+    sql: SELECT missing_col FROM users
+    error: "column"
+
+  - name: type_mismatch
+    sql: SELECT name + 1 FROM users
+    error: "type"
+
+  - name: syntax_error
+    sql: SELECT FROM users
+    error: "syntax"

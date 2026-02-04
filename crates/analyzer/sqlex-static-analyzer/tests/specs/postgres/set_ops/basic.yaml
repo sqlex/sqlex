@@ -1,0 +1,74 @@
+dialect: postgres
+migrations:
+  - |
+    CREATE TABLE table_a (
+      id INT NOT NULL,
+      value TEXT
+    )
+  - |
+    CREATE TABLE table_b (
+      id INT NOT NULL,
+      value TEXT NOT NULL
+    )
+
+tables:
+  - name: table_a
+    columns:
+      - name: id
+        type: Int
+        nullability: false
+      - name: value
+        type: Text
+        nullability: true
+  - name: table_b
+    columns:
+      - name: id
+        type: Int
+        nullability: false
+      - name: value
+        type: Text
+        nullability: false
+
+queries:
+  - name: union_nullability
+    sql: |
+      SELECT id, value FROM table_a
+      UNION
+      SELECT id, value FROM table_b
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: value
+        type: Text
+        nullability: true
+
+  - name: union_all
+    sql: |
+      SELECT id FROM table_a
+      UNION ALL
+      SELECT id FROM table_b
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+
+  - name: intersect
+    sql: |
+      SELECT id FROM table_a
+      INTERSECT
+      SELECT id FROM table_b
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+
+  - name: except
+    sql: |
+      SELECT id FROM table_a
+      EXCEPT
+      SELECT id FROM table_b
+    expected:
+      - name: id
+        type: Int
+        nullability: false

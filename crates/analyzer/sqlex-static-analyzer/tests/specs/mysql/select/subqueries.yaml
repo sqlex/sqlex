@@ -1,0 +1,87 @@
+dialect: mysql
+migrations:
+  - |
+    CREATE TABLE users (
+      id INT NOT NULL,
+      name TEXT NOT NULL,
+      email TEXT,
+      age INT
+    )
+  - |
+    CREATE TABLE orders (
+      id INT NOT NULL,
+      user_id INT NOT NULL,
+      total DECIMAL,
+      status TEXT
+    )
+
+tables:
+  - name: users
+    columns:
+      - name: id
+        type: Int
+        nullability: false
+      - name: name
+        type: Text
+        nullability: false
+      - name: email
+        type: Text
+        nullability: true
+      - name: age
+        type: Int
+        nullability: true
+  - name: orders
+    columns:
+      - name: id
+        type: Int
+        nullability: false
+      - name: user_id
+        type: Int
+        nullability: false
+      - name: total
+        type: Decimal
+        nullability: true
+      - name: status
+        type: Text
+        nullability: true
+
+queries:
+  - name: correlated_scalar_subquery
+    sql: |
+      SELECT u.id,
+             (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) AS order_count
+      FROM users u
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: order_count
+        type: BigInt
+        nullability: false
+
+  - name: derived_table_filter
+    sql: |
+      SELECT t.user_id
+      FROM (SELECT user_id, total FROM orders WHERE status IS NOT NULL) t
+    expected:
+      - name: user_id
+        type: Int
+        nullability: false
+
+  - name: in_subquery_distinct
+    sql: |
+      SELECT id FROM users
+      WHERE id IN (SELECT DISTINCT user_id FROM orders)
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+
+  - name: exists_subquery_projection
+    sql: |
+      SELECT name FROM users u
+      WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id AND o.total > 0)
+    expected:
+      - name: name
+        type: Text
+        nullability: false
