@@ -34,16 +34,6 @@ impl StaticAnalyzer {
             analysis: AnalysisEngine::new(dialect),
         }
     }
-
-    /// Get a reference to the catalog
-    pub fn catalog(&self) -> &Catalog {
-        &self.catalog
-    }
-
-    /// Get a mutable reference to the catalog
-    pub fn catalog_mut(&mut self) -> &mut Catalog {
-        &mut self.catalog
-    }
 }
 
 #[async_trait]
