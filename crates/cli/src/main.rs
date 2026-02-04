@@ -7,7 +7,7 @@ use std::{
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use notify::{RecursiveMode, Watcher};
-use sqlex_common::{AnalyzerMode, GeneratorConfig, SqlexConfig};
+use sqlex_common::{AnalyzerMode, Dialect, GeneratorConfig, SqlexConfig};
 use sqlex_compiler::Compiler;
 use tokio::fs;
 
@@ -73,7 +73,7 @@ async fn run_init(name: String) -> Result<()> {
     } else {
         let config = SqlexConfig {
             name: name.clone(),
-            dialect: "postgres".to_string(),
+            dialect: Dialect::Postgres,
             migrations: "migrations".to_string(),
             analyzer: AnalyzerMode::Database,
             generators: vec![GeneratorConfig {

@@ -1,5 +1,5 @@
 use sqlex_analyzer::{Analyzer, Result};
-use sqlex_common::DatabaseType;
+use sqlex_common::Dialect;
 
 pub mod mysql;
 pub mod postgres;
@@ -10,17 +10,17 @@ pub use mysql::MySqlDatabaseAnalyzer;
 pub use postgres::PostgresDatabaseAnalyzer;
 pub use sqlite::SqliteDatabaseAnalyzer;
 
-pub async fn new_database_analyzer(db_type: DatabaseType) -> Result<Box<dyn Analyzer>> {
-    match db_type {
-        DatabaseType::Postgres => {
+pub async fn new_database_analyzer(dialect: Dialect) -> Result<Box<dyn Analyzer>> {
+    match dialect {
+        Dialect::Postgres => {
             let analyzer = PostgresDatabaseAnalyzer::new().await?;
             Ok(Box::new(analyzer))
         },
-        DatabaseType::MySQL => {
+        Dialect::MySQL => {
             let analyzer = MySqlDatabaseAnalyzer::new().await?;
             Ok(Box::new(analyzer))
         },
-        DatabaseType::SQLite => {
+        Dialect::SQLite => {
             let analyzer = SqliteDatabaseAnalyzer::new().await?;
             Ok(Box::new(analyzer))
         },

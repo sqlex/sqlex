@@ -1,9 +1,11 @@
 use serde::{Deserialize, Serialize};
 
+use crate::Dialect;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SqlexConfig {
     pub name: String,
-    pub dialect: String, // postgres, mysql, sqlite
+    pub dialect: Dialect, // postgres, mysql, sqlite
     #[serde(default = "default_migrations_dir")]
     pub migrations: String,
     #[serde(default)]
