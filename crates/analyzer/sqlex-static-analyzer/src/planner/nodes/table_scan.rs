@@ -1,10 +1,8 @@
 use sqlex_analyzer::AnalyzerError;
 
-use crate::{
-    planner::{
-        BuildContext,
-        plan::{LogicalNode, PlanNodeColumn},
-    },
+use crate::planner::{
+    BuildContext,
+    plan::{LogicalNode, PlanNodeColumn},
 };
 
 #[derive(Debug, Clone)]

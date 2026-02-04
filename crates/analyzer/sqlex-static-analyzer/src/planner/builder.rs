@@ -412,10 +412,7 @@ impl<'a> BuildContext<'a> {
     /// Build PlanNode from FROM clause
     fn build_from(&mut self, from: &[TableWithJoins]) -> Result<(Box<dyn PlanNode>, Scope)> {
         if from.is_empty() {
-            return Ok((
-                Box::new(ValuesNode::new(vec![], vec![])),
-                Scope::default(),
-            ));
+            return Ok((Box::new(ValuesNode::new(vec![], vec![])), Scope::default()));
         }
 
         let mut plan: Option<Box<dyn PlanNode>> = None;
@@ -476,11 +473,9 @@ impl<'a> BuildContext<'a> {
                 let table_name = name.to_dotted_string();
                 let alias_name = alias.as_ref().map(|a| a.name.value.clone());
 
-                if let Some(cte_plan) = super::nodes::CTERefNode::build(
-                    self,
-                    table_name.clone(),
-                    alias_name.clone(),
-                )? {
+                if let Some(cte_plan) =
+                    super::nodes::CTERefNode::build(self, table_name.clone(), alias_name.clone())?
+                {
                     let scope = self.extract_scope_from_plan(&cte_plan)?;
                     return Ok((Box::new(cte_plan), scope));
                 }
@@ -596,9 +591,7 @@ impl<'a> BuildContext<'a> {
 
         // Check if it's an aggregate function
         if AggregateFunctionName::from_name(&name).is_some() {
-            return Ok(Box::new(AggregateFunctionExpr::build(
-                self, func, scope,
-            )?));
+            return Ok(Box::new(AggregateFunctionExpr::build(self, func, scope)?));
         }
 
         // Default: treat as scalar function
