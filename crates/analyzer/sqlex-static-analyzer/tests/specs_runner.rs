@@ -1,22 +1,28 @@
 use std::{fs, path::Path};
 
 use serde::Deserialize;
+use sqlex_analyzer::Analyzer;
 use sqlex_common::{dialect::Dialect, types::DataType};
-use sqlex_static_analyzer::{
-    analysis::{AnalysisEngine, diagnostics::DiagnosticSeverity},
-    catalog::Catalog,
-};
+use sqlex_static_analyzer::StaticAnalyzer;
 
 #[derive(Debug, Deserialize)]
 struct YamlTestSuite {
     dialect: Dialect,
     #[serde(default)]
-    schema: Vec<String>,
-    tests: Vec<YamlTestCase>,
+    migrations: Vec<String>,
+    #[serde(default)]
+    tables: Vec<YamlTable>,
+    queries: Vec<YamlQuery>,
 }
 
 #[derive(Debug, Deserialize)]
-struct YamlTestCase {
+struct YamlTable {
+    name: String,
+    columns: Vec<YamlOutputColumn>,
+}
+
+#[derive(Debug, Deserialize)]
+struct YamlQuery {
     name: String,
     sql: String,
     expected: Option<Vec<YamlOutputColumn>>,
@@ -31,8 +37,8 @@ struct YamlOutputColumn {
     nullability: bool,
 }
 
-#[test]
-fn run_specs_tests() {
+#[tokio::test]
+async fn run_specs_tests() {
     let specs_dir = Path::new("tests/specs");
     if !specs_dir.exists() {
         return;
@@ -44,74 +50,145 @@ fn run_specs_tests() {
 
         if path.extension().is_some_and(|ext| ext == "yaml") {
             println!("Running tests from: {:?}", path);
-            run_test_file(&path);
+            run_test_file(&path).await;
         }
     }
 }
 
-fn run_test_file(path: &Path) {
+async fn run_test_file(path: &Path) {
     let content = fs::read_to_string(path).expect("Failed to read file");
     let suite: YamlTestSuite = serde_yaml::from_str(&content)
         .unwrap_or_else(|e| panic!("Failed to parse YAML file {:?}: {}", path, e));
 
-    // Setup Catalog + Analyzer
-    let mut catalog = Catalog::new(suite.dialect);
-    let analyzer = AnalysisEngine::new(suite.dialect);
+    let mut analyzer = StaticAnalyzer::new(suite.dialect);
 
-    // Apply schema DDL
-    for sql in suite.schema {
+    // Apply migrations
+    for sql in suite.migrations {
         let sql = sql.trim();
         if !sql.is_empty() {
-            catalog.apply_ddl(sql).unwrap_or_else(|e| {
+            analyzer.execute(sql).await.unwrap_or_else(|e| {
                 panic!(
-                    "Failed to apply DDL in {:?}:\nSQL: {}\nError: {}",
+                    "Failed to apply migration in {:?}:\nSQL: {}\nError: {}",
                     path, sql, e
                 )
             });
         }
     }
 
-    // Run tests
-    for test in suite.tests {
+    if !suite.tables.is_empty() {
+        let mut actual_tables = analyzer.get_all_tables().await.unwrap_or_else(|e| {
+            panic!(
+                "Failed to get tables for schema validation in {:?}: {}",
+                path, e
+            )
+        });
+        actual_tables.sort_by(|a, b| a.name.cmp(&b.name));
+
+        let mut expected_tables = suite.tables;
+        expected_tables.sort_by(|a, b| a.name.cmp(&b.name));
+
+        assert_eq!(
+            actual_tables.len(),
+            expected_tables.len(),
+            "Schema in {:?}: table count mismatch. Expected {} tables, got {}. Expected: [{}], Actual: [{}]",
+            path,
+            expected_tables.len(),
+            actual_tables.len(),
+            expected_tables
+                .iter()
+                .map(|t| t.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
+            actual_tables
+                .iter()
+                .map(|t| t.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+
+        for (actual, expected) in actual_tables.iter().zip(expected_tables.iter()) {
+            assert_eq!(
+                actual.name, expected.name,
+                "Schema in {:?}: table name mismatch. Expected {}, got {}",
+                path, expected.name, actual.name
+            );
+            assert_eq!(
+                actual.columns.len(),
+                expected.columns.len(),
+                "Schema in {:?}: column count mismatch for table {}. Expected {} columns, got {}. Expected: [{}], Actual: [{}]",
+                path,
+                expected.name,
+                expected.columns.len(),
+                actual.columns.len(),
+                expected
+                    .columns
+                    .iter()
+                    .map(|c| c.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                actual
+                    .columns
+                    .iter()
+                    .map(|c| c.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+
+            for (i, (actual_col, expected_col)) in actual
+                .columns
+                .iter()
+                .zip(expected.columns.iter())
+                .enumerate()
+            {
+                assert_eq!(
+                    actual_col.name, expected_col.name,
+                    "Schema in {:?}: column {} name mismatch for table {} (Expected: {}, Actual: {})",
+                    path, i, expected.name, expected_col.name, actual_col.name
+                );
+                assert_eq!(
+                    actual_col.data_type, expected_col.data_type,
+                    "Schema in {:?}: column {} type mismatch for table {} (Expected: {:?}, Actual: {:?})",
+                    path, i, expected.name, expected_col.data_type, actual_col.data_type
+                );
+                assert_eq!(
+                    actual_col.nullability, expected_col.nullability,
+                    "Schema in {:?}: column {} nullability mismatch for table {} (Expected: {}, Actual: {})",
+                    path, i, expected.name, expected_col.nullability, actual_col.nullability
+                );
+            }
+        }
+    }
+
+    // Run queries
+    for test in suite.queries {
         println!("  Running test: {}", test.name);
 
         if let Some(expected_error) = test.error {
-            let result = analyzer.analyze(&catalog, &test.sql);
-            let has_error = result
-                .diagnostics
-                .iter()
-                .any(|d| d.severity == DiagnosticSeverity::Error);
-
+            let result = analyzer.analyze(&test.sql).await;
             assert!(
-                has_error,
+                result.is_err(),
                 "Test '{}' in {:?}: Expected error containing '{}', but analysis succeeded",
-                test.name, path, expected_error
-            );
-            // We could also check the error message content if needed, but for now just presence is enough or basic containment if easy.
-            // verifying message can be added if needed, strict equality might be flaky for now.
-        } else if let Some(expected_columns) = test.expected {
-            let result = analyzer.analyze(&catalog, &test.sql);
-
-            // Check for errors
-            let errors: Vec<_> = result
-                .diagnostics
-                .iter()
-                .filter(|d| d.severity == DiagnosticSeverity::Error)
-                .collect();
-
-            assert!(
-                errors.is_empty(),
-                "Test '{}' in {:?}: Expected success, got errors: {}",
                 test.name,
                 path,
-                errors
-                    .iter()
-                    .map(|d| d.message.as_str())
-                    .collect::<Vec<_>>()
-                    .join("; ")
+                expected_error
             );
-
-            let columns = result.output.expect("Expected output schema").columns;
+            let message = result.unwrap_err().to_string();
+            assert!(
+                message.contains(&expected_error),
+                "Test '{}' in {:?}: Expected error containing '{}', got '{}'",
+                test.name,
+                path,
+                expected_error,
+                message
+            );
+        } else if let Some(expected_columns) = test.expected {
+            let result = analyzer.analyze(&test.sql).await.unwrap_or_else(|e| {
+                panic!(
+                    "Test '{}' in {:?}: Expected success, got error: {}",
+                    test.name, path, e
+                )
+            });
+            let columns = result.columns;
 
             assert_eq!(
                 columns.len(),

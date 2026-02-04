@@ -2142,6 +2142,7 @@ dependencies = [
  "sqlex-analyzer",
  "sqlex-common",
  "sqlparser",
+ "tokio",
 ]
 
 [[package]]
