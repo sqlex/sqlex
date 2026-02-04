@@ -1,7 +1,11 @@
 use sqlex_analyzer::Result;
 use sqlex_common::DataType;
 
-use crate::planner::expr::{Expression, ExpressionNode};
+use crate::planner::{
+    BuildContext,
+    expr::{Expression, ExpressionNode},
+    scope::Scope,
+};
 
 /// CASE expression
 #[derive(Debug, Clone)]
@@ -31,31 +35,29 @@ impl ExpressionNode for CaseExpr {
 }
 
 impl CaseExpr {
-    pub fn from_ast<F>(
+    pub fn build(
+        ctx: &mut BuildContext,
         operand: &Option<Box<sqlparser::ast::Expr>>,
         conditions: &[sqlparser::ast::Expr],
         results: &[sqlparser::ast::Expr],
         else_result: &Option<Box<sqlparser::ast::Expr>>,
-        mut expr_builder: F,
-    ) -> Result<Box<dyn Expression>>
-    where
-        F: FnMut(&sqlparser::ast::Expr) -> Result<Box<dyn Expression>>,
-    {
+        scope: &Scope,
+    ) -> Result<Box<dyn Expression>> {
         let operand_expr = if let Some(op) = operand {
-            Some(expr_builder(op)?)
+            Some(ctx.build_expr(op, scope)?)
         } else {
             None
         };
         let mut cond_exprs = Vec::new();
         for cond in conditions {
-            cond_exprs.push(expr_builder(cond)?);
+            cond_exprs.push(ctx.build_expr(cond, scope)?);
         }
         let mut result_exprs = Vec::new();
         for res in results {
-            result_exprs.push(expr_builder(res)?);
+            result_exprs.push(ctx.build_expr(res, scope)?);
         }
         let else_expr = if let Some(el) = else_result {
-            Some(expr_builder(el)?)
+            Some(ctx.build_expr(el, scope)?)
         } else {
             None
         };

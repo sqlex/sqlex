@@ -2,7 +2,11 @@ use sqlex_analyzer::Result;
 use sqlex_common::DataType;
 
 use super::super::order_by::OrderByExpr;
-use crate::planner::expr::{Expression, ExpressionNode};
+use crate::planner::{
+    BuildContext,
+    expr::{Expression, ExpressionNode},
+    scope::Scope,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AggregateFunctionName {
@@ -62,10 +66,11 @@ impl ExpressionNode for AggregateFunctionExpr {
 }
 
 impl AggregateFunctionExpr {
-    pub fn from_ast<F>(func: &sqlparser::ast::Function, mut expr_builder: F) -> Result<Self>
-    where
-        F: FnMut(&sqlparser::ast::Expr) -> Result<Box<dyn Expression>>,
-    {
+    pub fn build(
+        ctx: &mut BuildContext,
+        func: &sqlparser::ast::Function,
+        scope: &Scope,
+    ) -> Result<Self> {
         use sqlex_analyzer::ObjectNameExt;
         use sqlparser::ast::{
             DuplicateTreatment, FunctionArg, FunctionArgExpr, FunctionArguments, Value,
@@ -87,14 +92,14 @@ impl AggregateFunctionExpr {
                         arg: FunctionArgExpr::Expr(e),
                         ..
                     } => {
-                        args.push(expr_builder(e)?);
+                        args.push(ctx.build_expr(e, scope)?);
                     },
                     FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => {
-                        args.push(expr_builder(e)?);
+                        args.push(ctx.build_expr(e, scope)?);
                     },
                     FunctionArg::Unnamed(FunctionArgExpr::Wildcard) => {
                         // COUNT(*) -> 1
-                        args.push(LiteralExpr::build(Value::Number("1".to_string(), false)));
+                        args.push(LiteralExpr::new(Value::Number("1".to_string(), false)));
                     },
                     _ => {},
                 }
@@ -103,7 +108,7 @@ impl AggregateFunctionExpr {
         }
 
         let filter = if let Some(filter) = &func.filter {
-            Some(expr_builder(filter)?)
+            Some(ctx.build_expr(filter, scope)?)
         } else {
             None
         };

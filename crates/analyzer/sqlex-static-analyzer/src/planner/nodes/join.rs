@@ -2,6 +2,7 @@ use sqlex_analyzer::AnalyzerError;
 
 use crate::{
     planner::{
+        BuildContext,
         expr::Expression,
         plan::{LogicalNode, PlanNode, PlanNodeColumn},
         scope::Scope,
@@ -40,7 +41,7 @@ pub struct JoinNode {
 }
 
 impl JoinNode {
-    pub fn build(
+    pub(crate) fn new(
         schema: &Schema,
         left: Box<dyn PlanNode>,
         right: Box<dyn PlanNode>,
@@ -106,18 +107,15 @@ impl JoinNode {
         }
     }
 
-    pub fn from_ast<F>(
+    pub fn build(
+        ctx: &mut BuildContext,
         schema: &Schema,
         left: Box<dyn PlanNode>,
         right: Box<dyn PlanNode>,
         join_operator: &sqlparser::ast::JoinOperator,
         left_scope: &Scope,
         right_scope: &Scope,
-        mut expr_builder: F,
-    ) -> Result<Box<dyn PlanNode>, AnalyzerError>
-    where
-        F: FnMut(&sqlparser::ast::Expr, &Scope) -> Result<Box<dyn Expression>, AnalyzerError>,
-    {
+    ) -> Result<Box<dyn PlanNode>, AnalyzerError> {
         use sqlparser::ast::{JoinConstraint, JoinOperator};
 
         // Convert JoinOperator to JoinKind and extract constraint
@@ -141,7 +139,7 @@ impl JoinNode {
 
             Some(match constraint {
                 JoinConstraint::On(expr) => {
-                    let expr = expr_builder(expr, &combined_scope)?;
+                    let expr = ctx.build_expr(expr, &combined_scope)?;
                     JoinCondition::On(expr)
                 },
                 JoinConstraint::Using(idents) => {
@@ -158,7 +156,7 @@ impl JoinNode {
             None
         };
 
-        Ok(Box::new(Self::build(schema, left, right, kind, condition)))
+        Ok(Box::new(Self::new(schema, left, right, kind, condition)))
     }
 }
 

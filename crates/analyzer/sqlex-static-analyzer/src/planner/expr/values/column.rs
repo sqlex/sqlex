@@ -31,7 +31,7 @@ impl ExpressionNode for ColumnExpr {
 
 impl ColumnExpr {
     /// Build a column expression with resolved type information
-    pub fn build(
+    pub(crate) fn new(
         table: Option<String>,
         column: String,
         data_type: DataType,
@@ -45,11 +45,11 @@ impl ColumnExpr {
         })
     }
 
-    pub fn from_ast(expr: &sqlparser::ast::Expr, scope: &Scope) -> Result<Box<dyn Expression>> {
+    pub fn build(expr: &sqlparser::ast::Expr, scope: &Scope) -> Result<Box<dyn Expression>> {
         match expr {
             sqlparser::ast::Expr::Identifier(ident) => {
                 let col = scope.resolve_column(None, &ident.value)?;
-                Ok(Self::build(
+                Ok(Self::new(
                     None,
                     ident.value.clone(),
                     col.data_type,
@@ -59,7 +59,7 @@ impl ColumnExpr {
             sqlparser::ast::Expr::CompoundIdentifier(idents) => {
                 if idents.len() == 2 {
                     let col = scope.resolve_column(Some(&idents[0].value), &idents[1].value)?;
-                    Ok(Self::build(
+                    Ok(Self::new(
                         Some(idents[0].value.clone()),
                         idents[1].value.clone(),
                         col.data_type,

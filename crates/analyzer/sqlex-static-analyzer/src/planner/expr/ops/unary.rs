@@ -2,7 +2,11 @@ use sqlex_analyzer::Result;
 use sqlex_common::DataType;
 use sqlparser::ast::UnaryOperator;
 
-use crate::planner::expr::{Expression, ExpressionNode};
+use crate::planner::{
+    BuildContext,
+    expr::{Expression, ExpressionNode},
+    scope::Scope,
+};
 
 /// Unary operation expression
 #[derive(Debug, Clone)]
@@ -24,15 +28,13 @@ impl ExpressionNode for UnaryExpr {
 }
 
 impl UnaryExpr {
-    pub fn from_ast<F>(
+    pub fn build(
+        ctx: &mut BuildContext,
         op: &UnaryOperator,
         expr: &sqlparser::ast::Expr,
-        mut expr_builder: F,
-    ) -> Result<Box<dyn Expression>>
-    where
-        F: FnMut(&sqlparser::ast::Expr) -> Result<Box<dyn Expression>>,
-    {
-        let operand = expr_builder(expr)?;
+        scope: &Scope,
+    ) -> Result<Box<dyn Expression>> {
+        let operand = ctx.build_expr(expr, scope)?;
 
         let return_type = analyze_unary_type(op, &operand.data_type());
         let is_nullable = operand.nullable();

@@ -25,9 +25,9 @@ type Result<T> = std::result::Result<T, AnalyzerError>;
 ///
 /// Each build operation consumes the context to ensure clean state.
 pub struct BuildContext<'a> {
-    schema: &'a Schema,
+    pub(crate) schema: &'a Schema,
     /// CTE scope for WITH clause resolution
-    cte_scope: HashMap<String, ResolvedCTE>,
+    pub(crate) cte_scope: HashMap<String, ResolvedCTE>,
 }
 
 /// Resolved CTE information (internal)
@@ -69,7 +69,7 @@ impl<'a> BuildContext<'a> {
     }
 
     /// Build PlanNode from parsed Query
-    fn build_plan(&mut self, query: &Query) -> Result<Box<dyn PlanNode>> {
+    pub(crate) fn build_plan(&mut self, query: &Query) -> Result<Box<dyn PlanNode>> {
         // Handle WITH clause first (CTEs)
         if let Some(with) = &query.with {
             for cte in &with.cte_tables {
@@ -88,7 +88,7 @@ impl<'a> BuildContext<'a> {
                         cte_name.clone(),
                         ResolvedCTE {
                             columns: anchor_cols,
-                            plan: Box::new(ValuesNode::build(vec![], vec![])), // Placeholder
+                            plan: Box::new(ValuesNode::new(vec![], vec![])), // Placeholder
                         },
                     );
                 }
@@ -171,7 +171,7 @@ impl<'a> BuildContext<'a> {
 
         // LIMIT / OFFSET
         if query.limit.is_some() || query.offset.is_some() {
-            plan = Box::new(LimitNode::from_ast(
+            plan = Box::new(LimitNode::build(
                 plan,
                 query.limit.as_ref(),
                 query.offset.as_ref(),
@@ -195,7 +195,7 @@ impl<'a> BuildContext<'a> {
                 let left_plan = self.build_set_expr(left)?;
                 let right_plan = self.build_set_expr(right)?;
 
-                Ok(Box::new(SetOperationNode::from_ast(
+                Ok(Box::new(SetOperationNode::build(
                     op,
                     set_quantifier,
                     left_plan,
@@ -204,9 +204,7 @@ impl<'a> BuildContext<'a> {
             },
             SetExpr::Values(values) => {
                 let scope = Scope::default();
-                super::nodes::values::ValuesNode::from_ast(values, |expr| {
-                    self.build_expr(expr, &scope)
-                })
+                super::nodes::values::ValuesNode::build(self, values, &scope)
             },
             _ => Err(AnalyzerError::AnalysisError(format!(
                 "Unsupported set expression: {:?}",
@@ -281,9 +279,8 @@ impl<'a> BuildContext<'a> {
                     if let Expr::Function(func) = expr {
                         use crate::planner::expr::ExprExt;
                         if expr.has_aggregate_function() {
-                            aggregate_exprs.push(super::expr::AggregateFunctionExpr::from_ast(
-                                func,
-                                |expr| self.build_expr(expr, &scope),
+                            aggregate_exprs.push(super::expr::AggregateFunctionExpr::build(
+                                self, func, &scope,
                             )?);
                         }
                     }
@@ -357,7 +354,7 @@ impl<'a> BuildContext<'a> {
                                 Expr::Identifier(Ident::new(&col.name))
                             };
 
-                            let typed = super::expr::values::ColumnExpr::build(
+                            let typed = super::expr::values::ColumnExpr::new(
                                 col.source_alias.clone(),
                                 col.name.clone(),
                                 col.data_type.clone(),
@@ -379,7 +376,7 @@ impl<'a> BuildContext<'a> {
                                 Ident::new(&table_alias),
                                 Ident::new(&col.name),
                             ]);
-                            let typed = super::expr::values::ColumnExpr::build(
+                            let typed = super::expr::values::ColumnExpr::new(
                                 Some(table_alias.clone()),
                                 col.name.clone(),
                                 col.data_type.clone(),
@@ -416,7 +413,7 @@ impl<'a> BuildContext<'a> {
     fn build_from(&mut self, from: &[TableWithJoins]) -> Result<(Box<dyn PlanNode>, Scope)> {
         if from.is_empty() {
             return Ok((
-                Box::new(ValuesNode::build(vec![], vec![])),
+                Box::new(ValuesNode::new(vec![], vec![])),
                 Scope::default(),
             ));
         }
@@ -429,7 +426,7 @@ impl<'a> BuildContext<'a> {
 
             if let Some(current_plan) = plan {
                 // Implicit cross join for comma-separated tables
-                plan = Some(Box::new(JoinNode::build(
+                plan = Some(Box::new(JoinNode::new(
                     self.schema,
                     current_plan,
                     relation,
@@ -454,9 +451,15 @@ impl<'a> BuildContext<'a> {
         for join in &table_with_joins.joins {
             let (right_plan, right_scope) = self.build_table_factor(&join.relation)?;
 
-            // Use build_join_node to handle all conversion logic including expression building
-            let join_node =
-                self.build_join_node(plan, right_plan, &join.join_operator, &scope, &right_scope)?;
+            let join_node = super::nodes::join::JoinNode::build(
+                self,
+                self.schema,
+                plan,
+                right_plan,
+                &join.join_operator,
+                &scope,
+                &right_scope,
+            )?;
 
             // Extract scope from the RESULTING join node (which is a PlanNode)
             scope = self.extract_scope_from_plan(join_node.as_ref())?;
@@ -471,32 +474,18 @@ impl<'a> BuildContext<'a> {
         match table {
             TableFactor::Table { name, alias, .. } => {
                 let table_name = name.to_dotted_string();
-                let effective_alias = alias
-                    .as_ref()
-                    .map(|a| a.name.value.clone())
-                    .unwrap_or_else(|| table_name.clone());
+                let alias_name = alias.as_ref().map(|a| a.name.value.clone());
 
-                // Check CTEs first
-                if let Some(cte) = self.cte_scope.get(&table_name) {
-                    let cte_cols = cte
-                        .columns
-                        .iter()
-                        .map(|c| super::plan::PlanNodeColumn {
-                            name: c.name.clone(),
-                            data_type: c.data_type.clone(),
-                            nullability: c.nullable,
-                            origin_table: c.source_alias.clone(),
-                            origin_column: None,
-                        })
-                        .collect();
-
-                    let plan = CTERefNode::build(table_name, Some(effective_alias), cte_cols);
-                    let scope = self.extract_scope_from_plan(&plan)?;
-
-                    return Ok((Box::new(plan), scope));
+                if let Some(cte_plan) = super::nodes::CTERefNode::build(
+                    self,
+                    table_name.clone(),
+                    alias_name.clone(),
+                )? {
+                    let scope = self.extract_scope_from_plan(&cte_plan)?;
+                    return Ok((Box::new(cte_plan), scope));
                 }
 
-                let plan = TableScanNode::build(self.schema, table_name, Some(effective_alias))?;
+                let plan = super::nodes::TableScanNode::build(self, table_name, alias_name)?;
                 let scope = self.extract_scope_from_plan(&plan)?;
 
                 Ok((Box::new(plan), scope))
@@ -504,12 +493,7 @@ impl<'a> BuildContext<'a> {
             TableFactor::Derived {
                 alias, subquery, ..
             } => {
-                let sub_plan = self.build_plan(subquery)?;
-                let effective_alias = alias.as_ref().map(|a| a.name.value.clone()).ok_or(
-                    AnalyzerError::AnalysisError("Subquery must have an alias".to_string()),
-                )?;
-
-                let plan = SubqueryNode::build(sub_plan, effective_alias);
+                let plan = super::nodes::SubqueryNode::build(self, subquery, alias)?;
                 let scope = self.extract_scope_from_plan(&plan)?;
                 Ok((Box::new(plan), scope))
             },
@@ -517,45 +501,22 @@ impl<'a> BuildContext<'a> {
         }
     }
 
-    fn build_join_node(
-        &mut self,
-        left_plan: Box<dyn PlanNode>,
-        right_plan: Box<dyn PlanNode>,
-        join_operator: &sqlparser::ast::JoinOperator,
-        left_scope: &Scope,
-        right_scope: &Scope,
-    ) -> Result<Box<dyn PlanNode>> {
-        use super::nodes::join::JoinNode;
-
-        JoinNode::from_ast(
-            self.schema,
-            left_plan,
-            right_plan,
-            join_operator,
-            left_scope,
-            right_scope,
-            |expr, scope| self.build_expr(expr, scope),
-        )
-    }
-
     /// Build a Box<dyn Expression> from an AST expression
-    fn build_expr(
+    pub(crate) fn build_expr(
         &mut self,
         expr: &Expr,
         scope: &Scope,
     ) -> Result<Box<dyn super::expr::Expression>> {
         match expr {
             Expr::Identifier(_) | Expr::CompoundIdentifier(_) => {
-                super::expr::values::ColumnExpr::from_ast(expr, scope)
+                super::expr::values::ColumnExpr::build(expr, scope)
             },
-            Expr::Value(v) => Ok(super::expr::LiteralExpr::from_ast(v)),
+            Expr::Value(v) => Ok(super::expr::LiteralExpr::build(v)),
             Expr::BinaryOp { left, op, right } => {
-                super::expr::BinaryExpr::from_ast(left, op, right, |expr| {
-                    self.build_expr(expr, scope)
-                })
+                super::expr::BinaryExpr::build(self, left, op, right, scope)
             },
             Expr::UnaryOp { op, expr: inner } => {
-                super::expr::UnaryExpr::from_ast(op, inner, |expr| self.build_expr(expr, scope))
+                super::expr::UnaryExpr::build(self, op, inner, scope)
             },
             Expr::Nested(inner) => self.build_expr(inner, scope),
             Expr::Function(func) => self.build_function_expr(func, scope),
@@ -564,23 +525,24 @@ impl<'a> BuildContext<'a> {
                 conditions,
                 results,
                 else_result,
-            } => super::expr::control::CaseExpr::from_ast(
+            } => super::expr::control::CaseExpr::build(
+                self,
                 operand,
                 conditions,
                 results,
                 else_result,
-                |expr| self.build_expr(expr, scope),
+                scope,
             ),
             _ => {
                 // Fallback: create a literal with unknown type
-                Ok(super::expr::LiteralExpr::build(sqlparser::ast::Value::Null))
+                Ok(super::expr::LiteralExpr::new(sqlparser::ast::Value::Null))
             },
         }
     }
 
     /// Build a function expression (scalar, aggregate, or window)
     /// Build a function expression (scalar, aggregate, or window)
-    fn build_function_expr(
+    pub(crate) fn build_function_expr(
         &mut self,
         func: &sqlparser::ast::Function,
         scope: &Scope,
@@ -619,7 +581,7 @@ impl<'a> BuildContext<'a> {
                 },
                 FunctionArg::Unnamed(FunctionArgExpr::Wildcard) => {
                     // COUNT(*) - use a dummy literal
-                    bound_args.push(super::expr::values::LiteralExpr::build(
+                    bound_args.push(super::expr::values::LiteralExpr::new(
                         sqlparser::ast::Value::Number("1".to_string(), false),
                     ));
                 },
@@ -629,16 +591,14 @@ impl<'a> BuildContext<'a> {
 
         // Check for Window Function (OVER clause)
         if func.over.is_some() {
-            return WindowFunctionExpr::from_ast(func, bound_args, |expr| {
-                self.build_expr(expr, scope)
-            });
+            return WindowFunctionExpr::build(self, func, bound_args, scope);
         }
 
         // Check if it's an aggregate function
         if AggregateFunctionName::from_name(&name).is_some() {
-            return Ok(Box::new(AggregateFunctionExpr::from_ast(func, |expr| {
-                self.build_expr(expr, scope)
-            })?));
+            return Ok(Box::new(AggregateFunctionExpr::build(
+                self, func, scope,
+            )?));
         }
 
         // Default: treat as scalar function
@@ -651,7 +611,7 @@ impl<'a> BuildContext<'a> {
     }
 
     // Helper to get scope from a plan node (re-deriving it)
-    fn extract_scope_from_plan(&self, plan: &dyn PlanNode) -> Result<Scope> {
+    pub(crate) fn extract_scope_from_plan(&self, plan: &dyn PlanNode) -> Result<Scope> {
         let mut scope = Scope::default();
         let cols = plan.columns();
 

@@ -5,6 +5,7 @@ use super::{
     super::{Expression, ExpressionNode, order_by::OrderByExpr},
     aggregate::AggregateFunctionName,
 };
+use crate::planner::{BuildContext, scope::Scope};
 
 /// Window frame specification
 #[derive(Debug, Clone)]
@@ -92,14 +93,12 @@ impl ExpressionNode for WindowFunctionExpr {
 }
 
 impl WindowFunctionExpr {
-    pub fn from_ast<F>(
+    pub fn build(
+        ctx: &mut BuildContext,
         func: &sqlparser::ast::Function,
         args: Vec<Box<dyn Expression>>,
-        mut expr_builder: F,
-    ) -> Result<Box<dyn Expression>>
-    where
-        F: FnMut(&sqlparser::ast::Expr) -> Result<Box<dyn Expression>>,
-    {
+        scope: &Scope,
+    ) -> Result<Box<dyn Expression>> {
         use sqlparser::ast::{WindowFrameUnits as SQLWindowFrameUnits, WindowType};
 
         let name = func.name.to_dotted_string();
@@ -122,12 +121,12 @@ impl WindowFunctionExpr {
             WindowType::WindowSpec(spec) => {
                 let mut partition_by = Vec::new();
                 for expr in &spec.partition_by {
-                    partition_by.push(expr_builder(expr)?);
+                    partition_by.push(ctx.build_expr(expr, scope)?);
                 }
 
                 let mut order_by = Vec::new();
                 for ob in &spec.order_by {
-                    let expr = expr_builder(&ob.expr)?;
+                    let expr = ctx.build_expr(&ob.expr, scope)?;
                     order_by.push(OrderByExpr::build(
                         expr,
                         ob.asc.unwrap_or(true),

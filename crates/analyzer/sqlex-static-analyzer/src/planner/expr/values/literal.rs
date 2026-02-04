@@ -22,13 +22,13 @@ impl ExpressionNode for LiteralExpr {
 
 impl LiteralExpr {
     /// Build a literal expression from an AST Value
-    pub fn build(value: Value) -> Box<dyn Expression> {
+    pub(crate) fn new(value: Value) -> Box<dyn Expression> {
         let return_type = infer_literal_type(&value);
         Box::new(LiteralExpr { value, return_type })
     }
 
-    pub fn from_ast(value: &Value) -> Box<dyn Expression> {
-        Self::build(value.clone())
+    pub fn build(value: &Value) -> Box<dyn Expression> {
+        Self::new(value.clone())
     }
 }
 

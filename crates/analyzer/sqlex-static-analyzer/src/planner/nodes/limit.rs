@@ -11,7 +11,7 @@ pub struct LimitNode {
 
 impl LimitNode {
     /// Build from AST LIMIT and OFFSET expressions
-    pub fn from_ast(
+    pub fn build(
         input: Box<dyn PlanNode>,
         limit_expr: Option<&Expr>,
         offset_expr: Option<&Offset>,

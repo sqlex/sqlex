@@ -1,8 +1,10 @@
 use sqlex_analyzer::AnalyzerError;
 
 use crate::{
-    planner::plan::{LogicalNode, PlanNodeColumn},
-    schema::Schema,
+    planner::{
+        BuildContext,
+        plan::{LogicalNode, PlanNodeColumn},
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -14,13 +16,13 @@ pub struct TableScanNode {
 
 impl TableScanNode {
     pub fn build(
-        schema: &Schema,
+        ctx: &BuildContext,
         table_name: String,
         alias: Option<String>,
     ) -> Result<Self, AnalyzerError> {
         let effective_alias = alias.as_deref().unwrap_or(&table_name).to_string();
 
-        let table_def = schema.tables.get(&table_name).ok_or_else(|| {
+        let table_def = ctx.schema.tables.get(&table_name).ok_or_else(|| {
             AnalyzerError::AnalysisError(format!("Table {} not found", table_name))
         })?;
 

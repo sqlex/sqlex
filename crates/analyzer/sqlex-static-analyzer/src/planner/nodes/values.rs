@@ -1,8 +1,10 @@
 use sqlex_analyzer::{AnalyzerError, Result};
 
 use crate::planner::{
+    BuildContext,
     expr::Expression,
     plan::{LogicalNode, PlanNode, PlanNodeColumn},
+    scope::Scope,
 };
 
 #[derive(Debug, Clone)]
@@ -13,7 +15,7 @@ pub struct ValuesNode {
 }
 
 impl ValuesNode {
-    pub fn build(rows: Vec<Vec<Box<dyn Expression>>>, column_names: Vec<String>) -> Self {
+    pub(crate) fn new(rows: Vec<Vec<Box<dyn Expression>>>, column_names: Vec<String>) -> Self {
         let mut output_columns: Vec<PlanNodeColumn> = vec![];
 
         if let Some(first_row) = rows.first() {
@@ -47,20 +49,18 @@ impl ValuesNode {
         }
     }
 
-    pub fn from_ast<F>(
+    pub fn build(
+        ctx: &mut BuildContext,
         values: &sqlparser::ast::Values,
-        mut expr_builder: F,
-    ) -> Result<Box<dyn PlanNode>>
-    where
-        F: FnMut(&sqlparser::ast::Expr) -> Result<Box<dyn Expression>>,
-    {
+        scope: &Scope,
+    ) -> Result<Box<dyn PlanNode>> {
         let mut rules_rows = Vec::new();
         let mut num_cols = 0;
 
         for (row_idx, row) in values.rows.iter().enumerate() {
             let mut typed_row = Vec::new();
             for expr in row {
-                typed_row.push(expr_builder(expr)?);
+                typed_row.push(ctx.build_expr(expr, scope)?);
             }
 
             if row_idx == 0 {
@@ -86,7 +86,7 @@ impl ValuesNode {
         // Generate default column names: column1, column2, ...
         let column_names = (1..=num_cols).map(|i| format!("column{}", i)).collect();
 
-        Ok(Box::new(Self::build(rules_rows, column_names)))
+        Ok(Box::new(Self::new(rules_rows, column_names)))
     }
 }
 

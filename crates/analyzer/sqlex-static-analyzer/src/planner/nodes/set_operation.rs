@@ -24,7 +24,7 @@ pub struct SetOperationNode {
 
 impl SetOperationNode {
     /// Build from AST SetOperator and SetQuantifier
-    pub fn from_ast(
+    pub fn build(
         op: &SetOperator,
         set_quantifier: &SetQuantifier,
         left: Box<dyn PlanNode>,
