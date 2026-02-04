@@ -28,7 +28,7 @@ struct YamlOutputColumn {
 }
 
 #[test]
-fn run_yaml_tests() {
+fn run_specs_tests() {
     let specs_dir = Path::new("tests/specs");
     if !specs_dir.exists() {
         return;
