@@ -88,6 +88,7 @@ pub(crate) struct FunctionMeta {
     pub(crate) accepts_distinct: bool,
     pub(crate) allows_over: bool,
     pub(crate) requires_over: bool,
+    pub(crate) arity: FunctionArity,
 }
 
 #[derive(Debug, Clone)]
@@ -96,6 +97,34 @@ pub(crate) enum FunctionKind {
     Aggregate(AggregateFunctionName),
     Window(WindowFunctionName),
     Unknown,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum FunctionArity {
+    Any,
+    Exact(usize),
+    AtLeast(usize),
+    Between { min: usize, max: usize },
+}
+
+impl FunctionArity {
+    pub(crate) fn matches(self, count: usize) -> bool {
+        match self {
+            Self::Any => true,
+            Self::Exact(expected) => count == expected,
+            Self::AtLeast(min) => count >= min,
+            Self::Between { min, max } => count >= min && count <= max,
+        }
+    }
+
+    pub(crate) fn describe(self) -> String {
+        match self {
+            Self::Any => "any number of".to_string(),
+            Self::Exact(expected) => format!("{expected}"),
+            Self::AtLeast(min) => format!("at least {min}"),
+            Self::Between { min, max } => format!("between {min} and {max}"),
+        }
+    }
 }
 
 impl ScalarFunction {
@@ -338,28 +367,138 @@ pub(crate) fn resolve_function(name: &str) -> FunctionMeta {
 
     if let Some(window) = WindowFunctionName::from_name(&upper) {
         return FunctionMeta {
-            kind: FunctionKind::Window(window),
+            kind: FunctionKind::Window(window.clone()),
             accepts_distinct: false,
             allows_over: true,
             requires_over: true,
+            arity: match window {
+                WindowFunctionName::RowNumber
+                | WindowFunctionName::Rank
+                | WindowFunctionName::DenseRank
+                | WindowFunctionName::PercentRank
+                | WindowFunctionName::CumeDist => FunctionArity::Exact(0),
+                WindowFunctionName::NTile => FunctionArity::Exact(1),
+                WindowFunctionName::Lead | WindowFunctionName::Lag => {
+                    FunctionArity::Between { min: 1, max: 3 }
+                },
+                WindowFunctionName::FirstValue | WindowFunctionName::LastValue => {
+                    FunctionArity::Exact(1)
+                },
+                WindowFunctionName::NthValue => FunctionArity::Exact(2),
+                WindowFunctionName::Aggregate(agg) => match agg {
+                    AggregateFunctionName::Count => FunctionArity::Between { min: 0, max: 1 },
+                    AggregateFunctionName::StringAgg => FunctionArity::Exact(2),
+                    AggregateFunctionName::JsonObjectAgg => FunctionArity::Exact(2),
+                    AggregateFunctionName::Sum
+                    | AggregateFunctionName::Avg
+                    | AggregateFunctionName::Min
+                    | AggregateFunctionName::Max
+                    | AggregateFunctionName::First
+                    | AggregateFunctionName::Last
+                    | AggregateFunctionName::ArrayAgg
+                    | AggregateFunctionName::JsonArrayAgg => FunctionArity::Exact(1),
+                    AggregateFunctionName::Custom(_) => FunctionArity::Any,
+                },
+            },
         };
     }
 
     if let Some(agg) = AggregateFunctionName::from_name(&upper) {
         return FunctionMeta {
-            kind: FunctionKind::Aggregate(agg),
+            kind: FunctionKind::Aggregate(agg.clone()),
             accepts_distinct: true,
             allows_over: true,
             requires_over: false,
+            arity: match agg {
+                AggregateFunctionName::Count => FunctionArity::Between { min: 0, max: 1 },
+                AggregateFunctionName::StringAgg => FunctionArity::Exact(2),
+                AggregateFunctionName::JsonObjectAgg => FunctionArity::Exact(2),
+                AggregateFunctionName::Sum
+                | AggregateFunctionName::Avg
+                | AggregateFunctionName::Min
+                | AggregateFunctionName::Max
+                | AggregateFunctionName::First
+                | AggregateFunctionName::Last
+                | AggregateFunctionName::ArrayAgg
+                | AggregateFunctionName::JsonArrayAgg => FunctionArity::Exact(1),
+                AggregateFunctionName::Custom(_) => FunctionArity::Any,
+            },
         };
     }
 
     if let Some(scalar) = ScalarFunction::from_name(&upper) {
         return FunctionMeta {
-            kind: FunctionKind::Scalar(scalar),
+            kind: FunctionKind::Scalar(scalar.clone()),
             accepts_distinct: false,
             allows_over: false,
             requires_over: false,
+            arity: match scalar {
+                ScalarFunction::Concat | ScalarFunction::ConcatWs => FunctionArity::AtLeast(2),
+                ScalarFunction::Upper
+                | ScalarFunction::Lower
+                | ScalarFunction::Trim
+                | ScalarFunction::Ltrim
+                | ScalarFunction::Rtrim
+                | ScalarFunction::Length
+                | ScalarFunction::CharLength
+                | ScalarFunction::CharacterLength
+                | ScalarFunction::OctetLength
+                | ScalarFunction::BitLength
+                | ScalarFunction::Abs
+                | ScalarFunction::Ceil
+                | ScalarFunction::Ceiling
+                | ScalarFunction::Floor
+                | ScalarFunction::Sqrt
+                | ScalarFunction::Exp
+                | ScalarFunction::Ln
+                | ScalarFunction::Log10
+                | ScalarFunction::Log2
+                | ScalarFunction::Sign
+                | ScalarFunction::Date
+                | ScalarFunction::Time
+                | ScalarFunction::Year
+                | ScalarFunction::Month
+                | ScalarFunction::Day
+                | ScalarFunction::Hour
+                | ScalarFunction::Minute
+                | ScalarFunction::Second
+                | ScalarFunction::ToJson
+                | ScalarFunction::ToJsonb => FunctionArity::Exact(1),
+                ScalarFunction::Substring | ScalarFunction::Substr => {
+                    FunctionArity::Between { min: 2, max: 3 }
+                },
+                ScalarFunction::Replace
+                | ScalarFunction::Left
+                | ScalarFunction::Right
+                | ScalarFunction::Repeat
+                | ScalarFunction::Position
+                | ScalarFunction::Strpos
+                | ScalarFunction::Power
+                | ScalarFunction::Pow
+                | ScalarFunction::Mod
+                | ScalarFunction::Nullif
+                | ScalarFunction::Ifnull
+                | ScalarFunction::Nvl => FunctionArity::Exact(2),
+                ScalarFunction::Round
+                | ScalarFunction::Truncate
+                | ScalarFunction::Trunc
+                | ScalarFunction::Log => FunctionArity::Between { min: 1, max: 2 },
+                ScalarFunction::Random | ScalarFunction::Rand => {
+                    FunctionArity::Between { min: 0, max: 1 }
+                },
+                ScalarFunction::Now
+                | ScalarFunction::CurrentTimestamp
+                | ScalarFunction::CurrentDate
+                | ScalarFunction::CurrentTime => FunctionArity::Exact(0),
+                ScalarFunction::Extract
+                | ScalarFunction::Cast
+                | ScalarFunction::Convert
+                | ScalarFunction::JsonObject
+                | ScalarFunction::JsonArray
+                | ScalarFunction::Custom(_)
+                | ScalarFunction::Unknown => FunctionArity::Any,
+                ScalarFunction::Coalesce => FunctionArity::AtLeast(1),
+            },
         };
     }
 
@@ -368,5 +507,6 @@ pub(crate) fn resolve_function(name: &str) -> FunctionMeta {
         accepts_distinct: false,
         allows_over: false,
         requires_over: false,
+        arity: FunctionArity::Any,
     }
 }

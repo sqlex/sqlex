@@ -9,7 +9,7 @@ impl<'a> Binder<'a> {
             Expr::Identifier(ident) => match scope.resolve_column(None, &ident.value) {
                 Ok(col_id) => self.exprs.alloc(BoundExpr::Column(col_id)),
                 Err(diag) => {
-                    self.diagnostics.push(diag);
+                    self.diagnostics.push(diag.with_context(expr.to_string()));
                     self.exprs.alloc(BoundExpr::Unsupported)
                 },
             },
@@ -20,7 +20,7 @@ impl<'a> Binder<'a> {
                     match scope.resolve_column(Some(table), col) {
                         Ok(col_id) => self.exprs.alloc(BoundExpr::Column(col_id)),
                         Err(diag) => {
-                            self.diagnostics.push(diag);
+                            self.diagnostics.push(diag.with_context(expr.to_string()));
                             self.exprs.alloc(BoundExpr::Unsupported)
                         },
                     }
@@ -28,7 +28,8 @@ impl<'a> Binder<'a> {
                     self.diagnostics.push(
                         super::super::diagnostics::Diagnostic::unsupported_feature(
                             "Deep compound identifiers",
-                        ),
+                        )
+                        .with_context(expr.to_string()),
                     );
                     self.exprs.alloc(BoundExpr::Unsupported)
                 }
@@ -95,7 +96,8 @@ impl<'a> Binder<'a> {
                                 self.diagnostics.push(
                                     super::super::diagnostics::Diagnostic::unsupported_feature(
                                         "function argument",
-                                    ),
+                                    )
+                                    .with_context(expr.to_string()),
                                 );
                             },
                         }
@@ -130,7 +132,8 @@ impl<'a> Binder<'a> {
                     self.diagnostics.push(
                         super::super::diagnostics::Diagnostic::invalid_statement(
                             "CASE WHEN/THEN arity mismatch",
-                        ),
+                        )
+                        .with_context(expr.to_string()),
                     );
                 }
 
@@ -146,10 +149,12 @@ impl<'a> Binder<'a> {
                 self.exprs.alloc(BoundExpr::Subquery(Box::new(bound)))
             },
             _ => {
-                self.diagnostics
-                    .push(super::super::diagnostics::Diagnostic::unsupported_feature(
+                self.diagnostics.push(
+                    super::super::diagnostics::Diagnostic::unsupported_feature(
                         "expression in binder",
-                    ));
+                    )
+                    .with_context(expr.to_string()),
+                );
                 self.exprs.alloc(BoundExpr::Unsupported)
             },
         }

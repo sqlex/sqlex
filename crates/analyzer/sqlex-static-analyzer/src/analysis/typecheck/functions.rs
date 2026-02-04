@@ -33,6 +33,15 @@ impl<'a> TypeContext<'a> {
                     &upper,
                 ));
         }
+        if !meta.arity.matches(arg_types.len()) {
+            self.diagnostics.push(
+                super::super::diagnostics::Diagnostic::function_arity_mismatch(
+                    &upper,
+                    &meta.arity.describe(),
+                    arg_types.len(),
+                ),
+            );
+        }
 
         match meta.kind {
             FunctionKind::Window(window) => self.infer_window_function(window, arg_types),

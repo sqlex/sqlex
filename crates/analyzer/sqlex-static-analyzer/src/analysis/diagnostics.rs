@@ -73,6 +73,22 @@ impl Diagnostic {
         self
     }
 
+    pub fn render(&self) -> String {
+        let mut out = String::new();
+        if let Some(code) = self.code {
+            out.push('[');
+            out.push_str(&format!("{code:?}"));
+            out.push_str("] ");
+        }
+        out.push_str(&self.message);
+        if let Some(ctx) = &self.context {
+            out.push_str(" (");
+            out.push_str(ctx);
+            out.push(')');
+        }
+        out
+    }
+
     pub fn parse_error(message: impl Into<String>) -> Self {
         Self::error_with_code(DiagnosticCode::ParseError, message)
     }
@@ -162,6 +178,13 @@ impl Diagnostic {
         Self::error_with_code(
             DiagnosticCode::InvalidFunctionUsage,
             format!("DISTINCT is only allowed for aggregate functions (found in {name})"),
+        )
+    }
+
+    pub fn function_arity_mismatch(name: &str, expected: &str, found: usize) -> Self {
+        Self::error_with_code(
+            DiagnosticCode::InvalidFunctionUsage,
+            format!("Function {name} expects {expected} arguments, found {found}"),
         )
     }
 
