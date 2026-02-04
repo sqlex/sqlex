@@ -1,5 +1,7 @@
-use super::Binder;
-use crate::ir::{BoundExpr, BoundQuery, BoundSelect, BoundSetExpr};
+use crate::{
+    analysis::bind::Binder,
+    ir::bound::{BoundExpr, BoundQuery, BoundSelect, BoundSetExpr},
+};
 
 impl<'a> Binder<'a> {
     pub(super) fn output_names_for_query(&self, query: &BoundQuery) -> Vec<String> {

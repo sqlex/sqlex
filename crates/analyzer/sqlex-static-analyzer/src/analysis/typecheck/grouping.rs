@@ -1,9 +1,15 @@
 use std::collections::HashSet;
 
-use super::{QueryTypeState, TypeContext};
 use crate::{
-    analysis::functions::{FunctionKind, resolve_function},
-    ir::{BoundExpr, BoundJoinCondition, BoundSelect, BoundTableSource, ColumnId, ExprId},
+    analysis::{
+        diagnostics::Diagnostic,
+        functions::{FunctionKind, resolve_function},
+        typecheck::{QueryTypeState, TypeContext},
+    },
+    ir::{
+        bound::{BoundExpr, BoundJoinCondition, BoundSelect, BoundTableSource},
+        ids::{ColumnId, ExprId},
+    },
 };
 
 impl<'a> TypeContext<'a> {
@@ -44,13 +50,10 @@ impl<'a> TypeContext<'a> {
                     .difference(&group_columns)
                     .map(|col| self.format_column_ref(state, *col))
                     .collect::<Vec<_>>();
-                self.diagnostics
-                    .push(super::super::diagnostics::Diagnostic::grouping_error(
-                        format!(
-                            "Non-aggregated SELECT columns must appear in GROUP BY: {}",
-                            missing.join(", ")
-                        ),
-                    ));
+                self.diagnostics.push(Diagnostic::grouping_error(format!(
+                    "Non-aggregated SELECT columns must appear in GROUP BY: {}",
+                    missing.join(", ")
+                )));
             }
         }
 
@@ -62,13 +65,10 @@ impl<'a> TypeContext<'a> {
                     .difference(&group_columns)
                     .map(|col| self.format_column_ref(state, *col))
                     .collect::<Vec<_>>();
-                self.diagnostics
-                    .push(super::super::diagnostics::Diagnostic::grouping_error(
-                        format!(
-                            "HAVING references non-grouped columns: {}",
-                            missing.join(", ")
-                        ),
-                    ));
+                self.diagnostics.push(Diagnostic::grouping_error(format!(
+                    "HAVING references non-grouped columns: {}",
+                    missing.join(", ")
+                )));
             }
         }
     }
@@ -81,15 +81,12 @@ impl<'a> TypeContext<'a> {
         if let Some(selection) = select.selection {
             let analysis = self.analyze_group_expr(state, selection);
             if analysis.has_aggregate {
-                self.diagnostics.push(
-                    super::super::diagnostics::Diagnostic::aggregate_not_allowed("WHERE clause"),
-                );
+                self.diagnostics
+                    .push(Diagnostic::aggregate_not_allowed("WHERE clause"));
             }
             if analysis.has_window {
                 self.diagnostics
-                    .push(super::super::diagnostics::Diagnostic::window_not_allowed(
-                        "WHERE clause",
-                    ));
+                    .push(Diagnostic::window_not_allowed("WHERE clause"));
             }
         }
 
@@ -98,18 +95,12 @@ impl<'a> TypeContext<'a> {
                 if let Some(BoundJoinCondition::On(expr_id)) = &join.condition {
                     let analysis = self.analyze_group_expr(state, *expr_id);
                     if analysis.has_aggregate {
-                        self.diagnostics.push(
-                            super::super::diagnostics::Diagnostic::aggregate_not_allowed(
-                                "JOIN ON clause",
-                            ),
-                        );
+                        self.diagnostics
+                            .push(Diagnostic::aggregate_not_allowed("JOIN ON clause"));
                     }
                     if analysis.has_window {
-                        self.diagnostics.push(
-                            super::super::diagnostics::Diagnostic::window_not_allowed(
-                                "JOIN ON clause",
-                            ),
-                        );
+                        self.diagnostics
+                            .push(Diagnostic::window_not_allowed("JOIN ON clause"));
                     }
                 }
             }
@@ -119,10 +110,10 @@ impl<'a> TypeContext<'a> {
             let analysis = self.analyze_group_expr(state, *expr_id);
             if analysis.has_window {
                 self.diagnostics
-                    .push(super::super::diagnostics::Diagnostic::group_by_window_not_allowed());
+                    .push(Diagnostic::group_by_window_not_allowed());
             } else if analysis.has_aggregate {
                 self.diagnostics
-                    .push(super::super::diagnostics::Diagnostic::group_by_aggregate_not_allowed());
+                    .push(Diagnostic::group_by_aggregate_not_allowed());
             }
         }
 
@@ -130,9 +121,7 @@ impl<'a> TypeContext<'a> {
             let analysis = self.analyze_group_expr(state, having);
             if analysis.has_window {
                 self.diagnostics
-                    .push(super::super::diagnostics::Diagnostic::window_not_allowed(
-                        "HAVING clause",
-                    ));
+                    .push(Diagnostic::window_not_allowed("HAVING clause"));
             }
         }
     }
@@ -231,7 +220,7 @@ impl<'a> TypeContext<'a> {
 
 #[derive(Default)]
 struct ExprAnalysis {
-    columns: HashSet<crate::ir::ColumnId>,
+    columns: HashSet<crate::ir::ids::ColumnId>,
     has_aggregate: bool,
     has_window: bool,
 }

@@ -1,8 +1,8 @@
 use std::{fs, path::Path};
 
 use serde::Deserialize;
-use sqlex_common::DataType;
-use sqlex_static_analyzer::{Catalog, Dialect};
+use sqlex_common::{dialect::Dialect, types::DataType};
+use sqlex_static_analyzer::catalog::Catalog;
 
 #[derive(Debug, Deserialize)]
 struct YamlTestSuite {
@@ -38,7 +38,7 @@ fn run_yaml_tests() {
         let entry = entry.expect("Failed to read directory entry");
         let path = entry.path();
 
-        if path.extension().map_or(false, |ext| ext == "yaml") {
+        if path.extension().is_some_and(|ext| ext == "yaml") {
             println!("Running tests from: {:?}", path);
             run_test_file(&path);
         }

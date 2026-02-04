@@ -2,8 +2,10 @@ use std::sync::Arc;
 
 use sqlparser::ast::{Query, SetExpr};
 
-use super::{Binder, CteBinding};
-use crate::ir::{BoundCte, BoundQuery, BoundSetExpr};
+use crate::{
+    analysis::bind::{Binder, CteBinding},
+    ir::bound::{BoundCte, BoundQuery, BoundSetExpr},
+};
 
 impl<'a> Binder<'a> {
     pub(super) fn bind_ctes(&mut self, with: Option<&sqlparser::ast::With>) -> Vec<Arc<BoundCte>> {
@@ -40,7 +42,7 @@ impl<'a> Binder<'a> {
             if !alias_columns.is_empty() {
                 if alias_columns.len() != output_cols.len() {
                     self.diagnostics.push(
-                        super::super::diagnostics::Diagnostic::cte_column_count_mismatch(&name),
+                        crate::analysis::diagnostics::Diagnostic::cte_column_count_mismatch(&name),
                     );
                 }
                 output_cols = alias_columns.clone();
@@ -80,9 +82,9 @@ impl<'a> Binder<'a> {
     pub(super) fn empty_query(&self) -> BoundQuery {
         BoundQuery {
             ctes: Vec::new(),
-            tables: crate::ir::Arena::default(),
-            columns: crate::ir::Arena::default(),
-            exprs: crate::ir::Arena::default(),
+            tables: crate::ir::arena::Arena::default(),
+            columns: crate::ir::arena::Arena::default(),
+            exprs: crate::ir::arena::Arena::default(),
             body: BoundSetExpr::Unsupported,
             order_by: Vec::new(),
             limit: None,

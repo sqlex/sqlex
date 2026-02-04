@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::Dialect;
+use crate::dialect::Dialect;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SqlexConfig {

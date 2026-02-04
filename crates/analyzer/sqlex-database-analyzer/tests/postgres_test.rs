@@ -1,5 +1,6 @@
-use sqlex_analyzer::{Analyzer, DataType};
-use sqlex_database_analyzer::PostgresDatabaseAnalyzer;
+use sqlex_analyzer::Analyzer;
+use sqlex_common::types::DataType;
+use sqlex_database_analyzer::postgres::PostgresDatabaseAnalyzer;
 
 #[tokio::test]
 async fn test_postgres_analyzer_basic() -> anyhow::Result<()> {

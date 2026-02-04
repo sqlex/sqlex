@@ -2,8 +2,8 @@
 //!
 //! Tests for CREATE TABLE, ALTER TABLE, DROP TABLE parsing
 
-use sqlex_common::DataType;
-use sqlex_static_analyzer::{Catalog, Dialect};
+use sqlex_common::{dialect::Dialect, types::DataType};
+use sqlex_static_analyzer::catalog::Catalog;
 
 #[test]
 fn test_create_table_simple() {

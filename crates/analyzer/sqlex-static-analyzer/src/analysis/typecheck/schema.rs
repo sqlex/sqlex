@@ -1,9 +1,18 @@
 use std::collections::HashSet;
 
-use super::{QueryTypeState, TypeContext, infer::merge_types};
-use crate::ir::{
-    BoundExpr, BoundJoinCondition, BoundJoinKind, BoundQuery, BoundSelect, BoundSetExpr,
-    BoundSetOp, BoundTableSource, ColumnId, ExprId, OutputColumn, OutputSchema, TableId,
+use crate::{
+    analysis::{
+        diagnostics::Diagnostic,
+        typecheck::{QueryTypeState, TypeContext, infer::merge_types},
+    },
+    ir::{
+        bound::{
+            BoundExpr, BoundJoinCondition, BoundJoinKind, BoundQuery, BoundSelect, BoundSetExpr,
+            BoundSetOp, BoundTableSource,
+        },
+        ids::{ColumnId, ExprId, TableId},
+        output::{OutputColumn, OutputSchema},
+    },
 };
 
 impl<'a> TypeContext<'a> {
@@ -32,9 +41,7 @@ impl<'a> TypeContext<'a> {
             BoundSetExpr::Values { rows } => self.output_values_schema(&mut state, rows),
             BoundSetExpr::Unsupported => {
                 self.diagnostics
-                    .push(super::super::diagnostics::Diagnostic::unsupported_feature(
-                        "query body in typecheck",
-                    ));
+                    .push(Diagnostic::unsupported_feature("query body in typecheck"));
                 Vec::new()
             },
         };
@@ -115,15 +122,14 @@ impl<'a> TypeContext<'a> {
         let mut columns = Vec::new();
 
         for idx in 0..col_count {
-            let mut merged_type: Option<sqlex_common::DataType> = None;
+            let mut merged_type: Option<sqlex_common::types::DataType> = None;
             let mut nullable = false;
             let mut lineage = Vec::new();
 
             for row in rows {
                 if row.len() != col_count {
-                    self.diagnostics.push(
-                        super::super::diagnostics::Diagnostic::values_column_count_mismatch(),
-                    );
+                    self.diagnostics
+                        .push(Diagnostic::values_column_count_mismatch());
                     break;
                 }
                 let expr_id = row[idx];
@@ -142,8 +148,9 @@ impl<'a> TypeContext<'a> {
 
             columns.push(OutputColumn {
                 name: format!("column{}", idx + 1),
-                data_type: merged_type
-                    .unwrap_or_else(|| sqlex_common::DataType::Custom("unknown".to_string())),
+                data_type: merged_type.unwrap_or_else(|| {
+                    sqlex_common::types::DataType::Custom("unknown".to_string())
+                }),
                 nullability: nullable,
                 lineage,
             });
@@ -160,7 +167,7 @@ impl<'a> TypeContext<'a> {
     ) -> Vec<OutputColumn> {
         if left.columns.len() != right.columns.len() {
             self.diagnostics
-                .push(super::super::diagnostics::Diagnostic::set_operation_column_count_mismatch());
+                .push(Diagnostic::set_operation_column_count_mismatch());
         }
 
         let count = left.columns.len().min(right.columns.len());
@@ -343,7 +350,7 @@ impl<'a> TypeContext<'a> {
 
     fn infer_expr_name(&self, state: &QueryTypeState<'_>, expr_id: ExprId, index: usize) -> String {
         match state.query.exprs.get(expr_id) {
-            crate::ir::BoundExpr::Column(column_id) => {
+            crate::ir::bound::BoundExpr::Column(column_id) => {
                 let column = state.query.columns.get(*column_id);
                 column.name.clone()
             },

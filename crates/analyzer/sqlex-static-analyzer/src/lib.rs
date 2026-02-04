@@ -7,12 +7,18 @@ pub mod analysis;
 pub mod catalog;
 pub mod ir;
 
-// Re-exports
-use analysis::{AnalysisEngine, diagnostics::DiagnosticSeverity};
+// Re-exports (Internal imports now)
 use async_trait::async_trait;
-pub use catalog::{Catalog, ColumnDef, ForeignKeyDef, TableDef};
-use sqlex_analyzer::{Analyzer, AnalyzerError, Result, ResultSet, Table};
-pub use sqlex_common::Dialect;
+use sqlex_analyzer::{Analyzer, AnalyzerError, Result};
+use sqlex_common::{
+    dialect::Dialect,
+    types::{ResultSet, Table},
+};
+
+use crate::{
+    analysis::{AnalysisEngine, diagnostics::DiagnosticSeverity},
+    catalog::Catalog,
+};
 
 /// Static SQL analyzer implementation
 pub struct StaticAnalyzer {
@@ -72,7 +78,7 @@ impl Analyzer for StaticAnalyzer {
         let columns = output
             .columns
             .into_iter()
-            .map(|c| sqlex_common::ColumnInfo {
+            .map(|c| sqlex_common::types::ColumnInfo {
                 name: c.name,
                 data_type: c.data_type,
                 nullability: c.nullability,
@@ -92,7 +98,7 @@ impl Analyzer for StaticAnalyzer {
                 columns: t
                     .columns
                     .iter()
-                    .map(|c| sqlex_common::ColumnInfo {
+                    .map(|c| sqlex_common::types::ColumnInfo {
                         name: c.name.clone(),
                         data_type: c.data_type.clone(),
                         nullability: c.nullable,

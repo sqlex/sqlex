@@ -1,4 +1,4 @@
-use super::arena::ArenaId;
+use crate::ir::arena::ArenaId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TableId(pub(crate) usize);

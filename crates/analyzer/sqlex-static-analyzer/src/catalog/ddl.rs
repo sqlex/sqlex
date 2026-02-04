@@ -3,8 +3,8 @@
 //! Parses CREATE TABLE, ALTER TABLE, and DROP TABLE statements
 //! to build and maintain the catalog.
 
-use sqlex_analyzer::{AnalyzerError, ObjectNameExt};
-use sqlex_common::{DataType, Dialect};
+use sqlex_analyzer::{AnalyzerError, extension::ObjectNameExt};
+use sqlex_common::{dialect::Dialect, types::DataType};
 use sqlparser::{
     ast::{
         AlterTableOperation, CharacterLength, ColumnOption, CreateTable, DataType as SqlDataType,
@@ -14,7 +14,10 @@ use sqlparser::{
     parser::Parser,
 };
 
-use super::{Catalog, ColumnDef, ForeignKeyDef, ReferentialAction, TableDef};
+use crate::catalog::{
+    Catalog,
+    types::{ColumnDef, ForeignKeyDef, ReferentialAction, TableDef},
+};
 
 type Result<T> = std::result::Result<T, AnalyzerError>;
 

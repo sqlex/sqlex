@@ -6,17 +6,17 @@ mod schema;
 
 use std::collections::{HashMap, HashSet};
 
-use sqlex_common::Dialect;
+use sqlex_common::dialect::Dialect;
 
-use super::diagnostics::Diagnostic;
 use crate::{
+    analysis::diagnostics::Diagnostic,
     catalog::Catalog,
-    ir::{BoundQuery, OutputSchema},
+    ir::{bound::BoundQuery, output::OutputSchema},
 };
 
 #[derive(Debug, Clone)]
 pub(super) struct TypeInfo {
-    data_type: sqlex_common::DataType,
+    data_type: sqlex_common::types::DataType,
     nullable: bool,
 }
 
@@ -54,8 +54,8 @@ impl<'a> TypeContext<'a> {
 
 pub(super) struct QueryTypeState<'a> {
     query: &'a BoundQuery,
-    types: HashMap<crate::ir::ExprId, TypeInfo>,
-    nullable_tables: HashSet<crate::ir::TableId>,
+    types: HashMap<crate::ir::ids::ExprId, TypeInfo>,
+    nullable_tables: HashSet<crate::ir::ids::TableId>,
 }
 
 impl<'a> QueryTypeState<'a> {

@@ -2,7 +2,7 @@ mod factory;
 
 use anyhow::Result;
 use sqlex_common::{
-    SqlexConfig,
+    config::SqlexConfig,
     ir::{CompilationUnit, ParameterDescriptor, QueryDescriptor},
     types::{ColumnInfo, DataType, Table},
 };

@@ -3,7 +3,7 @@
 //! Defines the data structures for representing database catalog metadata,
 //! including tables, columns, constraints, and foreign keys.
 
-use sqlex_common::DataType;
+use sqlex_common::types::DataType;
 
 /// Table definition
 #[derive(Debug, Clone)]

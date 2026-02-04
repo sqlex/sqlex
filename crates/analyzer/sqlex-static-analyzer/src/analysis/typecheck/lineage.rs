@@ -1,7 +1,13 @@
 use std::collections::HashSet;
 
-use super::{QueryTypeState, TypeContext};
-use crate::ir::{BoundExpr, BoundTableSource, ColumnId, ExprId, LineageColumn};
+use crate::{
+    analysis::typecheck::{QueryTypeState, TypeContext},
+    ir::{
+        bound::{BoundExpr, BoundTableSource},
+        ids::{ColumnId, ExprId},
+        output::LineageColumn,
+    },
+};
 
 impl<'a> TypeContext<'a> {
     pub(super) fn collect_lineage(

@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use super::super::diagnostics::Diagnostic;
-use crate::ir::ColumnId;
+use crate::{analysis::diagnostics::Diagnostic, ir::ids::ColumnId};
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct BindScope {

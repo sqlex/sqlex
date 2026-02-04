@@ -1,5 +1,6 @@
-use sqlex_analyzer::{Analyzer, DataType};
-use sqlex_database_analyzer::MySqlDatabaseAnalyzer;
+use sqlex_analyzer::Analyzer;
+use sqlex_common::types::DataType;
+use sqlex_database_analyzer::mysql::MySqlDatabaseAnalyzer;
 
 #[tokio::test]
 async fn test_mysql_analyzer_basic() -> anyhow::Result<()> {

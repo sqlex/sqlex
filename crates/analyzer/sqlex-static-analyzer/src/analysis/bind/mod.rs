@@ -6,8 +6,7 @@ mod scope;
 
 use std::{collections::HashMap, sync::Arc};
 
-use scope::BindScope;
-use sqlex_common::Dialect;
+use sqlex_common::dialect::Dialect;
 use sqlparser::{
     ast::{
         Expr, GroupByExpr, Query, Select, SelectItem, SetExpr, SetOperator, SetQuantifier,
@@ -17,12 +16,16 @@ use sqlparser::{
     parser::Parser,
 };
 
-use super::diagnostics::Diagnostic;
 use crate::{
+    analysis::{bind::scope::BindScope, diagnostics::Diagnostic},
     catalog::Catalog,
     ir::{
-        Arena, BoundColumn, BoundCte, BoundExpr, BoundOrderBy, BoundProjection, BoundQuery,
-        BoundSelect, BoundSetExpr, BoundSetOp, BoundTable, ColumnId, ExprId, TableId,
+        arena::Arena,
+        bound::{
+            BoundColumn, BoundCte, BoundExpr, BoundOrderBy, BoundProjection, BoundQuery,
+            BoundSelect, BoundSetExpr, BoundSetOp, BoundTable,
+        },
+        ids::{ColumnId, ExprId, TableId},
     },
 };
 

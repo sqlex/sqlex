@@ -1,10 +1,15 @@
 use sqlparser::ast::{Expr, FunctionArg, FunctionArgExpr, FunctionArguments, Value};
 
-use super::{Binder, scope::BindScope};
-use crate::ir::BoundExpr;
+use crate::{
+    analysis::{
+        bind::{Binder, scope::BindScope},
+        diagnostics::Diagnostic,
+    },
+    ir::bound::BoundExpr,
+};
 
 impl<'a> Binder<'a> {
-    pub(super) fn bind_expr(&mut self, expr: &Expr, scope: &BindScope) -> crate::ir::ExprId {
+    pub(super) fn bind_expr(&mut self, expr: &Expr, scope: &BindScope) -> crate::ir::ids::ExprId {
         match expr {
             Expr::Identifier(ident) => match scope.resolve_column(None, &ident.value) {
                 Ok(col_id) => self.exprs.alloc(BoundExpr::Column(col_id)),
@@ -26,10 +31,8 @@ impl<'a> Binder<'a> {
                     }
                 } else {
                     self.diagnostics.push(
-                        super::super::diagnostics::Diagnostic::unsupported_feature(
-                            "Deep compound identifiers",
-                        )
-                        .with_context(expr.to_string()),
+                        Diagnostic::unsupported_feature("Deep compound identifiers")
+                            .with_context(expr.to_string()),
                     );
                     self.exprs.alloc(BoundExpr::Unsupported)
                 }
@@ -94,10 +97,8 @@ impl<'a> Binder<'a> {
                             },
                             _ => {
                                 self.diagnostics.push(
-                                    super::super::diagnostics::Diagnostic::unsupported_feature(
-                                        "function argument",
-                                    )
-                                    .with_context(expr.to_string()),
+                                    Diagnostic::unsupported_feature("function argument")
+                                        .with_context(expr.to_string()),
                                 );
                             },
                         }
@@ -130,10 +131,8 @@ impl<'a> Binder<'a> {
 
                 if cond_ids.len() != result_ids.len() {
                     self.diagnostics.push(
-                        super::super::diagnostics::Diagnostic::invalid_statement(
-                            "CASE WHEN/THEN arity mismatch",
-                        )
-                        .with_context(expr.to_string()),
+                        Diagnostic::invalid_statement("CASE WHEN/THEN arity mismatch")
+                            .with_context(expr.to_string()),
                     );
                 }
 
@@ -150,10 +149,8 @@ impl<'a> Binder<'a> {
             },
             _ => {
                 self.diagnostics.push(
-                    super::super::diagnostics::Diagnostic::unsupported_feature(
-                        "expression in binder",
-                    )
-                    .with_context(expr.to_string()),
+                    Diagnostic::unsupported_feature("expression in binder")
+                        .with_context(expr.to_string()),
                 );
                 self.exprs.alloc(BoundExpr::Unsupported)
             },

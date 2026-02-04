@@ -1,4 +1,4 @@
-use sqlex_common::DataType;
+use sqlex_common::types::DataType;
 
 #[derive(Debug, Clone)]
 pub struct OutputSchema {

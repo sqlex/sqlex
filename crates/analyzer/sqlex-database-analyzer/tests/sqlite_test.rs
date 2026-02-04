@@ -1,5 +1,6 @@
-use sqlex_analyzer::{Analyzer, DataType};
-use sqlex_database_analyzer::SqliteDatabaseAnalyzer;
+use sqlex_analyzer::Analyzer;
+use sqlex_common::types::DataType;
+use sqlex_database_analyzer::sqlite::SqliteDatabaseAnalyzer;
 
 #[tokio::test]
 async fn test_sqlite_analyzer_basic() -> anyhow::Result<()> {

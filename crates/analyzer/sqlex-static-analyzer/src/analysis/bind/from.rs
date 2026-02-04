@@ -2,13 +2,21 @@ use std::collections::HashSet;
 
 use sqlparser::ast::{JoinConstraint, JoinOperator, TableFactor, TableWithJoins};
 
-use super::{
-    Binder,
-    scope::{BindScope, ScopeColumn},
-};
-use crate::ir::{
-    BoundColumn, BoundFromItem, BoundJoin, BoundJoinCondition, BoundJoinKind, BoundTable,
-    BoundTableSource, TableId,
+use crate::{
+    analysis::{
+        bind::{
+            Binder,
+            scope::{BindScope, ScopeColumn},
+        },
+        diagnostics::Diagnostic,
+    },
+    ir::{
+        bound::{
+            BoundColumn, BoundFromItem, BoundJoin, BoundJoinCondition, BoundJoinKind, BoundTable,
+            BoundTableSource,
+        },
+        ids::TableId,
+    },
 };
 
 impl<'a> Binder<'a> {
@@ -73,9 +81,7 @@ impl<'a> Binder<'a> {
             JoinOperator::CrossJoin => (BoundJoinKind::Cross, None),
             _ => {
                 self.diagnostics
-                    .push(super::super::diagnostics::Diagnostic::unsupported_feature(
-                        "join type in binder",
-                    ));
+                    .push(Diagnostic::unsupported_feature("join type in binder"));
                 (BoundJoinKind::Inner, None)
             },
         };
@@ -103,11 +109,8 @@ impl<'a> Binder<'a> {
                 },
                 JoinConstraint::Natural => BoundJoinCondition::Natural,
                 JoinConstraint::None => {
-                    self.diagnostics.push(
-                        super::super::diagnostics::Diagnostic::unsupported_feature(
-                            "JOIN constraint NONE",
-                        ),
-                    );
+                    self.diagnostics
+                        .push(Diagnostic::unsupported_feature("JOIN constraint NONE"));
                     return None;
                 },
             })
@@ -155,9 +158,7 @@ impl<'a> Binder<'a> {
                     )
                 } else {
                     self.diagnostics
-                        .push(super::super::diagnostics::Diagnostic::unknown_table(
-                            &table_name,
-                        ));
+                        .push(Diagnostic::unknown_table(&table_name));
                     self.register_table(
                         BoundTable {
                             source: BoundTableSource::Table {
@@ -177,9 +178,8 @@ impl<'a> Binder<'a> {
             } => {
                 let alias_name = alias.as_ref().map(|a| a.name.value.clone());
                 let Some(alias_name) = alias_name.clone() else {
-                    self.diagnostics.push(
-                        super::super::diagnostics::Diagnostic::derived_table_requires_alias(),
-                    );
+                    self.diagnostics
+                        .push(Diagnostic::derived_table_requires_alias());
                     let bound_query = self.bind_subquery(subquery);
                     let (table_id, scope) = self.register_table(
                         BoundTable {
@@ -225,9 +225,7 @@ impl<'a> Binder<'a> {
             },
             _ => {
                 self.diagnostics
-                    .push(super::super::diagnostics::Diagnostic::unsupported_feature(
-                        "table factor in binder",
-                    ));
+                    .push(Diagnostic::unsupported_feature("table factor in binder"));
 
                 let (table_id, scope) = self.register_table(
                     BoundTable {
@@ -283,7 +281,7 @@ impl<'a> Binder<'a> {
         for col in &columns {
             if !left_scope.has_column(col) || !right_scope.has_column(col) {
                 self.diagnostics
-                    .push(super::super::diagnostics::Diagnostic::join_using_column_missing(col));
+                    .push(Diagnostic::join_using_column_missing(col));
             }
         }
 

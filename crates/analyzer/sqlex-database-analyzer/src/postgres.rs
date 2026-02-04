@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use rand::{Rng, distributions::Alphanumeric};
-use sqlex_analyzer::{Analyzer, AnalyzerError, ColumnInfo, DataType, Result, ResultSet, Table};
+use sqlex_analyzer::{Analyzer, AnalyzerError, Result};
+use sqlex_common::types::{ColumnInfo, DataType, ResultSet, Table};
 use sqlx::{
     Column, Executor, Row, Statement, TypeInfo,
     postgres::{PgPool, PgPoolOptions, PgTypeInfo},

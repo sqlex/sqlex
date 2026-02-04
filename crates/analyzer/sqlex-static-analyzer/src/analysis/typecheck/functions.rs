@@ -1,11 +1,14 @@
-use super::{TypeContext, TypeInfo};
-use crate::analysis::functions::{FunctionKind, WindowFunction, resolve_function};
+use crate::analysis::{
+    diagnostics::Diagnostic,
+    functions::{FunctionKind, WindowFunction, resolve_function},
+    typecheck::{TypeContext, TypeInfo},
+};
 
 impl<'a> TypeContext<'a> {
     pub(super) fn infer_function(
         &mut self,
         name: &str,
-        arg_types: &[sqlex_common::DataType],
+        arg_types: &[sqlex_common::types::DataType],
         arg_nullables: &[bool],
         distinct: bool,
         over: bool,
@@ -15,30 +18,21 @@ impl<'a> TypeContext<'a> {
 
         if meta.requires_over && !over {
             self.diagnostics
-                .push(super::super::diagnostics::Diagnostic::window_requires_over(
-                    &upper,
-                ));
+                .push(Diagnostic::window_requires_over(&upper));
         }
         if over && !meta.allows_over {
-            self.diagnostics
-                .push(super::super::diagnostics::Diagnostic::over_not_allowed(
-                    &upper,
-                ));
+            self.diagnostics.push(Diagnostic::over_not_allowed(&upper));
         }
         if distinct && !meta.accepts_distinct {
             self.diagnostics
-                .push(super::super::diagnostics::Diagnostic::distinct_not_allowed(
-                    &upper,
-                ));
+                .push(Diagnostic::distinct_not_allowed(&upper));
         }
         if !meta.arity.matches(arg_types.len()) {
-            self.diagnostics.push(
-                super::super::diagnostics::Diagnostic::function_arity_mismatch(
-                    &upper,
-                    &meta.arity.describe(),
-                    arg_types.len(),
-                ),
-            );
+            self.diagnostics.push(Diagnostic::function_arity_mismatch(
+                &upper,
+                &meta.arity.describe(),
+                arg_types.len(),
+            ));
         }
 
         match meta.kind {
@@ -68,12 +62,9 @@ impl<'a> TypeContext<'a> {
                 }
             },
             FunctionKind::Unknown => {
-                self.diagnostics
-                    .push(super::super::diagnostics::Diagnostic::unknown_function(
-                        &upper,
-                    ));
+                self.diagnostics.push(Diagnostic::unknown_function(&upper));
                 TypeInfo {
-                    data_type: sqlex_common::DataType::Custom("unknown".to_string()),
+                    data_type: sqlex_common::types::DataType::Custom("unknown".to_string()),
                     nullable: true,
                 }
             },

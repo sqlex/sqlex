@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use sqlparser::ast::{BinaryOperator, UnaryOperator, Value};
 
-use super::{
+use crate::ir::{
     arena::Arena,
     ids::{ColumnId, ExprId, TableId},
 };
