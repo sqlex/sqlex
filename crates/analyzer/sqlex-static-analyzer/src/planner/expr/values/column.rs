@@ -36,35 +36,35 @@ impl ColumnExpr {
         column: String,
         data_type: DataType,
         nullable: bool,
-    ) -> Box<dyn Expression> {
-        Box::new(ColumnExpr {
+    ) -> Self {
+        ColumnExpr {
             table,
             column,
             return_type: data_type,
             is_nullable: nullable,
-        })
+        }
     }
 
     pub fn build(expr: &sqlparser::ast::Expr, scope: &Scope) -> Result<Box<dyn Expression>> {
         match expr {
             sqlparser::ast::Expr::Identifier(ident) => {
                 let col = scope.resolve_column(None, &ident.value)?;
-                Ok(Self::new(
+                Ok(Box::new(Self::new(
                     None,
                     ident.value.clone(),
                     col.data_type,
                     col.nullable,
-                ))
+                )))
             },
             sqlparser::ast::Expr::CompoundIdentifier(idents) => {
                 if idents.len() == 2 {
                     let col = scope.resolve_column(Some(&idents[0].value), &idents[1].value)?;
-                    Ok(Self::new(
+                    Ok(Box::new(Self::new(
                         Some(idents[0].value.clone()),
                         idents[1].value.clone(),
                         col.data_type,
                         col.nullable,
-                    ))
+                    )))
                 } else {
                     Err(AnalyzerError::AnalysisError(
                         "Deep compound identifiers not supported".to_string(),

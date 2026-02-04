@@ -354,12 +354,12 @@ impl<'a> BuildContext<'a> {
                                 Expr::Identifier(Ident::new(&col.name))
                             };
 
-                            let typed = super::expr::values::ColumnExpr::new(
+                            let typed = Box::new(super::expr::values::ColumnExpr::new(
                                 col.source_alias.clone(),
                                 col.name.clone(),
                                 col.data_type.clone(),
                                 col.nullable,
-                            );
+                            ));
                             new_scope_cols.push(col.clone());
                             project_cols.push(ProjectColumn {
                                 alias: Some(col.name.clone()),
@@ -376,12 +376,12 @@ impl<'a> BuildContext<'a> {
                                 Ident::new(&table_alias),
                                 Ident::new(&col.name),
                             ]);
-                            let typed = super::expr::values::ColumnExpr::new(
+                            let typed = Box::new(super::expr::values::ColumnExpr::new(
                                 Some(table_alias.clone()),
                                 col.name.clone(),
                                 col.data_type.clone(),
                                 col.nullable,
-                            );
+                            ));
                             new_scope_cols.push(col.clone());
                             project_cols.push(ProjectColumn {
                                 alias: Some(col.name.clone()),
@@ -530,7 +530,9 @@ impl<'a> BuildContext<'a> {
             ),
             _ => {
                 // Fallback: create a literal with unknown type
-                Ok(super::expr::LiteralExpr::new(sqlparser::ast::Value::Null))
+                Ok(Box::new(super::expr::LiteralExpr::new(
+                    sqlparser::ast::Value::Null,
+                )))
             },
         }
     }
@@ -576,9 +578,9 @@ impl<'a> BuildContext<'a> {
                 },
                 FunctionArg::Unnamed(FunctionArgExpr::Wildcard) => {
                     // COUNT(*) - use a dummy literal
-                    bound_args.push(super::expr::values::LiteralExpr::new(
+                    bound_args.push(Box::new(super::expr::values::LiteralExpr::new(
                         sqlparser::ast::Value::Number("1".to_string(), false),
-                    ));
+                    )));
                 },
                 _ => {},
             }

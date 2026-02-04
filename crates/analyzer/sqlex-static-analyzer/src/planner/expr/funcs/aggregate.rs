@@ -99,7 +99,10 @@ impl AggregateFunctionExpr {
                     },
                     FunctionArg::Unnamed(FunctionArgExpr::Wildcard) => {
                         // COUNT(*) -> 1
-                        args.push(LiteralExpr::new(Value::Number("1".to_string(), false)));
+                        args.push(Box::new(LiteralExpr::new(Value::Number(
+                            "1".to_string(),
+                            false,
+                        ))));
                     },
                     _ => {},
                 }
