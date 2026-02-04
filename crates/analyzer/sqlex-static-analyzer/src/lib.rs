@@ -3,18 +3,19 @@
 //! A static SQL analyzer that infers result set types and nullability
 //! without requiring a database connection.
 
-pub mod planner;
-pub mod schema;
+pub mod analysis;
+pub mod catalog;
+pub mod ir;
 
 // Re-exports
+use analysis::diagnostics::DiagnosticSeverity;
 use async_trait::async_trait;
-pub use planner::{BuildContext, LogicalNode, PlanNode, PlanNodeColumn, nodes::join::JoinKind};
-pub use schema::{ColumnDef, Dialect, ForeignKeyDef, Schema, TableDef};
+pub use catalog::{Catalog, ColumnDef, Dialect, ForeignKeyDef, TableDef};
 use sqlex_analyzer::{Analyzer, AnalyzerError, Result, ResultSet, Table};
 
 /// Static SQL analyzer implementation
 pub struct StaticAnalyzer {
-    schema: Schema,
+    catalog: Catalog,
 }
 
 impl Default for StaticAnalyzer {
@@ -27,47 +28,66 @@ impl StaticAnalyzer {
     /// Create a new static analyzer with the given dialect
     pub fn new(dialect: Dialect) -> Self {
         Self {
-            schema: Schema::new(dialect),
+            catalog: Catalog::new(dialect),
         }
     }
 
-    /// Get a reference to the schema
-    pub fn schema(&self) -> &Schema {
-        &self.schema
+    /// Get a reference to the catalog
+    pub fn catalog(&self) -> &Catalog {
+        &self.catalog
     }
 
-    /// Get a mutable reference to the schema
-    pub fn schema_mut(&mut self) -> &mut Schema {
-        &mut self.schema
+    /// Get a mutable reference to the catalog
+    pub fn catalog_mut(&mut self) -> &mut Catalog {
+        &mut self.catalog
     }
 }
 
 #[async_trait]
 impl Analyzer for StaticAnalyzer {
     async fn execute(&mut self, sql: &str) -> Result<()> {
-        self.schema
-            .execute_ddl(sql)
+        self.catalog
+            .apply_ddl(sql)
             .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))
     }
 
     async fn analyze(&self, sql: &str) -> Result<ResultSet> {
-        let ctx = BuildContext::new(&self.schema);
-        let plan = ctx.build(sql)?;
-        let columns = plan
-            .columns()
+        let analysis = analysis::analyze(&self.catalog, sql);
+        if analysis
+            .diagnostics
             .iter()
+            .any(|d| d.severity == DiagnosticSeverity::Error)
+        {
+            let message = analysis
+                .diagnostics
+                .iter()
+                .filter(|d| d.severity == DiagnosticSeverity::Error)
+                .map(|d| d.message.clone())
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(AnalyzerError::AnalysisError(message));
+        }
+
+        let output = analysis.output.ok_or_else(|| {
+            AnalyzerError::AnalysisError("Analysis produced no output schema".to_string())
+        })?;
+
+        let columns = output
+            .columns
+            .into_iter()
             .map(|c| sqlex_common::ColumnInfo {
-                name: c.name.clone(),
-                data_type: c.data_type.clone(),
+                name: c.name,
+                data_type: c.data_type,
                 nullability: c.nullability,
             })
             .collect();
+
         Ok(ResultSet { columns })
     }
 
     async fn get_all_tables(&self) -> Result<Vec<Table>> {
         let tables = self
-            .schema
+            .catalog
             .tables
             .values()
             .map(|t| Table {

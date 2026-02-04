@@ -2,11 +2,13 @@
 //!
 //! Tests for CTE, Set Operations, Window Functions
 
+mod test_utils;
 use sqlex_common::DataType;
-use sqlex_static_analyzer::{BuildContext, ColumnDef, Dialect, Schema, TableDef};
+use sqlex_static_analyzer::{Catalog, ColumnDef, Dialect, TableDef};
+use test_utils::analyze_columns;
 
-fn setup_schema() -> Schema {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+fn setup_schema() -> Catalog {
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
 
     let users = TableDef {
         name: "users".to_string(),
@@ -60,7 +62,6 @@ fn setup_schema() -> Schema {
 
     schema
 }
-
 // =============================================================================
 // CTE (WITH clause) Tests
 // =============================================================================
@@ -68,15 +69,13 @@ fn setup_schema() -> Schema {
 #[test]
 fn test_simple_cte() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "WITH active_users AS (
+    let result = analyze_columns(
+        &schema,
+        "WITH active_users AS (
                 SELECT id, name FROM users WHERE id > 0
             )
             SELECT id, name FROM active_users",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert_eq!(result.len(), 2);
     assert!(!result[0].nullability); // id from CTE
@@ -86,15 +85,13 @@ fn test_simple_cte() {
 #[test]
 fn test_cte_with_column_aliases() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "WITH renamed(user_id, user_name) AS (
+    let result = analyze_columns(
+        &schema,
+        "WITH renamed(user_id, user_name) AS (
                 SELECT id, name FROM users
             )
             SELECT user_id, user_name FROM renamed",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert_eq!(result[0].name, "user_id");
     assert_eq!(result[1].name, "user_name");
@@ -103,15 +100,13 @@ fn test_cte_with_column_aliases() {
 #[test]
 fn test_multiple_ctes() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "WITH 
+    let result = analyze_columns(
+        &schema,
+        "WITH 
                 cte1 AS (SELECT id FROM users),
                 cte2 AS (SELECT name FROM users)
             SELECT cte1.id, cte2.name FROM cte1, cte2",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert_eq!(result.len(), 2);
 }
@@ -119,9 +114,9 @@ fn test_multiple_ctes() {
 #[test]
 fn test_recursive_cte() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "WITH RECURSIVE hierarchy AS (
+    let result = analyze_columns(
+        &schema,
+        "WITH RECURSIVE hierarchy AS (
                 SELECT id, name, manager_id, 1 as level
                 FROM users
                 WHERE manager_id IS NULL
@@ -131,9 +126,7 @@ fn test_recursive_cte() {
                 JOIN hierarchy h ON u.manager_id = h.id
             )
             SELECT id, name, level FROM hierarchy",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert_eq!(result.len(), 3);
 }
@@ -145,14 +138,12 @@ fn test_recursive_cte() {
 #[test]
 fn test_union_nullability() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT id, value FROM table_a
+    let result = analyze_columns(
+        &schema,
+        "SELECT id, value FROM table_a
              UNION
              SELECT id, value FROM table_b",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert!(!result[0].nullability); // id: NOT NULL in both
     assert!(result[1].nullability); // value: nullable in table_a
@@ -161,14 +152,12 @@ fn test_union_nullability() {
 #[test]
 fn test_union_all() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT id FROM table_a
+    let result = analyze_columns(
+        &schema,
+        "SELECT id FROM table_a
              UNION ALL
              SELECT id FROM table_b",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert_eq!(result.len(), 1);
 }
@@ -176,14 +165,12 @@ fn test_union_all() {
 #[test]
 fn test_intersect() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT id FROM table_a
+    let result = analyze_columns(
+        &schema,
+        "SELECT id FROM table_a
              INTERSECT
              SELECT id FROM table_b",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert_eq!(result.len(), 1);
 }
@@ -191,14 +178,12 @@ fn test_intersect() {
 #[test]
 fn test_except() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT id FROM table_a
+    let result = analyze_columns(
+        &schema,
+        "SELECT id FROM table_a
              EXCEPT
              SELECT id FROM table_b",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert_eq!(result.len(), 1);
 }
@@ -210,10 +195,10 @@ fn test_except() {
 #[test]
 fn test_row_number_not_nullable() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT id, ROW_NUMBER() OVER (ORDER BY id) FROM sales")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(
+        &schema,
+        "SELECT id, ROW_NUMBER() OVER (ORDER BY id) FROM sales",
+    );
 
     assert!(!result[0].nullability);
     assert!(!result[1].nullability); // ROW_NUMBER never null
@@ -222,10 +207,10 @@ fn test_row_number_not_nullable() {
 #[test]
 fn test_rank_not_nullable() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT id, RANK() OVER (ORDER BY amount) FROM sales")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(
+        &schema,
+        "SELECT id, RANK() OVER (ORDER BY amount) FROM sales",
+    );
 
     assert!(!result[1].nullability);
 }
@@ -233,10 +218,10 @@ fn test_rank_not_nullable() {
 #[test]
 fn test_dense_rank_not_nullable() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT id, DENSE_RANK() OVER (ORDER BY amount) FROM sales")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(
+        &schema,
+        "SELECT id, DENSE_RANK() OVER (ORDER BY amount) FROM sales",
+    );
 
     assert!(!result[1].nullability);
 }
@@ -244,15 +229,13 @@ fn test_dense_rank_not_nullable() {
 #[test]
 fn test_lead_lag_nullable() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT id, 
+    let result = analyze_columns(
+        &schema,
+        "SELECT id, 
                     LEAD(amount) OVER (ORDER BY id),
                     LAG(amount) OVER (ORDER BY id)
              FROM sales",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert!(result[1].nullability); // LEAD
     assert!(result[2].nullability); // LAG
@@ -261,10 +244,10 @@ fn test_lead_lag_nullable() {
 #[test]
 fn test_sum_over_window() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT id, SUM(amount) OVER (PARTITION BY region ORDER BY id) FROM sales")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(
+        &schema,
+        "SELECT id, SUM(amount) OVER (PARTITION BY region ORDER BY id) FROM sales",
+    );
 
     // Window aggregate - conservatively nullable
     assert!(result[1].nullability);
@@ -273,14 +256,12 @@ fn test_sum_over_window() {
 #[test]
 fn test_partition_by() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT id, region, 
+    let result = analyze_columns(
+        &schema,
+        "SELECT id, region, 
                     ROW_NUMBER() OVER (PARTITION BY region ORDER BY id)
              FROM sales",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert_eq!(result.len(), 3);
 }
@@ -292,14 +273,12 @@ fn test_partition_by() {
 #[test]
 fn test_group_by_with_aggregates() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT region, SUM(amount), COUNT(*)
+    let result = analyze_columns(
+        &schema,
+        "SELECT region, SUM(amount), COUNT(*)
              FROM sales
              GROUP BY region",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert_eq!(result.len(), 3);
     assert!(!result[0].nullability); // region
@@ -310,15 +289,13 @@ fn test_group_by_with_aggregates() {
 #[test]
 fn test_having_clause() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT region, SUM(amount) as total
+    let result = analyze_columns(
+        &schema,
+        "SELECT region, SUM(amount) as total
              FROM sales
              GROUP BY region
              HAVING SUM(amount) > 100",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert_eq!(result.len(), 2);
 }

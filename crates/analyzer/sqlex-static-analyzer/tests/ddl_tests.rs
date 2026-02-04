@@ -3,13 +3,13 @@
 //! Tests for CREATE TABLE, ALTER TABLE, DROP TABLE parsing
 
 use sqlex_common::DataType;
-use sqlex_static_analyzer::{Dialect, Schema};
+use sqlex_static_analyzer::{Catalog, Dialect};
 
 #[test]
 fn test_create_table_simple() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl("CREATE TABLE users (id INT, name TEXT)")
+        .apply_ddl("CREATE TABLE users (id INT, name TEXT)")
         .unwrap();
 
     let table = schema.get_table("users").expect("table should exist");
@@ -21,9 +21,9 @@ fn test_create_table_simple() {
 
 #[test]
 fn test_create_table_with_not_null() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl("CREATE TABLE users (id INT NOT NULL, name TEXT)")
+        .apply_ddl("CREATE TABLE users (id INT NOT NULL, name TEXT)")
         .unwrap();
 
     let table = schema.get_table("users").unwrap();
@@ -33,9 +33,9 @@ fn test_create_table_with_not_null() {
 
 #[test]
 fn test_create_table_with_primary_key_inline() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl("CREATE TABLE users (id INT PRIMARY KEY, name TEXT)")
+        .apply_ddl("CREATE TABLE users (id INT PRIMARY KEY, name TEXT)")
         .unwrap();
 
     let table = schema.get_table("users").unwrap();
@@ -45,9 +45,9 @@ fn test_create_table_with_primary_key_inline() {
 
 #[test]
 fn test_create_table_with_primary_key_constraint() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl(
+        .apply_ddl(
             "CREATE TABLE users (
                 id INT,
                 name TEXT,
@@ -63,9 +63,9 @@ fn test_create_table_with_primary_key_constraint() {
 
 #[test]
 fn test_create_table_with_composite_primary_key() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl(
+        .apply_ddl(
             "CREATE TABLE order_items (
                 order_id INT,
                 item_id INT,
@@ -86,12 +86,12 @@ fn test_create_table_with_composite_primary_key() {
 
 #[test]
 fn test_create_table_with_foreign_key_inline() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl("CREATE TABLE users (id INT PRIMARY KEY)")
+        .apply_ddl("CREATE TABLE users (id INT PRIMARY KEY)")
         .unwrap();
     schema
-        .execute_ddl(
+        .apply_ddl(
             "CREATE TABLE orders (
                 id INT PRIMARY KEY,
                 user_id INT NOT NULL REFERENCES users(id)
@@ -108,12 +108,12 @@ fn test_create_table_with_foreign_key_inline() {
 
 #[test]
 fn test_create_table_with_foreign_key_constraint() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl("CREATE TABLE users (id INT PRIMARY KEY)")
+        .apply_ddl("CREATE TABLE users (id INT PRIMARY KEY)")
         .unwrap();
     schema
-        .execute_ddl(
+        .apply_ddl(
             "CREATE TABLE orders (
                 id INT PRIMARY KEY,
                 user_id INT NOT NULL,
@@ -128,9 +128,9 @@ fn test_create_table_with_foreign_key_constraint() {
 
 #[test]
 fn test_create_table_with_unique_constraint() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl(
+        .apply_ddl(
             "CREATE TABLE users (
                 id INT PRIMARY KEY,
                 email TEXT UNIQUE
@@ -148,9 +148,9 @@ fn test_create_table_with_unique_constraint() {
 
 #[test]
 fn test_create_table_with_default() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl(
+        .apply_ddl(
             "CREATE TABLE users (
                 id INT PRIMARY KEY,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -164,12 +164,12 @@ fn test_create_table_with_default() {
 
 #[test]
 fn test_alter_table_add_column() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl("CREATE TABLE users (id INT PRIMARY KEY)")
+        .apply_ddl("CREATE TABLE users (id INT PRIMARY KEY)")
         .unwrap();
     schema
-        .execute_ddl("ALTER TABLE users ADD COLUMN email TEXT")
+        .apply_ddl("ALTER TABLE users ADD COLUMN email TEXT")
         .unwrap();
 
     let table = schema.get_table("users").unwrap();
@@ -179,15 +179,15 @@ fn test_alter_table_add_column() {
 
 #[test]
 fn test_alter_table_add_foreign_key() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl("CREATE TABLE users (id INT PRIMARY KEY)")
+        .apply_ddl("CREATE TABLE users (id INT PRIMARY KEY)")
         .unwrap();
     schema
-        .execute_ddl("CREATE TABLE orders (id INT PRIMARY KEY, user_id INT NOT NULL)")
+        .apply_ddl("CREATE TABLE orders (id INT PRIMARY KEY, user_id INT NOT NULL)")
         .unwrap();
     schema
-        .execute_ddl(
+        .apply_ddl(
             "ALTER TABLE orders ADD CONSTRAINT fk_user 
             FOREIGN KEY (user_id) REFERENCES users(id)",
         )
@@ -199,20 +199,20 @@ fn test_alter_table_add_foreign_key() {
 
 #[test]
 fn test_drop_table() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl("CREATE TABLE users (id INT PRIMARY KEY)")
+        .apply_ddl("CREATE TABLE users (id INT PRIMARY KEY)")
         .unwrap();
-    schema.execute_ddl("DROP TABLE users").unwrap();
+    schema.apply_ddl("DROP TABLE users").unwrap();
 
     assert!(schema.get_table("users").is_none());
 }
 
 #[test]
 fn test_multiple_statements() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl(
+        .apply_ddl(
             "
         CREATE TABLE users (id INT PRIMARY KEY);
         CREATE TABLE orders (id INT PRIMARY KEY, user_id INT);
@@ -228,9 +228,9 @@ fn test_multiple_statements() {
 
 #[test]
 fn test_mysql_auto_increment() {
-    let mut schema = Schema::new(Dialect::MySQL);
+    let mut schema = Catalog::new(Dialect::MySQL);
     schema
-        .execute_ddl(
+        .apply_ddl(
             "CREATE TABLE users (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 name VARCHAR(255)
@@ -244,9 +244,9 @@ fn test_mysql_auto_increment() {
 
 #[test]
 fn test_sqlite_integer_primary_key() {
-    let mut schema = Schema::new(Dialect::SQLite);
+    let mut schema = Catalog::new(Dialect::SQLite);
     schema
-        .execute_ddl("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
+        .apply_ddl("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)")
         .unwrap();
 
     let table = schema.get_table("users").unwrap();
@@ -257,9 +257,9 @@ fn test_sqlite_integer_primary_key() {
 
 #[test]
 fn test_data_type_mapping_int() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl("CREATE TABLE t (a INT, b INTEGER, c SMALLINT, d BIGINT)")
+        .apply_ddl("CREATE TABLE t (a INT, b INTEGER, c SMALLINT, d BIGINT)")
         .unwrap();
 
     let table = schema.get_table("t").unwrap();
@@ -271,9 +271,9 @@ fn test_data_type_mapping_int() {
 
 #[test]
 fn test_data_type_mapping_float() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl("CREATE TABLE t (a FLOAT, b DOUBLE PRECISION, c DECIMAL, d NUMERIC)")
+        .apply_ddl("CREATE TABLE t (a FLOAT, b DOUBLE PRECISION, c DECIMAL, d NUMERIC)")
         .unwrap();
 
     let table = schema.get_table("t").unwrap();
@@ -285,9 +285,9 @@ fn test_data_type_mapping_float() {
 
 #[test]
 fn test_data_type_mapping_text() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl("CREATE TABLE t (a TEXT, b VARCHAR(255), c CHAR(10))")
+        .apply_ddl("CREATE TABLE t (a TEXT, b VARCHAR(255), c CHAR(10))")
         .unwrap();
 
     let table = schema.get_table("t").unwrap();
@@ -298,9 +298,9 @@ fn test_data_type_mapping_text() {
 
 #[test]
 fn test_data_type_mapping_time() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
     schema
-        .execute_ddl("CREATE TABLE t (a DATE, b TIME, c TIMESTAMP)")
+        .apply_ddl("CREATE TABLE t (a DATE, b TIME, c TIMESTAMP)")
         .unwrap();
 
     let table = schema.get_table("t").unwrap();

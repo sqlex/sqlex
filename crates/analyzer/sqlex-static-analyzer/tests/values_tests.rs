@@ -1,17 +1,16 @@
 //! VALUES clause tests
 
+mod test_utils;
 use sqlex_common::DataType;
-use sqlex_static_analyzer::{BuildContext, Dialect, Schema};
+use sqlex_static_analyzer::{Catalog, Dialect};
+use test_utils::analyze_columns;
 
 #[test]
 fn test_values_clause_infer_types() {
-    let schema = Schema::new(Dialect::PostgreSQL);
+    let schema = Catalog::new(Dialect::PostgreSQL);
 
     // Test VALUES with single row
-    let plan = BuildContext::new(&schema)
-        .build("VALUES (1, 'hello')")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "VALUES (1, 'hello')");
 
     assert_eq!(result.len(), 2);
     assert_eq!(result[0].data_type, DataType::Int);
@@ -20,13 +19,10 @@ fn test_values_clause_infer_types() {
 
 #[test]
 fn test_values_clause_multiple_rows() {
-    let schema = Schema::new(Dialect::PostgreSQL);
+    let schema = Catalog::new(Dialect::PostgreSQL);
 
     // Test VALUES with multiple rows
-    let plan = BuildContext::new(&schema)
-        .build("VALUES (1, 10), (2, 20)")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "VALUES (1, 10), (2, 20)");
 
     assert_eq!(result.len(), 2);
     assert_eq!(result[0].data_type, DataType::Int);
@@ -35,13 +31,10 @@ fn test_values_clause_multiple_rows() {
 
 #[test]
 fn test_values_clause_nullability() {
-    let schema = Schema::new(Dialect::PostgreSQL);
+    let schema = Catalog::new(Dialect::PostgreSQL);
 
     // Test VALUES with NULLs
-    let plan = BuildContext::new(&schema)
-        .build("VALUES (1), (NULL)")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "VALUES (1), (NULL)");
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].data_type, DataType::Int);

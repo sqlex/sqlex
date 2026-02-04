@@ -2,11 +2,13 @@
 //!
 //! Tests for expression and function type inference
 
+mod test_utils;
 use sqlex_common::DataType;
-use sqlex_static_analyzer::{BuildContext, ColumnDef, Dialect, Schema, TableDef};
+use sqlex_static_analyzer::{Catalog, ColumnDef, Dialect, TableDef};
+use test_utils::analyze_columns;
 
-fn setup_schema() -> Schema {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+fn setup_schema() -> Catalog {
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
 
     let data = TableDef {
         name: "data".to_string(),
@@ -26,7 +28,6 @@ fn setup_schema() -> Schema {
     schema.add_table(data);
     schema
 }
-
 // =============================================================================
 // Arithmetic Type Promotion
 // =============================================================================
@@ -34,10 +35,7 @@ fn setup_schema() -> Schema {
 #[test]
 fn test_int_plus_bigint() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT int_val + bigint_val FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT int_val + bigint_val FROM data");
 
     assert_eq!(result[0].data_type, DataType::BigInt);
 }
@@ -45,10 +43,7 @@ fn test_int_plus_bigint() {
 #[test]
 fn test_int_plus_float() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT int_val + float_val FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT int_val + float_val FROM data");
 
     assert_eq!(result[0].data_type, DataType::Float);
 }
@@ -56,10 +51,7 @@ fn test_int_plus_float() {
 #[test]
 fn test_float_plus_double() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT float_val + double_val FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT float_val + double_val FROM data");
 
     assert_eq!(result[0].data_type, DataType::Double);
 }
@@ -67,10 +59,7 @@ fn test_float_plus_double() {
 #[test]
 fn test_int_plus_decimal() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT int_val + decimal_val FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT int_val + decimal_val FROM data");
 
     assert_eq!(result[0].data_type, DataType::Decimal);
 }
@@ -82,10 +71,7 @@ fn test_int_plus_decimal() {
 #[test]
 fn test_division_returns_double() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT int_val / 2 FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT int_val / 2 FROM data");
 
     assert_eq!(result[0].data_type, DataType::Double);
 }
@@ -97,10 +83,7 @@ fn test_division_returns_double() {
 #[test]
 fn test_comparison_returns_bool() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT int_val > 0 FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT int_val > 0 FROM data");
 
     assert_eq!(result[0].data_type, DataType::Bool);
 }
@@ -108,10 +91,7 @@ fn test_comparison_returns_bool() {
 #[test]
 fn test_equality_returns_bool() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT int_val = bigint_val FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT int_val = bigint_val FROM data");
 
     assert_eq!(result[0].data_type, DataType::Bool);
 }
@@ -119,10 +99,7 @@ fn test_equality_returns_bool() {
 #[test]
 fn test_logical_and_returns_bool() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT bool_val AND TRUE FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT bool_val AND TRUE FROM data");
 
     assert_eq!(result[0].data_type, DataType::Bool);
 }
@@ -134,10 +111,7 @@ fn test_logical_and_returns_bool() {
 #[test]
 fn test_count_returns_bigint() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT COUNT(*) FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT COUNT(*) FROM data");
 
     assert_eq!(result[0].data_type, DataType::BigInt);
 }
@@ -145,10 +119,7 @@ fn test_count_returns_bigint() {
 #[test]
 fn test_sum_int_returns_bigint() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT SUM(int_val) FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT SUM(int_val) FROM data");
 
     assert_eq!(result[0].data_type, DataType::BigInt);
 }
@@ -156,10 +127,7 @@ fn test_sum_int_returns_bigint() {
 #[test]
 fn test_sum_float_returns_double() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT SUM(float_val) FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT SUM(float_val) FROM data");
 
     assert_eq!(result[0].data_type, DataType::Double);
 }
@@ -167,10 +135,7 @@ fn test_sum_float_returns_double() {
 #[test]
 fn test_avg_returns_double() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT AVG(int_val) FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT AVG(int_val) FROM data");
 
     assert_eq!(result[0].data_type, DataType::Double);
 }
@@ -178,10 +143,7 @@ fn test_avg_returns_double() {
 #[test]
 fn test_min_preserves_type() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT MIN(int_val) FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT MIN(int_val) FROM data");
 
     assert_eq!(result[0].data_type, DataType::Int);
 }
@@ -189,10 +151,7 @@ fn test_min_preserves_type() {
 #[test]
 fn test_max_preserves_type() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT MAX(text_val) FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT MAX(text_val) FROM data");
 
     assert_eq!(result[0].data_type, DataType::Text);
 }
@@ -204,10 +163,7 @@ fn test_max_preserves_type() {
 #[test]
 fn test_string_concat() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT text_val || ' suffix' FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT text_val || ' suffix' FROM data");
 
     assert_eq!(result[0].data_type, DataType::Text);
 }
@@ -219,10 +175,7 @@ fn test_string_concat() {
 #[test]
 fn test_integer_literal_type() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT 42 FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT 42 FROM data");
 
     assert_eq!(result[0].data_type, DataType::Int);
 }
@@ -230,10 +183,7 @@ fn test_integer_literal_type() {
 #[test]
 fn test_float_literal_type() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT 3.14 FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT 3.14 FROM data");
 
     assert_eq!(result[0].data_type, DataType::Double);
 }
@@ -241,10 +191,7 @@ fn test_float_literal_type() {
 #[test]
 fn test_string_literal_type() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT 'hello' FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT 'hello' FROM data");
 
     assert_eq!(result[0].data_type, DataType::Text);
 }
@@ -252,10 +199,7 @@ fn test_string_literal_type() {
 #[test]
 fn test_bool_literal_type() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT TRUE FROM data")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT TRUE FROM data");
 
     assert_eq!(result[0].data_type, DataType::Bool);
 }

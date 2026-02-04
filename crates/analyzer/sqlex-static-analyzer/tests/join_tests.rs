@@ -2,15 +2,17 @@
 //!
 //! Tests for JOIN nullability with and without foreign key awareness
 
+mod test_utils;
 use sqlex_common::DataType;
-use sqlex_static_analyzer::{BuildContext, ColumnDef, Dialect, ForeignKeyDef, Schema, TableDef};
+use sqlex_static_analyzer::{Catalog, ColumnDef, Dialect, ForeignKeyDef, TableDef};
+use test_utils::analyze_columns;
 
 // =============================================================================
 // Basic JOIN Tests (without FK)
 // =============================================================================
 
-fn setup_schema_no_fk() -> Schema {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+fn setup_schema_no_fk() -> Catalog {
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
 
     let users = TableDef {
         name: "users".to_string(),
@@ -40,18 +42,15 @@ fn setup_schema_no_fk() -> Schema {
 
     schema
 }
-
 #[test]
 fn test_inner_join_preserves_nullability() {
     let schema = setup_schema_no_fk();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT u.id, u.name, o.amount 
+    let result = analyze_columns(
+        &schema,
+        "SELECT u.id, u.name, o.amount 
              FROM users u 
              INNER JOIN orders o ON u.id = o.user_id",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert!(!result[0].nullability); // u.id: NOT NULL
     assert!(!result[1].nullability); // u.name: NOT NULL
@@ -61,14 +60,12 @@ fn test_inner_join_preserves_nullability() {
 #[test]
 fn test_left_join_right_columns_nullable() {
     let schema = setup_schema_no_fk();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT u.id, o.id, o.amount 
+    let result = analyze_columns(
+        &schema,
+        "SELECT u.id, o.id, o.amount 
              FROM users u 
              LEFT JOIN orders o ON u.id = o.user_id",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert!(!result[0].nullability); // u.id: left table keeps nullability
     assert!(result[1].nullability); // o.id: forced nullable (no FK)
@@ -78,14 +75,12 @@ fn test_left_join_right_columns_nullable() {
 #[test]
 fn test_right_join_left_columns_nullable() {
     let schema = setup_schema_no_fk();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT u.id, u.name, o.amount 
+    let result = analyze_columns(
+        &schema,
+        "SELECT u.id, u.name, o.amount 
              FROM users u 
              RIGHT JOIN orders o ON u.id = o.user_id",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert!(result[0].nullability); // u.id: forced nullable
     assert!(result[1].nullability); // u.name: forced nullable
@@ -95,14 +90,12 @@ fn test_right_join_left_columns_nullable() {
 #[test]
 fn test_full_join_both_sides_nullable() {
     let schema = setup_schema_no_fk();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT u.id, o.id 
+    let result = analyze_columns(
+        &schema,
+        "SELECT u.id, o.id 
              FROM users u 
              FULL OUTER JOIN orders o ON u.id = o.user_id",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert!(result[0].nullability); // u.id: forced nullable
     assert!(result[1].nullability); // o.id: forced nullable
@@ -111,14 +104,12 @@ fn test_full_join_both_sides_nullable() {
 #[test]
 fn test_cross_join_preserves_nullability() {
     let schema = setup_schema_no_fk();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT u.id, o.amount 
+    let result = analyze_columns(
+        &schema,
+        "SELECT u.id, o.amount 
              FROM users u 
              CROSS JOIN orders o",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert!(!result[0].nullability); // preserves original
     assert!(!result[1].nullability); // preserves original
@@ -128,8 +119,8 @@ fn test_cross_join_preserves_nullability() {
 // FK-Aware JOIN Tests
 // =============================================================================
 
-fn setup_schema_with_fk() -> Schema {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+fn setup_schema_with_fk() -> Catalog {
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
 
     let users = TableDef {
         name: "users".to_string(),
@@ -167,14 +158,12 @@ fn setup_schema_with_fk() -> Schema {
 #[test]
 fn test_left_join_fk_preserves_right_nullability() {
     let schema = setup_schema_with_fk();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT o.id, u.id, u.name 
+    let result = analyze_columns(
+        &schema,
+        "SELECT o.id, u.id, u.name 
              FROM orders o 
              LEFT JOIN users u ON o.user_id = u.id",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert!(!result[0].nullability); // o.id: NOT NULL
     assert!(!result[1].nullability); // u.id: FK guarantees match!
@@ -184,14 +173,12 @@ fn test_left_join_fk_preserves_right_nullability() {
 #[test]
 fn test_left_join_no_fk_forces_nullable() {
     let schema = setup_schema_with_fk();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT u.id, o.id, o.amount 
+    let result = analyze_columns(
+        &schema,
+        "SELECT u.id, o.id, o.amount 
              FROM users u 
              LEFT JOIN orders o ON u.id = o.user_id",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert!(!result[0].nullability); // u.id: left table
     assert!(result[1].nullability); // o.id: nullable (no FK guarantee)
@@ -201,14 +188,12 @@ fn test_left_join_no_fk_forces_nullable() {
 #[test]
 fn test_right_join_fk_preserves_left_nullability() {
     let schema = setup_schema_with_fk();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT u.id, u.name, o.id 
+    let result = analyze_columns(
+        &schema,
+        "SELECT u.id, u.name, o.id 
              FROM users u 
              RIGHT JOIN orders o ON u.id = o.user_id",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert!(!result[0].nullability); // u.id: FK guarantees match!
     assert!(!result[1].nullability); // u.name: FK guarantees match!
@@ -219,8 +204,8 @@ fn test_right_join_fk_preserves_left_nullability() {
 // Multiple JOIN Tests
 // =============================================================================
 
-fn setup_schema_with_products() -> Schema {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+fn setup_schema_with_products() -> Catalog {
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
 
     let users = TableDef {
         name: "users".to_string(),
@@ -272,15 +257,13 @@ fn setup_schema_with_products() -> Schema {
 #[test]
 fn test_multiple_left_joins_with_fk() {
     let schema = setup_schema_with_products();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT o.id, u.name, p.name
+    let result = analyze_columns(
+        &schema,
+        "SELECT o.id, u.name, p.name
              FROM orders o
              LEFT JOIN users u ON o.user_id = u.id
              LEFT JOIN products p ON o.product_id = p.id",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert!(!result[0].nullability); // o.id
     assert!(!result[1].nullability); // u.name: FK guarantee
@@ -290,15 +273,13 @@ fn test_multiple_left_joins_with_fk() {
 #[test]
 fn test_chained_joins() {
     let schema = setup_schema_with_products();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT u.name
+    let result = analyze_columns(
+        &schema,
+        "SELECT u.name
              FROM users u
              INNER JOIN orders o ON u.id = o.user_id
              INNER JOIN products p ON o.product_id = p.id",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert!(!result[0].nullability);
 }
@@ -310,14 +291,12 @@ fn test_chained_joins() {
 #[test]
 fn test_join_using_clause() {
     let schema = setup_schema_no_fk();
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT u.id, u.name
+    let result = analyze_columns(
+        &schema,
+        "SELECT u.id, u.name
              FROM users u
              INNER JOIN (SELECT id, amount FROM orders) o USING (id)",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert_eq!(result.len(), 2);
 }
@@ -328,7 +307,7 @@ fn test_join_using_clause() {
 
 #[test]
 fn test_self_join() {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
 
     let employees = TableDef {
         name: "employees".to_string(),
@@ -343,14 +322,12 @@ fn test_self_join() {
     };
     schema.add_table(employees);
 
-    let plan = BuildContext::new(&schema)
-        .build(
-            "SELECT e.name, m.name AS manager_name
+    let result = analyze_columns(
+        &schema,
+        "SELECT e.name, m.name AS manager_name
              FROM employees e
              LEFT JOIN employees m ON e.manager_id = m.id",
-        )
-        .unwrap();
-    let result = plan.columns();
+    );
 
     assert!(!result[0].nullability); // e.name
     assert!(result[1].nullability); // m.name (no FK guarantee)

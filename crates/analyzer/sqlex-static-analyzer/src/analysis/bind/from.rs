@@ -1,0 +1,292 @@
+use std::collections::HashSet;
+
+use sqlparser::ast::{JoinConstraint, JoinOperator, TableFactor, TableWithJoins};
+
+use super::{
+    Binder,
+    scope::{BindScope, ScopeColumn},
+};
+use crate::ir::{
+    BoundColumn, BoundFromItem, BoundJoin, BoundJoinCondition, BoundJoinKind, BoundTable,
+    BoundTableSource, TableId,
+};
+
+impl<'a> Binder<'a> {
+    pub(super) fn bind_from(&mut self, from: &[TableWithJoins]) -> (Vec<BoundFromItem>, BindScope) {
+        let mut scope = BindScope::default();
+        let mut items = Vec::new();
+
+        for item in from {
+            let (from_item, item_scope) = self.bind_table_with_joins(item, &scope);
+            scope.merge(item_scope);
+            items.push(from_item);
+        }
+
+        (items, scope)
+    }
+
+    fn bind_table_with_joins(
+        &mut self,
+        table_with_joins: &TableWithJoins,
+        scope: &BindScope,
+    ) -> (BoundFromItem, BindScope) {
+        let (table_id, mut local_scope) = self.bind_table_factor(&table_with_joins.relation, scope);
+        let mut from_item = BoundFromItem {
+            table: table_id,
+            joins: Vec::new(),
+        };
+
+        for join in &table_with_joins.joins {
+            let (right_id, mut right_scope) = self.bind_table_factor(&join.relation, &local_scope);
+
+            let (kind, condition) =
+                self.bind_join_operator(&join.join_operator, &local_scope, &right_scope);
+            let using_columns = self.using_columns_for_join(&condition, &local_scope, &right_scope);
+            from_item.joins.push(BoundJoin {
+                kind,
+                table: right_id,
+                condition: condition.clone(),
+            });
+
+            if let Some(using_columns) = using_columns {
+                let using_set: HashSet<String> = using_columns.into_iter().collect();
+                right_scope.drop_columns(&using_set);
+            }
+
+            local_scope.merge(right_scope);
+        }
+
+        (from_item, local_scope)
+    }
+
+    fn bind_join_operator(
+        &mut self,
+        join_operator: &JoinOperator,
+        left_scope: &BindScope,
+        right_scope: &BindScope,
+    ) -> (BoundJoinKind, Option<BoundJoinCondition>) {
+        let (kind, constraint) = match join_operator {
+            JoinOperator::Inner(constraint) => (BoundJoinKind::Inner, Some(constraint)),
+            JoinOperator::LeftOuter(constraint) => (BoundJoinKind::Left, Some(constraint)),
+            JoinOperator::RightOuter(constraint) => (BoundJoinKind::Right, Some(constraint)),
+            JoinOperator::FullOuter(constraint) => (BoundJoinKind::Full, Some(constraint)),
+            JoinOperator::CrossJoin => (BoundJoinKind::Cross, None),
+            _ => {
+                self.diagnostics
+                    .push(super::super::diagnostics::Diagnostic::unsupported_feature(
+                        "join type in binder",
+                    ));
+                (BoundJoinKind::Inner, None)
+            },
+        };
+
+        let condition = constraint.and_then(|constraint| {
+            let mut combined = left_scope.clone();
+            combined.merge(right_scope.clone());
+
+            Some(match constraint {
+                JoinConstraint::On(expr) => {
+                    let expr_id = self.bind_expr(expr, &combined);
+                    BoundJoinCondition::On(expr_id)
+                },
+                JoinConstraint::Using(names) => {
+                    let columns = names
+                        .iter()
+                        .map(|name| {
+                            name.0
+                                .last()
+                                .map(|ident| ident.value.clone())
+                                .unwrap_or_else(|| name.to_string())
+                        })
+                        .collect();
+                    BoundJoinCondition::Using(columns)
+                },
+                JoinConstraint::Natural => BoundJoinCondition::Natural,
+                JoinConstraint::None => {
+                    self.diagnostics.push(
+                        super::super::diagnostics::Diagnostic::unsupported_feature(
+                            "JOIN constraint NONE",
+                        ),
+                    );
+                    return None;
+                },
+            })
+        });
+
+        (kind, condition)
+    }
+
+    fn bind_table_factor(
+        &mut self,
+        table: &TableFactor,
+        _scope: &BindScope,
+    ) -> (TableId, BindScope) {
+        match table {
+            TableFactor::Table { name, alias, .. } => {
+                let table_name = name.to_string();
+                let alias_name = alias.as_ref().map(|a| a.name.value.clone());
+
+                if let Some(cte_binding) = self.cte_scope.get(&table_name) {
+                    let (table_id, scope) = self.register_table(
+                        BoundTable {
+                            source: BoundTableSource::Cte {
+                                name: table_name.clone(),
+                            },
+                            alias: alias_name.clone(),
+                            columns: cte_binding.columns.clone(),
+                        },
+                        alias_name.unwrap_or_else(|| table_name.clone()),
+                    );
+                    return (table_id, scope);
+                }
+
+                let (table_id, scope) = if let Some(table_def) = self.catalog.get_table(&table_name)
+                {
+                    let column_names = table_def.columns.iter().map(|c| c.name.clone()).collect();
+                    self.register_table(
+                        BoundTable {
+                            source: BoundTableSource::Table {
+                                name: table_name.clone(),
+                            },
+                            alias: alias_name.clone(),
+                            columns: column_names,
+                        },
+                        alias_name.unwrap_or_else(|| table_name.clone()),
+                    )
+                } else {
+                    self.diagnostics
+                        .push(super::super::diagnostics::Diagnostic::unknown_table(
+                            &table_name,
+                        ));
+                    self.register_table(
+                        BoundTable {
+                            source: BoundTableSource::Table {
+                                name: table_name.clone(),
+                            },
+                            alias: alias_name.clone(),
+                            columns: Vec::new(),
+                        },
+                        alias_name.unwrap_or(table_name),
+                    )
+                };
+
+                (table_id, scope)
+            },
+            TableFactor::Derived {
+                subquery, alias, ..
+            } => {
+                let alias_name = alias.as_ref().map(|a| a.name.value.clone());
+                let Some(alias_name) = alias_name.clone() else {
+                    self.diagnostics.push(
+                        super::super::diagnostics::Diagnostic::derived_table_requires_alias(),
+                    );
+                    let bound_query = self.bind_subquery(subquery);
+                    let (table_id, scope) = self.register_table(
+                        BoundTable {
+                            source: BoundTableSource::Derived {
+                                query: Box::new(bound_query),
+                            },
+                            alias: None,
+                            columns: Vec::new(),
+                        },
+                        "<derived>".to_string(),
+                    );
+                    return (table_id, scope);
+                };
+
+                let bound_query = self.bind_subquery(subquery);
+                let column_aliases = alias
+                    .as_ref()
+                    .map(|a| {
+                        a.columns
+                            .iter()
+                            .map(|c| c.name.value.clone())
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                let column_names = if !column_aliases.is_empty() {
+                    column_aliases
+                } else {
+                    self.output_names_for_query(&bound_query)
+                };
+
+                let (table_id, scope) = self.register_table(
+                    BoundTable {
+                        source: BoundTableSource::Derived {
+                            query: Box::new(bound_query),
+                        },
+                        alias: Some(alias_name.clone()),
+                        columns: column_names,
+                    },
+                    alias_name,
+                );
+
+                (table_id, scope)
+            },
+            _ => {
+                self.diagnostics
+                    .push(super::super::diagnostics::Diagnostic::unsupported_feature(
+                        "table factor in binder",
+                    ));
+
+                let (table_id, scope) = self.register_table(
+                    BoundTable {
+                        source: BoundTableSource::Table {
+                            name: "<unknown>".to_string(),
+                        },
+                        alias: None,
+                        columns: Vec::new(),
+                    },
+                    "<unknown>".to_string(),
+                );
+
+                (table_id, scope)
+            },
+        }
+    }
+
+    fn register_table(&mut self, table: BoundTable, alias: String) -> (TableId, BindScope) {
+        let column_names = table.columns.clone();
+        let table_id = self.tables.alloc(table);
+        let mut scope = BindScope::default();
+        let mut cols = Vec::new();
+        for col_name in &column_names {
+            let col_id = self.columns.alloc(BoundColumn {
+                table: table_id,
+                name: col_name.clone(),
+            });
+            cols.push(ScopeColumn {
+                name: col_name.clone(),
+                id: col_id,
+            });
+        }
+        scope.add_table(alias, cols);
+        (table_id, scope)
+    }
+
+    fn using_columns_for_join(
+        &mut self,
+        condition: &Option<BoundJoinCondition>,
+        left_scope: &BindScope,
+        right_scope: &BindScope,
+    ) -> Option<Vec<String>> {
+        let columns = match condition {
+            Some(BoundJoinCondition::Using(cols)) => cols.clone(),
+            Some(BoundJoinCondition::Natural) => {
+                let left = left_scope.column_names_set();
+                let right = right_scope.column_names_set();
+                left.intersection(&right).cloned().collect()
+            },
+            _ => return None,
+        };
+
+        for col in &columns {
+            if !left_scope.has_column(col) || !right_scope.has_column(col) {
+                self.diagnostics
+                    .push(super::super::diagnostics::Diagnostic::join_using_column_missing(col));
+            }
+        }
+
+        Some(columns)
+    }
+}

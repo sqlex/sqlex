@@ -2,11 +2,13 @@
 //!
 //! Tests for SELECT statement analysis
 
+mod test_utils;
 use sqlex_common::DataType;
-use sqlex_static_analyzer::{BuildContext, ColumnDef, Dialect, ForeignKeyDef, Schema, TableDef};
+use sqlex_static_analyzer::{Catalog, ColumnDef, Dialect, ForeignKeyDef, TableDef};
+use test_utils::{analyze_columns, analyze_err};
 
-fn setup_schema() -> Schema {
-    let mut schema = Schema::new(Dialect::PostgreSQL);
+fn setup_schema() -> Catalog {
+    let mut schema = Catalog::new(Dialect::PostgreSQL);
 
     let users = TableDef {
         name: "users".to_string(),
@@ -42,7 +44,6 @@ fn setup_schema() -> Schema {
 
     schema
 }
-
 // =============================================================================
 // Basic SELECT Tests
 // =============================================================================
@@ -50,10 +51,7 @@ fn setup_schema() -> Schema {
 #[test]
 fn test_select_all_columns() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT * FROM users")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT * FROM users");
 
     assert_eq!(result.len(), 4);
     assert_eq!(result[0].name, "id");
@@ -65,10 +63,7 @@ fn test_select_all_columns() {
 #[test]
 fn test_select_specific_columns() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT id, name FROM users")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT id, name FROM users");
 
     assert_eq!(result.len(), 2);
     assert_eq!(result[0].name, "id");
@@ -78,10 +73,10 @@ fn test_select_specific_columns() {
 #[test]
 fn test_select_with_alias() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT id AS user_id, name AS user_name FROM users")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(
+        &schema,
+        "SELECT id AS user_id, name AS user_name FROM users",
+    );
 
     assert_eq!(result[0].name, "user_id");
     assert_eq!(result[1].name, "user_name");
@@ -90,10 +85,7 @@ fn test_select_with_alias() {
 #[test]
 fn test_select_with_table_alias() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT u.id, u.name FROM users u")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT u.id, u.name FROM users u");
 
     assert_eq!(result.len(), 2);
 }
@@ -101,10 +93,7 @@ fn test_select_with_table_alias() {
 #[test]
 fn test_select_literal_values() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT 1, 'hello', 3.14, TRUE FROM users")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT 1, 'hello', 3.14, TRUE FROM users");
 
     assert_eq!(result.len(), 4);
     // Literals are never null
@@ -117,10 +106,7 @@ fn test_select_literal_values() {
 #[test]
 fn test_select_null_literal() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT NULL FROM users")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT NULL FROM users");
 
     assert_eq!(result.len(), 1);
     assert!(result[0].nullability); // NULL is always nullable
@@ -129,10 +115,7 @@ fn test_select_null_literal() {
 #[test]
 fn test_select_expression() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT age + 1 FROM users")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT age + 1 FROM users");
 
     assert_eq!(result.len(), 1);
     // age is nullable, so age + 1 is nullable
@@ -142,10 +125,7 @@ fn test_select_expression() {
 #[test]
 fn test_select_from_subquery() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT sub.id FROM (SELECT id FROM users) sub")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT sub.id FROM (SELECT id FROM users) sub");
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].name, "id");
@@ -158,10 +138,7 @@ fn test_select_from_subquery() {
 #[test]
 fn test_select_with_where() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT id, name FROM users WHERE id > 0")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT id, name FROM users WHERE id > 0");
 
     assert_eq!(result.len(), 2);
 }
@@ -169,10 +146,10 @@ fn test_select_with_where() {
 #[test]
 fn test_select_with_complex_where() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT id FROM users WHERE id > 0 AND name IS NOT NULL")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(
+        &schema,
+        "SELECT id FROM users WHERE id > 0 AND name IS NOT NULL",
+    );
 
     assert_eq!(result.len(), 1);
 }
@@ -184,10 +161,7 @@ fn test_select_with_complex_where() {
 #[test]
 fn test_select_with_order_by() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT id, name FROM users ORDER BY id DESC")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT id, name FROM users ORDER BY id DESC");
 
     assert_eq!(result.len(), 2);
 }
@@ -195,10 +169,7 @@ fn test_select_with_order_by() {
 #[test]
 fn test_select_with_limit() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT id FROM users LIMIT 10 OFFSET 5")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT id FROM users LIMIT 10 OFFSET 5");
 
     assert_eq!(result.len(), 1);
 }
@@ -210,10 +181,7 @@ fn test_select_with_limit() {
 #[test]
 fn test_select_distinct() {
     let schema = setup_schema();
-    let plan = BuildContext::new(&schema)
-        .build("SELECT DISTINCT name FROM users")
-        .unwrap();
-    let result = plan.columns();
+    let result = analyze_columns(&schema, "SELECT DISTINCT name FROM users");
 
     assert_eq!(result.len(), 1);
 }
@@ -225,41 +193,35 @@ fn test_select_distinct() {
 #[test]
 fn test_unknown_table_error() {
     let schema = setup_schema();
-    let result = BuildContext::new(&schema).build("SELECT * FROM nonexistent");
-    assert!(result.is_err());
+    analyze_err(&schema, "SELECT * FROM nonexistent");
 }
 
 #[test]
 fn test_unknown_column_error() {
     let schema = setup_schema();
-    let result = BuildContext::new(&schema).build("SELECT nonexistent FROM users");
-    assert!(result.is_err());
+    analyze_err(&schema, "SELECT nonexistent FROM users");
 }
 
 #[test]
 fn test_invalid_sql_error() {
     let schema = setup_schema();
-    let result = BuildContext::new(&schema).build("SELECT FROM");
-    assert!(result.is_err());
+    analyze_err(&schema, "SELECT FROM");
 }
 
 #[test]
 fn test_empty_sql() {
     let schema = setup_schema();
-    let result = BuildContext::new(&schema).build("");
-    assert!(result.is_err());
+    analyze_err(&schema, "");
 }
 
 #[test]
 fn test_multiple_statements_error() {
     let schema = setup_schema();
-    let result = BuildContext::new(&schema).build("SELECT id FROM users; SELECT id FROM users");
-    assert!(result.is_err());
+    analyze_err(&schema, "SELECT id FROM users; SELECT id FROM users");
 }
 
 #[test]
 fn test_non_select_error() {
     let schema = setup_schema();
-    let result = BuildContext::new(&schema).build("INSERT INTO users (id) VALUES (1)");
-    assert!(result.is_err());
+    analyze_err(&schema, "INSERT INTO users (id) VALUES (1)");
 }
