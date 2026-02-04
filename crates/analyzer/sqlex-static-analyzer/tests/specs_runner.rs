@@ -2,7 +2,10 @@ use std::{fs, path::Path};
 
 use serde::Deserialize;
 use sqlex_common::{dialect::Dialect, types::DataType};
-use sqlex_static_analyzer::{analysis::diagnostics::DiagnosticSeverity, catalog::Catalog};
+use sqlex_static_analyzer::{
+    analysis::{AnalysisEngine, diagnostics::DiagnosticSeverity},
+    catalog::Catalog,
+};
 
 #[derive(Debug, Deserialize)]
 struct YamlTestSuite {
@@ -53,7 +56,7 @@ fn run_test_file(path: &Path) {
     // Setup Catalog + Analyzer
     let dialect = Dialect::Postgres;
     let mut catalog = Catalog::new(dialect);
-    let analyzer = sqlex_static_analyzer::analysis::AnalysisEngine::new(dialect);
+    let analyzer = AnalysisEngine::new(dialect);
 
     // Apply schema DDL
     for sql in suite.schema {
