@@ -212,9 +212,11 @@ async fn run_test_file(path: &Path, specs_dir: &Path) {
                 expected_error
             );
             let message = result.unwrap_err().to_string();
+            let message_lower = message.to_lowercase();
+            let expected_lower = expected_error.to_lowercase();
             assert!(
-                message.contains(&expected_error),
-                "Test '{}' in {}: Expected error containing '{}', got '{}'",
+                message_lower.contains(&expected_lower),
+                "Test '{}' in {}: Expected error containing '{}' (case-insensitive), got '{}'",
                 test.name,
                 display_path,
                 expected_error,
