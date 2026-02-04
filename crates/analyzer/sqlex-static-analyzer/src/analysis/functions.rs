@@ -1,87 +1,5 @@
 use sqlex_common::DataType;
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum ScalarFunction {
-    // String
-    Concat,
-    ConcatWs,
-    Upper,
-    Lower,
-    Trim,
-    Ltrim,
-    Rtrim,
-    Substring,
-    Substr,
-    Replace,
-    Left,
-    Right,
-    Repeat,
-    Length,
-    CharLength,
-    CharacterLength,
-    OctetLength,
-    BitLength,
-    Position,
-    Strpos,
-
-    // Numeric
-    Abs,
-    Ceil,
-    Ceiling,
-    Floor,
-    Round,
-    Truncate,
-    Trunc,
-    Sqrt,
-    Exp,
-    Log,
-    Ln,
-    Log10,
-    Log2,
-    Power,
-    Pow,
-    Mod,
-    Random,
-    Rand,
-    Sign,
-
-    // Date/Time
-    Now,
-    CurrentTimestamp,
-    CurrentDate,
-    CurrentTime,
-    Date,
-    Time,
-    Year,
-    Month,
-    Day,
-    Hour,
-    Minute,
-    Second,
-    Extract,
-
-    // Type Conversion
-    Cast,
-    Convert,
-
-    // JSON
-    JsonObject,
-    JsonArray,
-    ToJson,
-    ToJsonb,
-
-    // Control Flow / Boolean
-    Coalesce,
-    Nullif,
-    Ifnull,
-    Nvl,
-
-    // Fallback / Unknown
-    Unknown,
-    Custom(String),
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct FunctionMeta {
     pub(crate) kind: FunctionKind,
@@ -94,8 +12,8 @@ pub(crate) struct FunctionMeta {
 #[derive(Debug, Clone)]
 pub(crate) enum FunctionKind {
     Scalar(ScalarFunction),
-    Aggregate(AggregateFunctionName),
-    Window(WindowFunctionName),
+    Aggregate(AggregateFunction),
+    Window(WindowFunction),
     Unknown,
 }
 
@@ -127,6 +45,78 @@ impl FunctionArity {
     }
 }
 
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ScalarFunction {
+    // String
+    Concat,
+    ConcatWs,
+    Upper,
+    Lower,
+    Trim,
+    Ltrim,
+    Rtrim,
+    Substring,
+    Replace,
+    Left,
+    Right,
+    Repeat,
+    Length,
+    CharLength,
+    OctetLength,
+    BitLength,
+    Position,
+
+    // Numeric
+    Abs,
+    Ceil,
+    Floor,
+    Round,
+    Truncate,
+    Sqrt,
+    Exp,
+    Log,
+    Ln,
+    Log10,
+    Log2,
+    Power,
+    Mod,
+    Random,
+    Sign,
+
+    // Date/Time
+    CurrentTimestamp,
+    CurrentDate,
+    CurrentTime,
+    Date,
+    Time,
+    Year,
+    Month,
+    Day,
+    Hour,
+    Minute,
+    Second,
+    Extract,
+
+    // Type Conversion
+    Cast,
+    Convert,
+
+    // JSON
+    JsonObject,
+    JsonArray,
+    ToJson,
+    ToJsonb,
+
+    // Control Flow / Boolean
+    Coalesce,
+    Nullif,
+    Ifnull,
+    Nvl,
+
+    Custom(String),
+}
+
 impl ScalarFunction {
     pub(crate) fn from_name(name: &str) -> Option<Self> {
         match name.to_uppercase().as_str() {
@@ -138,41 +128,36 @@ impl ScalarFunction {
             "TRIM" => Some(Self::Trim),
             "LTRIM" => Some(Self::Ltrim),
             "RTRIM" => Some(Self::Rtrim),
-            "SUBSTRING" => Some(Self::Substring),
-            "SUBSTR" => Some(Self::Substr),
+            "SUBSTRING" | "SUBSTR" => Some(Self::Substring),
             "REPLACE" => Some(Self::Replace),
             "LEFT" => Some(Self::Left),
             "RIGHT" => Some(Self::Right),
             "REPEAT" => Some(Self::Repeat),
             "LENGTH" => Some(Self::Length),
-            "CHAR_LENGTH" => Some(Self::CharLength),
-            "CHARACTER_LENGTH" => Some(Self::CharacterLength),
+            "CHAR_LENGTH" | "CHARACTER_LENGTH" => Some(Self::CharLength),
             "OCTET_LENGTH" => Some(Self::OctetLength),
             "BIT_LENGTH" => Some(Self::BitLength),
-            "POSITION" => Some(Self::Position),
-            "STRPOS" => Some(Self::Strpos),
+            "POSITION" | "STRPOS" => Some(Self::Position),
 
             // Numeric
             "ABS" => Some(Self::Abs),
-            "CEIL" => Some(Self::Ceil),
-            "CEILING" => Some(Self::Ceiling),
+            "CEIL" | "CEILING" => Some(Self::Ceil),
             "FLOOR" => Some(Self::Floor),
-            "TRUNCATE" => Some(Self::Truncate),
-            "TRUNC" => Some(Self::Trunc),
+            "ROUND" => Some(Self::Round),
+            "TRUNCATE" | "TRUNC" => Some(Self::Truncate),
             "SQRT" => Some(Self::Sqrt),
             "EXP" => Some(Self::Exp),
             "LOG" => Some(Self::Log),
             "LN" => Some(Self::Ln),
             "LOG10" => Some(Self::Log10),
             "LOG2" => Some(Self::Log2),
-            "POWER" => Some(Self::Power),
-            "POW" => Some(Self::Pow),
+            "POWER" | "POW" => Some(Self::Power),
             "MOD" => Some(Self::Mod),
             "RANDOM" | "RAND" => Some(Self::Random),
             "SIGN" => Some(Self::Sign),
 
             // Date/Time
-            "NOW" | "CURRENT_TIMESTAMP" => Some(Self::Now),
+            "NOW" | "CURRENT_TIMESTAMP" => Some(Self::CurrentTimestamp),
             "CURRENT_DATE" => Some(Self::CurrentDate),
             "CURRENT_TIME" => Some(Self::CurrentTime),
             "DATE" => Some(Self::Date),
@@ -201,9 +186,6 @@ impl ScalarFunction {
             "IFNULL" => Some(Self::Ifnull),
             "NVL" => Some(Self::Nvl),
 
-            // Handling functions that might map to multiple variants or direct parsing
-            "ROUND" => Some(Self::Round),
-
             _ => None,
         }
     }
@@ -224,7 +206,6 @@ impl ScalarFunction {
             | Self::Ltrim
             | Self::Rtrim
             | Self::Substring
-            | Self::Substr
             | Self::Replace
             | Self::Left
             | Self::Right
@@ -232,20 +213,13 @@ impl ScalarFunction {
 
             Self::Length
             | Self::CharLength
-            | Self::CharacterLength
             | Self::OctetLength
             | Self::BitLength
-            | Self::Position
-            | Self::Strpos => (DataType::Int, true),
+            | Self::Position => (DataType::Int, true),
 
-            Self::Abs
-            | Self::Ceil
-            | Self::Ceiling
-            | Self::Floor
-            | Self::Round
-            | Self::Truncate
-            | Self::Trunc
-            | Self::Mod => (input_type, true),
+            Self::Abs | Self::Ceil | Self::Floor | Self::Round | Self::Truncate | Self::Mod => {
+                (input_type, true)
+            },
 
             Self::Sqrt
             | Self::Exp
@@ -254,13 +228,11 @@ impl ScalarFunction {
             | Self::Log10
             | Self::Log2
             | Self::Power
-            | Self::Pow
-            | Self::Random
-            | Self::Rand => (DataType::Double, true),
+            | Self::Random => (DataType::Double, true),
 
             Self::Sign => (DataType::Int, true),
 
-            Self::Now | Self::CurrentTimestamp => (DataType::Timestamp, false),
+            Self::CurrentTimestamp => (DataType::Timestamp, false),
             Self::CurrentDate => (DataType::Date, false),
             Self::CurrentTime => (DataType::Time, false),
             Self::Date => (DataType::Date, true),
@@ -285,14 +257,71 @@ impl ScalarFunction {
 
             Self::Cast | Self::Convert => (input_type, true),
 
-            Self::Custom(_) | Self::Unknown => (DataType::Custom("unknown".to_string()), true),
+            Self::Custom(_) => (DataType::Custom("unknown".to_string()), true),
+        }
+    }
+
+    pub(crate) fn arity(&self) -> FunctionArity {
+        match self {
+            Self::Concat | Self::ConcatWs => FunctionArity::AtLeast(2),
+            Self::Upper
+            | Self::Lower
+            | Self::Trim
+            | Self::Ltrim
+            | Self::Rtrim
+            | Self::Length
+            | Self::CharLength
+            | Self::OctetLength
+            | Self::BitLength
+            | Self::Abs
+            | Self::Ceil
+            | Self::Floor
+            | Self::Sqrt
+            | Self::Exp
+            | Self::Ln
+            | Self::Log10
+            | Self::Log2
+            | Self::Sign
+            | Self::Date
+            | Self::Time
+            | Self::Year
+            | Self::Month
+            | Self::Day
+            | Self::Hour
+            | Self::Minute
+            | Self::Second
+            | Self::ToJson
+            | Self::ToJsonb => FunctionArity::Exact(1),
+            Self::Substring => FunctionArity::Between { min: 2, max: 3 },
+            Self::Replace
+            | Self::Left
+            | Self::Right
+            | Self::Repeat
+            | Self::Position
+            | Self::Power
+            | Self::Mod
+            | Self::Nullif
+            | Self::Ifnull
+            | Self::Nvl => FunctionArity::Exact(2),
+            Self::Round | Self::Truncate | Self::Log => FunctionArity::Between { min: 1, max: 2 },
+            Self::Random => FunctionArity::Between { min: 0, max: 1 },
+            Self::CurrentTimestamp | Self::CurrentDate | Self::CurrentTime => {
+                FunctionArity::Exact(0)
+            },
+            Self::Extract
+            | Self::Cast
+            | Self::Convert
+            | Self::JsonObject
+            | Self::JsonArray
+            | Self::Custom(_) => FunctionArity::Any,
+            Self::Coalesce => FunctionArity::AtLeast(1),
         }
     }
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum AggregateFunctionName {
+pub(crate) enum AggregateFunction {
     Count,
     Sum,
     Avg,
@@ -307,7 +336,7 @@ pub(crate) enum AggregateFunctionName {
     Custom(String),
 }
 
-impl AggregateFunctionName {
+impl AggregateFunction {
     pub(crate) fn from_name(name: &str) -> Option<Self> {
         match name.to_uppercase().as_str() {
             "COUNT" => Some(Self::Count),
@@ -324,11 +353,53 @@ impl AggregateFunctionName {
             _ => None,
         }
     }
+
+    pub(crate) fn infer_type(&self, arg_types: &[DataType]) -> (DataType, bool) {
+        let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
+
+        match self {
+            Self::Count => (DataType::BigInt, false),
+            Self::Sum => {
+                let data_type = match input_type {
+                    DataType::TinyInt | DataType::SmallInt | DataType::Int | DataType::BigInt => {
+                        DataType::BigInt
+                    },
+                    DataType::Float | DataType::Double | DataType::Decimal => DataType::Double,
+                    _ => input_type,
+                };
+                (data_type, true)
+            },
+            Self::Avg => (DataType::Double, true),
+            Self::Min | Self::Max => (input_type, true),
+            Self::First | Self::Last => (input_type, true),
+            Self::ArrayAgg => (DataType::Array(Box::new(input_type)), true),
+            Self::JsonArrayAgg | Self::JsonObjectAgg => (DataType::Json, true),
+            Self::StringAgg => (DataType::Text, true),
+            Self::Custom(_) => (input_type, true),
+        }
+    }
+
+    pub(crate) fn arity(&self) -> FunctionArity {
+        match self {
+            Self::Count => FunctionArity::Between { min: 0, max: 1 },
+            Self::StringAgg => FunctionArity::Exact(2),
+            Self::JsonObjectAgg => FunctionArity::Exact(2),
+            Self::Sum
+            | Self::Avg
+            | Self::Min
+            | Self::Max
+            | Self::First
+            | Self::Last
+            | Self::ArrayAgg
+            | Self::JsonArrayAgg => FunctionArity::Exact(1),
+            Self::Custom(_) => FunctionArity::Any,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum WindowFunctionName {
-    Aggregate(AggregateFunctionName),
+pub(crate) enum WindowFunction {
+    Aggregate(AggregateFunction),
     RowNumber,
     Rank,
     DenseRank,
@@ -342,7 +413,7 @@ pub(crate) enum WindowFunctionName {
     CumeDist,
 }
 
-impl WindowFunctionName {
+impl WindowFunction {
     pub(crate) fn from_name(name: &str) -> Option<Self> {
         let name_upper = name.to_uppercase();
         match name_upper.as_str() {
@@ -360,145 +431,68 @@ impl WindowFunctionName {
             _ => None,
         }
     }
+
+    pub(crate) fn infer_type(&self, arg_types: &[DataType]) -> (DataType, bool) {
+        match self {
+            Self::RowNumber | Self::Rank | Self::DenseRank | Self::NTile => {
+                (DataType::BigInt, false)
+            },
+            Self::PercentRank | Self::CumeDist => (DataType::Double, false),
+            Self::Lead | Self::Lag | Self::FirstValue | Self::LastValue | Self::NthValue => {
+                let data_type = arg_types.first().cloned().unwrap_or(DataType::Int);
+                (data_type, true)
+            },
+            Self::Aggregate(agg) => agg.infer_type(arg_types),
+        }
+    }
+
+    pub(crate) fn arity(&self) -> FunctionArity {
+        match self {
+            Self::RowNumber | Self::Rank | Self::DenseRank | Self::PercentRank | Self::CumeDist => {
+                FunctionArity::Exact(0)
+            },
+            Self::NTile => FunctionArity::Exact(1),
+            Self::Lead | Self::Lag => FunctionArity::Between { min: 1, max: 3 },
+            Self::FirstValue | Self::LastValue => FunctionArity::Exact(1),
+            Self::NthValue => FunctionArity::Exact(2),
+            Self::Aggregate(agg) => agg.arity(),
+        }
+    }
 }
 
 pub(crate) fn resolve_function(name: &str) -> FunctionMeta {
     let upper = name.to_uppercase();
 
-    if let Some(window) = WindowFunctionName::from_name(&upper) {
+    if let Some(window) = WindowFunction::from_name(&upper) {
+        let arity = window.arity();
         return FunctionMeta {
-            kind: FunctionKind::Window(window.clone()),
+            kind: FunctionKind::Window(window),
             accepts_distinct: false,
             allows_over: true,
             requires_over: true,
-            arity: match window {
-                WindowFunctionName::RowNumber
-                | WindowFunctionName::Rank
-                | WindowFunctionName::DenseRank
-                | WindowFunctionName::PercentRank
-                | WindowFunctionName::CumeDist => FunctionArity::Exact(0),
-                WindowFunctionName::NTile => FunctionArity::Exact(1),
-                WindowFunctionName::Lead | WindowFunctionName::Lag => {
-                    FunctionArity::Between { min: 1, max: 3 }
-                },
-                WindowFunctionName::FirstValue | WindowFunctionName::LastValue => {
-                    FunctionArity::Exact(1)
-                },
-                WindowFunctionName::NthValue => FunctionArity::Exact(2),
-                WindowFunctionName::Aggregate(agg) => match agg {
-                    AggregateFunctionName::Count => FunctionArity::Between { min: 0, max: 1 },
-                    AggregateFunctionName::StringAgg => FunctionArity::Exact(2),
-                    AggregateFunctionName::JsonObjectAgg => FunctionArity::Exact(2),
-                    AggregateFunctionName::Sum
-                    | AggregateFunctionName::Avg
-                    | AggregateFunctionName::Min
-                    | AggregateFunctionName::Max
-                    | AggregateFunctionName::First
-                    | AggregateFunctionName::Last
-                    | AggregateFunctionName::ArrayAgg
-                    | AggregateFunctionName::JsonArrayAgg => FunctionArity::Exact(1),
-                    AggregateFunctionName::Custom(_) => FunctionArity::Any,
-                },
-            },
+            arity,
         };
     }
 
-    if let Some(agg) = AggregateFunctionName::from_name(&upper) {
+    if let Some(agg) = AggregateFunction::from_name(&upper) {
+        let arity = agg.arity();
         return FunctionMeta {
-            kind: FunctionKind::Aggregate(agg.clone()),
+            kind: FunctionKind::Aggregate(agg),
             accepts_distinct: true,
             allows_over: true,
             requires_over: false,
-            arity: match agg {
-                AggregateFunctionName::Count => FunctionArity::Between { min: 0, max: 1 },
-                AggregateFunctionName::StringAgg => FunctionArity::Exact(2),
-                AggregateFunctionName::JsonObjectAgg => FunctionArity::Exact(2),
-                AggregateFunctionName::Sum
-                | AggregateFunctionName::Avg
-                | AggregateFunctionName::Min
-                | AggregateFunctionName::Max
-                | AggregateFunctionName::First
-                | AggregateFunctionName::Last
-                | AggregateFunctionName::ArrayAgg
-                | AggregateFunctionName::JsonArrayAgg => FunctionArity::Exact(1),
-                AggregateFunctionName::Custom(_) => FunctionArity::Any,
-            },
+            arity,
         };
     }
 
     if let Some(scalar) = ScalarFunction::from_name(&upper) {
+        let arity = scalar.arity();
         return FunctionMeta {
-            kind: FunctionKind::Scalar(scalar.clone()),
+            kind: FunctionKind::Scalar(scalar),
             accepts_distinct: false,
             allows_over: false,
             requires_over: false,
-            arity: match scalar {
-                ScalarFunction::Concat | ScalarFunction::ConcatWs => FunctionArity::AtLeast(2),
-                ScalarFunction::Upper
-                | ScalarFunction::Lower
-                | ScalarFunction::Trim
-                | ScalarFunction::Ltrim
-                | ScalarFunction::Rtrim
-                | ScalarFunction::Length
-                | ScalarFunction::CharLength
-                | ScalarFunction::CharacterLength
-                | ScalarFunction::OctetLength
-                | ScalarFunction::BitLength
-                | ScalarFunction::Abs
-                | ScalarFunction::Ceil
-                | ScalarFunction::Ceiling
-                | ScalarFunction::Floor
-                | ScalarFunction::Sqrt
-                | ScalarFunction::Exp
-                | ScalarFunction::Ln
-                | ScalarFunction::Log10
-                | ScalarFunction::Log2
-                | ScalarFunction::Sign
-                | ScalarFunction::Date
-                | ScalarFunction::Time
-                | ScalarFunction::Year
-                | ScalarFunction::Month
-                | ScalarFunction::Day
-                | ScalarFunction::Hour
-                | ScalarFunction::Minute
-                | ScalarFunction::Second
-                | ScalarFunction::ToJson
-                | ScalarFunction::ToJsonb => FunctionArity::Exact(1),
-                ScalarFunction::Substring | ScalarFunction::Substr => {
-                    FunctionArity::Between { min: 2, max: 3 }
-                },
-                ScalarFunction::Replace
-                | ScalarFunction::Left
-                | ScalarFunction::Right
-                | ScalarFunction::Repeat
-                | ScalarFunction::Position
-                | ScalarFunction::Strpos
-                | ScalarFunction::Power
-                | ScalarFunction::Pow
-                | ScalarFunction::Mod
-                | ScalarFunction::Nullif
-                | ScalarFunction::Ifnull
-                | ScalarFunction::Nvl => FunctionArity::Exact(2),
-                ScalarFunction::Round
-                | ScalarFunction::Truncate
-                | ScalarFunction::Trunc
-                | ScalarFunction::Log => FunctionArity::Between { min: 1, max: 2 },
-                ScalarFunction::Random | ScalarFunction::Rand => {
-                    FunctionArity::Between { min: 0, max: 1 }
-                },
-                ScalarFunction::Now
-                | ScalarFunction::CurrentTimestamp
-                | ScalarFunction::CurrentDate
-                | ScalarFunction::CurrentTime => FunctionArity::Exact(0),
-                ScalarFunction::Extract
-                | ScalarFunction::Cast
-                | ScalarFunction::Convert
-                | ScalarFunction::JsonObject
-                | ScalarFunction::JsonArray
-                | ScalarFunction::Custom(_)
-                | ScalarFunction::Unknown => FunctionArity::Any,
-                ScalarFunction::Coalesce => FunctionArity::AtLeast(1),
-            },
+            arity,
         };
     }
 

@@ -1,7 +1,5 @@
 use super::{TypeContext, TypeInfo};
-use crate::analysis::functions::{
-    AggregateFunctionName, FunctionKind, WindowFunctionName, resolve_function,
-};
+use crate::analysis::functions::{FunctionKind, WindowFunction, resolve_function};
 
 impl<'a> TypeContext<'a> {
     pub(super) fn infer_function(
@@ -44,12 +42,22 @@ impl<'a> TypeContext<'a> {
         }
 
         match meta.kind {
-            FunctionKind::Window(window) => self.infer_window_function(window, arg_types),
+            FunctionKind::Window(window) => {
+                let (data_type, nullable) = window.infer_type(arg_types);
+                TypeInfo {
+                    data_type,
+                    nullable,
+                }
+            },
             FunctionKind::Aggregate(agg) => {
-                if over {
-                    self.infer_window_function(WindowFunctionName::Aggregate(agg), arg_types)
+                let (data_type, nullable) = if over {
+                    WindowFunction::Aggregate(agg).infer_type(arg_types)
                 } else {
-                    self.infer_aggregate_function(agg, arg_types)
+                    agg.infer_type(arg_types)
+                };
+                TypeInfo {
+                    data_type,
+                    nullable,
                 }
             },
             FunctionKind::Scalar(scalar) => {
@@ -69,93 +77,6 @@ impl<'a> TypeContext<'a> {
                     nullable: true,
                 }
             },
-        }
-    }
-
-    fn infer_aggregate_function(
-        &self,
-        function: AggregateFunctionName,
-        arg_types: &[sqlex_common::DataType],
-    ) -> TypeInfo {
-        use sqlex_common::DataType;
-
-        let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
-        match function {
-            AggregateFunctionName::Count => TypeInfo {
-                data_type: DataType::BigInt,
-                nullable: false,
-            },
-            AggregateFunctionName::Sum => TypeInfo {
-                data_type: match input_type {
-                    DataType::TinyInt | DataType::SmallInt | DataType::Int | DataType::BigInt => {
-                        DataType::BigInt
-                    },
-                    DataType::Float | DataType::Double | DataType::Decimal => DataType::Double,
-                    _ => input_type,
-                },
-                nullable: true,
-            },
-            AggregateFunctionName::Avg => TypeInfo {
-                data_type: DataType::Double,
-                nullable: true,
-            },
-            AggregateFunctionName::Min | AggregateFunctionName::Max => TypeInfo {
-                data_type: input_type,
-                nullable: true,
-            },
-            AggregateFunctionName::First | AggregateFunctionName::Last => TypeInfo {
-                data_type: input_type,
-                nullable: true,
-            },
-            AggregateFunctionName::ArrayAgg => TypeInfo {
-                data_type: DataType::Array(Box::new(input_type)),
-                nullable: true,
-            },
-            AggregateFunctionName::JsonArrayAgg | AggregateFunctionName::JsonObjectAgg => {
-                TypeInfo {
-                    data_type: DataType::Json,
-                    nullable: true,
-                }
-            },
-            AggregateFunctionName::StringAgg => TypeInfo {
-                data_type: DataType::Text,
-                nullable: true,
-            },
-            AggregateFunctionName::Custom(_) => TypeInfo {
-                data_type: input_type,
-                nullable: true,
-            },
-        }
-    }
-
-    fn infer_window_function(
-        &self,
-        function: WindowFunctionName,
-        arg_types: &[sqlex_common::DataType],
-    ) -> TypeInfo {
-        use sqlex_common::DataType;
-
-        match function {
-            WindowFunctionName::RowNumber
-            | WindowFunctionName::Rank
-            | WindowFunctionName::DenseRank
-            | WindowFunctionName::NTile => TypeInfo {
-                data_type: DataType::BigInt,
-                nullable: false,
-            },
-            WindowFunctionName::PercentRank | WindowFunctionName::CumeDist => TypeInfo {
-                data_type: DataType::Double,
-                nullable: false,
-            },
-            WindowFunctionName::Lead
-            | WindowFunctionName::Lag
-            | WindowFunctionName::FirstValue
-            | WindowFunctionName::LastValue
-            | WindowFunctionName::NthValue => TypeInfo {
-                data_type: arg_types.first().cloned().unwrap_or(DataType::Int),
-                nullable: true,
-            },
-            WindowFunctionName::Aggregate(agg) => self.infer_aggregate_function(agg, arg_types),
         }
     }
 }

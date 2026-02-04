@@ -279,9 +279,7 @@ pub(super) fn merge_types(
             }
         },
         Some(current) => {
-            if matches!(next, sqlex_common::DataType::Custom(_)) {
-                Some(current)
-            } else if current == next {
+            if matches!(next, sqlex_common::DataType::Custom(_)) || current == next {
                 Some(current)
             } else {
                 Some(promote_numeric(&current, &next))

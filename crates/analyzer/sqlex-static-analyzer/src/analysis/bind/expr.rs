@@ -47,7 +47,7 @@ impl<'a> Binder<'a> {
             Expr::UnaryOp { op, expr: inner } => {
                 let inner_id = self.bind_expr(inner, scope);
                 self.exprs.alloc(BoundExpr::Unary {
-                    op: op.clone(),
+                    op: *op,
                     expr: inner_id,
                 })
             },

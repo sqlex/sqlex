@@ -131,7 +131,7 @@ impl<'a> TypeContext<'a> {
     }
 }
 
-fn sort_lineage(lineage: &mut Vec<LineageColumn>) {
+fn sort_lineage(lineage: &mut [LineageColumn]) {
     lineage.sort_by(|a, b| {
         let key_a = (a.table.as_deref().unwrap_or(""), a.column.as_str());
         let key_b = (b.table.as_deref().unwrap_or(""), b.column.as_str());
