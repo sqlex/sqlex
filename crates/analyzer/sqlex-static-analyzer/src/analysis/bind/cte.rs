@@ -1,14 +1,17 @@
-use std::sync::Arc;
+use std::{mem, sync::Arc};
 
-use sqlparser::ast::{Query, SetExpr};
+use sqlparser::ast::{self, Query, SetExpr};
 
 use crate::{
-    analysis::bind::{Binder, CteBinding},
+    analysis::{
+        bind::{Binder, CteBinding},
+        diagnostics::Diagnostic,
+    },
     ir::bound::{BoundCte, BoundQuery, BoundSetExpr},
 };
 
 impl<'a> Binder<'a> {
-    pub(super) fn bind_ctes(&mut self, with: Option<&sqlparser::ast::With>) -> Vec<Arc<BoundCte>> {
+    pub(super) fn bind_ctes(&mut self, with: Option<&ast::With>) -> Vec<Arc<BoundCte>> {
         let mut ctes = self.cte_defs.clone();
         let Some(with) = with else {
             return ctes;
@@ -41,9 +44,8 @@ impl<'a> Binder<'a> {
             let mut output_cols = self.output_names_for_query(&bound_query);
             if !alias_columns.is_empty() {
                 if alias_columns.len() != output_cols.len() {
-                    self.diagnostics.push(
-                        crate::analysis::diagnostics::Diagnostic::cte_column_count_mismatch(&name),
-                    );
+                    self.diagnostics
+                        .push(Diagnostic::cte_column_count_mismatch(&name));
                 }
                 output_cols = alias_columns.clone();
             }
@@ -108,9 +110,9 @@ impl<'a> Binder<'a> {
 
         let anchor_query = BoundQuery {
             ctes: Vec::new(),
-            tables: std::mem::take(&mut child.tables),
-            columns: std::mem::take(&mut child.columns),
-            exprs: std::mem::take(&mut child.exprs),
+            tables: mem::take(&mut child.tables),
+            columns: mem::take(&mut child.columns),
+            exprs: mem::take(&mut child.exprs),
             body: anchor_body,
             order_by: Vec::new(),
             limit: None,

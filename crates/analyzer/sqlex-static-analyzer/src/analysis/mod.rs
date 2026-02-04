@@ -1,11 +1,11 @@
+use sqlex_common::dialect::Dialect;
+
+use crate::{analysis::diagnostics::Diagnostic, catalog::Catalog, ir::output::OutputSchema};
+
 pub mod bind;
 pub mod diagnostics;
 pub(crate) mod functions;
 pub mod typecheck;
-
-use sqlex_common::dialect::Dialect;
-
-use crate::{analysis::diagnostics::Diagnostic, catalog::Catalog, ir::output::OutputSchema};
 
 pub struct AnalysisResult {
     pub output: Option<OutputSchema>,

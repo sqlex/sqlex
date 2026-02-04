@@ -1,11 +1,11 @@
-mod factory;
-
 use anyhow::Result;
 use sqlex_common::{
     config::SqlexConfig,
     ir::{CompilationUnit, ParameterDescriptor, QueryDescriptor},
     types::{ColumnInfo, DataType, Table},
 };
+
+mod factory;
 
 pub struct Compiler {
     #[allow(dead_code)]

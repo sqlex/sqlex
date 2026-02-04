@@ -1,10 +1,4 @@
-mod cte;
-mod expr;
-mod from;
-mod names;
-mod scope;
-
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, mem, sync::Arc};
 
 use sqlex_common::dialect::Dialect;
 use sqlparser::{
@@ -28,6 +22,12 @@ use crate::{
         ids::{ColumnId, ExprId, TableId},
     },
 };
+
+mod cte;
+mod expr;
+mod from;
+mod names;
+mod scope;
 
 pub struct BindResult {
     pub bound: Option<BoundQuery>,
@@ -149,9 +149,9 @@ impl<'a> Binder<'a> {
 
         Some(BoundQuery {
             ctes,
-            tables: std::mem::take(&mut self.tables),
-            columns: std::mem::take(&mut self.columns),
-            exprs: std::mem::take(&mut self.exprs),
+            tables: mem::take(&mut self.tables),
+            columns: mem::take(&mut self.columns),
+            exprs: mem::take(&mut self.exprs),
             body,
             order_by,
             limit,

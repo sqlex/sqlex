@@ -1,9 +1,3 @@
-mod functions;
-mod grouping;
-mod infer;
-mod lineage;
-mod schema;
-
 use std::collections::{HashMap, HashSet};
 
 use sqlex_common::dialect::Dialect;
@@ -13,6 +7,12 @@ use crate::{
     catalog::Catalog,
     ir::{bound::BoundQuery, output::OutputSchema},
 };
+
+mod functions;
+mod grouping;
+mod infer;
+mod lineage;
+mod schema;
 
 #[derive(Debug, Clone)]
 pub(super) struct TypeInfo {

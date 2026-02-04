@@ -3,10 +3,6 @@
 //! A static SQL analyzer that infers result set types and nullability
 //! without requiring a database connection.
 
-pub mod analysis;
-pub mod catalog;
-pub mod ir;
-
 // Re-exports (Internal imports now)
 use async_trait::async_trait;
 use sqlex_analyzer::{Analyzer, AnalyzerError, Result};
@@ -19,6 +15,10 @@ use crate::{
     analysis::{AnalysisEngine, diagnostics::DiagnosticSeverity},
     catalog::Catalog,
 };
+
+pub mod analysis;
+pub mod catalog;
+pub mod ir;
 
 /// Static SQL analyzer implementation
 pub struct StaticAnalyzer {

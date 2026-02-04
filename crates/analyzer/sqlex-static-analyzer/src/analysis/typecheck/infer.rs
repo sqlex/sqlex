@@ -1,4 +1,5 @@
-use sqlparser::ast::BinaryOperator;
+use sqlex_common::types::DataType;
+use sqlparser::ast::{self, BinaryOperator};
 
 use crate::{
     analysis::{
@@ -34,7 +35,7 @@ impl<'a> TypeContext<'a> {
             },
             BoundExpr::Unary { expr, .. } => self.infer_expr(state, *expr),
             BoundExpr::IsNull { .. } => TypeInfo {
-                data_type: sqlex_common::types::DataType::Bool,
+                data_type: DataType::Bool,
                 nullable: false,
             },
             BoundExpr::Function {
@@ -67,7 +68,7 @@ impl<'a> TypeContext<'a> {
                     self.infer_expr(state, *expr_id);
                 }
 
-                let mut merged_type: Option<sqlex_common::types::DataType> = None;
+                let mut merged_type: Option<DataType> = None;
                 let mut nullable = else_result.is_none();
 
                 for expr_id in results {
@@ -87,9 +88,8 @@ impl<'a> TypeContext<'a> {
                 }
 
                 TypeInfo {
-                    data_type: merged_type.unwrap_or_else(|| {
-                        sqlex_common::types::DataType::Custom("unknown".to_string())
-                    }),
+                    data_type: merged_type
+                        .unwrap_or_else(|| DataType::Custom("unknown".to_string())),
                     nullable,
                 }
             },
@@ -105,13 +105,13 @@ impl<'a> TypeContext<'a> {
                     self.diagnostics
                         .push(Diagnostic::scalar_subquery_column_count());
                     TypeInfo {
-                        data_type: sqlex_common::types::DataType::Custom("unknown".to_string()),
+                        data_type: DataType::Custom("unknown".to_string()),
                         nullable: true,
                     }
                 }
             },
             BoundExpr::Unsupported => TypeInfo {
-                data_type: sqlex_common::types::DataType::Custom("unknown".to_string()),
+                data_type: DataType::Custom("unknown".to_string()),
                 nullable: true,
             },
         };
@@ -137,7 +137,7 @@ impl<'a> TypeContext<'a> {
                             name, column.name
                         )));
                         TypeInfo {
-                            data_type: sqlex_common::types::DataType::Custom("unknown".to_string()),
+                            data_type: DataType::Custom("unknown".to_string()),
                             nullable: true,
                         }
                     },
@@ -145,7 +145,7 @@ impl<'a> TypeContext<'a> {
                 None => {
                     self.diagnostics.push(Diagnostic::unknown_table(name));
                     TypeInfo {
-                        data_type: sqlex_common::types::DataType::Custom("unknown".to_string()),
+                        data_type: DataType::Custom("unknown".to_string()),
                         nullable: true,
                     }
                 },
@@ -182,7 +182,7 @@ impl<'a> TypeContext<'a> {
                         self.diagnostics
                             .push(Diagnostic::unknown_column(&column.name));
                         TypeInfo {
-                            data_type: sqlex_common::types::DataType::Custom("unknown".to_string()),
+                            data_type: DataType::Custom("unknown".to_string()),
                             nullable: true,
                         }
                     }
@@ -190,13 +190,13 @@ impl<'a> TypeContext<'a> {
                     let table = state.query.tables.get(column.table);
                     if table.columns.iter().any(|c| c == &column.name) {
                         TypeInfo {
-                            data_type: sqlex_common::types::DataType::Custom("unknown".to_string()),
+                            data_type: DataType::Custom("unknown".to_string()),
                             nullable: true,
                         }
                     } else {
                         self.diagnostics.push(Diagnostic::unknown_cte(name));
                         TypeInfo {
-                            data_type: sqlex_common::types::DataType::Custom("unknown".to_string()),
+                            data_type: DataType::Custom("unknown".to_string()),
                             nullable: true,
                         }
                     }
@@ -227,60 +227,56 @@ impl<'a> TypeContext<'a> {
             self.diagnostics
                 .push(Diagnostic::unknown_column(column_name));
             TypeInfo {
-                data_type: sqlex_common::types::DataType::Custom("unknown".to_string()),
+                data_type: DataType::Custom("unknown".to_string()),
                 nullable: true,
             }
         }
     }
 }
 
-fn infer_literal(value: &sqlparser::ast::Value) -> TypeInfo {
+fn infer_literal(value: &ast::Value) -> TypeInfo {
     match value {
-        sqlparser::ast::Value::Number(num, _) => {
+        ast::Value::Number(num, _) => {
             let is_float = num.contains('.');
             TypeInfo {
                 data_type: if is_float {
-                    sqlex_common::types::DataType::Double
+                    DataType::Double
                 } else {
-                    sqlex_common::types::DataType::Int
+                    DataType::Int
                 },
                 nullable: false,
             }
         },
-        sqlparser::ast::Value::Boolean(_) => TypeInfo {
-            data_type: sqlex_common::types::DataType::Bool,
+        ast::Value::Boolean(_) => TypeInfo {
+            data_type: DataType::Bool,
             nullable: false,
         },
-        sqlparser::ast::Value::SingleQuotedString(_)
-        | sqlparser::ast::Value::DoubleQuotedString(_) => TypeInfo {
-            data_type: sqlex_common::types::DataType::Text,
+        ast::Value::SingleQuotedString(_) | ast::Value::DoubleQuotedString(_) => TypeInfo {
+            data_type: DataType::Text,
             nullable: false,
         },
-        sqlparser::ast::Value::Null => TypeInfo {
-            data_type: sqlex_common::types::DataType::Custom("unknown".to_string()),
+        ast::Value::Null => TypeInfo {
+            data_type: DataType::Custom("unknown".to_string()),
             nullable: true,
         },
         _ => TypeInfo {
-            data_type: sqlex_common::types::DataType::Custom("unknown".to_string()),
+            data_type: DataType::Custom("unknown".to_string()),
             nullable: true,
         },
     }
 }
 
-pub(super) fn merge_types(
-    existing: Option<sqlex_common::types::DataType>,
-    next: sqlex_common::types::DataType,
-) -> Option<sqlex_common::types::DataType> {
+pub(super) fn merge_types(existing: Option<DataType>, next: DataType) -> Option<DataType> {
     match existing {
         None => {
-            if matches!(next, sqlex_common::types::DataType::Custom(_)) {
+            if matches!(next, DataType::Custom(_)) {
                 None
             } else {
                 Some(next)
             }
         },
         Some(current) => {
-            if matches!(next, sqlex_common::types::DataType::Custom(_)) || current == next {
+            if matches!(next, DataType::Custom(_)) || current == next {
                 Some(current)
             } else {
                 Some(promote_numeric(&current, &next))
@@ -289,13 +285,7 @@ pub(super) fn merge_types(
     }
 }
 
-fn analyze_binary_type(
-    left: &sqlex_common::types::DataType,
-    op: &BinaryOperator,
-    right: &sqlex_common::types::DataType,
-) -> sqlex_common::types::DataType {
-    use sqlex_common::types::DataType;
-
+fn analyze_binary_type(left: &DataType, op: &BinaryOperator, right: &DataType) -> DataType {
     match op {
         BinaryOperator::Plus
         | BinaryOperator::Minus
@@ -319,20 +309,15 @@ fn analyze_binary_type(
     }
 }
 
-fn promote_numeric(
-    a: &sqlex_common::types::DataType,
-    b: &sqlex_common::types::DataType,
-) -> sqlex_common::types::DataType {
-    use sqlex_common::types::DataType::*;
-
+fn promote_numeric(a: &DataType, b: &DataType) -> DataType {
     match (a, b) {
-        (Double, _) | (_, Double) => Double,
-        (Float, _) | (_, Float) => Float,
-        (Decimal, _) | (_, Decimal) => Decimal,
-        (BigInt, _) | (_, BigInt) => BigInt,
-        (Int, _) | (_, Int) => Int,
-        (SmallInt, _) | (_, SmallInt) => SmallInt,
-        (TinyInt, TinyInt) => TinyInt,
+        (DataType::Double, _) | (_, DataType::Double) => DataType::Double,
+        (DataType::Float, _) | (_, DataType::Float) => DataType::Float,
+        (DataType::Decimal, _) | (_, DataType::Decimal) => DataType::Decimal,
+        (DataType::BigInt, _) | (_, DataType::BigInt) => DataType::BigInt,
+        (DataType::Int, _) | (_, DataType::Int) => DataType::Int,
+        (DataType::SmallInt, _) | (_, DataType::SmallInt) => DataType::SmallInt,
+        (DataType::TinyInt, DataType::TinyInt) => DataType::TinyInt,
         _ => a.clone(),
     }
 }

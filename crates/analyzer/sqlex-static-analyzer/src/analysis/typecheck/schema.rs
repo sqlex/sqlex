@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use sqlparser::ast;
+
 use crate::{
     analysis::{
         diagnostics::Diagnostic,
@@ -332,9 +334,7 @@ impl<'a> TypeContext<'a> {
     ) -> Option<(ColumnId, ColumnId)> {
         match condition {
             BoundJoinCondition::On(expr_id) => match query.exprs.get(*expr_id) {
-                BoundExpr::Binary { left, op, right }
-                    if *op == sqlparser::ast::BinaryOperator::Eq =>
-                {
+                BoundExpr::Binary { left, op, right } if *op == ast::BinaryOperator::Eq => {
                     match (query.exprs.get(*left), query.exprs.get(*right)) {
                         (BoundExpr::Column(left_col), BoundExpr::Column(right_col)) => {
                             Some((*left_col, *right_col))

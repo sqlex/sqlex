@@ -2,7 +2,7 @@ use std::{fs, path::Path};
 
 use serde::Deserialize;
 use sqlex_common::{dialect::Dialect, types::DataType};
-use sqlex_static_analyzer::catalog::Catalog;
+use sqlex_static_analyzer::{analysis::diagnostics::DiagnosticSeverity, catalog::Catalog};
 
 #[derive(Debug, Deserialize)]
 struct YamlTestSuite {
@@ -73,7 +73,6 @@ fn run_test_file(path: &Path) {
         println!("  Running test: {}", test.name);
 
         if let Some(expected_error) = test.error {
-            use sqlex_static_analyzer::analysis::diagnostics::DiagnosticSeverity;
             let result = analyzer.analyze(&catalog, &test.sql);
             let has_error = result
                 .diagnostics
@@ -88,7 +87,6 @@ fn run_test_file(path: &Path) {
             // We could also check the error message content if needed, but for now just presence is enough or basic containment if easy.
             // verifying message can be added if needed, strict equality might be flaky for now.
         } else if let Some(expected_columns) = test.expected {
-            use sqlex_static_analyzer::analysis::diagnostics::DiagnosticSeverity;
             let result = analyzer.analyze(&catalog, &test.sql);
 
             // Check for errors

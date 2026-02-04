@@ -7,8 +7,8 @@ use sqlex_analyzer::{AnalyzerError, extension::ObjectNameExt};
 use sqlex_common::{dialect::Dialect, types::DataType};
 use sqlparser::{
     ast::{
-        AlterTableOperation, CharacterLength, ColumnOption, CreateTable, DataType as SqlDataType,
-        Statement, TableConstraint,
+        self, AlterTableOperation, CharacterLength, ColumnOption, CreateTable,
+        DataType as SqlDataType, Statement, TableConstraint,
     },
     dialect::{Dialect as SqlParserDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect},
     parser::Parser,
@@ -169,7 +169,7 @@ impl Catalog {
 }
 
 /// Parse a column definition from sqlparser AST
-pub fn parse_column_def(col: &sqlparser::ast::ColumnDef) -> Result<ColumnDef> {
+pub fn parse_column_def(col: &ast::ColumnDef) -> Result<ColumnDef> {
     let name = col.name.value.clone();
     let data_type = map_data_type(&col.data_type);
     let mut column_def = ColumnDef::new(name, data_type);
@@ -229,15 +229,13 @@ pub fn parse_table_constraint(constraint: &TableConstraint, table: &mut TableDef
     Ok(())
 }
 
-fn map_referential_action(
-    action: &Option<sqlparser::ast::ReferentialAction>,
-) -> Option<ReferentialAction> {
+fn map_referential_action(action: &Option<ast::ReferentialAction>) -> Option<ReferentialAction> {
     action.as_ref().map(|a| match a {
-        sqlparser::ast::ReferentialAction::Cascade => ReferentialAction::Cascade,
-        sqlparser::ast::ReferentialAction::SetNull => ReferentialAction::SetNull,
-        sqlparser::ast::ReferentialAction::SetDefault => ReferentialAction::SetDefault,
-        sqlparser::ast::ReferentialAction::Restrict => ReferentialAction::Restrict,
-        sqlparser::ast::ReferentialAction::NoAction => ReferentialAction::NoAction,
+        ast::ReferentialAction::Cascade => ReferentialAction::Cascade,
+        ast::ReferentialAction::SetNull => ReferentialAction::SetNull,
+        ast::ReferentialAction::SetDefault => ReferentialAction::SetDefault,
+        ast::ReferentialAction::Restrict => ReferentialAction::Restrict,
+        ast::ReferentialAction::NoAction => ReferentialAction::NoAction,
     })
 }
 
@@ -280,10 +278,10 @@ pub fn map_data_type(sql_type: &SqlDataType) -> DataType {
         },
         SqlDataType::Array(inner) => {
             let inner_type = match inner {
-                sqlparser::ast::ArrayElemTypeDef::None => DataType::Custom("ANY".to_string()),
-                sqlparser::ast::ArrayElemTypeDef::AngleBracket(t) => map_data_type(t),
-                sqlparser::ast::ArrayElemTypeDef::SquareBracket(t, _) => map_data_type(t),
-                sqlparser::ast::ArrayElemTypeDef::Parenthesis(t) => map_data_type(t),
+                ast::ArrayElemTypeDef::None => DataType::Custom("ANY".to_string()),
+                ast::ArrayElemTypeDef::AngleBracket(t) => map_data_type(t),
+                ast::ArrayElemTypeDef::SquareBracket(t, _) => map_data_type(t),
+                ast::ArrayElemTypeDef::Parenthesis(t) => map_data_type(t),
             };
             DataType::Array(Box::new(inner_type))
         },
