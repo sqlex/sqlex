@@ -1,0 +1,173 @@
+schema:
+  - |
+    CREATE TABLE users (
+        id INT NOT NULL,
+        name TEXT NOT NULL,
+        email TEXT,
+        age INT,
+        score DOUBLE PRECISION,
+        PRIMARY KEY (id)
+    )
+
+tests:
+  # Column Reference Nullability
+  - name: test_not_null_column_is_not_nullable
+    sql: SELECT id FROM users
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+
+  - name: test_nullable_column_is_nullable
+    sql: SELECT email FROM users
+    expected:
+      - name: email
+        type: Text
+        nullability: true
+
+  - name: test_mixed_nullability
+    sql: SELECT id, name, email FROM users
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: name
+        type: Text
+        nullability: false
+      - name: email
+        type: Text
+        nullability: true
+
+  # Binary Operator Nullability
+  - name: test_binary_op_with_nullable
+    sql: SELECT age + 1 as val FROM users
+    expected:
+      - name: val
+        type: Int
+        nullability: true
+
+  - name: test_binary_op_not_null
+    sql: SELECT id + 1 as val FROM users
+    expected:
+      - name: val
+        type: Int
+        nullability: false
+
+  - name: test_binary_op_both_nullable
+    sql: SELECT age + score as val FROM users
+    expected:
+      - name: val
+        type: Double
+        nullability: true
+
+  # COALESCE Nullability
+  - name: test_coalesce_with_not_null
+    sql: SELECT COALESCE(age, 0) as val FROM users
+    expected:
+      - name: val
+        type: Int
+        nullability: false
+
+  - name: test_coalesce_all_nullable
+    sql: SELECT COALESCE(age, score) as val FROM users
+    expected:
+      - name: val
+        type: Double
+        nullability: true
+
+  - name: test_coalesce_multiple_args
+    sql: SELECT COALESCE(age, score, 0) as val FROM users
+    expected:
+      - name: val
+        type: Int
+        nullability: false
+
+  # NULLIF Nullability
+  - name: test_nullif_always_nullable
+    sql: SELECT NULLIF(id, 0) as val FROM users
+    expected:
+      - name: val
+        type: Int
+        nullability: true
+
+  # CASE Expression Nullability
+  - name: test_case_with_else_all_not_null
+    sql: SELECT CASE WHEN id > 0 THEN 'positive' ELSE 'zero' END as val FROM users
+    expected:
+      - name: val
+        type: Text
+        nullability: false
+
+  - name: test_case_without_else
+    sql: SELECT CASE WHEN id > 0 THEN 'positive' END as val FROM users
+    expected:
+      - name: val
+        type: Text
+        nullability: true
+
+  - name: test_case_with_nullable_branch
+    sql: SELECT CASE WHEN id > 0 THEN age ELSE 0 END as val FROM users
+    expected:
+      - name: val
+        type: Int
+        nullability: true
+
+  # Subquery Nullability
+  - name: test_scalar_subquery_nullable
+    sql: SELECT (SELECT id FROM users WHERE id = 999) as val FROM users
+    expected:
+      - name: val
+        type: Int
+        nullability: true
+
+  # Aggregate Function Nullability
+  - name: test_count_star_not_nullable
+    sql: SELECT COUNT(*) as val FROM users
+    expected:
+      - name: val
+        type: BigInt
+        nullability: false
+
+  - name: test_count_column_not_nullable
+    sql: SELECT COUNT(age) as val FROM users
+    expected:
+      - name: val
+        type: BigInt
+        nullability: false
+
+  - name: test_sum_nullable
+    sql: SELECT SUM(age) as val FROM users
+    expected:
+      - name: val
+        type: BigInt
+        nullability: true
+
+  - name: test_avg_nullable
+    sql: SELECT AVG(age) as val FROM users
+    expected:
+      - name: val
+        type: Double
+        nullability: true
+
+  - name: test_min_max_nullable
+    sql: SELECT MIN(age) as min_val, MAX(age) as max_val FROM users
+    expected:
+      - name: min_val
+        type: Int
+        nullability: true
+      - name: max_val
+        type: Int
+        nullability: true
+
+  - name: test_mixed_aggregates
+    sql: SELECT COUNT(*) as count_val, SUM(age) as sum_val, AVG(age) as avg_val FROM users
+    expected:
+      - name: count_val
+        type: BigInt
+        nullability: false
+      - name: sum_val
+        type: BigInt
+        nullability: true
+      - name: avg_val
+        type: Double
+        nullability: true

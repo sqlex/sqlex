@@ -1,0 +1,245 @@
+schema: 
+  - |
+    CREATE TABLE users (
+        id INT NOT NULL,
+        name TEXT NOT NULL,
+        manager_id INT,
+        PRIMARY KEY (id)
+    )
+  - |
+    CREATE TABLE sales (
+        id INT NOT NULL,
+        region TEXT NOT NULL,
+        amount DECIMAL NOT NULL,
+        PRIMARY KEY (id)
+    )
+  - |
+    CREATE TABLE table_a (
+        id INT NOT NULL,
+        value TEXT
+    )
+  - |
+    CREATE TABLE table_b (
+        id INT NOT NULL,
+        value TEXT NOT NULL
+    )
+
+tests:
+  # CTE Tests
+  - name: test_simple_cte
+    sql: |
+      WITH active_users AS (
+          SELECT id, name FROM users WHERE id > 0
+      )
+      SELECT id, name FROM active_users
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: name
+        type: Text
+        nullability: false
+
+  - name: test_cte_with_column_aliases
+    sql: |
+      WITH renamed(user_id, user_name) AS (
+          SELECT id, name FROM users
+      )
+      SELECT user_id, user_name FROM renamed
+    expected:
+      - name: user_id
+        type: Int
+        nullability: false
+      - name: user_name
+        type: Text
+        nullability: false
+
+  - name: test_multiple_ctes
+    sql: |
+      WITH 
+          cte1 AS (SELECT id FROM users),
+          cte2 AS (SELECT name FROM users)
+      SELECT cte1.id, cte2.name FROM cte1, cte2
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: name
+        type: Text
+        nullability: false
+
+  - name: test_recursive_cte
+    sql: |
+      WITH RECURSIVE hierarchy AS (
+          SELECT id, name, manager_id, 1 as level
+          FROM users
+          WHERE manager_id IS NULL
+          UNION ALL
+          SELECT u.id, u.name, u.manager_id, h.level + 1
+          FROM users u
+          JOIN hierarchy h ON u.manager_id = h.id
+      )
+      SELECT id, name, level FROM hierarchy
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: name
+        type: Text
+        nullability: false
+      - name: level
+        type: Int
+        nullability: true
+
+  # Set Operations Tests
+  - name: test_union_nullability
+    sql: |
+      SELECT id, value FROM table_a
+      UNION
+      SELECT id, value FROM table_b
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: value
+        type: Text
+        nullability: true
+
+  - name: test_union_all
+    sql: |
+      SELECT id FROM table_a
+      UNION ALL
+      SELECT id FROM table_b
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+
+  - name: test_intersect
+    sql: |
+      SELECT id FROM table_a
+      INTERSECT
+      SELECT id FROM table_b
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+
+  - name: test_except
+    sql: |
+      SELECT id FROM table_a
+      EXCEPT
+      SELECT id FROM table_b
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+
+  # Window Function Tests
+  - name: test_row_number_not_nullable
+    sql: |
+      SELECT id, ROW_NUMBER() OVER (ORDER BY id) as row_number FROM sales
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: row_number
+        type: BigInt
+        nullability: false
+
+  - name: test_rank_not_nullable
+    sql: |
+      SELECT id, RANK() OVER (ORDER BY amount) as rank FROM sales
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: rank
+        type: BigInt
+        nullability: false
+
+  - name: test_dense_rank_not_nullable
+    sql: |
+      SELECT id, DENSE_RANK() OVER (ORDER BY amount) as dense_rank FROM sales
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: dense_rank
+        type: BigInt
+        nullability: false
+
+  - name: test_lead_lag_nullable
+    sql: |
+      SELECT id, 
+          LEAD(amount) OVER (ORDER BY id) as lead,
+          LAG(amount) OVER (ORDER BY id) as lag
+      FROM sales
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: lead
+        type: Decimal
+        nullability: true
+      - name: lag
+        type: Decimal
+        nullability: true
+
+  - name: test_sum_over_window
+    sql: |
+      SELECT id, SUM(amount) OVER (PARTITION BY region ORDER BY id) as sum FROM sales
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: sum
+        type: Double
+        nullability: true
+
+  - name: test_partition_by
+    sql: |
+      SELECT id, region, 
+          ROW_NUMBER() OVER (PARTITION BY region ORDER BY id) as row_number
+      FROM sales
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: region
+        type: Text
+        nullability: false
+      - name: row_number
+        type: BigInt
+        nullability: false
+
+  # GROUP BY Tests
+  - name: test_group_by_with_aggregates
+    sql: |
+      SELECT region, SUM(amount) as sum, COUNT(*) as count
+      FROM sales
+      GROUP BY region
+    expected:
+      - name: region
+        type: Text
+        nullability: false
+      - name: sum
+        type: Double
+        nullability: true
+      - name: count
+        type: BigInt
+        nullability: false
+
+  - name: test_having_clause
+    sql: |
+      SELECT region, SUM(amount) as total
+      FROM sales
+      GROUP BY region
+      HAVING SUM(amount) > 100
+    expected:
+      - name: region
+        type: Text
+        nullability: false
+      - name: total
+        type: Double
+        nullability: true

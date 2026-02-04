@@ -1,0 +1,117 @@
+schema:
+  - |
+    CREATE TABLE users (
+        id INT NOT NULL,
+        name TEXT NOT NULL,
+        PRIMARY KEY (id)
+    )
+  - |
+    CREATE TABLE products (
+        id INT NOT NULL,
+        name TEXT NOT NULL,
+        PRIMARY KEY (id)
+    )
+  - |
+    CREATE TABLE orders (
+        id INT NOT NULL,
+        user_id INT NOT NULL,
+        product_id INT NOT NULL,
+        amount DECIMAL NOT NULL,
+        PRIMARY KEY (id),
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (product_id) REFERENCES products(id)
+    )
+
+tests:
+  - name: test_left_join_fk_preserves_right_nullability
+    sql: |
+      SELECT o.id, u.id, u.name 
+      FROM orders o 
+      LEFT JOIN users u ON o.user_id = u.id
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: id
+        type: Int
+        nullability: false
+      - name: name
+        type: Text
+        nullability: false
+
+  - name: test_left_join_no_fk_forces_nullable
+    # Although orders has FK to users, this test simulates a join where FK might not be applicable or checked differently?
+    # Wait, the original test test_left_join_no_fk_forces_nullable used schema_with_fk!
+    # Original test code:
+    # SELECT u.id, o.id, o.amount FROM users u LEFT JOIN orders o ON u.id = o.user_id
+    # Here u is Left, o is Right.
+    # o.user_id refers to u.id.
+    # But we are joining ON u.id = o.user_id.
+    # Since o.user_id refers to u.id, it means all orders must have a user.
+    # BUT, strict FK doesn't mean all users have an order.
+    # So if we select from Users LEFT JOIN Orders, we might get NULLs for Orders.
+    # Even if FK exists (Child -> Parent), Parent LEFT JOIN Child can still produce NULLs for Child columns.
+    # So o.id and o.amount SHOULD be nullable.
+    sql: |
+      SELECT u.id, o.id, o.amount 
+      FROM users u 
+      LEFT JOIN orders o ON u.id = o.user_id
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: id
+        type: Int
+        nullability: true
+      - name: amount
+        type: Decimal
+        nullability: true
+
+  - name: test_right_join_fk_preserves_left_nullability
+    # SELECT u.id, u.name, o.id FROM users u RIGHT JOIN orders o ON u.id = o.user_id
+    # Orders (Right) -> Users (Left).
+    # Since Orders references Users (FK), every Order MUST have a User.
+    # So when we do Right Join (driving table is Orders), for every Order row we MUST find a User row.
+    # So User columns (u.id, u.name) should be NOT NULL.
+    sql: |
+      SELECT u.id, u.name, o.id 
+      FROM users u 
+      RIGHT JOIN orders o ON u.id = o.user_id
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: name
+        type: Text
+        nullability: false
+      - name: id
+        type: Int
+        nullability: false
+
+  - name: test_multiple_left_joins_with_fk
+    sql: |
+      SELECT o.id, u.name, p.name
+      FROM orders o
+      LEFT JOIN users u ON o.user_id = u.id
+      LEFT JOIN products p ON o.product_id = p.id
+    expected:
+      - name: id
+        type: Int
+        nullability: false
+      - name: name
+        type: Text
+        nullability: false
+      - name: name
+        type: Text
+        nullability: false
+
+  - name: test_chained_joins
+    sql: |
+      SELECT u.name
+      FROM users u
+      INNER JOIN orders o ON u.id = o.user_id
+      INNER JOIN products p ON o.product_id = p.id
+    expected:
+      - name: name
+        type: Text
+        nullability: false

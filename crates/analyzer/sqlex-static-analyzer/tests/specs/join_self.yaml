@@ -1,0 +1,22 @@
+schema:
+  - |
+    CREATE TABLE employees (
+        id INT NOT NULL,
+        name TEXT NOT NULL,
+        manager_id INT,
+        PRIMARY KEY (id)
+    )
+
+tests:
+  - name: test_self_join
+    sql: |
+      SELECT e.name, m.name AS manager_name
+      FROM employees e
+      LEFT JOIN employees m ON e.manager_id = m.id
+    expected:
+      - name: name
+        type: Text
+        nullability: false
+      - name: manager_name
+        type: Text
+        nullability: true
