@@ -9,6 +9,7 @@ use sqlex_static_analyzer::{
 
 #[derive(Debug, Deserialize)]
 struct YamlTestSuite {
+    dialect: Dialect,
     #[serde(default)]
     schema: Vec<String>,
     tests: Vec<YamlTestCase>,
@@ -54,9 +55,8 @@ fn run_test_file(path: &Path) {
         .unwrap_or_else(|e| panic!("Failed to parse YAML file {:?}: {}", path, e));
 
     // Setup Catalog + Analyzer
-    let dialect = Dialect::Postgres;
-    let mut catalog = Catalog::new(dialect);
-    let analyzer = AnalysisEngine::new(dialect);
+    let mut catalog = Catalog::new(suite.dialect);
+    let analyzer = AnalysisEngine::new(suite.dialect);
 
     // Apply schema DDL
     for sql in suite.schema {
