@@ -4,7 +4,7 @@
 //! to build and maintain the catalog.
 
 use sqlex_analyzer::{AnalyzerError, ObjectNameExt};
-use sqlex_common::DataType;
+use sqlex_common::{DataType, Dialect};
 use sqlparser::{
     ast::{
         AlterTableOperation, CharacterLength, ColumnOption, CreateTable, DataType as SqlDataType,
@@ -14,14 +14,18 @@ use sqlparser::{
     parser::Parser,
 };
 
-use super::{Catalog, ColumnDef, Dialect, ForeignKeyDef, ReferentialAction, TableDef};
+use super::{Catalog, ColumnDef, ForeignKeyDef, ReferentialAction, TableDef};
 
 type Result<T> = std::result::Result<T, AnalyzerError>;
 
 impl Catalog {
     /// Parse and execute DDL statement(s)
     pub fn apply_ddl(&mut self, sql: &str) -> Result<()> {
-        let dialect = self.get_sqlparser_dialect();
+        let dialect: Box<dyn SqlParserDialect> = match self.dialect {
+            Dialect::Postgres => Box::new(PostgreSqlDialect {}),
+            Dialect::MySQL => Box::new(MySqlDialect {}),
+            Dialect::SQLite => Box::new(SQLiteDialect {}),
+        };
         let statements = Parser::parse_sql(dialect.as_ref(), sql)
             .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
 
@@ -158,15 +162,6 @@ impl Catalog {
             }
         }
         Ok(())
-    }
-
-    /// Get the sqlparser dialect for the current catalog dialect
-    pub(crate) fn get_sqlparser_dialect(&self) -> Box<dyn SqlParserDialect> {
-        match self.dialect {
-            Dialect::PostgreSQL => Box::new(PostgreSqlDialect {}),
-            Dialect::MySQL => Box::new(MySqlDialect {}),
-            Dialect::SQLite => Box::new(SQLiteDialect {}),
-        }
     }
 }
 

@@ -50,8 +50,10 @@ fn run_test_file(path: &Path) {
     let suite: YamlTestSuite = serde_yaml::from_str(&content)
         .unwrap_or_else(|e| panic!("Failed to parse YAML file {:?}: {}", path, e));
 
-    // Setup Catalog
-    let mut catalog = Catalog::new(Dialect::PostgreSQL);
+    // Setup Catalog + Analyzer
+    let dialect = Dialect::Postgres;
+    let mut catalog = Catalog::new(dialect);
+    let analyzer = sqlex_static_analyzer::analysis::AnalysisEngine::new(dialect);
 
     // Apply schema DDL
     for sql in suite.schema {
@@ -71,8 +73,8 @@ fn run_test_file(path: &Path) {
         println!("  Running test: {}", test.name);
 
         if let Some(expected_error) = test.error {
-            use sqlex_static_analyzer::analysis::{self, diagnostics::DiagnosticSeverity};
-            let result = analysis::analyze(&catalog, &test.sql);
+            use sqlex_static_analyzer::analysis::diagnostics::DiagnosticSeverity;
+            let result = analyzer.analyze(&catalog, &test.sql);
             let has_error = result
                 .diagnostics
                 .iter()
@@ -86,8 +88,8 @@ fn run_test_file(path: &Path) {
             // We could also check the error message content if needed, but for now just presence is enough or basic containment if easy.
             // verifying message can be added if needed, strict equality might be flaky for now.
         } else if let Some(expected_columns) = test.expected {
-            use sqlex_static_analyzer::analysis::{self, diagnostics::DiagnosticSeverity};
-            let result = analysis::analyze(&catalog, &test.sql);
+            use sqlex_static_analyzer::analysis::diagnostics::DiagnosticSeverity;
+            let result = analyzer.analyze(&catalog, &test.sql);
 
             // Check for errors
             let errors: Vec<_> = result

@@ -7,11 +7,13 @@ mod scope;
 use std::{collections::HashMap, sync::Arc};
 
 use scope::BindScope;
+use sqlex_common::Dialect;
 use sqlparser::{
     ast::{
         Expr, GroupByExpr, Query, Select, SelectItem, SetExpr, SetOperator, SetQuantifier,
         Statement, Value,
     },
+    dialect::{Dialect as SqlParserDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect},
     parser::Parser,
 };
 
@@ -29,16 +31,8 @@ pub struct BindResult {
     pub diagnostics: Vec<Diagnostic>,
 }
 
-pub fn bind(catalog: &Catalog, sql: &str) -> BindResult {
-    let mut binder = Binder::new(catalog);
-    let bound = binder.bind_sql(sql);
-    BindResult {
-        bound,
-        diagnostics: binder.diagnostics,
-    }
-}
-
-struct Binder<'a> {
+pub(crate) struct Binder<'a> {
+    dialect: Dialect,
     catalog: &'a Catalog,
     diagnostics: Vec<Diagnostic>,
     cte_scope: HashMap<String, CteBinding>,
@@ -54,8 +48,9 @@ struct CteBinding {
 }
 
 impl<'a> Binder<'a> {
-    fn new(catalog: &'a Catalog) -> Self {
+    pub fn new(dialect: Dialect, catalog: &'a Catalog) -> Self {
         Self {
+            dialect,
             catalog,
             diagnostics: Vec::new(),
             cte_scope: HashMap::new(),
@@ -66,8 +61,20 @@ impl<'a> Binder<'a> {
         }
     }
 
+    pub fn bind(mut self, sql: &str) -> BindResult {
+        let bound = self.bind_sql(sql);
+        BindResult {
+            bound,
+            diagnostics: self.diagnostics,
+        }
+    }
+
     fn bind_sql(&mut self, sql: &str) -> Option<BoundQuery> {
-        let dialect = self.catalog.get_sqlparser_dialect();
+        let dialect: Box<dyn SqlParserDialect> = match self.dialect {
+            Dialect::Postgres => Box::new(PostgreSqlDialect {}),
+            Dialect::MySQL => Box::new(MySqlDialect {}),
+            Dialect::SQLite => Box::new(SQLiteDialect {}),
+        };
         let statements = match Parser::parse_sql(dialect.as_ref(), sql) {
             Ok(stmts) => stmts,
             Err(e) => {

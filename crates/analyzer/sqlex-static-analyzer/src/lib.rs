@@ -8,20 +8,16 @@ pub mod catalog;
 pub mod ir;
 
 // Re-exports
-use analysis::diagnostics::DiagnosticSeverity;
+use analysis::{AnalysisEngine, diagnostics::DiagnosticSeverity};
 use async_trait::async_trait;
-pub use catalog::{Catalog, ColumnDef, Dialect, ForeignKeyDef, TableDef};
+pub use catalog::{Catalog, ColumnDef, ForeignKeyDef, TableDef};
 use sqlex_analyzer::{Analyzer, AnalyzerError, Result, ResultSet, Table};
+pub use sqlex_common::Dialect;
 
 /// Static SQL analyzer implementation
 pub struct StaticAnalyzer {
     catalog: Catalog,
-}
-
-impl Default for StaticAnalyzer {
-    fn default() -> Self {
-        Self::new(Dialect::PostgreSQL)
-    }
+    analysis: AnalysisEngine,
 }
 
 impl StaticAnalyzer {
@@ -29,6 +25,7 @@ impl StaticAnalyzer {
     pub fn new(dialect: Dialect) -> Self {
         Self {
             catalog: Catalog::new(dialect),
+            analysis: AnalysisEngine::new(dialect),
         }
     }
 
@@ -52,7 +49,7 @@ impl Analyzer for StaticAnalyzer {
     }
 
     async fn analyze(&self, sql: &str) -> Result<ResultSet> {
-        let analysis = analysis::analyze(&self.catalog, sql);
+        let analysis = self.analysis.analyze(&self.catalog, sql);
         if analysis
             .diagnostics
             .iter()

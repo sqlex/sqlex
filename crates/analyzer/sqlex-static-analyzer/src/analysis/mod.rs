@@ -4,6 +4,7 @@ pub(crate) mod functions;
 pub mod typecheck;
 
 use diagnostics::Diagnostic;
+use sqlex_common::Dialect;
 
 use crate::{catalog::Catalog, ir::OutputSchema};
 
@@ -12,21 +13,31 @@ pub struct AnalysisResult {
     pub diagnostics: Vec<Diagnostic>,
 }
 
-pub fn analyze(catalog: &Catalog, sql: &str) -> AnalysisResult {
-    let bind_result = bind::bind(catalog, sql);
+pub struct AnalysisEngine {
+    dialect: Dialect,
+}
 
-    if let Some(bound) = bind_result.bound {
-        let mut diagnostics = bind_result.diagnostics;
-        let type_result = typecheck::typecheck(catalog, &bound);
-        diagnostics.extend(type_result.diagnostics);
-        AnalysisResult {
-            output: type_result.output,
-            diagnostics,
-        }
-    } else {
-        AnalysisResult {
-            output: None,
-            diagnostics: bind_result.diagnostics,
+impl AnalysisEngine {
+    pub fn new(dialect: Dialect) -> Self {
+        Self { dialect }
+    }
+
+    pub fn analyze(&self, catalog: &Catalog, sql: &str) -> AnalysisResult {
+        let bind_result = bind::Binder::new(self.dialect, catalog).bind(sql);
+
+        if let Some(bound) = bind_result.bound {
+            let mut diagnostics = bind_result.diagnostics;
+            let type_result = typecheck::TypeContext::new(self.dialect, catalog).typecheck(&bound);
+            diagnostics.extend(type_result.diagnostics);
+            AnalysisResult {
+                output: type_result.output,
+                diagnostics,
+            }
+        } else {
+            AnalysisResult {
+                output: None,
+                diagnostics: bind_result.diagnostics,
+            }
         }
     }
 }

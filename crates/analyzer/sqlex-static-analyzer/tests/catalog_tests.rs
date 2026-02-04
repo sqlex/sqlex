@@ -7,7 +7,7 @@ use sqlex_static_analyzer::{Catalog, Dialect};
 
 #[test]
 fn test_create_table_simple() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl("CREATE TABLE users (id INT, name TEXT)")
         .unwrap();
@@ -21,7 +21,7 @@ fn test_create_table_simple() {
 
 #[test]
 fn test_create_table_with_not_null() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl("CREATE TABLE users (id INT NOT NULL, name TEXT)")
         .unwrap();
@@ -33,7 +33,7 @@ fn test_create_table_with_not_null() {
 
 #[test]
 fn test_create_table_with_primary_key_inline() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl("CREATE TABLE users (id INT PRIMARY KEY, name TEXT)")
         .unwrap();
@@ -45,7 +45,7 @@ fn test_create_table_with_primary_key_inline() {
 
 #[test]
 fn test_create_table_with_primary_key_constraint() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl(
             "CREATE TABLE users (
@@ -63,7 +63,7 @@ fn test_create_table_with_primary_key_constraint() {
 
 #[test]
 fn test_create_table_with_composite_primary_key() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl(
             "CREATE TABLE order_items (
@@ -86,7 +86,7 @@ fn test_create_table_with_composite_primary_key() {
 
 #[test]
 fn test_create_table_with_foreign_key_inline() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl("CREATE TABLE users (id INT PRIMARY KEY)")
         .unwrap();
@@ -108,7 +108,7 @@ fn test_create_table_with_foreign_key_inline() {
 
 #[test]
 fn test_create_table_with_foreign_key_constraint() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl("CREATE TABLE users (id INT PRIMARY KEY)")
         .unwrap();
@@ -128,7 +128,7 @@ fn test_create_table_with_foreign_key_constraint() {
 
 #[test]
 fn test_create_table_with_unique_constraint() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl(
             "CREATE TABLE users (
@@ -148,7 +148,7 @@ fn test_create_table_with_unique_constraint() {
 
 #[test]
 fn test_create_table_with_default() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl(
             "CREATE TABLE users (
@@ -164,7 +164,7 @@ fn test_create_table_with_default() {
 
 #[test]
 fn test_alter_table_add_column() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl("CREATE TABLE users (id INT PRIMARY KEY)")
         .unwrap();
@@ -179,7 +179,7 @@ fn test_alter_table_add_column() {
 
 #[test]
 fn test_alter_table_add_foreign_key() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl("CREATE TABLE users (id INT PRIMARY KEY)")
         .unwrap();
@@ -199,7 +199,7 @@ fn test_alter_table_add_foreign_key() {
 
 #[test]
 fn test_drop_table() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl("CREATE TABLE users (id INT PRIMARY KEY)")
         .unwrap();
@@ -210,7 +210,7 @@ fn test_drop_table() {
 
 #[test]
 fn test_multiple_statements() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl(
             "
@@ -257,7 +257,7 @@ fn test_sqlite_integer_primary_key() {
 
 #[test]
 fn test_data_type_mapping_int() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl("CREATE TABLE t (a INT, b INTEGER, c SMALLINT, d BIGINT)")
         .unwrap();
@@ -271,7 +271,7 @@ fn test_data_type_mapping_int() {
 
 #[test]
 fn test_data_type_mapping_float() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl("CREATE TABLE t (a FLOAT, b DOUBLE PRECISION, c DECIMAL, d NUMERIC)")
         .unwrap();
@@ -285,7 +285,7 @@ fn test_data_type_mapping_float() {
 
 #[test]
 fn test_data_type_mapping_text() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl("CREATE TABLE t (a TEXT, b VARCHAR(255), c CHAR(10))")
         .unwrap();
@@ -298,7 +298,7 @@ fn test_data_type_mapping_text() {
 
 #[test]
 fn test_data_type_mapping_time() {
-    let mut schema = Catalog::new(Dialect::PostgreSQL);
+    let mut schema = Catalog::new(Dialect::Postgres);
     schema
         .apply_ddl("CREATE TABLE t (a DATE, b TIME, c TIMESTAMP)")
         .unwrap();

@@ -6,6 +6,8 @@ mod schema;
 
 use std::collections::{HashMap, HashSet};
 
+use sqlex_common::Dialect;
+
 use super::diagnostics::Diagnostic;
 use crate::{
     catalog::Catalog,
@@ -23,27 +25,29 @@ pub struct TypecheckResult {
     pub diagnostics: Vec<Diagnostic>,
 }
 
-pub fn typecheck(catalog: &Catalog, bound: &BoundQuery) -> TypecheckResult {
-    let mut ctx = TypeContext::new(catalog);
-    let output = Some(ctx.output_schema_for_query(bound));
-    TypecheckResult {
-        output,
-        diagnostics: ctx.diagnostics,
-    }
-}
-
 pub(super) struct TypeContext<'a> {
+    #[allow(dead_code)]
+    dialect: Dialect,
     catalog: &'a Catalog,
     diagnostics: Vec<Diagnostic>,
     schema_cache: HashMap<usize, OutputSchema>,
 }
 
 impl<'a> TypeContext<'a> {
-    fn new(catalog: &'a Catalog) -> Self {
+    pub(super) fn new(dialect: Dialect, catalog: &'a Catalog) -> Self {
         Self {
+            dialect,
             catalog,
             diagnostics: Vec::new(),
             schema_cache: HashMap::new(),
+        }
+    }
+
+    pub(super) fn typecheck(mut self, bound: &BoundQuery) -> TypecheckResult {
+        let output = Some(self.output_schema_for_query(bound));
+        TypecheckResult {
+            output,
+            diagnostics: self.diagnostics,
         }
     }
 }

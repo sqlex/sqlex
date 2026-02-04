@@ -67,7 +67,7 @@ impl<'a> Binder<'a> {
     }
 
     pub(super) fn bind_subquery(&mut self, query: &Query) -> BoundQuery {
-        let mut child = Binder::new(self.catalog);
+        let mut child = Binder::new(self.dialect, self.catalog);
         child.cte_scope = self.cte_scope.clone();
         child.cte_defs = self.cte_defs.clone();
         let bound = child
@@ -100,7 +100,7 @@ impl<'a> Binder<'a> {
             _ => query.body.as_ref(),
         };
 
-        let mut child = Binder::new(self.catalog);
+        let mut child = Binder::new(self.dialect, self.catalog);
         child.cte_scope = self.cte_scope.clone();
         let anchor_body = child.bind_set_expr(anchor_set);
 
