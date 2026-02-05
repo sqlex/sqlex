@@ -308,10 +308,17 @@ impl<'a> TypeContext<'a> {
     fn infer_literal(&self, value: &ast::Value) -> TypeInfo {
         match value {
             ast::Value::Number(num, _) => {
-                let is_float = num.contains('.') || num.contains('e') || num.contains('E');
+                let has_exponent = num.contains('e') || num.contains('E');
+                let has_decimal = num.contains('.');
                 TypeInfo {
-                    data_type: if is_float {
+                    data_type: if has_exponent {
                         DataType::Double
+                    } else if has_decimal {
+                        match self.dialect {
+                            sqlex_common::dialect::Dialect::MySQL
+                            | sqlex_common::dialect::Dialect::Postgres => DataType::Decimal,
+                            sqlex_common::dialect::Dialect::SQLite => DataType::Double,
+                        }
                     } else {
                         match self.dialect {
                             sqlex_common::dialect::Dialect::MySQL => DataType::BigInt,
@@ -323,7 +330,7 @@ impl<'a> TypeContext<'a> {
                 }
             },
             ast::Value::Boolean(_) => TypeInfo {
-                data_type: DataType::Bool,
+                data_type: self.boolean_result_type(),
                 nullable: false,
             },
             ast::Value::SingleQuotedString(_) | ast::Value::DoubleQuotedString(_) => TypeInfo {
