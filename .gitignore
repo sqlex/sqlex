@@ -1,2 +1,6 @@
 /target
+
+# AI
 /.agent
+/.codex
+/AGENTS.md
