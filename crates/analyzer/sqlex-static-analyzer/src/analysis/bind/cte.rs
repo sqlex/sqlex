@@ -4,7 +4,7 @@ use sqlparser::ast::{self, Query, SetExpr};
 
 use crate::{
     analysis::{
-        bind::{Binder, CteBinding},
+        bind::{Binder, CteBinding, scope::BindScope},
         diagnostics::Diagnostic,
     },
     ir::bound::{BoundCte, BoundQuery, BoundSetExpr},
@@ -81,6 +81,29 @@ impl<'a> Binder<'a> {
         bound
     }
 
+    pub(super) fn bind_correlated_subquery(
+        &mut self,
+        query: &Query,
+        outer_scope: &BindScope,
+    ) -> BoundQuery {
+        let mut child = Binder::new(self.dialect, self.catalog);
+        child.cte_scope = self.cte_scope.clone();
+        child.cte_defs = self.cte_defs.clone();
+
+        let mut outer_scopes = Vec::new();
+        outer_scopes.push(child.import_outer_scope(outer_scope, self));
+        for scope in &self.outer_scopes {
+            outer_scopes.push(child.import_outer_scope(scope, self));
+        }
+        child.outer_scopes = outer_scopes;
+
+        let bound = child
+            .bind_query(query)
+            .unwrap_or_else(|| child.empty_query());
+        self.diagnostics.extend(child.diagnostics);
+        bound
+    }
+
     pub(super) fn empty_query(&self) -> BoundQuery {
         BoundQuery {
             ctes: Vec::new(),
@@ -92,6 +115,20 @@ impl<'a> Binder<'a> {
             limit: None,
             offset: None,
         }
+    }
+
+    fn import_outer_scope(&mut self, scope: &BindScope, outer: &Binder<'_>) -> BindScope {
+        let mut merged = BindScope::default();
+        for (alias, columns) in scope.tables() {
+            let Some(first_col) = columns.first() else {
+                continue;
+            };
+            let outer_col = outer.columns.get(first_col.id);
+            let outer_table = outer.tables.get(outer_col.table).clone();
+            let (_, table_scope) = self.register_table(outer_table, alias.to_string());
+            merged.merge(table_scope);
+        }
+        merged
     }
 
     fn bind_recursive_anchor_columns(

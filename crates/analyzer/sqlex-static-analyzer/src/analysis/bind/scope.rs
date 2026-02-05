@@ -84,6 +84,12 @@ impl BindScope {
             .map(|idx| self.tables[*idx].columns.clone())
     }
 
+    pub(super) fn tables(&self) -> impl Iterator<Item = (&str, &[ScopeColumn])> {
+        self.tables
+            .iter()
+            .map(|table| (table.alias.as_str(), table.columns.as_slice()))
+    }
+
     pub(super) fn column_names_set(&self) -> HashSet<String> {
         let mut set = HashSet::new();
         for table in &self.tables {

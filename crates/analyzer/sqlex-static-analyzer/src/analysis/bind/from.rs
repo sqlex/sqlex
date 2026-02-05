@@ -251,7 +251,11 @@ impl<'a> Binder<'a> {
         }
     }
 
-    fn register_table(&mut self, table: BoundTable, alias: String) -> (TableId, BindScope) {
+    pub(super) fn register_table(
+        &mut self,
+        table: BoundTable,
+        alias: String,
+    ) -> (TableId, BindScope) {
         let column_names = table.columns.clone();
         let table_id = self.tables.alloc(table);
         let mut scope = BindScope::default();

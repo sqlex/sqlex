@@ -195,7 +195,7 @@ impl<'a> TypeContext<'a> {
                 }
             },
             BoundExpr::Subquery(_) => {
-                analysis.has_aggregate = true;
+                // Scalar subqueries should not force grouping in the outer query.
             },
             _ => {},
         }
