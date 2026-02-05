@@ -14,7 +14,7 @@ queries:
     sql: SELECT missing_col FROM users
 
   - name: type_mismatch
-    sql: SELECT name + 1 FROM users
+    sql: SELECT length(1, 2) FROM users
 
   - name: syntax_error
     sql: SELECT FROM users
