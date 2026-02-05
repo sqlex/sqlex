@@ -39,36 +39,41 @@ impl<'a> TypeContext<'a> {
             return;
         }
 
-        for proj in &select.projection {
-            let analysis = self.analyze_group_expr(state, proj.expr);
-            if analysis.has_grouping_function() {
-                continue;
-            }
-            if !analysis.columns.is_subset(&group_columns) {
-                let missing = analysis
-                    .columns
-                    .difference(&group_columns)
-                    .map(|col| self.format_column_ref(state, *col))
-                    .collect::<Vec<_>>();
-                self.diagnostics.push(Diagnostic::grouping_error(format!(
-                    "Non-aggregated SELECT columns must appear in GROUP BY: {}",
-                    missing.join(", ")
-                )));
+        if self.dialect != sqlex_common::dialect::Dialect::SQLite {
+            for proj in &select.projection {
+                let analysis = self.analyze_group_expr(state, proj.expr);
+                if analysis.has_grouping_function() {
+                    continue;
+                }
+                if !analysis.columns.is_subset(&group_columns) {
+                    let missing = analysis
+                        .columns
+                        .difference(&group_columns)
+                        .map(|col| self.format_column_ref(state, *col))
+                        .collect::<Vec<_>>();
+                    self.diagnostics.push(Diagnostic::grouping_error(format!(
+                        "Non-aggregated SELECT columns must appear in GROUP BY: {}",
+                        missing.join(", ")
+                    )));
+                }
             }
         }
 
-        if let Some(having) = select.having {
-            let analysis = self.analyze_group_expr(state, having);
-            if !analysis.has_grouping_function() && !analysis.columns.is_subset(&group_columns) {
-                let missing = analysis
-                    .columns
-                    .difference(&group_columns)
-                    .map(|col| self.format_column_ref(state, *col))
-                    .collect::<Vec<_>>();
-                self.diagnostics.push(Diagnostic::grouping_error(format!(
-                    "HAVING references non-grouped columns: {}",
-                    missing.join(", ")
-                )));
+        if self.dialect != sqlex_common::dialect::Dialect::SQLite {
+            if let Some(having) = select.having {
+                let analysis = self.analyze_group_expr(state, having);
+                if !analysis.has_grouping_function() && !analysis.columns.is_subset(&group_columns)
+                {
+                    let missing = analysis
+                        .columns
+                        .difference(&group_columns)
+                        .map(|col| self.format_column_ref(state, *col))
+                        .collect::<Vec<_>>();
+                    self.diagnostics.push(Diagnostic::grouping_error(format!(
+                        "HAVING references non-grouped columns: {}",
+                        missing.join(", ")
+                    )));
+                }
             }
         }
     }
