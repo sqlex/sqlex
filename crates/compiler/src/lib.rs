@@ -35,7 +35,7 @@ impl Compiler {
                 columns: vec![
                     ColumnInfo {
                         name: "id".to_string(),
-                        data_type: DataType::Int,
+                        data_type: DataType::Int(false),
                         nullability: false,
                     },
                     ColumnInfo {
@@ -55,13 +55,13 @@ impl Compiler {
                 sql: "SELECT * FROM users WHERE id = ?".to_string(),
                 params: vec![ParameterDescriptor {
                     name: "id".to_string(),
-                    type_info: DataType::Int,
+                    type_info: DataType::Int(false),
                     nullable: false,
                 }],
                 columns: vec![
                     ColumnInfo {
                         name: "id".to_string(),
-                        data_type: DataType::Int,
+                        data_type: DataType::Int(false),
                         nullability: false,
                     },
                     ColumnInfo {

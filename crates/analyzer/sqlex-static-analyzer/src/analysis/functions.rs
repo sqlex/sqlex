@@ -217,7 +217,7 @@ impl ScalarFunction {
             | Self::CharLength
             | Self::OctetLength
             | Self::BitLength
-            | Self::Position => (DataType::Int, true),
+            | Self::Position => (DataType::Int(false), true),
 
             Self::Abs | Self::Ceil | Self::Floor | Self::Round | Self::Truncate | Self::Mod => {
                 (input_type, true)
@@ -232,7 +232,7 @@ impl ScalarFunction {
             | Self::Power
             | Self::Random => (DataType::Double, true),
 
-            Self::Sign => (DataType::Int, true),
+            Self::Sign => (DataType::Int(false), true),
 
             Self::CurrentTimestamp => (DataType::Timestamp, false),
             Self::CurrentDate => (DataType::Date, false),
@@ -245,7 +245,7 @@ impl ScalarFunction {
             | Self::Hour
             | Self::Minute
             | Self::Second
-            | Self::Extract => (DataType::Int, true),
+            | Self::Extract => (DataType::Int(false), true),
 
             Self::JsonObject | Self::JsonArray | Self::ToJson | Self::ToJsonb => {
                 (DataType::Json, true)
@@ -359,15 +359,20 @@ impl AggregateFunction {
     }
 
     pub(crate) fn infer_type(&self, dialect: Dialect, arg_types: &[DataType]) -> (DataType, bool) {
-        let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
+        let input_type = arg_types.first().cloned().unwrap_or(DataType::Int(false));
 
         match self {
-            Self::Count => (DataType::BigInt, false),
+            Self::Count => (DataType::BigInt(false), false),
             Self::Sum => {
                 let data_type = match input_type {
-                    DataType::TinyInt | DataType::SmallInt | DataType::Int | DataType::BigInt => {
-                        DataType::BigInt
-                    },
+                    DataType::TinyInt(true)
+                    | DataType::SmallInt(true)
+                    | DataType::Int(true)
+                    | DataType::BigInt(true) => DataType::BigInt(true),
+                    DataType::TinyInt(false)
+                    | DataType::SmallInt(false)
+                    | DataType::Int(false)
+                    | DataType::BigInt(false) => DataType::BigInt(false),
                     DataType::Decimal => match dialect {
                         Dialect::MySQL | Dialect::Postgres => DataType::Decimal,
                         Dialect::SQLite => DataType::Double,
@@ -381,10 +386,10 @@ impl AggregateFunction {
                 let data_type = match dialect {
                     Dialect::SQLite => DataType::Double,
                     Dialect::MySQL | Dialect::Postgres => match input_type {
-                        DataType::TinyInt
-                        | DataType::SmallInt
-                        | DataType::Int
-                        | DataType::BigInt
+                        DataType::TinyInt(_)
+                        | DataType::SmallInt(_)
+                        | DataType::Int(_)
+                        | DataType::BigInt(_)
                         | DataType::Decimal => DataType::Decimal,
                         DataType::Float | DataType::Double => DataType::Double,
                         _ => DataType::Double,
@@ -457,11 +462,15 @@ impl WindowFunction {
     pub(crate) fn infer_type(&self, dialect: Dialect, arg_types: &[DataType]) -> (DataType, bool) {
         match self {
             Self::RowNumber | Self::Rank | Self::DenseRank | Self::NTile => {
-                (DataType::BigInt, false)
+                let data_type = match dialect {
+                    Dialect::MySQL => DataType::BigInt(true),
+                    Dialect::Postgres | Dialect::SQLite => DataType::BigInt(false),
+                };
+                (data_type, false)
             },
             Self::PercentRank | Self::CumeDist => (DataType::Double, false),
             Self::Lead | Self::Lag | Self::FirstValue | Self::LastValue | Self::NthValue => {
-                let data_type = arg_types.first().cloned().unwrap_or(DataType::Int);
+                let data_type = arg_types.first().cloned().unwrap_or(DataType::Int(false));
                 (data_type, true)
             },
             Self::Aggregate(agg) => agg.infer_type(dialect, arg_types),

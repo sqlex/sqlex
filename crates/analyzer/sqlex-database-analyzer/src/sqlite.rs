@@ -110,7 +110,7 @@ fn map_type(info: &SqliteTypeInfo) -> DataType {
 fn map_string_type(t: &str) -> DataType {
     let t = t.to_lowercase();
     if t.contains("int") {
-        DataType::BigInt
+        DataType::BigInt(false)
     } else if t.contains("char") || t.contains("clob") || t.contains("text") {
         DataType::Text
     } else if t.contains("blob") {

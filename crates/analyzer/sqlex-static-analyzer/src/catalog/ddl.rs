@@ -277,10 +277,17 @@ fn map_referential_action(action: &Option<ast::ReferentialAction>) -> Option<Ref
 pub fn map_data_type(sql_type: &SqlDataType) -> DataType {
     match sql_type {
         SqlDataType::Boolean => DataType::Bool,
-        SqlDataType::TinyInt(_) => DataType::TinyInt,
-        SqlDataType::SmallInt(_) => DataType::SmallInt,
-        SqlDataType::Int(_) | SqlDataType::Integer(_) => DataType::Int,
-        SqlDataType::BigInt(_) => DataType::BigInt,
+        SqlDataType::TinyInt(_) => DataType::TinyInt(false),
+        SqlDataType::SmallInt(_) => DataType::SmallInt(false),
+        SqlDataType::Int(_) | SqlDataType::Integer(_) => DataType::Int(false),
+        SqlDataType::BigInt(_) => DataType::BigInt(false),
+        SqlDataType::UnsignedTinyInt(_) => DataType::TinyInt(true),
+        SqlDataType::UnsignedSmallInt(_) | SqlDataType::UnsignedInt2(_) => DataType::SmallInt(true),
+        SqlDataType::UnsignedInt(_)
+        | SqlDataType::UnsignedInt4(_)
+        | SqlDataType::UnsignedInteger(_) => DataType::Int(true),
+        SqlDataType::UnsignedMediumInt(_) => DataType::Int(true),
+        SqlDataType::UnsignedBigInt(_) | SqlDataType::UnsignedInt8(_) => DataType::BigInt(true),
         SqlDataType::Float(_) => DataType::Float,
         SqlDataType::Real | SqlDataType::Double(_) | SqlDataType::DoublePrecision => {
             DataType::Double

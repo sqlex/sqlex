@@ -154,11 +154,23 @@ fn map_type(info: &MySqlTypeInfo) -> DataType {
 }
 
 fn map_string_type(t: &str) -> DataType {
-    match t.to_lowercase().as_str() {
-        "boolean" | "bool" | "tinyint" => DataType::Bool,
-        "smallint" => DataType::SmallInt,
-        "int" | "integer" | "mediumint" => DataType::Int,
-        "bigint" => DataType::BigInt,
+    let original = t.to_lowercase();
+    let unsigned = original.contains("unsigned");
+    let base = original.replace("unsigned", "");
+    let base = base.trim();
+
+    match base {
+        "boolean" | "bool" => DataType::Bool,
+        "tinyint" => {
+            if unsigned {
+                DataType::TinyInt(true)
+            } else {
+                DataType::Bool
+            }
+        },
+        "smallint" => DataType::SmallInt(unsigned),
+        "int" | "integer" | "mediumint" => DataType::Int(unsigned),
+        "bigint" => DataType::BigInt(unsigned),
         "float" => DataType::Float,
         "double" => DataType::Double,
         "decimal" | "numeric" => DataType::Decimal,
@@ -168,6 +180,6 @@ fn map_string_type(t: &str) -> DataType {
         "timestamp" => DataType::Timestamp,
         "json" => DataType::Json,
         "blob" | "binary" | "varbinary" | "longblob" => DataType::Binary,
-        other => DataType::Custom(other.to_string()),
+        _ => DataType::Custom(original),
     }
 }

@@ -33,10 +33,10 @@ impl DataTypeExt for DataType {
     fn is_numeric(&self) -> bool {
         matches!(
             self,
-            DataType::TinyInt
-                | DataType::SmallInt
-                | DataType::Int
-                | DataType::BigInt
+            DataType::TinyInt(_)
+                | DataType::SmallInt(_)
+                | DataType::Int(_)
+                | DataType::BigInt(_)
                 | DataType::Float
                 | DataType::Double
                 | DataType::Decimal
@@ -48,11 +48,36 @@ impl DataTypeExt for DataType {
             (DataType::Double, _) | (_, DataType::Double) => DataType::Double,
             (DataType::Float, _) | (_, DataType::Float) => DataType::Float,
             (DataType::Decimal, _) | (_, DataType::Decimal) => DataType::Decimal,
-            (DataType::BigInt, _) | (_, DataType::BigInt) => DataType::BigInt,
-            (DataType::Int, _) | (_, DataType::Int) => DataType::Int,
-            (DataType::SmallInt, _) | (_, DataType::SmallInt) => DataType::SmallInt,
-            (DataType::TinyInt, DataType::TinyInt) => DataType::TinyInt,
-            _ => self.clone(),
+            _ => {
+                let left = match self {
+                    DataType::TinyInt(unsigned) => Some((1, *unsigned)),
+                    DataType::SmallInt(unsigned) => Some((2, *unsigned)),
+                    DataType::Int(unsigned) => Some((3, *unsigned)),
+                    DataType::BigInt(unsigned) => Some((4, *unsigned)),
+                    _ => None,
+                };
+                let right = match other {
+                    DataType::TinyInt(unsigned) => Some((1, *unsigned)),
+                    DataType::SmallInt(unsigned) => Some((2, *unsigned)),
+                    DataType::Int(unsigned) => Some((3, *unsigned)),
+                    DataType::BigInt(unsigned) => Some((4, *unsigned)),
+                    _ => None,
+                };
+
+                if let (Some((left_rank, left_unsigned)), Some((right_rank, right_unsigned))) =
+                    (left, right)
+                {
+                    let rank = left_rank.max(right_rank);
+                    let unsigned = left_unsigned && right_unsigned;
+                    return match rank {
+                        1 => DataType::TinyInt(unsigned),
+                        2 => DataType::SmallInt(unsigned),
+                        3 => DataType::Int(unsigned),
+                        _ => DataType::BigInt(unsigned),
+                    };
+                }
+                self.clone()
+            },
         }
     }
 

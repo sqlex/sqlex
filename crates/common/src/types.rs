@@ -4,10 +4,10 @@ use serde::{Deserialize, Serialize};
 pub enum DataType {
     // Integers
     Bool,
-    TinyInt,
-    SmallInt,
-    Int,
-    BigInt,
+    TinyInt(bool),
+    SmallInt(bool),
+    Int(bool),
+    BigInt(bool),
 
     // Floats
     Float,
