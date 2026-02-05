@@ -10,6 +10,29 @@ pub(crate) struct FunctionMeta {
     pub(crate) arity: FunctionArity,
 }
 
+impl FunctionMeta {
+    pub(crate) fn validate_argument_types(
+        &self,
+        dialect: Dialect,
+        arg_types: &[DataType],
+    ) -> Option<String> {
+        if let FunctionKind::Scalar(ScalarFunction::Substring) = &self.kind {
+            if dialect == Dialect::Postgres {
+                if let Some(first_arg) = arg_types.first() {
+                    if !matches!(first_arg, DataType::Custom(_)) && !first_arg.is_text_like() {
+                        return Some(
+                            "expected a text or bytea argument for position 1 in PostgreSQL"
+                                .to_string(),
+                        );
+                    }
+                }
+            }
+        }
+
+        None
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum FunctionKind {
     Scalar(ScalarFunction),

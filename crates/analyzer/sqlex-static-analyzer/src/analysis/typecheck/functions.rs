@@ -27,12 +27,19 @@ impl<'a> TypeContext<'a> {
             self.diagnostics
                 .push(Diagnostic::distinct_not_allowed(&upper));
         }
-        if !meta.arity.matches(arg_types.len()) {
+        let arity_matches = meta.arity.matches(arg_types.len());
+        if !arity_matches {
             self.diagnostics.push(Diagnostic::function_arity_mismatch(
                 &upper,
                 &meta.arity.describe(),
                 arg_types.len(),
             ));
+        }
+        if arity_matches {
+            if let Some(detail) = meta.validate_argument_types(self.dialect, arg_types) {
+                self.diagnostics
+                    .push(Diagnostic::function_argument_type_mismatch(&upper, detail));
+            }
         }
 
         match meta.kind {

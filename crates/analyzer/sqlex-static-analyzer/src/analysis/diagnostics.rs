@@ -188,6 +188,16 @@ impl Diagnostic {
         )
     }
 
+    pub fn function_argument_type_mismatch(name: &str, detail: impl Into<String>) -> Self {
+        Self::error_with_code(
+            DiagnosticCode::InvalidFunctionUsage,
+            format!(
+                "Function {name} has invalid argument types: {}",
+                detail.into()
+            ),
+        )
+    }
+
     pub fn aggregate_not_allowed(context: &str) -> Self {
         Self::error_with_code(
             DiagnosticCode::InvalidGrouping,
