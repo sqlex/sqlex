@@ -1,4 +1,4 @@
-use sqlex_common::types::DataType;
+use sqlex_common::{dialect::Dialect, types::DataType};
 
 #[derive(Debug, Clone)]
 pub(crate) struct FunctionMeta {
@@ -354,7 +354,7 @@ impl AggregateFunction {
         }
     }
 
-    pub(crate) fn infer_type(&self, arg_types: &[DataType]) -> (DataType, bool) {
+    pub(crate) fn infer_type(&self, dialect: Dialect, arg_types: &[DataType]) -> (DataType, bool) {
         let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
 
         match self {
@@ -364,12 +364,30 @@ impl AggregateFunction {
                     DataType::TinyInt | DataType::SmallInt | DataType::Int | DataType::BigInt => {
                         DataType::BigInt
                     },
-                    DataType::Float | DataType::Double | DataType::Decimal => DataType::Double,
+                    DataType::Decimal => match dialect {
+                        Dialect::MySQL | Dialect::Postgres => DataType::Decimal,
+                        Dialect::SQLite => DataType::Double,
+                    },
+                    DataType::Float | DataType::Double => DataType::Double,
                     _ => input_type,
                 };
                 (data_type, true)
             },
-            Self::Avg => (DataType::Double, true),
+            Self::Avg => {
+                let data_type = match dialect {
+                    Dialect::SQLite => DataType::Double,
+                    Dialect::MySQL | Dialect::Postgres => match input_type {
+                        DataType::TinyInt
+                        | DataType::SmallInt
+                        | DataType::Int
+                        | DataType::BigInt
+                        | DataType::Decimal => DataType::Decimal,
+                        DataType::Float | DataType::Double => DataType::Double,
+                        _ => DataType::Double,
+                    },
+                };
+                (data_type, true)
+            },
             Self::Min | Self::Max => (input_type, true),
             Self::First | Self::Last => (input_type, true),
             Self::ArrayAgg => (DataType::Array(Box::new(input_type)), true),
@@ -432,7 +450,7 @@ impl WindowFunction {
         }
     }
 
-    pub(crate) fn infer_type(&self, arg_types: &[DataType]) -> (DataType, bool) {
+    pub(crate) fn infer_type(&self, dialect: Dialect, arg_types: &[DataType]) -> (DataType, bool) {
         match self {
             Self::RowNumber | Self::Rank | Self::DenseRank | Self::NTile => {
                 (DataType::BigInt, false)
@@ -442,7 +460,7 @@ impl WindowFunction {
                 let data_type = arg_types.first().cloned().unwrap_or(DataType::Int);
                 (data_type, true)
             },
-            Self::Aggregate(agg) => agg.infer_type(arg_types),
+            Self::Aggregate(agg) => agg.infer_type(dialect, arg_types),
         }
     }
 

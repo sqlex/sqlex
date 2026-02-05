@@ -37,7 +37,7 @@ impl<'a> TypeContext<'a> {
 
         match meta.kind {
             FunctionKind::Window(window) => {
-                let (data_type, nullable) = window.infer_type(arg_types);
+                let (data_type, nullable) = window.infer_type(self.dialect, arg_types);
                 TypeInfo {
                     data_type,
                     nullable,
@@ -45,9 +45,9 @@ impl<'a> TypeContext<'a> {
             },
             FunctionKind::Aggregate(agg) => {
                 let (data_type, nullable) = if over {
-                    WindowFunction::Aggregate(agg).infer_type(arg_types)
+                    WindowFunction::Aggregate(agg).infer_type(self.dialect, arg_types)
                 } else {
-                    agg.infer_type(arg_types)
+                    agg.infer_type(self.dialect, arg_types)
                 };
                 TypeInfo {
                     data_type,
