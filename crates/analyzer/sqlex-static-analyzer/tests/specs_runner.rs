@@ -6,7 +6,7 @@ use std::{
 
 use serde::Deserialize;
 use sqlex_analyzer::Analyzer;
-use sqlex_common::dialect::Dialect;
+use sqlex_common::{dialect::Dialect, types::DataType};
 use sqlex_database_analyzer::new_database_analyzer;
 use sqlex_static_analyzer::StaticAnalyzer;
 use tokio::fs as tokio_fs;
@@ -436,11 +436,18 @@ async fn run_test_file(path: &Path, specs_dir: &Path) {
                         "Test '{}' in {}: Expected column {} name mismatch (Expected: {}, Actual: {})",
                         test.name, display_path, i, db_col.name, expected_col.name
                     );
-                    assert_eq!(
-                        static_col.data_type, db_col.data_type,
-                        "Test '{}' in {}: Column {} type mismatch (Expected: {:?}, Actual: {:?})",
-                        test.name, display_path, i, db_col.data_type, static_col.data_type
-                    );
+                    // SQLite returns "null" type for aggregate functions on empty tables,
+                    // which cannot be accurately mapped to a concrete type. Skip type
+                    // comparison when db_col.data_type is Custom("null").
+                    let skip_type_check = suite.dialect == Dialect::SQLite
+                        && matches!(&db_col.data_type, DataType::Custom(s) if s == "null");
+                    if !skip_type_check {
+                        assert_eq!(
+                            static_col.data_type, db_col.data_type,
+                            "Test '{}' in {}: Column {} type mismatch (Expected: {:?}, Actual: {:?})",
+                            test.name, display_path, i, db_col.data_type, static_col.data_type
+                        );
+                    }
                     assert_eq!(
                         static_col.nullability,
                         expected_col.nullability,

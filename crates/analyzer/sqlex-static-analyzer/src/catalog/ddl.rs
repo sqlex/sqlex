@@ -141,6 +141,12 @@ impl Catalog {
                             }
                         },
                         AlterTableOperation::AddConstraint(constraint) => {
+                            if self.dialect == Dialect::SQLite {
+                                return Err(AnalyzerError::AnalysisError(
+                                    "SQLite does not support ALTER TABLE ADD CONSTRAINT"
+                                        .to_string(),
+                                ));
+                            }
                             parse_table_constraint(constraint, table)?;
                         },
                         _ => {
