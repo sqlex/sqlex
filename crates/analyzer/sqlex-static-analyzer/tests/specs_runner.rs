@@ -1,4 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+    process,
+};
 
 use serde::Deserialize;
 use sqlex_analyzer::Analyzer;
@@ -29,21 +33,54 @@ struct YamlOutputColumn {
     nullability: bool,
 }
 
-#[tokio::test]
-async fn run_specs_tests() {
-    let specs_dir = Path::new("tests/specs");
+const SPECS_DIR: &str = "tests/specs";
+
+#[tokio::main]
+async fn main() {
+    if let Err(err) = run().await {
+        eprintln!("{}", err);
+        process::exit(1);
+    }
+}
+
+async fn run() -> Result<(), String> {
+    let filter = parse_args()?;
+    let specs_dir = Path::new(SPECS_DIR);
     let specs_meta = tokio_fs::metadata(specs_dir).await;
     let is_dir = match specs_meta {
         Ok(meta) => meta.is_dir(),
         Err(_) => false,
     };
     if !is_dir {
-        return;
+        return Ok(());
     }
 
     let mut files = Vec::new();
     collect_yaml_files(specs_dir, &mut files).await;
+    files.sort_by(|a, b| {
+        let a_rel = a.strip_prefix(specs_dir).unwrap_or(a).to_string_lossy();
+        let b_rel = b.strip_prefix(specs_dir).unwrap_or(b).to_string_lossy();
+        a_rel.cmp(&b_rel)
+    });
+
+    let total_files = files.len();
+    let mut matched_files = Vec::new();
     for path in files {
+        let rel_path = path.strip_prefix(specs_dir).unwrap_or(&path);
+        if matches_filter(filter.as_deref(), rel_path) {
+            matched_files.push(path);
+        }
+    }
+
+    if let Some(filter_value) = filter.as_deref() {
+        println!("Specs filter: {}", filter_value);
+        println!("Matched {}/{} spec files", matched_files.len(), total_files);
+        if matched_files.is_empty() {
+            return Err(format!("No spec files matched filter '{}'.", filter_value));
+        }
+    }
+
+    for path in matched_files {
         let display_path = path
             .strip_prefix(specs_dir)
             .unwrap_or(&path)
@@ -52,6 +89,8 @@ async fn run_specs_tests() {
         println!("Running tests from: {}", display_path);
         run_test_file(&path, specs_dir).await;
     }
+
+    Ok(())
 }
 
 async fn collect_yaml_files(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -71,6 +110,113 @@ async fn collect_yaml_files(dir: &Path, out: &mut Vec<PathBuf>) {
             }
         }
     }
+}
+
+fn parse_args() -> Result<Option<String>, String> {
+    let mut args = env::args().skip(1);
+    let mut filter: Option<String> = None;
+
+    while let Some(arg) = args.next() {
+        if arg == "-h" || arg == "--help" {
+            print_usage();
+            process::exit(0);
+        }
+
+        if arg == "--specs" {
+            let value = args
+                .next()
+                .ok_or_else(|| "Missing value for --specs".to_string())?;
+            if filter.is_some() {
+                return Err("Duplicate --specs argument".to_string());
+            }
+            filter = Some(value);
+            continue;
+        }
+
+        if let Some(value) = arg.strip_prefix("--specs=") {
+            if value.is_empty() {
+                return Err("Missing value for --specs".to_string());
+            }
+            if filter.is_some() {
+                return Err("Duplicate --specs argument".to_string());
+            }
+            filter = Some(value.to_string());
+            continue;
+        }
+
+        return Err(format!("Unknown argument: {}", arg));
+    }
+
+    let normalized = filter.map(|value| normalize_filter(&value));
+    let normalized = match normalized {
+        Some(value) if value.is_empty() => None,
+        other => other,
+    };
+    Ok(normalized)
+}
+
+fn print_usage() {
+    println!("Usage:");
+    println!("  cargo test -p sqlex-static-analyzer --test specs_runner");
+    println!("  cargo test -p sqlex-static-analyzer --test specs_runner -- --specs <path-prefix>");
+    println!();
+    println!("Examples:");
+    println!("  --specs mysql/agg");
+    println!("  --specs mysql/agg/basic");
+    println!("  --specs tests/specs/mysql");
+}
+
+fn normalize_filter(raw: &str) -> String {
+    let mut value = raw.trim().replace('\\', "/");
+    value = value.trim_matches('/').to_string();
+    if let Some(stripped) = value.strip_prefix("./") {
+        value = stripped.to_string();
+    }
+    if value == "tests/specs" {
+        value.clear();
+        return value;
+    }
+    if let Some(stripped) = value.strip_prefix("tests/specs/") {
+        value = stripped.to_string();
+    }
+    value
+}
+
+fn split_components(value: &str) -> Vec<&str> {
+    value.split('/').filter(|part| !part.is_empty()).collect()
+}
+
+fn is_prefix(prefix: &[&str], path: &[&str]) -> bool {
+    if prefix.len() > path.len() {
+        return false;
+    }
+    prefix.iter().zip(path.iter()).all(|(a, b)| a == b)
+}
+
+fn matches_filter(filter: Option<&str>, rel_path: &Path) -> bool {
+    let filter = match filter {
+        Some(value) if !value.is_empty() => value,
+        _ => return true,
+    };
+
+    let filter_components = split_components(filter);
+    let rel_path_string = rel_path.to_string_lossy().replace('\\', "/");
+    let rel_components = split_components(&rel_path_string);
+
+    if is_prefix(&filter_components, &rel_components) {
+        return true;
+    }
+
+    if rel_path.extension().is_some_and(|ext| ext == "yaml") {
+        let no_ext_path = rel_path.with_extension("");
+        let no_ext_string = no_ext_path.to_string_lossy().replace('\\', "/");
+        let no_ext_components = split_components(&no_ext_string);
+        if is_prefix(&filter_components, &no_ext_components) {
+            return true;
+        }
+    }
+
+    false
 }
 
 async fn run_test_file(path: &Path, specs_dir: &Path) {

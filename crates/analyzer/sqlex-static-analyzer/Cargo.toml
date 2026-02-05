@@ -18,3 +18,8 @@ serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
 tokio.workspace = true
+
+[[test]]
+name = "specs_runner"
+path = "tests/specs_runner.rs"
+harness = false
