@@ -4,7 +4,7 @@ use sqlex_analyzer::{Analyzer, AnalyzerError, Result};
 use sqlex_common::types::{ColumnInfo, DataType, ResultSet, Table};
 use sqlx::{
     Column, Executor, Row, Statement, TypeInfo,
-    postgres::{PgPool, PgPoolOptions, PgTypeInfo},
+    postgres::{PgPool, PgPoolOptions},
 };
 use testcontainers::{ContainerAsync, GenericImage, ImageExt, runners::AsyncRunner};
 
@@ -72,8 +72,10 @@ impl Analyzer for PostgresDatabaseAnalyzer {
         let mut columns = Vec::new();
         for col in stmt.columns() {
             let name = col.name().to_string();
-            let type_info = col.type_info();
-            let data_type = map_type(type_info);
+            let data_type = {
+                let type_info = col.type_info();
+                map_udt(&type_info.name().to_lowercase())
+            };
             columns.push(ColumnInfo {
                 name,
                 data_type,
@@ -143,11 +145,6 @@ impl Analyzer for PostgresDatabaseAnalyzer {
 
         Ok(tables)
     }
-}
-
-fn map_type(info: &PgTypeInfo) -> DataType {
-    let name = info.name().to_lowercase();
-    map_udt(&name)
 }
 
 fn map_udt(udt: &str) -> DataType {

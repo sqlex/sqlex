@@ -4,7 +4,7 @@ use sqlex_analyzer::{Analyzer, AnalyzerError, Result};
 use sqlex_common::types::{ColumnInfo, DataType, ResultSet, Table};
 use sqlx::{
     Column, Executor, Row, Statement, TypeInfo,
-    mysql::{MySqlPool, MySqlPoolOptions, MySqlTypeInfo},
+    mysql::{MySqlPool, MySqlPoolOptions},
 };
 use testcontainers::{ContainerAsync, GenericImage, ImageExt, runners::AsyncRunner};
 
@@ -71,7 +71,10 @@ impl Analyzer for MySqlDatabaseAnalyzer {
         let mut columns = Vec::new();
         for col in stmt.columns() {
             let name = col.name().to_string();
-            let data_type = map_type(col.type_info());
+            let data_type = {
+                let name = col.type_info().name().to_lowercase();
+                map_string_type(&name)
+            };
             columns.push(ColumnInfo {
                 name,
                 data_type,
@@ -146,11 +149,6 @@ impl Analyzer for MySqlDatabaseAnalyzer {
 
         Ok(tables)
     }
-}
-
-fn map_type(info: &MySqlTypeInfo) -> DataType {
-    let name = info.name().to_lowercase();
-    map_string_type(&name)
 }
 
 fn map_string_type(t: &str) -> DataType {
