@@ -31,7 +31,7 @@ impl<'a> TypeContext<'a> {
             },
             BoundExpr::Unary { expr, .. } => self.infer_expr(state, *expr),
             BoundExpr::IsNull { .. } => TypeInfo {
-                data_type: DataType::Bool,
+                data_type: self.boolean_result_type(),
                 nullable: false,
             },
             BoundExpr::Function {
@@ -104,8 +104,29 @@ impl<'a> TypeContext<'a> {
             | BinaryOperator::GtEq
             | BinaryOperator::LtEq
             | BinaryOperator::Eq
-            | BinaryOperator::NotEq => DataType::Bool,
-            BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => DataType::Bool,
+            | BinaryOperator::NotEq
+            | BinaryOperator::Spaceship
+            | BinaryOperator::And
+            | BinaryOperator::Or
+            | BinaryOperator::Xor
+            | BinaryOperator::PGOverlap
+            | BinaryOperator::PGRegexMatch
+            | BinaryOperator::PGRegexIMatch
+            | BinaryOperator::PGRegexNotMatch
+            | BinaryOperator::PGRegexNotIMatch
+            | BinaryOperator::PGLikeMatch
+            | BinaryOperator::PGILikeMatch
+            | BinaryOperator::PGNotLikeMatch
+            | BinaryOperator::PGNotILikeMatch
+            | BinaryOperator::PGStartsWith
+            | BinaryOperator::AtAt
+            | BinaryOperator::AtArrow
+            | BinaryOperator::ArrowAt
+            | BinaryOperator::AtQuestion
+            | BinaryOperator::Question
+            | BinaryOperator::QuestionAnd
+            | BinaryOperator::QuestionPipe
+            | BinaryOperator::Overlaps => self.boolean_result_type(),
             BinaryOperator::StringConcat => DataType::Text,
             BinaryOperator::BitwiseOr
             | BinaryOperator::BitwiseAnd
@@ -159,6 +180,15 @@ impl<'a> TypeContext<'a> {
         TypeInfo {
             data_type: merged_type.unwrap_or_else(|| DataType::Custom("unknown".to_string())),
             nullable,
+        }
+    }
+
+    fn boolean_result_type(&self) -> DataType {
+        match self.dialect {
+            sqlex_common::dialect::Dialect::MySQL => DataType::BigInt,
+            sqlex_common::dialect::Dialect::Postgres | sqlex_common::dialect::Dialect::SQLite => {
+                DataType::Bool
+            },
         }
     }
 
