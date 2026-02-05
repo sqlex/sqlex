@@ -1,3 +1,4 @@
+use sqlex_analyzer::extension::DataTypeExt;
 use sqlex_common::types::DataType;
 use sqlparser::ast::{self, BinaryOperator};
 
@@ -24,14 +25,9 @@ impl<'a> TypeContext<'a> {
 
         let info = match state.query.exprs.get(expr_id) {
             BoundExpr::Column(column_id) => self.infer_column(state, *column_id),
-            BoundExpr::Literal(value) => infer_literal(value),
+            BoundExpr::Literal(value) => self.infer_literal(value),
             BoundExpr::Binary { left, op, right } => {
-                let left_info = self.infer_expr(state, *left);
-                let right_info = self.infer_expr(state, *right);
-                TypeInfo {
-                    data_type: analyze_binary_type(&left_info.data_type, op, &right_info.data_type),
-                    nullable: left_info.nullable || right_info.nullable,
-                }
+                self.infer_binary_expr(state, *left, op, *right)
             },
             BoundExpr::Unary { expr, .. } => self.infer_expr(state, *expr),
             BoundExpr::IsNull { .. } => TypeInfo {
@@ -60,39 +56,7 @@ impl<'a> TypeContext<'a> {
                 conditions,
                 results,
                 else_result,
-            } => {
-                if let Some(expr_id) = operand {
-                    self.infer_expr(state, *expr_id);
-                }
-                for expr_id in conditions {
-                    self.infer_expr(state, *expr_id);
-                }
-
-                let mut merged_type: Option<DataType> = None;
-                let mut nullable = else_result.is_none();
-
-                for expr_id in results {
-                    let info = self.infer_expr(state, *expr_id);
-                    merged_type = merge_types(merged_type, info.data_type.clone());
-                    if info.nullable {
-                        nullable = true;
-                    }
-                }
-
-                if let Some(expr_id) = else_result {
-                    let info = self.infer_expr(state, *expr_id);
-                    merged_type = merge_types(merged_type, info.data_type.clone());
-                    if info.nullable {
-                        nullable = true;
-                    }
-                }
-
-                TypeInfo {
-                    data_type: merged_type
-                        .unwrap_or_else(|| DataType::Custom("unknown".to_string())),
-                    nullable,
-                }
-            },
+            } => self.infer_case_expr(state, operand, conditions, results, else_result),
             BoundExpr::Subquery(subquery) => {
                 let schema = self.output_schema_for_query(subquery);
                 if schema.columns.len() == 1 {
@@ -118,6 +82,84 @@ impl<'a> TypeContext<'a> {
 
         state.types.insert(expr_id, info.clone());
         info
+    }
+
+    fn infer_binary_expr(
+        &mut self,
+        state: &mut QueryTypeState<'_>,
+        left: ExprId,
+        op: &BinaryOperator,
+        right: ExprId,
+    ) -> TypeInfo {
+        let left_info = self.infer_expr(state, left);
+        let right_info = self.infer_expr(state, right);
+        let data_type = match op {
+            BinaryOperator::Plus
+            | BinaryOperator::Minus
+            | BinaryOperator::Multiply
+            | BinaryOperator::Modulo => left_info.data_type.promote_numeric(&right_info.data_type),
+            BinaryOperator::Divide => DataType::Double,
+            BinaryOperator::Gt
+            | BinaryOperator::Lt
+            | BinaryOperator::GtEq
+            | BinaryOperator::LtEq
+            | BinaryOperator::Eq
+            | BinaryOperator::NotEq => DataType::Bool,
+            BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => DataType::Bool,
+            BinaryOperator::StringConcat => DataType::Text,
+            BinaryOperator::BitwiseOr
+            | BinaryOperator::BitwiseAnd
+            | BinaryOperator::BitwiseXor
+            | BinaryOperator::PGBitwiseShiftLeft
+            | BinaryOperator::PGBitwiseShiftRight => {
+                left_info.data_type.promote_numeric(&right_info.data_type)
+            },
+            _ => left_info.data_type.clone(),
+        };
+        TypeInfo {
+            data_type,
+            nullable: left_info.nullable || right_info.nullable,
+        }
+    }
+
+    fn infer_case_expr(
+        &mut self,
+        state: &mut QueryTypeState<'_>,
+        operand: &Option<ExprId>,
+        conditions: &[ExprId],
+        results: &[ExprId],
+        else_result: &Option<ExprId>,
+    ) -> TypeInfo {
+        if let Some(expr_id) = operand {
+            self.infer_expr(state, *expr_id);
+        }
+        for expr_id in conditions {
+            self.infer_expr(state, *expr_id);
+        }
+
+        let mut merged_type: Option<DataType> = None;
+        let mut nullable = else_result.is_none();
+
+        for expr_id in results {
+            let info = self.infer_expr(state, *expr_id);
+            merged_type = DataType::merge_common_type(self.dialect, merged_type, &info.data_type);
+            if info.nullable {
+                nullable = true;
+            }
+        }
+
+        if let Some(expr_id) = else_result {
+            let info = self.infer_expr(state, *expr_id);
+            merged_type = DataType::merge_common_type(self.dialect, merged_type, &info.data_type);
+            if info.nullable {
+                nullable = true;
+            }
+        }
+
+        TypeInfo {
+            data_type: merged_type.unwrap_or_else(|| DataType::Custom("unknown".to_string())),
+            nullable,
+        }
     }
 
     fn infer_column(&mut self, state: &QueryTypeState<'_>, column_id: ColumnId) -> TypeInfo {
@@ -232,92 +274,40 @@ impl<'a> TypeContext<'a> {
             }
         }
     }
-}
 
-fn infer_literal(value: &ast::Value) -> TypeInfo {
-    match value {
-        ast::Value::Number(num, _) => {
-            let is_float = num.contains('.');
-            TypeInfo {
-                data_type: if is_float {
-                    DataType::Double
-                } else {
-                    DataType::Int
-                },
+    fn infer_literal(&self, value: &ast::Value) -> TypeInfo {
+        match value {
+            ast::Value::Number(num, _) => {
+                let is_float = num.contains('.') || num.contains('e') || num.contains('E');
+                TypeInfo {
+                    data_type: if is_float {
+                        DataType::Double
+                    } else {
+                        match self.dialect {
+                            sqlex_common::dialect::Dialect::MySQL => DataType::BigInt,
+                            sqlex_common::dialect::Dialect::Postgres
+                            | sqlex_common::dialect::Dialect::SQLite => DataType::Int,
+                        }
+                    },
+                    nullable: false,
+                }
+            },
+            ast::Value::Boolean(_) => TypeInfo {
+                data_type: DataType::Bool,
                 nullable: false,
-            }
-        },
-        ast::Value::Boolean(_) => TypeInfo {
-            data_type: DataType::Bool,
-            nullable: false,
-        },
-        ast::Value::SingleQuotedString(_) | ast::Value::DoubleQuotedString(_) => TypeInfo {
-            data_type: DataType::Text,
-            nullable: false,
-        },
-        ast::Value::Null => TypeInfo {
-            data_type: DataType::Custom("unknown".to_string()),
-            nullable: true,
-        },
-        _ => TypeInfo {
-            data_type: DataType::Custom("unknown".to_string()),
-            nullable: true,
-        },
-    }
-}
-
-pub(super) fn merge_types(existing: Option<DataType>, next: DataType) -> Option<DataType> {
-    match existing {
-        None => {
-            if matches!(next, DataType::Custom(_)) {
-                None
-            } else {
-                Some(next)
-            }
-        },
-        Some(current) => {
-            if matches!(next, DataType::Custom(_)) || current == next {
-                Some(current)
-            } else {
-                Some(promote_numeric(&current, &next))
-            }
-        },
-    }
-}
-
-fn analyze_binary_type(left: &DataType, op: &BinaryOperator, right: &DataType) -> DataType {
-    match op {
-        BinaryOperator::Plus
-        | BinaryOperator::Minus
-        | BinaryOperator::Multiply
-        | BinaryOperator::Modulo => promote_numeric(left, right),
-        BinaryOperator::Divide => DataType::Double,
-        BinaryOperator::Gt
-        | BinaryOperator::Lt
-        | BinaryOperator::GtEq
-        | BinaryOperator::LtEq
-        | BinaryOperator::Eq
-        | BinaryOperator::NotEq => DataType::Bool,
-        BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => DataType::Bool,
-        BinaryOperator::StringConcat => DataType::Text,
-        BinaryOperator::BitwiseOr
-        | BinaryOperator::BitwiseAnd
-        | BinaryOperator::BitwiseXor
-        | BinaryOperator::PGBitwiseShiftLeft
-        | BinaryOperator::PGBitwiseShiftRight => promote_numeric(left, right),
-        _ => left.clone(),
-    }
-}
-
-fn promote_numeric(a: &DataType, b: &DataType) -> DataType {
-    match (a, b) {
-        (DataType::Double, _) | (_, DataType::Double) => DataType::Double,
-        (DataType::Float, _) | (_, DataType::Float) => DataType::Float,
-        (DataType::Decimal, _) | (_, DataType::Decimal) => DataType::Decimal,
-        (DataType::BigInt, _) | (_, DataType::BigInt) => DataType::BigInt,
-        (DataType::Int, _) | (_, DataType::Int) => DataType::Int,
-        (DataType::SmallInt, _) | (_, DataType::SmallInt) => DataType::SmallInt,
-        (DataType::TinyInt, DataType::TinyInt) => DataType::TinyInt,
-        _ => a.clone(),
+            },
+            ast::Value::SingleQuotedString(_) | ast::Value::DoubleQuotedString(_) => TypeInfo {
+                data_type: DataType::Text,
+                nullable: false,
+            },
+            ast::Value::Null => TypeInfo {
+                data_type: DataType::Custom("unknown".to_string()),
+                nullable: true,
+            },
+            _ => TypeInfo {
+                data_type: DataType::Custom("unknown".to_string()),
+                nullable: true,
+            },
+        }
     }
 }

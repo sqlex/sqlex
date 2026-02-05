@@ -1,11 +1,13 @@
 use std::collections::HashSet;
 
+use sqlex_analyzer::extension::DataTypeExt;
+use sqlex_common::types::DataType;
 use sqlparser::ast;
 
 use crate::{
     analysis::{
         diagnostics::Diagnostic,
-        typecheck::{QueryTypeState, TypeContext, infer::merge_types},
+        typecheck::{QueryTypeState, TypeContext},
     },
     ir::{
         bound::{
@@ -124,7 +126,7 @@ impl<'a> TypeContext<'a> {
         let mut columns = Vec::new();
 
         for idx in 0..col_count {
-            let mut merged_type: Option<sqlex_common::types::DataType> = None;
+            let mut merged_type: Option<DataType> = None;
             let mut nullable = false;
             let mut lineage = Vec::new();
 
@@ -139,7 +141,8 @@ impl<'a> TypeContext<'a> {
                 if info.nullable {
                     nullable = true;
                 }
-                merged_type = merge_types(merged_type, info.data_type.clone());
+                merged_type =
+                    DataType::merge_common_type(self.dialect, merged_type, &info.data_type);
                 let expr_lineage = self.collect_lineage(state, expr_id);
                 lineage = if lineage.is_empty() {
                     expr_lineage
@@ -177,9 +180,10 @@ impl<'a> TypeContext<'a> {
         for idx in 0..count {
             let left_col = &left.columns[idx];
             let right_col = &right.columns[idx];
-            let data_type = merge_types(
+            let data_type = DataType::merge_common_type(
+                self.dialect,
                 Some(left_col.data_type.clone()),
-                right_col.data_type.clone(),
+                &right_col.data_type,
             )
             .unwrap_or(left_col.data_type.clone());
             let lineage = self.merge_lineage(&left_col.lineage, &right_col.lineage);

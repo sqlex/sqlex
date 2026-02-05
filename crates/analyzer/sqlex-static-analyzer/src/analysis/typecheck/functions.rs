@@ -55,7 +55,8 @@ impl<'a> TypeContext<'a> {
                 }
             },
             FunctionKind::Scalar(scalar) => {
-                let (data_type, nullable) = scalar.infer_type(arg_types, arg_nullables);
+                let (data_type, nullable) =
+                    scalar.infer_type(self.dialect, arg_types, arg_nullables);
                 TypeInfo {
                     data_type,
                     nullable,

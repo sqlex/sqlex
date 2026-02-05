@@ -1,3 +1,4 @@
+use sqlex_analyzer::extension::DataTypeExt;
 use sqlex_common::{dialect::Dialect, types::DataType};
 
 #[derive(Debug, Clone)]
@@ -192,6 +193,7 @@ impl ScalarFunction {
 
     pub(crate) fn infer_type(
         &self,
+        dialect: Dialect,
         arg_types: &[DataType],
         arg_nullables: &[bool],
     ) -> (DataType, bool) {
@@ -251,7 +253,9 @@ impl ScalarFunction {
 
             Self::Coalesce | Self::Ifnull | Self::Nvl => {
                 let is_nullable = arg_nullables.iter().all(|&n| n);
-                (input_type, is_nullable)
+                let data_type = DataType::common_type(dialect, arg_types)
+                    .unwrap_or_else(|| DataType::Custom("unknown".to_string()));
+                (data_type, is_nullable)
             },
             Self::Nullif => (input_type, true),
 
