@@ -251,21 +251,29 @@ async fn run_test_file(path: &Path, specs_dir: &Path) {
             match (db_result, static_result) {
                 (Ok(_), Ok(_)) => {},
                 (Err(db_err), Err(static_err)) => {
-                    println!(
-                        "  Migration failed in {}: {} (static analyzer also failed: {})",
-                        display_path, db_err, static_err
-                    );
+                    println!("  Migration result: db=ERROR, static=ERROR (match)");
+                    println!("    SQL: {}", sql);
+                    println!("    DB error: {}", db_err);
+                    println!("    Static error: {}", static_err);
                 },
                 (Err(db_err), Ok(_)) => {
+                    println!("  Migration result: db=ERROR, static=OK (mismatch)");
+                    println!("    SQL: {}", sql);
+                    println!("    DB error: {}", db_err);
+                    println!("    Static error: <none>");
                     panic!(
-                        "Migration in {} failed on database analyzer ('{}'), but static analyzer succeeded.\nSQL: {}",
-                        display_path, db_err, sql
+                        "Migration in {} failed on database analyzer, but static analyzer succeeded.",
+                        display_path
                     );
                 },
                 (Ok(_), Err(static_err)) => {
+                    println!("  Migration result: db=OK, static=ERROR (mismatch)");
+                    println!("    SQL: {}", sql);
+                    println!("    DB error: <none>");
+                    println!("    Static error: {}", static_err);
                     panic!(
-                        "Migration in {} succeeded on database analyzer, but static analyzer failed: {}.\nSQL: {}",
-                        display_path, static_err, sql
+                        "Migration in {} succeeded on database analyzer, but static analyzer failed.",
+                        display_path
                     );
                 },
             }
@@ -366,22 +374,27 @@ async fn run_test_file(path: &Path, specs_dir: &Path) {
         let static_result = static_analyzer.analyze(&test.sql).await;
 
         match (db_result, static_result) {
-            (Err(db_err), Err(_)) => {
-                println!(
-                    "  Database analyzer failed for '{}': {} (static analyzer also failed, ok)",
-                    test.name, db_err
-                );
+            (Err(db_err), Err(static_err)) => {
+                println!("  Result: db=ERROR, static=ERROR (match)");
+                println!("    DB error: {}", db_err);
+                println!("    Static error: {}", static_err);
             },
             (Err(db_err), Ok(_)) => {
+                println!("  Result: db=ERROR, static=OK (mismatch)");
+                println!("    DB error: {}", db_err);
+                println!("    Static error: <none>");
                 panic!(
-                    "Test '{}' in {}: Database analyzer failed ('{}'), but static analyzer succeeded",
-                    test.name, display_path, db_err
+                    "Test '{}' in {}: Database analyzer failed, but static analyzer succeeded",
+                    test.name, display_path
                 );
             },
             (Ok(_), Err(static_err)) => {
+                println!("  Result: db=OK, static=ERROR (mismatch)");
+                println!("    DB error: <none>");
+                println!("    Static error: {}", static_err);
                 panic!(
-                    "Test '{}' in {}: Database analyzer succeeded, but static analyzer failed: {}",
-                    test.name, display_path, static_err
+                    "Test '{}' in {}: Database analyzer succeeded, but static analyzer failed",
+                    test.name, display_path
                 );
             },
             (Ok(db_result), Ok(static_result)) => {
