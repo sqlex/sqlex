@@ -198,6 +198,13 @@ impl Diagnostic {
         )
     }
 
+    pub fn binary_operator_type_mismatch(operator: &str, left: &str, right: &str) -> Self {
+        Self::error_with_code(
+            DiagnosticCode::InvalidStatement,
+            format!("Operator {operator} is not supported for types {left} and {right}"),
+        )
+    }
+
     pub fn aggregate_not_allowed(context: &str) -> Self {
         Self::error_with_code(
             DiagnosticCode::InvalidGrouping,

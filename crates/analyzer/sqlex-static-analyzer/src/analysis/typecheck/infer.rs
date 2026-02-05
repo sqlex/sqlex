@@ -98,6 +98,24 @@ impl<'a> TypeContext<'a> {
     ) -> TypeInfo {
         let left_info = self.infer_expr(state, left);
         let right_info = self.infer_expr(state, right);
+        if matches!(
+            op,
+            BinaryOperator::Plus
+                | BinaryOperator::Minus
+                | BinaryOperator::Multiply
+                | BinaryOperator::Divide
+                | BinaryOperator::Modulo
+        ) && matches!(self.dialect, sqlex_common::dialect::Dialect::Postgres)
+            && (!left_info.data_type.is_numeric() || !right_info.data_type.is_numeric())
+        {
+            self.diagnostics
+                .push(Diagnostic::binary_operator_type_mismatch(
+                    &format!("{op:?}"),
+                    &format!("{:?}", left_info.data_type),
+                    &format!("{:?}", right_info.data_type),
+                ));
+        }
+
         let data_type = match op {
             BinaryOperator::Plus
             | BinaryOperator::Minus
