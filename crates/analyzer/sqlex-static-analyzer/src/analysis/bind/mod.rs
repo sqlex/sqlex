@@ -11,7 +11,7 @@ use sqlparser::{
 };
 
 use crate::{
-    analysis::{bind::scope::BindScope, diagnostics::Diagnostic},
+    analysis::{bind::scope::BindScope, diagnostics::Diagnostic, keywords},
     catalog::Catalog,
     ir::{
         arena::Arena,
@@ -226,6 +226,12 @@ impl<'a> Binder<'a> {
                 },
                 SelectItem::ExprWithAlias { expr, alias } => {
                     let expr_id = self.bind_expr(expr, &scope);
+                    if keywords::is_reserved_identifier(self.dialect, alias) {
+                        self.diagnostics.push(Diagnostic::invalid_statement(format!(
+                            "Alias {alias} is a reserved keyword in {dialect}; quote it to use as an identifier",
+                            dialect = self.dialect
+                        )));
+                    }
                     alias_map.insert(alias.value.clone(), expr_id);
                     projection.push(BoundProjection {
                         expr: expr_id,

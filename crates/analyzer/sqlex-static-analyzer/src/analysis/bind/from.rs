@@ -9,6 +9,7 @@ use crate::{
             scope::{BindScope, ScopeColumn},
         },
         diagnostics::{Diagnostic, DiagnosticCode},
+        keywords,
     },
     ir::{
         bound::{
@@ -136,6 +137,14 @@ impl<'a> Binder<'a> {
             TableFactor::Table { name, alias, .. } => {
                 let table_name = name.to_string();
                 let alias_name = alias.as_ref().map(|a| a.name.value.clone());
+                if let Some(alias) = alias.as_ref() {
+                    if keywords::is_reserved_identifier(self.dialect, &alias.name) {
+                        self.diagnostics.push(Diagnostic::invalid_statement(format!(
+                            "Table alias {alias} is a reserved keyword in {dialect}; quote it to use as an identifier",
+                            dialect = self.dialect
+                        )));
+                    }
+                }
 
                 if let Some(cte_binding) = self.cte_scope.get(&table_name) {
                     let (table_id, scope) = self.register_table(
@@ -201,6 +210,24 @@ impl<'a> Binder<'a> {
                     );
                     return (table_id, scope);
                 };
+
+                if let Some(alias) = alias.as_ref() {
+                    if keywords::is_reserved_identifier(self.dialect, &alias.name) {
+                        self.diagnostics.push(Diagnostic::invalid_statement(format!(
+                            "Table alias {alias} is a reserved keyword in {dialect}; quote it to use as an identifier",
+                            dialect = self.dialect
+                        )));
+                    }
+                    for column_alias in &alias.columns {
+                        if keywords::is_reserved_identifier(self.dialect, &column_alias.name) {
+                            self.diagnostics.push(Diagnostic::invalid_statement(format!(
+                                "Derived column alias {alias} is a reserved keyword in {dialect}; quote it to use as an identifier",
+                                alias = column_alias.name,
+                                dialect = self.dialect
+                            )));
+                        }
+                    }
+                }
 
                 let bound_query = self.bind_subquery(subquery);
                 let column_aliases = alias

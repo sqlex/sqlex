@@ -16,3 +16,21 @@ queries:
 
   - name: invalid_group_by
     sql: SELECT name, COUNT(*) FROM users
+
+  - name: reserved_alias
+    sql: SELECT id, RANK() OVER (ORDER BY age) AS rank FROM users
+
+  - name: reserved_alias_row_number
+    sql: SELECT id, ROW_NUMBER() OVER (ORDER BY age) AS row_number FROM users
+
+  - name: reserved_alias_select
+    sql: SELECT id AS select FROM users
+
+  - name: reserved_alias_window
+    sql: SELECT id AS window FROM users
+
+  - name: reserved_table_alias
+    sql: SELECT id FROM users AS select
+
+  - name: reserved_derived_column_alias
+    sql: SELECT * FROM (SELECT id FROM users) AS t(select)

@@ -5,6 +5,7 @@ use crate::{analysis::diagnostics::Diagnostic, catalog::Catalog, ir::output::Out
 pub mod bind;
 pub mod diagnostics;
 pub(crate) mod functions;
+pub(crate) mod keywords;
 pub mod typecheck;
 
 pub struct AnalysisResult {
