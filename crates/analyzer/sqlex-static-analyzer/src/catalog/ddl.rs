@@ -64,7 +64,7 @@ impl Catalog {
 
         // Parse columns
         for col in columns {
-            table.columns.push(parse_column_def(col)?);
+            table.columns.push(parse_column_def(self.dialect, col)?);
             // Also handle inline constraints (PRIMARY KEY, UNIQUE, REFERENCES)
             for option in &col.options {
                 match &option.option {
@@ -120,7 +120,9 @@ impl Catalog {
                 for op in operations {
                     match op {
                         AlterTableOperation::AddColumn { column_def, .. } => {
-                            table.columns.push(parse_column_def(column_def)?);
+                            table
+                                .columns
+                                .push(parse_column_def(self.dialect, column_def)?);
                         },
                         AlterTableOperation::DropColumn {
                             column_name,
@@ -203,9 +205,9 @@ impl Catalog {
 }
 
 /// Parse a column definition from sqlparser AST
-pub fn parse_column_def(col: &ast::ColumnDef) -> Result<ColumnDef> {
+pub fn parse_column_def(dialect: Dialect, col: &ast::ColumnDef) -> Result<ColumnDef> {
     let name = col.name.value.clone();
-    let data_type = map_data_type(&col.data_type);
+    let data_type = map_data_type(dialect, &col.data_type);
     let mut column_def = ColumnDef::new(name, data_type);
 
     for option in &col.options {
@@ -274,7 +276,29 @@ fn map_referential_action(action: &Option<ast::ReferentialAction>) -> Option<Ref
 }
 
 /// Map sqlparser DataType to our DataType
-pub fn map_data_type(sql_type: &SqlDataType) -> DataType {
+pub fn map_data_type(dialect: Dialect, sql_type: &SqlDataType) -> DataType {
+    if dialect == Dialect::SQLite
+        && matches!(
+            sql_type,
+            SqlDataType::TinyInt(_)
+                | SqlDataType::SmallInt(_)
+                | SqlDataType::Int(_)
+                | SqlDataType::Integer(_)
+                | SqlDataType::BigInt(_)
+                | SqlDataType::UnsignedTinyInt(_)
+                | SqlDataType::UnsignedSmallInt(_)
+                | SqlDataType::UnsignedInt2(_)
+                | SqlDataType::UnsignedInt(_)
+                | SqlDataType::UnsignedInt4(_)
+                | SqlDataType::UnsignedInteger(_)
+                | SqlDataType::UnsignedMediumInt(_)
+                | SqlDataType::UnsignedBigInt(_)
+                | SqlDataType::UnsignedInt8(_)
+        )
+    {
+        return DataType::BigInt(false);
+    }
+
     match sql_type {
         SqlDataType::Boolean => DataType::Bool,
         SqlDataType::TinyInt(_) => DataType::TinyInt(false),
@@ -320,9 +344,9 @@ pub fn map_data_type(sql_type: &SqlDataType) -> DataType {
         SqlDataType::Array(inner) => {
             let inner_type = match inner {
                 ast::ArrayElemTypeDef::None => DataType::Custom("ANY".to_string()),
-                ast::ArrayElemTypeDef::AngleBracket(t) => map_data_type(t),
-                ast::ArrayElemTypeDef::SquareBracket(t, _) => map_data_type(t),
-                ast::ArrayElemTypeDef::Parenthesis(t) => map_data_type(t),
+                ast::ArrayElemTypeDef::AngleBracket(t) => map_data_type(dialect, t),
+                ast::ArrayElemTypeDef::SquareBracket(t, _) => map_data_type(dialect, t),
+                ast::ArrayElemTypeDef::Parenthesis(t) => map_data_type(dialect, t),
             };
             DataType::Array(Box::new(inner_type))
         },
