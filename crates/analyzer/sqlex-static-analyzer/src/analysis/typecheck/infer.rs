@@ -61,9 +61,14 @@ impl<'a> TypeContext<'a> {
                 let schema = self.output_schema_for_query(subquery);
                 if schema.columns.len() == 1 {
                     let col = &schema.columns[0];
+                    let guaranteed_row = self.query_cardinality(subquery).guarantees_row();
                     TypeInfo {
                         data_type: col.data_type.clone(),
-                        nullable: true,
+                        nullable: if guaranteed_row {
+                            col.nullability
+                        } else {
+                            true
+                        },
                     }
                 } else {
                     self.diagnostics

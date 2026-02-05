@@ -8,6 +8,7 @@ use crate::{
     ir::{bound::BoundQuery, output::OutputSchema},
 };
 
+mod cardinality;
 mod functions;
 mod grouping;
 mod infer;

@@ -126,7 +126,11 @@ impl<'a> TypeContext<'a> {
         }
     }
 
-    fn analyze_group_expr(&self, state: &QueryTypeState<'_>, expr_id: ExprId) -> ExprAnalysis {
+    pub(super) fn analyze_group_expr(
+        &self,
+        state: &QueryTypeState<'_>,
+        expr_id: ExprId,
+    ) -> ExprAnalysis {
         let mut analysis = ExprAnalysis::default();
         self.analyze_group_expr_inner(state, expr_id, &mut analysis);
         analysis
@@ -219,9 +223,9 @@ impl<'a> TypeContext<'a> {
 }
 
 #[derive(Default)]
-struct ExprAnalysis {
+pub(super) struct ExprAnalysis {
     columns: HashSet<crate::ir::ids::ColumnId>,
-    has_aggregate: bool,
+    pub(super) has_aggregate: bool,
     has_window: bool,
 }
 
