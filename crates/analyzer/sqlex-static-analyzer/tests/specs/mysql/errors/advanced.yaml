@@ -12,7 +12,7 @@ queries:
       SELECT id FROM users u1 JOIN users u2 ON u1.id = u2.id
 
   - name: invalid_function_args
-    sql: SELECT SUBSTR(1, 2, 3) FROM users
+    sql: SELECT SUBSTR(1, 2, 3, 4) FROM users
 
   - name: invalid_group_by
     sql: SELECT name, COUNT(*) FROM users
