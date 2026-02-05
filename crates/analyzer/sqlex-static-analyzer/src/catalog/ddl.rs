@@ -158,10 +158,44 @@ impl Catalog {
 
     /// Handle DROP statement
     fn handle_drop(&mut self, stmt: &Statement) -> Result<()> {
-        if let Statement::Drop { names, .. } = stmt {
+        if let Statement::Drop {
+            object_type,
+            names,
+            cascade,
+            ..
+        } = stmt
+        {
+            if *object_type != ast::ObjectType::Table {
+                return Ok(());
+            }
             for name in names {
                 let table_name = name.to_dotted_string();
+                if self.dialect != Dialect::SQLite && !*cascade {
+                    let referencing: Vec<String> = self
+                        .tables
+                        .values()
+                        .filter(|table| {
+                            table
+                                .foreign_keys
+                                .iter()
+                                .any(|fk| fk.ref_table == table_name)
+                        })
+                        .map(|table| table.name.clone())
+                        .collect();
+                    if !referencing.is_empty() {
+                        return Err(AnalyzerError::AnalysisError(format!(
+                            "Cannot drop table {} referenced by foreign key constraints: {}",
+                            table_name,
+                            referencing.join(", ")
+                        )));
+                    }
+                }
                 self.tables.remove(&table_name);
+                if *cascade {
+                    for table in self.tables.values_mut() {
+                        table.foreign_keys.retain(|fk| fk.ref_table != table_name);
+                    }
+                }
             }
         }
         Ok(())

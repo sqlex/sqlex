@@ -245,18 +245,30 @@ async fn run_test_file(path: &Path, specs_dir: &Path) {
     for sql in suite.migrations {
         let sql = sql.trim();
         if !sql.is_empty() {
-            static_analyzer.execute(sql).await.unwrap_or_else(|e| {
-                panic!(
-                    "Failed to apply migration in {}:\nSQL: {}\nError: {}",
-                    display_path, sql, e
-                )
-            });
-            db_analyzer.execute(sql).await.unwrap_or_else(|e| {
-                panic!(
-                    "Failed to apply migration in {} (database analyzer):\nSQL: {}\nError: {}",
-                    display_path, sql, e
-                )
-            });
+            let static_result = static_analyzer.execute(sql).await;
+            let db_result = db_analyzer.execute(sql).await;
+
+            match (db_result, static_result) {
+                (Ok(_), Ok(_)) => {},
+                (Err(db_err), Err(static_err)) => {
+                    println!(
+                        "  Migration failed in {}: {} (static analyzer also failed: {})",
+                        display_path, db_err, static_err
+                    );
+                },
+                (Err(db_err), Ok(_)) => {
+                    panic!(
+                        "Migration in {} failed on database analyzer ('{}'), but static analyzer succeeded.\nSQL: {}",
+                        display_path, db_err, sql
+                    );
+                },
+                (Ok(_), Err(static_err)) => {
+                    panic!(
+                        "Migration in {} succeeded on database analyzer, but static analyzer failed: {}.\nSQL: {}",
+                        display_path, static_err, sql
+                    );
+                },
+            }
         }
     }
 
