@@ -8,7 +8,7 @@ use crate::{
             Binder,
             scope::{BindScope, ScopeColumn},
         },
-        diagnostics::Diagnostic,
+        diagnostics::{Diagnostic, DiagnosticCode},
     },
     ir::{
         bound::{
@@ -77,7 +77,15 @@ impl<'a> Binder<'a> {
             JoinOperator::Inner(constraint) => (BoundJoinKind::Inner, Some(constraint)),
             JoinOperator::LeftOuter(constraint) => (BoundJoinKind::Left, Some(constraint)),
             JoinOperator::RightOuter(constraint) => (BoundJoinKind::Right, Some(constraint)),
-            JoinOperator::FullOuter(constraint) => (BoundJoinKind::Full, Some(constraint)),
+            JoinOperator::FullOuter(constraint) => {
+                if self.dialect == sqlex_common::dialect::Dialect::MySQL {
+                    self.diagnostics.push(Diagnostic::error_with_code(
+                        DiagnosticCode::InvalidJoin,
+                        "FULL JOIN is not supported in MySQL",
+                    ));
+                }
+                (BoundJoinKind::Full, Some(constraint))
+            },
             JoinOperator::CrossJoin => (BoundJoinKind::Cross, None),
             _ => {
                 self.diagnostics

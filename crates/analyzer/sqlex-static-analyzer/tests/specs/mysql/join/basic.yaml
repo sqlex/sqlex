@@ -52,14 +52,3 @@ queries:
         nullability: true
       - name: amount
         nullability: false
-
-  - name: full_join
-    sql: |
-      SELECT u.id, o.id
-      FROM users u
-      FULL JOIN orders o ON u.id = o.user_id
-    expected:
-      - name: id
-        nullability: true
-      - name: id
-        nullability: true

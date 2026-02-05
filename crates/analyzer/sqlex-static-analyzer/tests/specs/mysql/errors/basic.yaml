@@ -16,5 +16,11 @@ queries:
   - name: invalid_function_args
     sql: SELECT COALESCE() FROM users
 
+  - name: unsupported_full_join
+    sql: |
+      SELECT u1.id, u2.id
+      FROM users u1
+      FULL JOIN users u2 ON u1.id = u2.id
+
   - name: syntax_error
     sql: SELECT FROM users
