@@ -13,8 +13,8 @@ queries:
   - name: missing_column
     sql: SELECT missing_col FROM users
 
-  - name: type_mismatch
-    sql: SELECT name + 1 FROM users
+  - name: invalid_function_args
+    sql: SELECT COALESCE() FROM users
 
   - name: syntax_error
     sql: SELECT FROM users
