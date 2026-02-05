@@ -6,20 +6,6 @@ migrations:
       region TEXT NOT NULL,
       amount DECIMAL NOT NULL
     )
-
-tables:
-  - name: sales
-    columns:
-      - name: id
-        type: Int
-        nullability: false
-      - name: region
-        type: Text
-        nullability: false
-      - name: amount
-        type: Decimal
-        nullability: false
-
 queries:
   - name: row_number_partition
     sql: |
@@ -28,10 +14,8 @@ queries:
       FROM sales
     expected:
       - name: id
-        type: Int
         nullability: false
       - name: rn
-        type: BigInt
         nullability: false
 
   - name: sum_over_window
@@ -41,8 +25,6 @@ queries:
       FROM sales
     expected:
       - name: id
-        type: Int
         nullability: false
       - name: running_sum
-        type: Double
         nullability: true

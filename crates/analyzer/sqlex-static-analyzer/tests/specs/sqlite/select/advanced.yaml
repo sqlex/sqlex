@@ -14,37 +14,6 @@ migrations:
       total DECIMAL,
       status TEXT
     )
-
-tables:
-  - name: users
-    columns:
-      - name: id
-        type: Int
-        nullability: false
-      - name: name
-        type: Text
-        nullability: false
-      - name: email
-        type: Text
-        nullability: true
-      - name: age
-        type: Int
-        nullability: true
-  - name: orders
-    columns:
-      - name: id
-        type: Int
-        nullability: false
-      - name: user_id
-        type: Int
-        nullability: false
-      - name: total
-        type: Decimal
-        nullability: true
-      - name: status
-        type: Text
-        nullability: true
-
 queries:
   - name: derived_table
     sql: |
@@ -52,10 +21,8 @@ queries:
       FROM (SELECT user_id, total FROM orders) AS t
     expected:
       - name: user_id
-        type: Int
         nullability: false
       - name: total
-        type: Decimal
         nullability: true
 
   - name: scalar_subquery
@@ -65,10 +32,8 @@ queries:
       FROM users
     expected:
       - name: id
-        type: Int
         nullability: false
       - name: max_total
-        type: Double
         nullability: true
 
   - name: exists_subquery
@@ -77,7 +42,6 @@ queries:
       WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = users.id)
     expected:
       - name: id
-        type: Int
         nullability: false
 
   - name: in_subquery
@@ -86,5 +50,4 @@ queries:
       WHERE id IN (SELECT user_id FROM orders)
     expected:
       - name: id
-        type: Int
         nullability: false

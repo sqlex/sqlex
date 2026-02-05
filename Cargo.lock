@@ -2141,6 +2141,7 @@ dependencies = [
  "serde_yaml",
  "sqlex-analyzer",
  "sqlex-common",
+ "sqlex-database-analyzer",
  "sqlparser",
  "tokio",
 ]

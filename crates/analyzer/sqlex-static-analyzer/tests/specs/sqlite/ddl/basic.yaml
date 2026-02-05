@@ -22,18 +22,4 @@ migrations:
     ALTER TABLE orders ADD CONSTRAINT orders_user_fk FOREIGN KEY (user_id) REFERENCES users(id)
   - |
     DROP TABLE users
-
-tables:
-  - name: orders
-    columns:
-      - name: id
-        type: Int
-        nullability: false
-      - name: user_id
-        type: Int
-        nullability: false
-      - name: status
-        type: Text
-        nullability: true
-
 queries: []

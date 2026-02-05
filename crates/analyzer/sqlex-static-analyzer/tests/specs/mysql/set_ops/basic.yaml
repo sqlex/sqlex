@@ -10,25 +10,6 @@ migrations:
       id INT NOT NULL,
       value TEXT NOT NULL
     )
-
-tables:
-  - name: table_a
-    columns:
-      - name: id
-        type: Int
-        nullability: false
-      - name: value
-        type: Text
-        nullability: true
-  - name: table_b
-    columns:
-      - name: id
-        type: Int
-        nullability: false
-      - name: value
-        type: Text
-        nullability: false
-
 queries:
   - name: union_nullability
     sql: |
@@ -37,10 +18,8 @@ queries:
       SELECT id, value FROM table_b
     expected:
       - name: id
-        type: Int
         nullability: false
       - name: value
-        type: Text
         nullability: true
 
   - name: union_all
@@ -50,7 +29,6 @@ queries:
       SELECT id FROM table_b
     expected:
       - name: id
-        type: Int
         nullability: false
 
   - name: intersect
@@ -60,7 +38,6 @@ queries:
       SELECT id FROM table_b
     expected:
       - name: id
-        type: Int
         nullability: false
 
   - name: except
@@ -70,5 +47,4 @@ queries:
       SELECT id FROM table_b
     expected:
       - name: id
-        type: Int
         nullability: false

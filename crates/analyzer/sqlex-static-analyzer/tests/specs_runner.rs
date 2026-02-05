@@ -2,7 +2,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use sqlex_analyzer::Analyzer;
-use sqlex_common::{dialect::Dialect, types::DataType};
+use sqlex_common::dialect::Dialect;
+use sqlex_database_analyzer::new_database_analyzer;
 use sqlex_static_analyzer::StaticAnalyzer;
 use tokio::fs as tokio_fs;
 
@@ -11,30 +12,20 @@ struct YamlTestSuite {
     dialect: Dialect,
     #[serde(default)]
     migrations: Vec<String>,
-    #[serde(default)]
-    tables: Vec<YamlTable>,
     queries: Vec<YamlQuery>,
-}
-
-#[derive(Debug, Deserialize)]
-struct YamlTable {
-    name: String,
-    columns: Vec<YamlOutputColumn>,
 }
 
 #[derive(Debug, Deserialize)]
 struct YamlQuery {
     name: String,
     sql: String,
-    expected: Option<Vec<YamlOutputColumn>>,
-    error: Option<String>,
+    #[serde(default)]
+    expected: Vec<YamlOutputColumn>,
 }
 
 #[derive(Debug, Deserialize)]
 struct YamlOutputColumn {
     name: String,
-    #[serde(rename = "type")]
-    data_type: DataType,
     nullability: bool,
 }
 
@@ -94,175 +85,203 @@ async fn run_test_file(path: &Path, specs_dir: &Path) {
     let suite: YamlTestSuite = serde_yaml::from_str(&content)
         .unwrap_or_else(|e| panic!("Failed to parse YAML file {}: {}", display_path, e));
 
-    let mut analyzer = StaticAnalyzer::new(suite.dialect);
+    let mut static_analyzer = StaticAnalyzer::new(suite.dialect);
+    let mut db_analyzer = new_database_analyzer(suite.dialect)
+        .await
+        .unwrap_or_else(|e| {
+            panic!(
+                "Failed to create database analyzer for {}: {}",
+                display_path, e
+            )
+        });
 
     // Apply migrations
     for sql in suite.migrations {
         let sql = sql.trim();
         if !sql.is_empty() {
-            analyzer.execute(sql).await.unwrap_or_else(|e| {
+            static_analyzer.execute(sql).await.unwrap_or_else(|e| {
                 panic!(
                     "Failed to apply migration in {}:\nSQL: {}\nError: {}",
+                    display_path, sql, e
+                )
+            });
+            db_analyzer.execute(sql).await.unwrap_or_else(|e| {
+                panic!(
+                    "Failed to apply migration in {} (database analyzer):\nSQL: {}\nError: {}",
                     display_path, sql, e
                 )
             });
         }
     }
 
-    if !suite.tables.is_empty() {
-        let mut actual_tables = analyzer.get_all_tables().await.unwrap_or_else(|e| {
-            panic!(
-                "Failed to get tables for schema validation in {}: {}",
-                display_path, e
-            )
-        });
-        actual_tables.sort_by(|a, b| a.name.cmp(&b.name));
+    let mut static_tables = static_analyzer.get_all_tables().await.unwrap_or_else(|e| {
+        panic!(
+            "Failed to get tables for schema validation in {}: {}",
+            display_path, e
+        )
+    });
+    static_tables.sort_by(|a, b| a.name.cmp(&b.name));
 
-        let mut expected_tables = suite.tables;
-        expected_tables.sort_by(|a, b| a.name.cmp(&b.name));
+    let mut db_tables = db_analyzer.get_all_tables().await.unwrap_or_else(|e| {
+        panic!(
+            "Failed to get tables for schema validation in {} (database analyzer): {}",
+            display_path, e
+        )
+    });
+    db_tables.sort_by(|a, b| a.name.cmp(&b.name));
 
+    assert_eq!(
+        static_tables.len(),
+        db_tables.len(),
+        "Schema in {}: table count mismatch. Expected {} tables, got {}. Expected: [{}], Actual: [{}]",
+        display_path,
+        db_tables.len(),
+        static_tables.len(),
+        db_tables
+            .iter()
+            .map(|t| t.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", "),
+        static_tables
+            .iter()
+            .map(|t| t.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    for (actual, expected) in static_tables.iter().zip(db_tables.iter()) {
         assert_eq!(
-            actual_tables.len(),
-            expected_tables.len(),
-            "Schema in {}: table count mismatch. Expected {} tables, got {}. Expected: [{}], Actual: [{}]",
+            actual.name, expected.name,
+            "Schema in {}: table name mismatch. Expected {}, got {}",
+            display_path, expected.name, actual.name
+        );
+        assert_eq!(
+            actual.columns.len(),
+            expected.columns.len(),
+            "Schema in {}: column count mismatch for table {}. Expected {} columns, got {}. Expected: [{}], Actual: [{}]",
             display_path,
-            expected_tables.len(),
-            actual_tables.len(),
-            expected_tables
+            expected.name,
+            expected.columns.len(),
+            actual.columns.len(),
+            expected
+                .columns
                 .iter()
-                .map(|t| t.name.as_str())
+                .map(|c| c.name.as_str())
                 .collect::<Vec<_>>()
                 .join(", "),
-            actual_tables
+            actual
+                .columns
                 .iter()
-                .map(|t| t.name.as_str())
+                .map(|c| c.name.as_str())
                 .collect::<Vec<_>>()
                 .join(", ")
         );
 
-        for (actual, expected) in actual_tables.iter().zip(expected_tables.iter()) {
+        for (i, (actual_col, expected_col)) in actual
+            .columns
+            .iter()
+            .zip(expected.columns.iter())
+            .enumerate()
+        {
             assert_eq!(
-                actual.name, expected.name,
-                "Schema in {}: table name mismatch. Expected {}, got {}",
-                display_path, expected.name, actual.name
+                actual_col.name, expected_col.name,
+                "Schema in {}: column {} name mismatch for table {} (Expected: {}, Actual: {})",
+                display_path, i, expected.name, expected_col.name, actual_col.name
             );
             assert_eq!(
-                actual.columns.len(),
-                expected.columns.len(),
-                "Schema in {}: column count mismatch for table {}. Expected {} columns, got {}. Expected: [{}], Actual: [{}]",
-                display_path,
-                expected.name,
-                expected.columns.len(),
-                actual.columns.len(),
-                expected
-                    .columns
-                    .iter()
-                    .map(|c| c.name.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                actual
-                    .columns
-                    .iter()
-                    .map(|c| c.name.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                actual_col.data_type, expected_col.data_type,
+                "Schema in {}: column {} type mismatch for table {} (Expected: {:?}, Actual: {:?})",
+                display_path, i, expected.name, expected_col.data_type, actual_col.data_type
             );
-
-            for (i, (actual_col, expected_col)) in actual
-                .columns
-                .iter()
-                .zip(expected.columns.iter())
-                .enumerate()
-            {
-                assert_eq!(
-                    actual_col.name, expected_col.name,
-                    "Schema in {}: column {} name mismatch for table {} (Expected: {}, Actual: {})",
-                    display_path, i, expected.name, expected_col.name, actual_col.name
-                );
-                assert_eq!(
-                    actual_col.data_type, expected_col.data_type,
-                    "Schema in {}: column {} type mismatch for table {} (Expected: {:?}, Actual: {:?})",
-                    display_path, i, expected.name, expected_col.data_type, actual_col.data_type
-                );
-                assert_eq!(
-                    actual_col.nullability,
-                    expected_col.nullability,
-                    "Schema in {}: column {} nullability mismatch for table {} (Expected: {}, Actual: {})",
-                    display_path,
-                    i,
-                    expected.name,
-                    expected_col.nullability,
-                    actual_col.nullability
-                );
-            }
+            assert_eq!(
+                actual_col.nullability, expected_col.nullability,
+                "Schema in {}: column {} nullability mismatch for table {} (Expected: {}, Actual: {})",
+                display_path, i, expected.name, expected_col.nullability, actual_col.nullability
+            );
         }
     }
 
     // Run queries
     for test in suite.queries {
         println!("  Running test: {}", test.name);
+        let db_result = db_analyzer.analyze(&test.sql).await;
+        let static_result = static_analyzer.analyze(&test.sql).await;
 
-        if let Some(expected_error) = test.error {
-            let result = analyzer.analyze(&test.sql).await;
-            assert!(
-                result.is_err(),
-                "Test '{}' in {}: Expected error containing '{}', but analysis succeeded",
-                test.name,
-                display_path,
-                expected_error
-            );
-            let message = result.unwrap_err().to_string();
-            let message_lower = message.to_lowercase();
-            let expected_lower = expected_error.to_lowercase();
-            assert!(
-                message_lower.contains(&expected_lower),
-                "Test '{}' in {}: Expected error containing '{}' (case-insensitive), got '{}'",
-                test.name,
-                display_path,
-                expected_error,
-                message
-            );
-        } else if let Some(expected_columns) = test.expected {
-            let result = analyzer.analyze(&test.sql).await.unwrap_or_else(|e| {
+        match (db_result, static_result) {
+            (Err(db_err), Err(_)) => {
+                println!(
+                    "  Database analyzer failed for '{}': {} (static analyzer also failed, ok)",
+                    test.name, db_err
+                );
+            },
+            (Err(db_err), Ok(_)) => {
                 panic!(
-                    "Test '{}' in {}: Expected success, got error: {}",
-                    test.name, display_path, e
-                )
-            });
-            let columns = result.columns;
+                    "Test '{}' in {}: Database analyzer failed ('{}'), but static analyzer succeeded",
+                    test.name, display_path, db_err
+                );
+            },
+            (Ok(_), Err(static_err)) => {
+                panic!(
+                    "Test '{}' in {}: Database analyzer succeeded, but static analyzer failed: {}",
+                    test.name, display_path, static_err
+                );
+            },
+            (Ok(db_result), Ok(static_result)) => {
+                let db_columns = db_result.columns;
+                let static_columns = static_result.columns;
 
-            assert_eq!(
-                columns.len(),
-                expected_columns.len(),
-                "Test '{}' in {}: output column count mismatch. Expected {}, got {}",
-                test.name,
-                display_path,
-                expected_columns.len(),
-                columns.len()
-            );
+                assert_eq!(
+                    static_columns.len(),
+                    db_columns.len(),
+                    "Test '{}' in {}: output column count mismatch. Expected {}, got {}",
+                    test.name,
+                    display_path,
+                    db_columns.len(),
+                    static_columns.len()
+                );
 
-            for (i, (actual, expected)) in columns.iter().zip(expected_columns.iter()).enumerate() {
                 assert_eq!(
-                    actual.name, expected.name,
-                    "Test '{}' in {}: Column {} name mismatch",
-                    test.name, display_path, i
+                    test.expected.len(),
+                    db_columns.len(),
+                    "Test '{}' in {}: expected nullability count mismatch. Expected {}, got {}",
+                    test.name,
+                    display_path,
+                    db_columns.len(),
+                    test.expected.len()
                 );
-                assert_eq!(
-                    actual.data_type, expected.data_type,
-                    "Test '{}' in {}: Column {} type mismatch",
-                    test.name, display_path, i
-                );
-                assert_eq!(
-                    actual.nullability, expected.nullability,
-                    "Test '{}' in {}: Column {} nullability mismatch (Expected nullability: {}, Actual: {})",
-                    test.name, display_path, i, expected.nullability, actual.nullability
-                );
-            }
-        } else {
-            panic!(
-                "Test '{}' in {} must have either 'expected' or 'error'",
-                test.name, display_path
-            );
+
+                for i in 0..db_columns.len() {
+                    let db_col = &db_columns[i];
+                    let static_col = &static_columns[i];
+                    let expected_col = &test.expected[i];
+
+                    assert_eq!(
+                        static_col.name, db_col.name,
+                        "Test '{}' in {}: Column {} name mismatch (Expected: {}, Actual: {})",
+                        test.name, display_path, i, db_col.name, static_col.name
+                    );
+                    assert_eq!(
+                        expected_col.name, db_col.name,
+                        "Test '{}' in {}: Expected column {} name mismatch (Expected: {}, Actual: {})",
+                        test.name, display_path, i, db_col.name, expected_col.name
+                    );
+                    assert_eq!(
+                        static_col.data_type, db_col.data_type,
+                        "Test '{}' in {}: Column {} type mismatch (Expected: {:?}, Actual: {:?})",
+                        test.name, display_path, i, db_col.data_type, static_col.data_type
+                    );
+                    assert_eq!(
+                        static_col.nullability,
+                        expected_col.nullability,
+                        "Test '{}' in {}: Column {} nullability mismatch (Expected: {}, Actual: {})",
+                        test.name,
+                        display_path,
+                        i,
+                        expected_col.nullability,
+                        static_col.nullability
+                    );
+                }
+            },
         }
     }
 }

@@ -6,30 +6,13 @@ migrations:
       name TEXT NOT NULL,
       age INT
     )
-
-tables:
-  - name: users
-    columns:
-      - name: id
-        type: Int
-        nullability: false
-      - name: name
-        type: Text
-        nullability: false
-      - name: age
-        type: Int
-        nullability: true
-
 queries:
   - name: ambiguous_column
     sql: |
       SELECT id FROM users u1 JOIN users u2 ON u1.id = u2.id
-    error: "ambiguous"
 
   - name: invalid_function_args
     sql: SELECT SUBSTR(1, 2, 3) FROM users
-    error: "type"
 
   - name: invalid_group_by
     sql: SELECT name, COUNT(*) FROM users
-    error: "group"

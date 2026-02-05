@@ -14,37 +14,6 @@ migrations:
       total DECIMAL,
       status TEXT
     )
-
-tables:
-  - name: users
-    columns:
-      - name: id
-        type: Int
-        nullability: false
-      - name: name
-        type: Text
-        nullability: false
-      - name: email
-        type: Text
-        nullability: true
-      - name: age
-        type: Int
-        nullability: true
-  - name: orders
-    columns:
-      - name: id
-        type: Int
-        nullability: false
-      - name: user_id
-        type: Int
-        nullability: false
-      - name: total
-        type: Decimal
-        nullability: true
-      - name: status
-        type: Text
-        nullability: true
-
 queries:
   - name: correlated_scalar_subquery
     sql: |
@@ -53,10 +22,8 @@ queries:
       FROM users u
     expected:
       - name: id
-        type: Int
         nullability: false
       - name: order_count
-        type: BigInt
         nullability: false
 
   - name: derived_table_filter
@@ -65,7 +32,6 @@ queries:
       FROM (SELECT user_id, total FROM orders WHERE status IS NOT NULL) t
     expected:
       - name: user_id
-        type: Int
         nullability: false
 
   - name: in_subquery_distinct
@@ -74,7 +40,6 @@ queries:
       WHERE id IN (SELECT DISTINCT user_id FROM orders)
     expected:
       - name: id
-        type: Int
         nullability: false
 
   - name: exists_subquery_projection
@@ -83,5 +48,4 @@ queries:
       WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id AND o.total > 0)
     expected:
       - name: name
-        type: Text
         nullability: false

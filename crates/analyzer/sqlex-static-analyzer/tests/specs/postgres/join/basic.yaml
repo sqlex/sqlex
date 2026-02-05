@@ -13,28 +13,6 @@ migrations:
       amount DECIMAL NOT NULL,
       PRIMARY KEY (id)
     )
-
-tables:
-  - name: users
-    columns:
-      - name: id
-        type: Int
-        nullability: false
-      - name: name
-        type: Text
-        nullability: false
-  - name: orders
-    columns:
-      - name: id
-        type: Int
-        nullability: false
-      - name: user_id
-        type: Int
-        nullability: true
-      - name: amount
-        type: Decimal
-        nullability: false
-
 queries:
   - name: inner_join
     sql: |
@@ -43,13 +21,10 @@ queries:
       INNER JOIN orders o ON u.id = o.user_id
     expected:
       - name: id
-        type: Int
         nullability: false
       - name: name
-        type: Text
         nullability: false
       - name: amount
-        type: Decimal
         nullability: false
 
   - name: left_join
@@ -59,13 +34,10 @@ queries:
       LEFT JOIN orders o ON u.id = o.user_id
     expected:
       - name: id
-        type: Int
         nullability: false
       - name: id
-        type: Int
         nullability: true
       - name: amount
-        type: Decimal
         nullability: true
 
   - name: right_join
@@ -75,13 +47,10 @@ queries:
       RIGHT JOIN orders o ON u.id = o.user_id
     expected:
       - name: id
-        type: Int
         nullability: true
       - name: name
-        type: Text
         nullability: true
       - name: amount
-        type: Decimal
         nullability: false
 
   - name: full_join
@@ -91,8 +60,6 @@ queries:
       FULL JOIN orders o ON u.id = o.user_id
     expected:
       - name: id
-        type: Int
         nullability: true
       - name: id
-        type: Int
         nullability: true

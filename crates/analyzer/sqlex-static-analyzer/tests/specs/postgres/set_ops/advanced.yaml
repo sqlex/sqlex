@@ -10,25 +10,6 @@ migrations:
       id BIGINT NOT NULL,
       val BIGINT
     )
-
-tables:
-  - name: nums
-    columns:
-      - name: id
-        type: Int
-        nullability: false
-      - name: val
-        type: Int
-        nullability: true
-  - name: nums_big
-    columns:
-      - name: id
-        type: BigInt
-        nullability: false
-      - name: val
-        type: BigInt
-        nullability: true
-
 queries:
   - name: union_type_promotion
     sql: |
@@ -37,8 +18,6 @@ queries:
       SELECT id, val FROM nums_big
     expected:
       - name: id
-        type: BigInt
         nullability: false
       - name: val
-        type: BigInt
         nullability: true

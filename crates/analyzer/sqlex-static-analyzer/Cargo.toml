@@ -13,6 +13,7 @@ async-trait = { workspace = true }
 sqlparser = { workspace = true }
 
 [dev-dependencies]
+sqlex-database-analyzer = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
