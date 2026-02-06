@@ -1,6 +1,11 @@
+# idea
+/.idea
+*.iml
+
 /target
 
 # AI
+/.claude
 /.agent
 /.codex
 /AGENTS.md
