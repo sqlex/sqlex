@@ -1,6 +1,8 @@
 use sqlex_analyzer::{Analyzer, Result};
 use sqlex_common::dialect::Dialect;
 
+mod container_pool;
+mod docker_raw;
 pub mod mysql;
 pub mod postgres;
 pub mod sqlite;

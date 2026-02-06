@@ -1,54 +1,112 @@
 use async_trait::async_trait;
 use rand::{Rng, distributions::Alphanumeric};
 use sqlex_analyzer::{Analyzer, AnalyzerError, Result};
-use sqlex_common::types::{ColumnInfo, DataType, ResultSet, Table};
+use sqlex_common::{
+    dialect::Dialect,
+    types::{ColumnInfo, DataType, ResultSet, Table},
+};
 use sqlx::{
     Column, Executor, Row, Statement, TypeInfo,
     postgres::{PgPool, PgPoolOptions},
 };
-use testcontainers::{ContainerAsync, GenericImage, ImageExt, runners::AsyncRunner};
+use testcontainers::{GenericImage, ImageExt, runners::AsyncRunner};
 
-use crate::utils::parse_retry_connect;
+use crate::{
+    container_pool::{ContainerInfo, ContainerPool},
+    docker_raw::{DIALECT_LABEL_KEY, MANAGED_LABEL_KEY, MANAGED_LABEL_VALUE},
+    utils::parse_retry_connect,
+};
 
 pub struct PostgresDatabaseAnalyzer {
     pool: PgPool,
-    _container: ContainerAsync<GenericImage>,
 }
 
 impl PostgresDatabaseAnalyzer {
     pub async fn new() -> Result<Self> {
-        // Use Alphanumeric to ensure password characters are safe for the connection URL
-        // without requiring percent-encoding.
-        let password: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(16)
-            .map(char::from)
-            .collect();
+        let shared = ContainerPool::global()
+            .get_or_create_container(Dialect::Postgres, || async {
+                let password: String = rand::thread_rng()
+                    .sample_iter(&Alphanumeric)
+                    .take(16)
+                    .map(char::from)
+                    .collect();
 
-        let image = GenericImage::new("postgres", "16-alpine")
-            .with_env_var("POSTGRES_PASSWORD", &password)
-            .with_env_var("POSTGRES_DB", "sqlex");
+                let image = GenericImage::new("postgres", "16-alpine")
+                    .with_env_var("POSTGRES_PASSWORD", &password)
+                    .with_label(MANAGED_LABEL_KEY, MANAGED_LABEL_VALUE)
+                    .with_label(DIALECT_LABEL_KEY, "postgres");
 
-        let container = image.start().await.map_err(|e| {
-            AnalyzerError::ExecutionError(format!("Failed to start postgres container: {}", e))
-        })?;
+                let container = image.start().await.map_err(|e| {
+                    AnalyzerError::ExecutionError(format!(
+                        "Failed to start postgres container: {}",
+                        e
+                    ))
+                })?;
 
-        let host = container
-            .get_host()
+                let container_id = container.id().to_string();
+                let host = container
+                    .get_host()
+                    .await
+                    .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?
+                    .to_string();
+                let port = container
+                    .get_host_port_ipv4(5432)
+                    .await
+                    .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+
+                let url = format!(
+                    "postgres://postgres:{}@{}:{}/postgres",
+                    password, host, port
+                );
+                parse_retry_connect(|| PgPoolOptions::new().connect(&url)).await?;
+
+                std::mem::forget(container);
+
+                Ok(ContainerInfo {
+                    container_id,
+                    dialect: Dialect::Postgres,
+                    host,
+                    port,
+                    password,
+                })
+            })
+            .await?;
+
+        // Create a unique database for this analyzer instance
+        let db_name = format!(
+            "sqlex_{}",
+            rand::thread_rng()
+                .sample_iter(&Alphanumeric)
+                .take(8)
+                .map(char::from)
+                .collect::<String>()
+                .to_lowercase()
+        );
+        let admin_url = format!(
+            "postgres://postgres:{}@{}:{}/postgres",
+            shared.password, shared.host, shared.port
+        );
+        let admin_pool = PgPoolOptions::new()
+            .connect(&admin_url)
             .await
             .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
-        let port = container
-            .get_host_port_ipv4(5432)
+
+        admin_pool
+            .execute(format!("CREATE DATABASE {}", db_name).as_str())
             .await
             .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
-        let url = format!("postgres://postgres:{}@{}:{}/sqlex", password, host, port);
 
-        let pool = parse_retry_connect(|| PgPoolOptions::new().connect(&url)).await?;
+        // Connect to the new database
+        let url = format!(
+            "postgres://postgres:{}@{}:{}/{}",
+            shared.password, shared.host, shared.port, db_name
+        );
+        let pool = PgPoolOptions::new()
+            .connect(&url)
+            .await
+            .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
 
-        Ok(Self {
-            pool,
-            _container: container,
-        })
+        Ok(Self { pool })
     }
 }
 
@@ -132,16 +190,26 @@ impl Analyzer for PostgresDatabaseAnalyzer {
                 table_order.push(table_name.clone());
                 tables_map.insert(table_name.clone(), Vec::new());
             }
-            tables_map.get_mut(&table_name).unwrap().push(col_info);
+            if let Some(columns) = tables_map.get_mut(&table_name) {
+                columns.push(col_info);
+            } else {
+                return Err(AnalyzerError::AnalysisError(format!(
+                    "Missing table entry while collecting Postgres metadata: {}",
+                    table_name
+                )));
+            }
         }
 
-        let tables = table_order
-            .into_iter()
-            .map(|name| Table {
-                columns: tables_map.remove(&name).unwrap(),
-                name,
-            })
-            .collect();
+        let mut tables = Vec::with_capacity(table_order.len());
+        for name in table_order {
+            let columns = tables_map.remove(&name).ok_or_else(|| {
+                AnalyzerError::AnalysisError(format!(
+                    "Missing collected columns for Postgres table: {}",
+                    name
+                ))
+            })?;
+            tables.push(Table { columns, name });
+        }
 
         Ok(tables)
     }

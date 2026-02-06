@@ -10,7 +10,11 @@ sqlex-common = { workspace = true }
 
 # External
 async-trait = { workspace = true }
+fs2 = { workspace = true }
+libc = { workspace = true }
 rand = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 sqlx = { workspace = true, features = ["runtime-tokio", "tls-rustls", "postgres", "mysql", "sqlite"] }
 testcontainers = { workspace = true }
 tokio = { workspace = true }

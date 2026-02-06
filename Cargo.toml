@@ -52,3 +52,7 @@ rand = "0.8"
 
 # Testing
 testcontainers = "0.23"
+
+# Container Management
+fs2 = "0.4"
+libc = "0.2"
