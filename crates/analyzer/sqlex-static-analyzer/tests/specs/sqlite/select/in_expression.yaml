@@ -1,0 +1,73 @@
+dialect: sqlite
+migrations:
+  - |
+    CREATE TABLE users (
+      id INT NOT NULL,
+      name TEXT NOT NULL,
+      email TEXT,
+      age INT,
+      score DOUBLE PRECISION
+    )
+  - |
+    CREATE TABLE orders (
+      id INT NOT NULL,
+      user_id INT NOT NULL,
+      total DECIMAL,
+      status TEXT
+    )
+queries:
+  - name: where_in_literal_list
+    sql: SELECT id, name FROM users WHERE id IN (1, 2, 3)
+    expected:
+      - name: id
+        nullability: false
+      - name: name
+        nullability: false
+
+  - name: where_not_in_literal_list
+    sql: SELECT id, name FROM users WHERE id NOT IN (1, 2, 3)
+    expected:
+      - name: id
+        nullability: false
+      - name: name
+        nullability: false
+
+  - name: where_in_subquery
+    sql: SELECT id, name FROM users WHERE id IN (SELECT user_id FROM orders)
+    expected:
+      - name: id
+        nullability: false
+      - name: name
+        nullability: false
+
+  - name: where_not_in_subquery
+    sql: SELECT id, name FROM users WHERE id NOT IN (SELECT user_id FROM orders)
+    expected:
+      - name: id
+        nullability: false
+      - name: name
+        nullability: false
+
+  - name: select_in_expression
+    sql: SELECT id, (id IN (1, 2, 3)) as is_special FROM users
+    expected:
+      - name: id
+        nullability: false
+      - name: is_special
+        nullability: false
+
+  - name: select_not_in_expression
+    sql: SELECT id, (id NOT IN (1, 2, 3)) as is_not_special FROM users
+    expected:
+      - name: id
+        nullability: false
+      - name: is_not_special
+        nullability: false
+
+  - name: where_in_nullable_column
+    sql: SELECT id, email FROM users WHERE email IN ('test@example.com', 'admin@example.com')
+    expected:
+      - name: id
+        nullability: false
+      - name: email
+        nullability: true
