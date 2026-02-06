@@ -19,6 +19,8 @@ use crate::{
 
 pub struct MySqlDatabaseAnalyzer {
     pool: MySqlPool,
+    db_name: String,
+    admin_url: String,
 }
 
 impl MySqlDatabaseAnalyzer {
@@ -98,7 +100,11 @@ impl MySqlDatabaseAnalyzer {
             .await
             .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
 
-        Ok(Self { pool })
+        Ok(Self {
+            pool,
+            db_name,
+            admin_url,
+        })
     }
 }
 
@@ -208,6 +214,24 @@ impl Analyzer for MySqlDatabaseAnalyzer {
         }
 
         Ok(tables)
+    }
+}
+
+impl Drop for MySqlDatabaseAnalyzer {
+    fn drop(&mut self) {
+        let db_name = self.db_name.clone();
+        let admin_url = self.admin_url.clone();
+
+        // Try to drop the database in a blocking manner
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(async move {
+                if let Ok(admin_pool) = MySqlPoolOptions::new().connect(&admin_url).await {
+                    let _ = admin_pool
+                        .execute(format!("DROP DATABASE IF EXISTS {}", db_name).as_str())
+                        .await;
+                }
+            });
+        }
     }
 }
 
