@@ -79,6 +79,14 @@ impl<'a> TypeContext<'a> {
                     }
                 }
             },
+            BoundExpr::InList { expr, .. } | BoundExpr::InSubquery { expr, .. } => {
+                // IN expressions return boolean type
+                let expr_info = self.infer_expr(state, *expr);
+                TypeInfo {
+                    data_type: self.boolean_result_type(),
+                    nullable: expr_info.nullable,
+                }
+            },
             BoundExpr::Unsupported => TypeInfo {
                 data_type: DataType::Custom("unknown".to_string()),
                 nullable: true,

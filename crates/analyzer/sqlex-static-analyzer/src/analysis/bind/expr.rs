@@ -149,6 +149,32 @@ impl<'a> Binder<'a> {
                 let bound = self.bind_correlated_subquery(query, scope);
                 self.exprs.alloc(BoundExpr::Subquery(Box::new(bound)))
             },
+            Expr::InList {
+                expr,
+                list,
+                negated,
+            } => {
+                let expr_id = self.bind_expr(expr, scope);
+                let list_ids = list.iter().map(|e| self.bind_expr(e, scope)).collect();
+                self.exprs.alloc(BoundExpr::InList {
+                    expr: expr_id,
+                    list: list_ids,
+                    negated: *negated,
+                })
+            },
+            Expr::InSubquery {
+                expr,
+                subquery,
+                negated,
+            } => {
+                let expr_id = self.bind_expr(expr, scope);
+                let bound_subquery = self.bind_correlated_subquery(subquery, scope);
+                self.exprs.alloc(BoundExpr::InSubquery {
+                    expr: expr_id,
+                    subquery: Box::new(bound_subquery),
+                    negated: *negated,
+                })
+            },
             _ => {
                 self.diagnostics.push(
                     Diagnostic::unsupported_feature("expression in binder")

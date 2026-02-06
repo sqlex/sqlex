@@ -151,6 +151,16 @@ pub enum BoundExpr {
         results: Vec<ExprId>,
         else_result: Option<ExprId>,
     },
+    InList {
+        expr: ExprId,
+        list: Vec<ExprId>,
+        negated: bool,
+    },
+    InSubquery {
+        expr: ExprId,
+        subquery: Box<BoundQuery>,
+        negated: bool,
+    },
     Subquery(Box<BoundQuery>),
     Unsupported,
 }
