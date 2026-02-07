@@ -1,0 +1,61 @@
+dialect: postgres
+migrations:
+  - |
+    CREATE TABLE departments (
+      id INT NOT NULL,
+      name TEXT NOT NULL,
+      PRIMARY KEY (id)
+    )
+  - |
+    CREATE TABLE users (
+      id INT NOT NULL,
+      name TEXT NOT NULL,
+      department_id INT NOT NULL,
+      PRIMARY KEY (id),
+      FOREIGN KEY (department_id) REFERENCES departments(id)
+    )
+queries:
+  - name: left_join_with_not_null_fk
+    sql: |
+      SELECT u.id, u.name, d.id, d.name
+      FROM users u
+      LEFT JOIN departments d ON u.department_id = d.id
+    expected:
+      - name: id
+        nullability: false
+      - name: name
+        nullability: false
+      - name: id
+        nullability: false
+      - name: name
+        nullability: false
+
+  - name: left_join_without_fk
+    sql: |
+      SELECT d.id, d.name, u.id, u.name
+      FROM departments d
+      LEFT JOIN users u ON d.id = u.department_id
+    expected:
+      - name: id
+        nullability: false
+      - name: name
+        nullability: false
+      - name: id
+        nullability: true
+      - name: name
+        nullability: true
+
+  - name: right_join_with_not_null_fk
+    sql: |
+      SELECT d.id, d.name, u.id, u.name
+      FROM departments d
+      RIGHT JOIN users u ON d.id = u.department_id
+    expected:
+      - name: id
+        nullability: false
+      - name: name
+        nullability: false
+      - name: id
+        nullability: false
+      - name: name
+        nullability: false
