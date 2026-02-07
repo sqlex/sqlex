@@ -13,6 +13,7 @@ sqlex-generator-debug = { workspace = true }
 sqlex-generator-go = { workspace = true }
 sqlex-generator-java = { workspace = true }
 sqlex-generator-rust = { workspace = true }
+sqlex-hybrid-analyzer = { workspace = true }
 sqlex-static-analyzer = { workspace = true }
 
 # External

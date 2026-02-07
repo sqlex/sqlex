@@ -18,8 +18,9 @@ pub struct SqlexConfig {
 #[serde(rename_all = "snake_case")]
 pub enum AnalyzerMode {
     Static,
-    #[default]
     Database,
+    #[default]
+    Hybrid,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

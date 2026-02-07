@@ -22,6 +22,7 @@ sqlex-cli = { path = "crates/sqlex-cli" }
 sqlex-common = { path = "crates/sqlex-common" }
 sqlex-compiler = { path = "crates/sqlex-compiler" }
 sqlex-database-analyzer = { path = "crates/analyzer/sqlex-database-analyzer" }
+sqlex-hybrid-analyzer = { path = "crates/analyzer/sqlex-hybrid-analyzer" }
 sqlex-generator = { path = "crates/generator/sqlex-generator" }
 sqlex-generator-debug = { path = "crates/generator/sqlex-generator-debug" }
 sqlex-generator-go = { path = "crates/generator/sqlex-generator-go" }

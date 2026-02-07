@@ -7,6 +7,7 @@ use sqlex_common::{
     ir::{CompilationUnit, QueryDescriptor},
 };
 use sqlex_database_analyzer::new_database_analyzer;
+use sqlex_hybrid_analyzer::HybridAnalyzer;
 use sqlex_static_analyzer::StaticAnalyzer;
 
 mod generators;
@@ -46,6 +47,10 @@ impl Compiler {
             AnalyzerMode::Database => {
                 println!("  Using database analyzer");
                 new_database_analyzer(self.config.dialect).await?
+            },
+            AnalyzerMode::Hybrid => {
+                println!("  Using hybrid analyzer");
+                Box::new(HybridAnalyzer::new(self.config.dialect).await?)
             },
         };
 

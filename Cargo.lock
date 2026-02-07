@@ -2177,6 +2177,7 @@ dependencies = [
  "sqlex-generator-go",
  "sqlex-generator-java",
  "sqlex-generator-rust",
+ "sqlex-hybrid-analyzer",
  "sqlex-static-analyzer",
  "sqlparser",
  "tokio",

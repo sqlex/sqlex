@@ -78,7 +78,7 @@ async fn run_init(name: String) -> Result<()> {
             name: name.clone(),
             dialect: Dialect::Postgres,
             migrations: "migrations".to_string(),
-            analyzer: AnalyzerMode::Database,
+            analyzer: AnalyzerMode::Hybrid,
             generators: vec![GeneratorConfig {
                 name: "rust_entities".to_string(),
                 generator: "rust".to_string(),
