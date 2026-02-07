@@ -2253,6 +2253,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlex-hybrid-analyzer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "sqlex-analyzer",
+ "sqlex-common",
+ "sqlex-database-analyzer",
+ "sqlex-static-analyzer",
+ "tracing",
+]
+
+[[package]]
 name = "sqlex-static-analyzer"
 version = "0.1.0"
 dependencies = [

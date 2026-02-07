@@ -1,0 +1,14 @@
+[package]
+name = "sqlex-hybrid-analyzer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sqlex-analyzer = { path = "../sqlex-analyzer" }
+sqlex-static-analyzer = { path = "../sqlex-static-analyzer" }
+sqlex-database-analyzer = { path = "../sqlex-database-analyzer" }
+sqlex-common = { path = "../../sqlex-common" }
+
+async-trait = "0.1"
+anyhow = "1.0"
+tracing = "0.1"
