@@ -92,6 +92,7 @@ impl Compiler {
                 name: query.name.clone(),
                 sql: query.sql.clone(),
                 params: Vec::new(), // TODO: Extract parameters from SQL
+                cardinality: result_set.cardinality,
                 columns: result_set.columns,
             });
         }

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::types::{ColumnInfo, DataType, Table};
+use crate::types::{Cardinality, ColumnInfo, DataType, Table};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompilationUnit {
@@ -18,6 +18,9 @@ pub struct QueryDescriptor {
 
     /// Input parameters for the query
     pub params: Vec<ParameterDescriptor>,
+
+    /// Cardinality of the query result
+    pub cardinality: Cardinality,
 
     /// Output columns of the query result
     pub columns: Vec<ColumnInfo>,
