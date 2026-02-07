@@ -354,3 +354,314 @@ impl Project {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use sqlex_common::{config::AnalyzerMode, dialect::Dialect};
+
+    use super::*;
+
+    fn create_test_config() -> SqlexConfig {
+        SqlexConfig {
+            name: "test".to_string(),
+            dialect: Dialect::SQLite,
+            migrations: "migrations".to_string(),
+            analyzer: AnalyzerMode::Static,
+            generators: vec![],
+        }
+    }
+
+    #[test]
+    fn test_validate_identifier_valid() {
+        assert!(Project::validate_identifier("valid_name", "test").is_ok());
+        assert!(Project::validate_identifier("ValidName", "test").is_ok());
+        assert!(Project::validate_identifier("valid123", "test").is_ok());
+        assert!(Project::validate_identifier("a", "test").is_ok());
+        assert!(Project::validate_identifier("_valid", "test").is_err()); // Must start with letter
+        assert!(Project::validate_identifier("valid_name_123", "test").is_ok());
+    }
+
+    #[test]
+    fn test_validate_identifier_invalid_empty() {
+        let result = Project::validate_identifier("", "test context");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Empty identifier"));
+    }
+
+    #[test]
+    fn test_validate_identifier_invalid_start() {
+        let result = Project::validate_identifier("123invalid", "test context");
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Must start with a letter")
+        );
+    }
+
+    #[test]
+    fn test_validate_identifier_invalid_chars() {
+        assert!(Project::validate_identifier("invalid-name", "test").is_err());
+        assert!(Project::validate_identifier("invalid.name", "test").is_err());
+        assert!(Project::validate_identifier("invalid name", "test").is_err());
+        assert!(Project::validate_identifier("invalid@name", "test").is_err());
+    }
+
+    #[test]
+    fn test_validate_query_name_valid() {
+        let path = Path::new("test.sql");
+        assert!(Project::validate_query_name("valid_query", path).is_ok());
+        assert!(Project::validate_query_name("get_user", path).is_ok());
+        assert!(Project::validate_query_name("list_all_items", path).is_ok());
+        assert!(Project::validate_query_name("a", path).is_ok());
+    }
+
+    #[test]
+    fn test_validate_query_name_invalid_uppercase() {
+        let path = Path::new("test.sql");
+        let result = Project::validate_query_name("InvalidQuery", path);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("must be lowercase")
+        );
+    }
+
+    #[test]
+    fn test_validate_query_name_invalid_mixed_case() {
+        let path = Path::new("test.sql");
+        assert!(Project::validate_query_name("getUser", path).is_err());
+        assert!(Project::validate_query_name("Get_user", path).is_err());
+    }
+
+    #[test]
+    fn test_split_sql_statements_single() {
+        let sql = "SELECT * FROM users";
+        let statements = Project::split_sql_statements(sql);
+        assert_eq!(statements.len(), 1);
+        assert!(statements[0].contains("SELECT"));
+    }
+
+    #[test]
+    fn test_split_sql_statements_multiple() {
+        let sql = "CREATE TABLE users (id INT); INSERT INTO users VALUES (1);";
+        let statements = Project::split_sql_statements(sql);
+        assert_eq!(statements.len(), 2);
+        assert!(statements[0].contains("CREATE TABLE"));
+        assert!(statements[1].contains("INSERT INTO"));
+    }
+
+    #[test]
+    fn test_split_sql_statements_with_whitespace() {
+        let sql = "  SELECT * FROM users  ;  \n  INSERT INTO logs VALUES (1)  ;  ";
+        let statements = Project::split_sql_statements(sql);
+        assert_eq!(statements.len(), 2);
+    }
+
+    #[test]
+    fn test_split_sql_statements_empty() {
+        let sql = "";
+        let statements = Project::split_sql_statements(sql);
+        assert_eq!(statements.len(), 0);
+    }
+
+    #[test]
+    fn test_validate_version_sequence_empty() {
+        let project = Project {
+            config: create_test_config(),
+            config_dir: PathBuf::new(),
+            migrations: vec![],
+            queries: vec![],
+        };
+        assert!(project.validate_version_sequence().is_ok());
+    }
+
+    #[test]
+    fn test_validate_version_sequence_valid() {
+        let project = Project {
+            config: create_test_config(),
+            config_dir: PathBuf::new(),
+            migrations: vec![
+                Migration {
+                    version: 0,
+                    name: "init".to_string(),
+                    statements: vec![],
+                    file_path: PathBuf::from("0_init.sql"),
+                },
+                Migration {
+                    version: 1,
+                    name: "add_users".to_string(),
+                    statements: vec![],
+                    file_path: PathBuf::from("1_add_users.sql"),
+                },
+                Migration {
+                    version: 2,
+                    name: "add_posts".to_string(),
+                    statements: vec![],
+                    file_path: PathBuf::from("2_add_posts.sql"),
+                },
+            ],
+            queries: vec![],
+        };
+        assert!(project.validate_version_sequence().is_ok());
+    }
+
+    #[test]
+    fn test_validate_version_sequence_invalid_start() {
+        let project = Project {
+            config: create_test_config(),
+            config_dir: PathBuf::new(),
+            migrations: vec![Migration {
+                version: 1,
+                name: "init".to_string(),
+                statements: vec![],
+                file_path: PathBuf::from("1_init.sql"),
+            }],
+            queries: vec![],
+        };
+        let result = project.validate_version_sequence();
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("First migration version must be 0")
+        );
+    }
+
+    #[test]
+    fn test_validate_version_sequence_duplicate() {
+        let project = Project {
+            config: create_test_config(),
+            config_dir: PathBuf::new(),
+            migrations: vec![
+                Migration {
+                    version: 0,
+                    name: "init".to_string(),
+                    statements: vec![],
+                    file_path: PathBuf::from("0_init.sql"),
+                },
+                Migration {
+                    version: 0,
+                    name: "duplicate".to_string(),
+                    statements: vec![],
+                    file_path: PathBuf::from("0_duplicate.sql"),
+                },
+            ],
+            queries: vec![],
+        };
+        let result = project.validate_version_sequence();
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Duplicate migration version")
+        );
+    }
+
+    #[test]
+    fn test_validate_version_sequence_gap() {
+        let project = Project {
+            config: create_test_config(),
+            config_dir: PathBuf::new(),
+            migrations: vec![
+                Migration {
+                    version: 0,
+                    name: "init".to_string(),
+                    statements: vec![],
+                    file_path: PathBuf::from("0_init.sql"),
+                },
+                Migration {
+                    version: 2,
+                    name: "skip".to_string(),
+                    statements: vec![],
+                    file_path: PathBuf::from("2_skip.sql"),
+                },
+            ],
+            queries: vec![],
+        };
+        let result = project.validate_version_sequence();
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Migration version gap detected")
+        );
+    }
+
+    #[test]
+    fn test_parse_queries_from_content_single() {
+        let content = "-- name: get_user\nSELECT * FROM users WHERE id = 1";
+        let path = Path::new("test.sql");
+        let package_path = vec![];
+
+        let result = Project::parse_queries_from_content(content, package_path.clone(), path);
+        assert!(result.is_ok());
+
+        let queries = result.unwrap();
+        assert_eq!(queries.len(), 1);
+        assert_eq!(queries[0].name, "get_user");
+        assert!(queries[0].sql.contains("SELECT"));
+        assert_eq!(queries[0].package_path, package_path);
+    }
+
+    #[test]
+    fn test_parse_queries_from_content_multiple() {
+        let content = r#"
+-- name: get_user
+SELECT * FROM users WHERE id = 1;
+
+-- name: list_users
+SELECT * FROM users;
+"#;
+        let path = Path::new("test.sql");
+        let package_path = vec!["queries".to_string()];
+
+        let result = Project::parse_queries_from_content(content, package_path.clone(), path);
+        assert!(result.is_ok());
+
+        let queries = result.unwrap();
+        assert_eq!(queries.len(), 2);
+        assert_eq!(queries[0].name, "get_user");
+        assert_eq!(queries[1].name, "list_users");
+        assert_eq!(queries[0].package_path, package_path);
+        assert_eq!(queries[1].package_path, package_path);
+    }
+
+    #[test]
+    fn test_parse_queries_from_content_mismatch() {
+        let content = "-- name: get_user\nSELECT * FROM users; SELECT * FROM posts;";
+        let path = Path::new("test.sql");
+        let package_path = vec![];
+
+        let result = Project::parse_queries_from_content(content, package_path, path);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Mismatch between query names")
+        );
+    }
+
+    #[test]
+    fn test_parse_queries_from_content_invalid_name() {
+        let content = "-- name: InvalidName\nSELECT * FROM users";
+        let path = Path::new("test.sql");
+        let package_path = vec![];
+
+        let result = Project::parse_queries_from_content(content, package_path, path);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("must be lowercase")
+        );
+    }
+}
