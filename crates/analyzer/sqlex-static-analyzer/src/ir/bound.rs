@@ -1,18 +1,28 @@
-use std::sync::Arc;
-
+use sqlex_common::types::DataType;
 use sqlparser::ast::{BinaryOperator, UnaryOperator, Value};
 
-use crate::ir::{
-    arena::Arena,
-    ids::{ColumnId, ExprId, TableId},
+use crate::{
+    analysis::functions::FunctionKind,
+    ir::{
+        arena::Arena,
+        ids::{ColumnId, ExprId, TableId},
+    },
 };
 
+/// Top-level bound statement that owns all arenas.
+/// Subqueries share these arenas via IDs rather than owning separate copies.
 #[derive(Debug, Clone)]
-pub struct BoundQuery {
-    pub ctes: Vec<Arc<BoundCte>>,
+pub struct BoundStatement {
     pub tables: Arena<BoundTable, TableId>,
     pub columns: Arena<BoundColumn, ColumnId>,
     pub exprs: Arena<BoundExpr, ExprId>,
+    pub ctes: Vec<BoundCte>,
+    pub query: BoundQueryBody,
+}
+
+/// A query body without its own arenas — references the top-level BoundStatement arenas.
+#[derive(Debug, Clone)]
+pub struct BoundQueryBody {
     pub body: BoundSetExpr,
     pub order_by: Vec<BoundOrderBy>,
     pub limit: Option<ExprId>,
@@ -23,7 +33,7 @@ pub struct BoundQuery {
 pub struct BoundCte {
     pub name: String,
     pub columns: Vec<String>,
-    pub query: Box<BoundQuery>,
+    pub query: BoundQueryBody,
     pub recursive: bool,
 }
 
@@ -36,11 +46,10 @@ pub enum BoundSetExpr {
         left: Box<BoundSetExpr>,
         right: Box<BoundSetExpr>,
     },
-    Query(Box<BoundQuery>),
+    Query(Box<BoundQueryBody>),
     Values {
         rows: Vec<Vec<ExprId>>,
     },
-    Unsupported,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -113,13 +122,15 @@ pub struct BoundTable {
 pub enum BoundTableSource {
     Table { name: String },
     Cte { name: String },
-    Derived { query: Box<BoundQuery> },
+    Derived { query: BoundQueryBody },
 }
 
 #[derive(Debug, Clone)]
 pub struct BoundColumn {
     pub table: TableId,
     pub name: String,
+    pub data_type: Option<DataType>,
+    pub nullable: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -141,6 +152,7 @@ pub enum BoundExpr {
     },
     Function {
         name: String,
+        kind: FunctionKind,
         args: Vec<ExprId>,
         distinct: bool,
         over: bool,
@@ -158,9 +170,8 @@ pub enum BoundExpr {
     },
     InSubquery {
         expr: ExprId,
-        subquery: Box<BoundQuery>,
+        subquery: BoundQueryBody,
         negated: bool,
     },
-    Subquery(Box<BoundQuery>),
-    Unsupported,
+    Subquery(BoundQueryBody),
 }

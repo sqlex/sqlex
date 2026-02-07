@@ -147,23 +147,24 @@ impl<'a> Binder<'a> {
                 }
 
                 if let Some(cte_binding) = self.cte_scope.get(&table_name) {
+                    let columns = cte_binding.columns.clone();
                     let (table_id, scope) = self.register_table(
                         BoundTable {
                             source: BoundTableSource::Cte {
                                 name: table_name.clone(),
                             },
                             alias: alias_name.clone(),
-                            columns: cte_binding.columns.clone(),
+                            columns,
                         },
                         alias_name.unwrap_or_else(|| table_name.clone()),
+                        None,
                     );
                     return (table_id, scope);
                 }
 
-                let (table_id, scope) = if let Some(table_def) = self.catalog.get_table(&table_name)
-                {
+                if let Some(table_def) = self.catalog.get_table(&table_name) {
                     let column_names = table_def.columns.iter().map(|c| c.name.clone()).collect();
-                    self.register_table(
+                    let (table_id, scope) = self.register_table(
                         BoundTable {
                             source: BoundTableSource::Table {
                                 name: table_name.clone(),
@@ -172,11 +173,13 @@ impl<'a> Binder<'a> {
                             columns: column_names,
                         },
                         alias_name.unwrap_or_else(|| table_name.clone()),
-                    )
+                        Some(table_def),
+                    );
+                    (table_id, scope)
                 } else {
                     self.diagnostics
                         .push(Diagnostic::unknown_table(&table_name));
-                    self.register_table(
+                    let (table_id, scope) = self.register_table(
                         BoundTable {
                             source: BoundTableSource::Table {
                                 name: table_name.clone(),
@@ -185,79 +188,14 @@ impl<'a> Binder<'a> {
                             columns: Vec::new(),
                         },
                         alias_name.unwrap_or(table_name),
-                    )
-                };
-
-                (table_id, scope)
+                        None,
+                    );
+                    (table_id, scope)
+                }
             },
             TableFactor::Derived {
                 subquery, alias, ..
-            } => {
-                let alias_name = alias.as_ref().map(|a| a.name.value.clone());
-                let Some(alias_name) = alias_name.clone() else {
-                    self.diagnostics
-                        .push(Diagnostic::derived_table_requires_alias());
-                    let bound_query = self.bind_subquery(subquery);
-                    let (table_id, scope) = self.register_table(
-                        BoundTable {
-                            source: BoundTableSource::Derived {
-                                query: Box::new(bound_query),
-                            },
-                            alias: None,
-                            columns: Vec::new(),
-                        },
-                        "<derived>".to_string(),
-                    );
-                    return (table_id, scope);
-                };
-
-                if let Some(alias) = alias.as_ref() {
-                    if keywords::is_reserved_identifier(self.dialect, &alias.name) {
-                        self.diagnostics.push(Diagnostic::invalid_statement(format!(
-                            "Table alias {alias} is a reserved keyword in {dialect}; quote it to use as an identifier",
-                            dialect = self.dialect
-                        )));
-                    }
-                    for column_alias in &alias.columns {
-                        if keywords::is_reserved_identifier(self.dialect, &column_alias.name) {
-                            self.diagnostics.push(Diagnostic::invalid_statement(format!(
-                                "Derived column alias {alias} is a reserved keyword in {dialect}; quote it to use as an identifier",
-                                alias = column_alias.name,
-                                dialect = self.dialect
-                            )));
-                        }
-                    }
-                }
-
-                let bound_query = self.bind_subquery(subquery);
-                let column_aliases = alias
-                    .as_ref()
-                    .map(|a| {
-                        a.columns
-                            .iter()
-                            .map(|c| c.name.value.clone())
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
-                let column_names = if !column_aliases.is_empty() {
-                    column_aliases
-                } else {
-                    self.output_names_for_query(&bound_query)
-                };
-
-                let (table_id, scope) = self.register_table(
-                    BoundTable {
-                        source: BoundTableSource::Derived {
-                            query: Box::new(bound_query),
-                        },
-                        alias: Some(alias_name.clone()),
-                        columns: column_names,
-                    },
-                    alias_name,
-                );
-
-                (table_id, scope)
-            },
+            } => self.bind_derived_table(subquery, alias.as_ref()),
             _ => {
                 self.diagnostics
                     .push(Diagnostic::unsupported_feature("table factor in binder"));
@@ -271,6 +209,7 @@ impl<'a> Binder<'a> {
                         columns: Vec::new(),
                     },
                     "<unknown>".to_string(),
+                    None,
                 );
 
                 (table_id, scope)
@@ -278,19 +217,94 @@ impl<'a> Binder<'a> {
         }
     }
 
+    fn bind_derived_table(
+        &mut self,
+        subquery: &sqlparser::ast::Query,
+        alias: Option<&sqlparser::ast::TableAlias>,
+    ) -> (TableId, BindScope) {
+        let alias_name = alias.map(|a| a.name.value.clone());
+        let Some(alias_str) = alias_name.clone() else {
+            self.diagnostics
+                .push(Diagnostic::derived_table_requires_alias());
+            let bound_query = self.bind_query_body(subquery);
+            let (table_id, scope) = self.register_table(
+                BoundTable {
+                    source: BoundTableSource::Derived { query: bound_query },
+                    alias: None,
+                    columns: Vec::new(),
+                },
+                "<derived>".to_string(),
+                None,
+            );
+            return (table_id, scope);
+        };
+
+        if let Some(a) = alias {
+            if keywords::is_reserved_identifier(self.dialect, &a.name) {
+                self.diagnostics.push(Diagnostic::invalid_statement(format!(
+                    "Table alias {a} is a reserved keyword in {dialect}; quote it to use as an identifier",
+                    dialect = self.dialect
+                )));
+            }
+            for column_alias in &a.columns {
+                if keywords::is_reserved_identifier(self.dialect, &column_alias.name) {
+                    self.diagnostics.push(Diagnostic::invalid_statement(format!(
+                        "Derived column alias {alias} is a reserved keyword in {dialect}; quote it to use as an identifier",
+                        alias = column_alias.name,
+                        dialect = self.dialect
+                    )));
+                }
+            }
+        }
+
+        let bound_query = self.bind_query_body(subquery);
+        let column_aliases = alias
+            .map(|a| {
+                a.columns
+                    .iter()
+                    .map(|c| c.name.value.clone())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let column_names = if !column_aliases.is_empty() {
+            column_aliases
+        } else {
+            self.output_names_for_query_body(&bound_query)
+        };
+
+        let (table_id, scope) = self.register_table(
+            BoundTable {
+                source: BoundTableSource::Derived { query: bound_query },
+                alias: Some(alias_str.clone()),
+                columns: column_names,
+            },
+            alias_str,
+            None,
+        );
+
+        (table_id, scope)
+    }
+
     pub(super) fn register_table(
         &mut self,
         table: BoundTable,
         alias: String,
+        table_def: Option<&crate::catalog::types::TableDef>,
     ) -> (TableId, BindScope) {
         let column_names = table.columns.clone();
         let table_id = self.tables.alloc(table);
         let mut scope = BindScope::default();
         let mut cols = Vec::new();
         for col_name in &column_names {
+            let (data_type, nullable) = table_def
+                .and_then(|td| td.get_column(col_name))
+                .map(|cd| (Some(cd.data_type.clone()), Some(cd.nullable)))
+                .unwrap_or((None, None));
             let col_id = self.columns.alloc(BoundColumn {
                 table: table_id,
                 name: col_name.clone(),
+                data_type,
+                nullable,
             });
             cols.push(ScopeColumn {
                 name: col_name.clone(),

@@ -4,19 +4,16 @@ use sqlex_common::dialect::Dialect;
 
 use crate::{
     analysis::diagnostics::Diagnostic,
-    catalog::Catalog,
-    ir::{bound::BoundQuery, output::OutputSchema},
+    ir::{bound::BoundStatement, ids::ExprId, output::OutputSchema},
 };
 
 mod cardinality;
 mod functions;
-mod grouping;
 mod inference;
-mod lineage;
 mod schema;
 
 #[derive(Debug, Clone)]
-pub(super) struct TypeInfo {
+pub(crate) struct TypeInfo {
     data_type: sqlex_common::types::DataType,
     nullable: bool,
 }
@@ -26,26 +23,33 @@ pub struct InferResult {
     pub diagnostics: Vec<Diagnostic>,
 }
 
-pub(super) struct Inferrer<'a> {
-    #[allow(dead_code)]
-    dialect: Dialect,
-    catalog: &'a Catalog,
-    diagnostics: Vec<Diagnostic>,
-    schema_cache: HashMap<usize, OutputSchema>,
+pub(crate) struct Inferrer {
+    pub(super) dialect: Dialect,
+    pub(super) diagnostics: Vec<Diagnostic>,
+    schema_cache: HashMap<SchemaCacheKey, OutputSchema>,
 }
 
-impl<'a> Inferrer<'a> {
-    pub(super) fn new(dialect: Dialect, catalog: &'a Catalog) -> Self {
+/// Cache key using arena indices to avoid raw pointer issues.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[allow(dead_code)]
+enum SchemaCacheKey {
+    TopLevel,
+    Cte(usize),
+    Derived(crate::ir::ids::TableId),
+    Subquery(ExprId),
+}
+
+impl Inferrer {
+    pub(crate) fn new(dialect: Dialect) -> Self {
         Self {
             dialect,
-            catalog,
             diagnostics: Vec::new(),
             schema_cache: HashMap::new(),
         }
     }
 
-    pub(super) fn infer(mut self, bound: &BoundQuery) -> InferResult {
-        let output = Some(self.output_schema_for_query(bound));
+    pub(crate) fn infer(mut self, stmt: &BoundStatement) -> InferResult {
+        let output = Some(self.output_schema_for_statement(stmt));
         InferResult {
             output,
             diagnostics: self.diagnostics,
@@ -54,15 +58,15 @@ impl<'a> Inferrer<'a> {
 }
 
 pub(super) struct QueryTypeState<'a> {
-    query: &'a BoundQuery,
-    types: HashMap<crate::ir::ids::ExprId, TypeInfo>,
-    nullable_tables: HashSet<crate::ir::ids::TableId>,
+    pub(super) stmt: &'a BoundStatement,
+    pub(super) types: HashMap<ExprId, TypeInfo>,
+    pub(super) nullable_tables: HashSet<crate::ir::ids::TableId>,
 }
 
 impl<'a> QueryTypeState<'a> {
-    fn new(query: &'a BoundQuery) -> Self {
+    fn new(stmt: &'a BoundStatement) -> Self {
         Self {
-            query,
+            stmt,
             types: HashMap::new(),
             nullable_tables: HashSet::new(),
         }

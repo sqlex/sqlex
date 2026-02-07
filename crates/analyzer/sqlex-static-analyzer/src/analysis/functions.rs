@@ -34,7 +34,7 @@ impl FunctionMeta {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum FunctionKind {
+pub enum FunctionKind {
     Scalar(ScalarFunction),
     Aggregate(AggregateFunction),
     Window(WindowFunction),
@@ -71,7 +71,7 @@ impl FunctionArity {
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum ScalarFunction {
+pub enum ScalarFunction {
     // String
     Concat,
     ConcatWs,
@@ -348,7 +348,7 @@ impl ScalarFunction {
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum AggregateFunction {
+pub enum AggregateFunction {
     Count,
     Sum,
     Avg,
@@ -448,7 +448,7 @@ impl AggregateFunction {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum WindowFunction {
+pub enum WindowFunction {
     Aggregate(AggregateFunction),
     RowNumber,
     Rank,

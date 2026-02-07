@@ -4,6 +4,7 @@ use crate::{
     analysis::{
         bind::{Binder, scope::BindScope},
         diagnostics::{Diagnostic, DiagnosticCode},
+        functions::{self, FunctionKind},
     },
     ir::{bound::BoundExpr, ids::ColumnId},
 };
@@ -16,7 +17,7 @@ impl<'a> Binder<'a> {
                     Ok(col_id) => self.exprs.alloc(BoundExpr::Column(col_id)),
                     Err(diag) => {
                         self.diagnostics.push(diag.with_context(expr.to_string()));
-                        self.exprs.alloc(BoundExpr::Unsupported)
+                        self.exprs.alloc(BoundExpr::Literal(Value::Null))
                     },
                 }
             },
@@ -28,7 +29,7 @@ impl<'a> Binder<'a> {
                         Ok(col_id) => self.exprs.alloc(BoundExpr::Column(col_id)),
                         Err(diag) => {
                             self.diagnostics.push(diag.with_context(expr.to_string()));
-                            self.exprs.alloc(BoundExpr::Unsupported)
+                            self.exprs.alloc(BoundExpr::Literal(Value::Null))
                         },
                     }
                 } else {
@@ -36,7 +37,7 @@ impl<'a> Binder<'a> {
                         Diagnostic::unsupported_feature("Deep compound identifiers")
                             .with_context(expr.to_string()),
                     );
-                    self.exprs.alloc(BoundExpr::Unsupported)
+                    self.exprs.alloc(BoundExpr::Literal(Value::Null))
                 }
             },
             Expr::Value(value) => self.exprs.alloc(BoundExpr::Literal(value.clone())),
@@ -71,49 +72,7 @@ impl<'a> Binder<'a> {
                     negated: true,
                 })
             },
-            Expr::Function(func) => {
-                let name = func.name.to_string();
-                let mut args = Vec::new();
-                let mut distinct = false;
-                let over = func.over.is_some();
-
-                if let FunctionArguments::List(list) = &func.args {
-                    distinct = list.duplicate_treatment.is_some();
-                    for arg in &list.args {
-                        match arg {
-                            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => {
-                                args.push(self.bind_expr(expr, scope));
-                            },
-                            FunctionArg::Named {
-                                arg: FunctionArgExpr::Expr(expr),
-                                ..
-                            } => {
-                                args.push(self.bind_expr(expr, scope));
-                            },
-                            FunctionArg::Unnamed(FunctionArgExpr::Wildcard) => {
-                                let expr_id = self.exprs.alloc(BoundExpr::Literal(Value::Number(
-                                    "1".to_string(),
-                                    false,
-                                )));
-                                args.push(expr_id);
-                            },
-                            _ => {
-                                self.diagnostics.push(
-                                    Diagnostic::unsupported_feature("function argument")
-                                        .with_context(expr.to_string()),
-                                );
-                            },
-                        }
-                    }
-                }
-
-                self.exprs.alloc(BoundExpr::Function {
-                    name,
-                    args,
-                    distinct,
-                    over,
-                })
-            },
+            Expr::Function(func) => self.bind_function(func, expr, scope),
             Expr::Case {
                 operand,
                 conditions,
@@ -146,8 +105,8 @@ impl<'a> Binder<'a> {
                 })
             },
             Expr::Subquery(query) => {
-                let bound = self.bind_correlated_subquery(query, scope);
-                self.exprs.alloc(BoundExpr::Subquery(Box::new(bound)))
+                let bound = self.bind_correlated_subquery_body(query, scope);
+                self.exprs.alloc(BoundExpr::Subquery(bound))
             },
             Expr::InList {
                 expr,
@@ -168,10 +127,10 @@ impl<'a> Binder<'a> {
                 negated,
             } => {
                 let expr_id = self.bind_expr(expr, scope);
-                let bound_subquery = self.bind_correlated_subquery(subquery, scope);
+                let bound_subquery = self.bind_correlated_subquery_body(subquery, scope);
                 self.exprs.alloc(BoundExpr::InSubquery {
                     expr: expr_id,
-                    subquery: Box::new(bound_subquery),
+                    subquery: bound_subquery,
                     negated: *negated,
                 })
             },
@@ -180,9 +139,84 @@ impl<'a> Binder<'a> {
                     Diagnostic::unsupported_feature("expression in binder")
                         .with_context(expr.to_string()),
                 );
-                self.exprs.alloc(BoundExpr::Unsupported)
+                self.exprs.alloc(BoundExpr::Literal(Value::Null))
             },
         }
+    }
+
+    fn bind_function(
+        &mut self,
+        func: &sqlparser::ast::Function,
+        expr: &Expr,
+        scope: &BindScope,
+    ) -> crate::ir::ids::ExprId {
+        let name = func.name.to_string();
+        let upper = name.to_uppercase();
+        let meta = functions::resolve_function(&upper);
+
+        let mut args = Vec::new();
+        let mut distinct = false;
+        let over = func.over.is_some();
+
+        if let FunctionArguments::List(list) = &func.args {
+            distinct = list.duplicate_treatment.is_some();
+            for arg in &list.args {
+                match arg {
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(e)) => {
+                        args.push(self.bind_expr(e, scope));
+                    },
+                    FunctionArg::Named {
+                        arg: FunctionArgExpr::Expr(e),
+                        ..
+                    } => {
+                        args.push(self.bind_expr(e, scope));
+                    },
+                    FunctionArg::Unnamed(FunctionArgExpr::Wildcard) => {
+                        let expr_id = self
+                            .exprs
+                            .alloc(BoundExpr::Literal(Value::Number("1".to_string(), false)));
+                        args.push(expr_id);
+                    },
+                    _ => {
+                        self.diagnostics.push(
+                            Diagnostic::unsupported_feature("function argument")
+                                .with_context(expr.to_string()),
+                        );
+                    },
+                }
+            }
+        }
+
+        // Validate function at bind time
+        if matches!(meta.kind, FunctionKind::Unknown) {
+            self.diagnostics.push(Diagnostic::unknown_function(&upper));
+        }
+        if meta.requires_over && !over {
+            self.diagnostics
+                .push(Diagnostic::window_requires_over(&upper));
+        }
+        if over && !meta.allows_over {
+            self.diagnostics.push(Diagnostic::over_not_allowed(&upper));
+        }
+        if distinct && !meta.accepts_distinct {
+            self.diagnostics
+                .push(Diagnostic::distinct_not_allowed(&upper));
+        }
+        if !meta.arity.matches(args.len()) {
+            self.diagnostics.push(Diagnostic::function_arity_mismatch(
+                &upper,
+                &meta.arity.describe(),
+                args.len(),
+            ));
+        }
+
+        self.exprs.alloc(BoundExpr::Function {
+            name,
+            kind: meta.kind,
+            args,
+            distinct,
+            over,
+        })
     }
 
     fn resolve_column_with_outer(

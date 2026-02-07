@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem, sync::Arc};
+use std::collections::HashMap;
 
 use sqlex_common::dialect::Dialect;
 use sqlparser::{
@@ -16,8 +16,8 @@ use crate::{
     ir::{
         arena::Arena,
         bound::{
-            BoundColumn, BoundCte, BoundExpr, BoundOrderBy, BoundProjection, BoundQuery,
-            BoundSelect, BoundSetExpr, BoundSetOp, BoundTable,
+            BoundColumn, BoundExpr, BoundOrderBy, BoundProjection, BoundQueryBody, BoundSelect,
+            BoundSetExpr, BoundSetOp, BoundStatement, BoundTable,
         },
         ids::{ColumnId, ExprId, TableId},
     },
@@ -27,28 +27,36 @@ mod cte;
 mod expr;
 mod from;
 mod names;
-mod scope;
+pub(crate) mod scope;
 
 pub struct BindResult {
-    pub bound: Option<BoundQuery>,
+    pub bound: Option<BoundStatement>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
 pub(crate) struct Binder<'a> {
-    dialect: Dialect,
-    catalog: &'a Catalog,
-    diagnostics: Vec<Diagnostic>,
-    cte_scope: HashMap<String, CteBinding>,
-    cte_defs: Vec<Arc<BoundCte>>,
-    outer_scopes: Vec<BindScope>,
-    tables: Arena<BoundTable, TableId>,
-    columns: Arena<BoundColumn, ColumnId>,
-    exprs: Arena<BoundExpr, ExprId>,
+    pub(super) dialect: Dialect,
+    pub(super) catalog: &'a Catalog,
+    pub(super) diagnostics: Vec<Diagnostic>,
+    pub(super) cte_scope: HashMap<String, CteBinding>,
+    pub(super) cte_defs: Vec<CteDefEntry>,
+    pub(super) outer_scopes: Vec<BindScope>,
+    pub(super) tables: Arena<BoundTable, TableId>,
+    pub(super) columns: Arena<BoundColumn, ColumnId>,
+    pub(super) exprs: Arena<BoundExpr, ExprId>,
 }
 
 #[derive(Debug, Clone)]
-struct CteBinding {
-    columns: Vec<String>,
+pub(super) struct CteBinding {
+    pub(super) columns: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct CteDefEntry {
+    pub(super) name: String,
+    pub(super) columns: Vec<String>,
+    pub(super) query: BoundQueryBody,
+    pub(super) recursive: bool,
 }
 
 impl<'a> Binder<'a> {
@@ -67,14 +75,29 @@ impl<'a> Binder<'a> {
     }
 
     pub fn bind(mut self, sql: &str) -> BindResult {
-        let bound = self.bind_sql(sql);
-        BindResult {
-            bound,
-            diagnostics: self.diagnostics,
+        let result = self.bind_sql(sql);
+        match result {
+            Some((ctes, query_body)) => {
+                let stmt = BoundStatement {
+                    tables: self.tables,
+                    columns: self.columns,
+                    exprs: self.exprs,
+                    ctes,
+                    query: query_body,
+                };
+                BindResult {
+                    bound: Some(stmt),
+                    diagnostics: self.diagnostics,
+                }
+            },
+            None => BindResult {
+                bound: None,
+                diagnostics: self.diagnostics,
+            },
         }
     }
 
-    fn bind_sql(&mut self, sql: &str) -> Option<BoundQuery> {
+    fn bind_sql(&mut self, sql: &str) -> Option<(Vec<crate::ir::bound::BoundCte>, BoundQueryBody)> {
         let dialect: Box<dyn SqlParserDialect> = match self.dialect {
             Dialect::Postgres => Box::new(PostgreSqlDialect {}),
             Dialect::MySQL => Box::new(MySqlDialect {}),
@@ -106,8 +129,11 @@ impl<'a> Binder<'a> {
         }
     }
 
-    fn bind_query(&mut self, query: &Query) -> Option<BoundQuery> {
-        let ctes = self.bind_ctes(query.with.as_ref());
+    pub(super) fn bind_query(
+        &mut self,
+        query: &Query,
+    ) -> Option<(Vec<crate::ir::bound::BoundCte>, BoundQueryBody)> {
+        let cte_entries = self.bind_ctes(query.with.as_ref());
 
         let (body, order_scope, alias_map, projection_exprs) = match &*query.body {
             SetExpr::Select(select) => {
@@ -149,22 +175,42 @@ impl<'a> Binder<'a> {
             .as_ref()
             .map(|o| self.bind_expr(&o.value, &BindScope::default()));
 
-        Some(BoundQuery {
-            ctes,
-            tables: mem::take(&mut self.tables),
-            columns: mem::take(&mut self.columns),
-            exprs: mem::take(&mut self.exprs),
+        let ctes = cte_entries
+            .into_iter()
+            .map(|e| crate::ir::bound::BoundCte {
+                name: e.name,
+                columns: e.columns,
+                query: e.query,
+                recursive: e.recursive,
+            })
+            .collect();
+
+        let query_body = BoundQueryBody {
             body,
             order_by,
             limit,
             offset,
-        })
+        };
+
+        Some((ctes, query_body))
     }
 
-    fn bind_set_expr(&mut self, set_expr: &SetExpr) -> BoundSetExpr {
+    pub(super) fn bind_query_body(&mut self, query: &Query) -> BoundQueryBody {
+        match self.bind_query(query) {
+            Some((_ctes, body)) => body,
+            None => BoundQueryBody {
+                body: BoundSetExpr::Values { rows: Vec::new() },
+                order_by: Vec::new(),
+                limit: None,
+                offset: None,
+            },
+        }
+    }
+
+    pub(super) fn bind_set_expr(&mut self, set_expr: &SetExpr) -> BoundSetExpr {
         match set_expr {
             SetExpr::Select(select) => BoundSetExpr::Select(self.bind_select(select).0),
-            SetExpr::Query(query) => BoundSetExpr::Query(Box::new(self.bind_subquery(query))),
+            SetExpr::Query(query) => BoundSetExpr::Query(Box::new(self.bind_query_body(query))),
             SetExpr::SetOperation {
                 op,
                 left,
@@ -197,7 +243,7 @@ impl<'a> Binder<'a> {
             _ => {
                 self.diagnostics
                     .push(Diagnostic::unsupported_feature("set expression in binder"));
-                BoundSetExpr::Unsupported
+                BoundSetExpr::Values { rows: Vec::new() }
             },
         }
     }

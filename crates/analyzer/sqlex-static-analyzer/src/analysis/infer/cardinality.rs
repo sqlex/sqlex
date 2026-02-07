@@ -1,9 +1,9 @@
 use sqlparser::ast::Value;
 
 use crate::{
-    analysis::infer::{Inferrer, QueryTypeState},
+    analysis::{functions::FunctionKind, infer::Inferrer},
     ir::{
-        bound::{BoundExpr, BoundQuery, BoundSelect, BoundSetExpr},
+        bound::{BoundExpr, BoundQueryBody, BoundSelect, BoundSetExpr, BoundStatement},
         ids::ExprId,
     },
 };
@@ -49,9 +49,13 @@ struct QueryFacts {
     offset: Option<u64>,
 }
 
-impl<'a> Inferrer<'a> {
-    pub(super) fn query_cardinality(&self, query: &BoundQuery) -> RowCardinality {
-        let facts = self.query_facts(query);
+impl Inferrer {
+    pub(super) fn query_body_cardinality(
+        &self,
+        stmt: &BoundStatement,
+        query: &BoundQueryBody,
+    ) -> RowCardinality {
+        let facts = self.query_body_facts(stmt, query);
 
         let mut cardinality = match &query.body {
             BoundSetExpr::Select(_) => {
@@ -68,8 +72,7 @@ impl<'a> Inferrer<'a> {
                 None => RowCardinality::Unknown,
             },
             BoundSetExpr::SetOperation { .. } => RowCardinality::Unknown,
-            BoundSetExpr::Query(inner) => self.query_cardinality(inner),
-            BoundSetExpr::Unsupported => RowCardinality::Unknown,
+            BoundSetExpr::Query(inner) => self.query_body_cardinality(stmt, inner),
         };
 
         if let Some(limit) = facts.limit {
@@ -89,14 +92,14 @@ impl<'a> Inferrer<'a> {
         cardinality
     }
 
-    fn query_facts(&self, query: &BoundQuery) -> QueryFacts {
+    fn query_body_facts(&self, stmt: &BoundStatement, query: &BoundQueryBody) -> QueryFacts {
         let mut facts = QueryFacts {
             limit: query
                 .limit
-                .and_then(|expr_id| self.literal_u64(query, expr_id)),
+                .and_then(|expr_id| Self::literal_u64(stmt, expr_id)),
             offset: query
                 .offset
-                .and_then(|expr_id| self.literal_u64(query, expr_id)),
+                .and_then(|expr_id| Self::literal_u64(stmt, expr_id)),
             ..Default::default()
         };
 
@@ -104,7 +107,7 @@ impl<'a> Inferrer<'a> {
             BoundSetExpr::Select(select) => {
                 facts.has_from = !select.from.is_empty();
                 facts.has_aggregate_without_group_by =
-                    self.select_has_aggregate_without_group_by(query, select);
+                    Self::select_has_aggregate_without_group_by(stmt, select);
             },
             BoundSetExpr::Values { rows } => {
                 facts.values_len = Some(rows.len());
@@ -115,23 +118,18 @@ impl<'a> Inferrer<'a> {
         facts
     }
 
-    fn select_has_aggregate_without_group_by(
-        &self,
-        query: &BoundQuery,
-        select: &BoundSelect,
-    ) -> bool {
+    fn select_has_aggregate_without_group_by(stmt: &BoundStatement, select: &BoundSelect) -> bool {
         if !select.group_by.is_empty() {
             return false;
         }
 
-        let state = QueryTypeState::new(query);
         for proj in &select.projection {
-            if self.analyze_group_expr(&state, proj.expr).has_aggregate {
+            if Self::expr_has_aggregate(stmt, proj.expr) {
                 return true;
             }
         }
         if let Some(having) = select.having {
-            if self.analyze_group_expr(&state, having).has_aggregate {
+            if Self::expr_has_aggregate(stmt, having) {
                 return true;
             }
         }
@@ -139,10 +137,53 @@ impl<'a> Inferrer<'a> {
         false
     }
 
-    fn literal_u64(&self, query: &BoundQuery, expr_id: ExprId) -> Option<u64> {
-        match query.exprs.get(expr_id) {
+    fn literal_u64(stmt: &BoundStatement, expr_id: ExprId) -> Option<u64> {
+        match stmt.exprs.get(expr_id) {
             BoundExpr::Literal(Value::Number(text, _)) => text.parse().ok(),
             _ => None,
+        }
+    }
+
+    fn expr_has_aggregate(stmt: &BoundStatement, expr_id: ExprId) -> bool {
+        match stmt.exprs.get(expr_id) {
+            BoundExpr::Function {
+                kind, args, over, ..
+            } => {
+                let is_aggregate = matches!(kind, FunctionKind::Aggregate(_)) && !over;
+                if is_aggregate {
+                    return true;
+                }
+                args.iter().any(|a| Self::expr_has_aggregate(stmt, *a))
+            },
+            BoundExpr::Binary { left, right, .. } => {
+                Self::expr_has_aggregate(stmt, *left) || Self::expr_has_aggregate(stmt, *right)
+            },
+            BoundExpr::Unary { expr, .. } | BoundExpr::IsNull { expr, .. } => {
+                Self::expr_has_aggregate(stmt, *expr)
+            },
+            BoundExpr::Case {
+                operand,
+                conditions,
+                results,
+                else_result,
+            } => {
+                operand.iter().any(|e| Self::expr_has_aggregate(stmt, *e))
+                    || conditions
+                        .iter()
+                        .any(|e| Self::expr_has_aggregate(stmt, *e))
+                    || results.iter().any(|e| Self::expr_has_aggregate(stmt, *e))
+                    || else_result
+                        .iter()
+                        .any(|e| Self::expr_has_aggregate(stmt, *e))
+            },
+            BoundExpr::InList { expr, list, .. } => {
+                Self::expr_has_aggregate(stmt, *expr)
+                    || list.iter().any(|e| Self::expr_has_aggregate(stmt, *e))
+            },
+            BoundExpr::Column(_)
+            | BoundExpr::Literal(_)
+            | BoundExpr::Subquery(_)
+            | BoundExpr::InSubquery { .. } => false,
         }
     }
 }

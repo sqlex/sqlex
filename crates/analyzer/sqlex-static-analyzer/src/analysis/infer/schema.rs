@@ -1,364 +1,308 @@
-use std::collections::HashSet;
-
 use sqlex_analyzer::extension::DataTypeExt;
 use sqlex_common::types::DataType;
-use sqlparser::ast;
 
 use crate::{
     analysis::{
         diagnostics::Diagnostic,
-        infer::{Inferrer, QueryTypeState},
+        infer::{Inferrer, QueryTypeState, SchemaCacheKey},
     },
     ir::{
         bound::{
-            BoundExpr, BoundJoinCondition, BoundJoinKind, BoundQuery, BoundSelect, BoundSetExpr,
-            BoundSetOp, BoundTableSource,
+            BoundExpr, BoundJoinCondition, BoundJoinKind, BoundQueryBody, BoundSelect,
+            BoundSetExpr, BoundSetOp, BoundStatement,
         },
         ids::{ColumnId, ExprId, TableId},
         output::{OutputColumn, OutputSchema},
     },
 };
 
-impl<'a> Inferrer<'a> {
-    pub(super) fn output_schema_for_query(&mut self, query: &BoundQuery) -> OutputSchema {
-        let key = query as *const BoundQuery as usize;
-        if let Some(schema) = self.schema_cache.get(&key) {
+impl Inferrer {
+    // ------------------------------------------------------------------
+    // Entry points
+    // ------------------------------------------------------------------
+
+    pub(super) fn output_schema_for_statement(&mut self, stmt: &BoundStatement) -> OutputSchema {
+        if let Some(schema) = self.schema_cache.get(&SchemaCacheKey::TopLevel) {
             return schema.clone();
         }
-
-        let mut state = QueryTypeState::new(query);
-        let columns = match &query.body {
-            BoundSetExpr::Select(select) => {
-                self.compute_join_nullability(&mut state, select);
-                self.validate_grouping(&state, select);
-                self.validate_select_contexts(&state, select);
-                self.project_output(&mut state, select)
-            },
-            BoundSetExpr::SetOperation {
-                op, left, right, ..
-            } => {
-                let left_schema = self.output_schema_for_setexpr(query, left);
-                let right_schema = self.output_schema_for_setexpr(query, right);
-                self.merge_set_schema(op, left_schema, right_schema)
-            },
-            BoundSetExpr::Query(subquery) => self.output_schema_for_query(subquery).columns,
-            BoundSetExpr::Values { rows } => self.output_values_schema(&mut state, rows),
-            BoundSetExpr::Unsupported => {
-                self.diagnostics
-                    .push(Diagnostic::unsupported_feature("query body in typecheck"));
-                Vec::new()
-            },
-        };
-
+        let mut state = QueryTypeState::new(stmt);
+        let columns = self.infer_set_expr(&mut state, &stmt.query.body);
         let schema = OutputSchema { columns };
-        self.schema_cache.insert(key, schema.clone());
+        self.schema_cache
+            .insert(SchemaCacheKey::TopLevel, schema.clone());
         schema
     }
 
-    fn output_schema_for_setexpr(
+    pub(super) fn output_schema_for_query_body(
         &mut self,
-        query: &BoundQuery,
-        expr: &BoundSetExpr,
+        state: &mut QueryTypeState<'_>,
+        query: &BoundQueryBody,
     ) -> OutputSchema {
-        match expr {
+        let columns = self.infer_set_expr(state, &query.body);
+        OutputSchema { columns }
+    }
+
+    // ------------------------------------------------------------------
+    // Set expression dispatch
+    // ------------------------------------------------------------------
+
+    fn infer_set_expr(
+        &mut self,
+        state: &mut QueryTypeState<'_>,
+        body: &BoundSetExpr,
+    ) -> Vec<OutputColumn> {
+        match body {
             BoundSetExpr::Select(select) => {
-                let mut state = QueryTypeState::new(query);
-                self.compute_join_nullability(&mut state, select);
-                self.validate_grouping(&state, select);
-                self.validate_select_contexts(&state, select);
-                OutputSchema {
-                    columns: self.project_output(&mut state, select),
-                }
+                self.compute_join_nullability(state, select);
+                self.project_output(state, select)
             },
             BoundSetExpr::SetOperation {
                 op, left, right, ..
             } => {
-                let left_schema = self.output_schema_for_setexpr(query, left);
-                let right_schema = self.output_schema_for_setexpr(query, right);
-                OutputSchema {
-                    columns: self.merge_set_schema(op, left_schema, right_schema),
-                }
+                let left_cols = self.infer_set_expr(state, left);
+                let right_cols = self.infer_set_expr(state, right);
+                self.merge_set_schema(op, left_cols, right_cols)
             },
-            BoundSetExpr::Query(subquery) => self.output_schema_for_query(subquery),
-            BoundSetExpr::Values { rows } => OutputSchema {
-                columns: self.output_values_schema(&mut QueryTypeState::new(query), rows),
-            },
-            BoundSetExpr::Unsupported => OutputSchema {
-                columns: Vec::new(),
-            },
+            BoundSetExpr::Query(inner) => self.infer_set_expr(state, &inner.body),
+            BoundSetExpr::Values { rows } => self.output_values_schema(state, rows),
         }
     }
+
+    // ------------------------------------------------------------------
+    // SELECT projection
+    // ------------------------------------------------------------------
 
     fn project_output(
         &mut self,
         state: &mut QueryTypeState<'_>,
         select: &BoundSelect,
     ) -> Vec<OutputColumn> {
-        let mut cols = Vec::new();
-        for (index, proj) in select.projection.iter().enumerate() {
-            let type_info = self.infer_expr(state, proj.expr);
-            let name = proj
-                .alias
-                .clone()
-                .unwrap_or_else(|| self.infer_expr_name(state, proj.expr, index));
-            let lineage = self.collect_lineage(state, proj.expr);
-
-            cols.push(OutputColumn {
-                name,
-                data_type: type_info.data_type,
-                nullability: type_info.nullable,
-                lineage,
-            });
-        }
-        cols
+        select
+            .projection
+            .iter()
+            .enumerate()
+            .map(|(index, proj)| {
+                let info = self.infer_expr(state, proj.expr);
+                let name = proj
+                    .alias
+                    .clone()
+                    .unwrap_or_else(|| self.infer_expr_name(state, proj.expr, index));
+                OutputColumn {
+                    name,
+                    data_type: info.data_type,
+                    nullability: info.nullable,
+                }
+            })
+            .collect()
     }
+
+    // ------------------------------------------------------------------
+    // VALUES schema
+    // ------------------------------------------------------------------
 
     fn output_values_schema(
         &mut self,
         state: &mut QueryTypeState<'_>,
         rows: &[Vec<ExprId>],
     ) -> Vec<OutputColumn> {
-        let Some(first) = rows.first() else {
+        let Some(first_row) = rows.first() else {
             return Vec::new();
         };
 
-        let col_count = first.len();
-        let mut columns = Vec::new();
+        let col_count = first_row.len();
 
-        for idx in 0..col_count {
-            let mut merged_type: Option<DataType> = None;
-            let mut nullable = false;
-            let mut lineage = Vec::new();
+        // Seed with the first row.
+        let mut types: Vec<Option<DataType>> = Vec::with_capacity(col_count);
+        let mut nullables: Vec<bool> = Vec::with_capacity(col_count);
 
-            for row in rows {
-                if row.len() != col_count {
-                    self.diagnostics
-                        .push(Diagnostic::values_column_count_mismatch());
-                    break;
-                }
-                let expr_id = row[idx];
-                let info = self.infer_expr(state, expr_id);
-                if info.nullable {
-                    nullable = true;
-                }
-                merged_type =
-                    DataType::merge_common_type(self.dialect, merged_type, &info.data_type);
-                let expr_lineage = self.collect_lineage(state, expr_id);
-                lineage = if lineage.is_empty() {
-                    expr_lineage
-                } else {
-                    self.merge_lineage(&lineage, &expr_lineage)
-                };
-            }
-
-            columns.push(OutputColumn {
-                name: format!("column{}", idx + 1),
-                data_type: merged_type.unwrap_or_else(|| {
-                    sqlex_common::types::DataType::Custom("unknown".to_string())
-                }),
-                nullability: nullable,
-                lineage,
-            });
+        for expr_id in first_row {
+            let info = self.infer_expr(state, *expr_id);
+            types.push(Some(info.data_type));
+            nullables.push(info.nullable);
         }
 
-        columns
+        // Merge remaining rows.
+        for row in rows.iter().skip(1) {
+            if row.len() != col_count {
+                self.diagnostics
+                    .push(Diagnostic::values_column_count_mismatch());
+                break;
+            }
+            for (i, expr_id) in row.iter().enumerate() {
+                let info = self.infer_expr(state, *expr_id);
+                types[i] =
+                    DataType::merge_common_type(self.dialect, types[i].take(), &info.data_type);
+                if info.nullable {
+                    nullables[i] = true;
+                }
+            }
+        }
+
+        types
+            .into_iter()
+            .zip(nullables)
+            .enumerate()
+            .map(|(i, (dt, nullable))| OutputColumn {
+                name: format!("column{}", i + 1),
+                data_type: dt.unwrap_or_else(|| DataType::Custom("unknown".to_string())),
+                nullability: nullable,
+            })
+            .collect()
     }
+
+    // ------------------------------------------------------------------
+    // UNION / INTERSECT / EXCEPT
+    // ------------------------------------------------------------------
 
     fn merge_set_schema(
         &mut self,
         _op: &BoundSetOp,
-        left: OutputSchema,
-        right: OutputSchema,
+        left: Vec<OutputColumn>,
+        right: Vec<OutputColumn>,
     ) -> Vec<OutputColumn> {
-        if left.columns.len() != right.columns.len() {
+        if left.len() != right.len() {
             self.diagnostics
                 .push(Diagnostic::set_operation_column_count_mismatch());
+            return left;
         }
 
-        let count = left.columns.len().min(right.columns.len());
-        let mut columns = Vec::new();
-        for idx in 0..count {
-            let left_col = &left.columns[idx];
-            let right_col = &right.columns[idx];
-            let data_type = DataType::merge_common_type(
-                self.dialect,
-                Some(left_col.data_type.clone()),
-                &right_col.data_type,
-            )
-            .unwrap_or(left_col.data_type.clone());
-            let lineage = self.merge_lineage(&left_col.lineage, &right_col.lineage);
-            columns.push(OutputColumn {
-                name: left_col.name.clone(),
-                data_type,
-                nullability: left_col.nullability || right_col.nullability,
-                lineage,
-            });
-        }
-        columns
+        left.into_iter()
+            .zip(right)
+            .map(|(l, r)| {
+                let data_type =
+                    DataType::merge_common_type(self.dialect, Some(l.data_type), &r.data_type)
+                        .unwrap_or_else(|| DataType::Custom("unknown".to_string()));
+                OutputColumn {
+                    name: l.name,
+                    data_type,
+                    nullability: l.nullability || r.nullability,
+                }
+            })
+            .collect()
     }
 
+    // ------------------------------------------------------------------
+    // JOIN nullability
+    // ------------------------------------------------------------------
+
     fn compute_join_nullability(&self, state: &mut QueryTypeState<'_>, select: &BoundSelect) {
-        let mut nullable_tables = HashSet::new();
-
         for from_item in &select.from {
-            let mut left_tables = Vec::new();
-            left_tables.push(from_item.table);
-
             for join in &from_item.joins {
-                let right_table = join.table;
                 match join.kind {
-                    BoundJoinKind::Inner | BoundJoinKind::Cross => {},
                     BoundJoinKind::Left => {
-                        let preserve_right = self.left_join_preserves_right(
-                            state.query,
-                            &left_tables,
-                            right_table,
-                            &join.condition,
-                        );
-                        if !preserve_right {
-                            nullable_tables.insert(right_table);
+                        // Right side becomes nullable unless FK guarantees a match.
+                        if !self.left_join_preserves_right(state, join.table, &join.condition) {
+                            state.nullable_tables.insert(join.table);
                         }
                     },
                     BoundJoinKind::Right => {
-                        let preserve_left = self.right_join_preserves_left(
-                            state.query,
-                            &left_tables,
-                            right_table,
-                            &join.condition,
-                        );
-                        if !preserve_left {
-                            for table in &left_tables {
-                                nullable_tables.insert(*table);
-                            }
+                        // Left side (the driving table) becomes nullable.
+                        if !self.right_join_preserves_left(state, from_item.table, &join.condition)
+                        {
+                            state.nullable_tables.insert(from_item.table);
                         }
                     },
                     BoundJoinKind::Full => {
-                        for table in &left_tables {
-                            nullable_tables.insert(*table);
-                        }
-                        nullable_tables.insert(right_table);
+                        state.nullable_tables.insert(from_item.table);
+                        state.nullable_tables.insert(join.table);
+                    },
+                    BoundJoinKind::Inner | BoundJoinKind::Cross => {
+                        // No additional nullability.
                     },
                 }
-
-                left_tables.push(right_table);
             }
         }
-
-        state.nullable_tables = nullable_tables;
     }
 
     fn left_join_preserves_right(
         &self,
-        query: &BoundQuery,
-        left_tables: &[TableId],
+        state: &QueryTypeState<'_>,
         right_table: TableId,
-        condition: &Option<BoundJoinCondition>,
-    ) -> bool {
-        let right_set = HashSet::from([right_table]);
-        left_tables
-            .iter()
-            .any(|left_table| self.fk_guarantees_match(query, *left_table, &right_set, condition))
-    }
-
-    fn right_join_preserves_left(
-        &self,
-        query: &BoundQuery,
-        left_tables: &[TableId],
-        right_table: TableId,
-        condition: &Option<BoundJoinCondition>,
-    ) -> bool {
-        let left_set: HashSet<TableId> = left_tables.iter().copied().collect();
-        self.fk_guarantees_match(query, right_table, &left_set, condition)
-    }
-
-    fn fk_guarantees_match(
-        &self,
-        query: &BoundQuery,
-        fk_table: TableId,
-        ref_tables: &HashSet<TableId>,
         condition: &Option<BoundJoinCondition>,
     ) -> bool {
         let Some(condition) = condition else {
             return false;
         };
-        let Some((col_a, col_b)) = self.extract_join_columns(query, condition) else {
+        let Some((left_col, right_col)) = Self::extract_join_columns(state.stmt, condition) else {
             return false;
         };
-
-        let col_a_table = query.columns.get(col_a).table;
-        let col_b_table = query.columns.get(col_b).table;
-
-        let (fk_col, ref_col, ref_table) =
-            if col_a_table == fk_table && ref_tables.contains(&col_b_table) {
-                (col_a, col_b, col_b_table)
-            } else if col_b_table == fk_table && ref_tables.contains(&col_a_table) {
-                (col_b, col_a, col_a_table)
-            } else {
-                return false;
-            };
-
-        let fk_table_name = match &query.tables.get(fk_table).source {
-            BoundTableSource::Table { name } => name,
-            _ => return false,
-        };
-        let ref_table_name = match &query.tables.get(ref_table).source {
-            BoundTableSource::Table { name } => name,
-            _ => return false,
-        };
-
-        let fk_col_name = query.columns.get(fk_col).name.clone();
-        let ref_col_name = query.columns.get(ref_col).name.clone();
-
-        let fk_table_def = match self.catalog.get_table(fk_table_name) {
-            Some(def) => def,
-            None => return false,
-        };
-
-        let fk_col_def = match fk_table_def.get_column(&fk_col_name) {
-            Some(def) => def,
-            None => return false,
-        };
-        if fk_col_def.nullable {
+        let right_column = state.stmt.columns.get(right_col);
+        if right_column.table != right_table {
             return false;
         }
+        self.fk_guarantees_match(state, left_col, right_col)
+    }
 
-        fk_table_def.foreign_keys.iter().any(|fk| {
-            fk.ref_table == *ref_table_name
-                && fk.columns.len() == 1
-                && fk.ref_columns.len() == 1
-                && fk.columns[0] == fk_col_name
-                && fk.ref_columns[0] == ref_col_name
-        })
+    fn right_join_preserves_left(
+        &self,
+        state: &QueryTypeState<'_>,
+        left_table: TableId,
+        condition: &Option<BoundJoinCondition>,
+    ) -> bool {
+        let Some(condition) = condition else {
+            return false;
+        };
+        let Some((left_col, right_col)) = Self::extract_join_columns(state.stmt, condition) else {
+            return false;
+        };
+        let left_column = state.stmt.columns.get(left_col);
+        if left_column.table != left_table {
+            return false;
+        }
+        self.fk_guarantees_match(state, right_col, left_col)
+    }
+
+    /// Without a catalog we cannot verify foreign-key relationships,
+    /// so this always returns `false`.
+    fn fk_guarantees_match(
+        &self,
+        _state: &QueryTypeState<'_>,
+        _fk_col: ColumnId,
+        _pk_col: ColumnId,
+    ) -> bool {
+        false
     }
 
     fn extract_join_columns(
-        &self,
-        query: &BoundQuery,
+        stmt: &BoundStatement,
         condition: &BoundJoinCondition,
     ) -> Option<(ColumnId, ColumnId)> {
         match condition {
-            BoundJoinCondition::On(expr_id) => match query.exprs.get(*expr_id) {
-                BoundExpr::Binary { left, op, right } if *op == ast::BinaryOperator::Eq => {
-                    match (query.exprs.get(*left), query.exprs.get(*right)) {
-                        (BoundExpr::Column(left_col), BoundExpr::Column(right_col)) => {
-                            Some((*left_col, *right_col))
-                        },
-                        _ => None,
+            BoundJoinCondition::On(expr_id) => {
+                let expr = stmt.exprs.get(*expr_id);
+                if let BoundExpr::Binary {
+                    left,
+                    op: sqlparser::ast::BinaryOperator::Eq,
+                    right,
+                } = expr
+                {
+                    let left_expr = stmt.exprs.get(*left);
+                    let right_expr = stmt.exprs.get(*right);
+                    if let (BoundExpr::Column(l), BoundExpr::Column(r)) = (left_expr, right_expr) {
+                        return Some((*l, *r));
                     }
-                },
-                _ => None,
+                }
+                None
             },
-            _ => None,
+            BoundJoinCondition::Using(_) | BoundJoinCondition::Natural => None,
         }
     }
 
+    // ------------------------------------------------------------------
+    // Expression name inference
+    // ------------------------------------------------------------------
+
     fn infer_expr_name(&self, state: &QueryTypeState<'_>, expr_id: ExprId, index: usize) -> String {
-        match state.query.exprs.get(expr_id) {
-            crate::ir::bound::BoundExpr::Column(column_id) => {
-                let column = state.query.columns.get(*column_id);
-                column.name.clone()
+        let expr = state.stmt.exprs.get(expr_id);
+        match expr {
+            BoundExpr::Column(column_id) => state.stmt.columns.get(*column_id).name.clone(),
+            BoundExpr::Function { name, .. } => name.to_lowercase(),
+            BoundExpr::Literal(value) => {
+                format!("{value}")
             },
-            _ => format!("col_{}", index),
+            _ => {
+                format!("column{}", index + 1)
+            },
         }
     }
 }

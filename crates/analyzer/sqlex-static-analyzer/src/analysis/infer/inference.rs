@@ -1,6 +1,6 @@
 use sqlex_analyzer::extension::DataTypeExt;
 use sqlex_common::types::DataType;
-use sqlparser::ast::{self, BinaryOperator};
+use sqlparser::ast::{self, BinaryOperator, UnaryOperator};
 
 use crate::{
     analysis::{
@@ -8,12 +8,12 @@ use crate::{
         infer::{Inferrer, QueryTypeState, TypeInfo},
     },
     ir::{
-        bound::{BoundExpr, BoundQuery, BoundTableSource},
+        bound::{BoundExpr, BoundTableSource},
         ids::{ColumnId, ExprId},
     },
 };
 
-impl<'a> Inferrer<'a> {
+impl Inferrer {
     pub(super) fn infer_expr(
         &mut self,
         state: &mut QueryTypeState<'_>,
@@ -23,19 +23,20 @@ impl<'a> Inferrer<'a> {
             return info.clone();
         }
 
-        let info = match state.query.exprs.get(expr_id) {
+        let info = match state.stmt.exprs.get(expr_id) {
             BoundExpr::Column(column_id) => self.infer_column(state, *column_id),
             BoundExpr::Literal(value) => self.infer_literal(value),
             BoundExpr::Binary { left, op, right } => {
                 self.infer_binary_expr(state, *left, op, *right)
             },
-            BoundExpr::Unary { expr, .. } => self.infer_expr(state, *expr),
+            BoundExpr::Unary { op, expr } => self.infer_unary_expr(state, *op, *expr),
             BoundExpr::IsNull { .. } => TypeInfo {
                 data_type: self.boolean_result_type(),
                 nullable: false,
             },
             BoundExpr::Function {
                 name,
+                kind,
                 args,
                 distinct,
                 over,
@@ -49,7 +50,7 @@ impl<'a> Inferrer<'a> {
                     .map(|id| self.infer_expr(state, *id).nullable)
                     .collect::<Vec<_>>();
 
-                self.infer_function(name, &arg_types, &arg_nullables, *distinct, *over)
+                self.infer_function(name, kind, &arg_types, &arg_nullables, *distinct, *over)
             },
             BoundExpr::Case {
                 operand,
@@ -58,10 +59,12 @@ impl<'a> Inferrer<'a> {
                 else_result,
             } => self.infer_case_expr(state, operand, conditions, results, else_result),
             BoundExpr::Subquery(subquery) => {
-                let schema = self.output_schema_for_query(subquery);
+                let schema = self.output_schema_for_query_body(state, subquery);
                 if schema.columns.len() == 1 {
                     let col = &schema.columns[0];
-                    let guaranteed_row = self.query_cardinality(subquery).guarantees_row();
+                    let guaranteed_row = self
+                        .query_body_cardinality(state.stmt, subquery)
+                        .guarantees_row();
                     TypeInfo {
                         data_type: col.data_type.clone(),
                         nullable: if guaranteed_row {
@@ -80,16 +83,11 @@ impl<'a> Inferrer<'a> {
                 }
             },
             BoundExpr::InList { expr, .. } | BoundExpr::InSubquery { expr, .. } => {
-                // IN expressions return boolean type
                 let expr_info = self.infer_expr(state, *expr);
                 TypeInfo {
                     data_type: self.boolean_result_type(),
                     nullable: expr_info.nullable,
                 }
-            },
-            BoundExpr::Unsupported => TypeInfo {
-                data_type: DataType::Custom("unknown".to_string()),
-                nullable: true,
             },
         };
 
@@ -174,6 +172,23 @@ impl<'a> Inferrer<'a> {
         }
     }
 
+    fn infer_unary_expr(
+        &mut self,
+        state: &mut QueryTypeState<'_>,
+        op: UnaryOperator,
+        expr: ExprId,
+    ) -> TypeInfo {
+        let inner = self.infer_expr(state, expr);
+        match op {
+            UnaryOperator::Not => TypeInfo {
+                data_type: self.boolean_result_type(),
+                nullable: inner.nullable,
+            },
+            UnaryOperator::Minus | UnaryOperator::Plus => inner,
+            _ => inner,
+        }
+    }
+
     fn infer_case_expr(
         &mut self,
         state: &mut QueryTypeState<'_>,
@@ -214,97 +229,28 @@ impl<'a> Inferrer<'a> {
         }
     }
 
-    fn boolean_result_type(&self) -> DataType {
-        match self.dialect {
-            sqlex_common::dialect::Dialect::MySQL => DataType::BigInt(false),
-            sqlex_common::dialect::Dialect::Postgres | sqlex_common::dialect::Dialect::SQLite => {
-                DataType::Bool
-            },
-        }
-    }
-
-    fn infer_column(&mut self, state: &QueryTypeState<'_>, column_id: ColumnId) -> TypeInfo {
-        let column = state.query.columns.get(column_id);
-        let table = state.query.tables.get(column.table);
+    fn infer_column(&mut self, state: &mut QueryTypeState<'_>, column_id: ColumnId) -> TypeInfo {
+        let column = state.stmt.columns.get(column_id);
+        let table = state.stmt.tables.get(column.table);
 
         let mut info = match &table.source {
-            BoundTableSource::Table { name } => match self.catalog.get_table(name) {
-                Some(table_def) => match table_def.get_column(&column.name) {
-                    Some(col_def) => TypeInfo {
-                        data_type: col_def.data_type.clone(),
-                        nullable: col_def.nullable,
-                    },
-                    None => {
-                        self.diagnostics.push(Diagnostic::unknown_column(&format!(
-                            "{}.{}",
-                            name, column.name
-                        )));
-                        TypeInfo {
-                            data_type: DataType::Custom("unknown".to_string()),
-                            nullable: true,
-                        }
-                    },
-                },
-                None => {
-                    self.diagnostics.push(Diagnostic::unknown_table(name));
+            BoundTableSource::Table { .. } => {
+                if let (Some(dt), Some(null)) = (&column.data_type, column.nullable) {
+                    TypeInfo {
+                        data_type: dt.clone(),
+                        nullable: null,
+                    }
+                } else {
                     TypeInfo {
                         data_type: DataType::Custom("unknown".to_string()),
                         nullable: true,
                     }
-                },
+                }
             },
             BoundTableSource::Derived { query } => {
                 self.lookup_derived_column(state, query, &column.name)
             },
-            BoundTableSource::Cte { name } => {
-                let cte = state.query.ctes.iter().rev().find(|cte| cte.name == *name);
-                if let Some(cte) = cte {
-                    let schema = self.output_schema_for_query(&cte.query);
-
-                    let mut info = None;
-                    if !cte.columns.is_empty() {
-                        if let Some(index) = cte.columns.iter().position(|c| c == &column.name) {
-                            if let Some(col) = schema.columns.get(index) {
-                                info = Some(TypeInfo {
-                                    data_type: col.data_type.clone(),
-                                    nullable: col.nullability,
-                                });
-                            }
-                        }
-                    }
-
-                    if let Some(info) = info {
-                        info
-                    } else if let Some(col) = schema.columns.iter().find(|c| c.name == column.name)
-                    {
-                        TypeInfo {
-                            data_type: col.data_type.clone(),
-                            nullable: col.nullability,
-                        }
-                    } else {
-                        self.diagnostics
-                            .push(Diagnostic::unknown_column(&column.name));
-                        TypeInfo {
-                            data_type: DataType::Custom("unknown".to_string()),
-                            nullable: true,
-                        }
-                    }
-                } else {
-                    let table = state.query.tables.get(column.table);
-                    if table.columns.iter().any(|c| c == &column.name) {
-                        TypeInfo {
-                            data_type: DataType::Custom("unknown".to_string()),
-                            nullable: true,
-                        }
-                    } else {
-                        self.diagnostics.push(Diagnostic::unknown_cte(name));
-                        TypeInfo {
-                            data_type: DataType::Custom("unknown".to_string()),
-                            nullable: true,
-                        }
-                    }
-                }
-            },
+            BoundTableSource::Cte { name } => self.lookup_cte_column(state, name, &column.name),
         };
 
         if state.nullable_tables.contains(&column.table) {
@@ -316,24 +262,56 @@ impl<'a> Inferrer<'a> {
 
     fn lookup_derived_column(
         &mut self,
-        _state: &QueryTypeState<'_>,
-        query: &BoundQuery,
-        column_name: &str,
+        state: &mut QueryTypeState<'_>,
+        query: &crate::ir::bound::BoundQueryBody,
+        col_name: &str,
     ) -> TypeInfo {
-        let schema = self.output_schema_for_query(query);
-        if let Some(col) = schema.columns.iter().find(|c| c.name == column_name) {
-            TypeInfo {
-                data_type: col.data_type.clone(),
-                nullable: col.nullability,
-            }
-        } else {
-            self.diagnostics
-                .push(Diagnostic::unknown_column(column_name));
-            TypeInfo {
+        let schema = self.output_schema_for_query_body(state, query);
+        schema
+            .columns
+            .iter()
+            .find(|c| c.name.eq_ignore_ascii_case(col_name))
+            .map(|c| TypeInfo {
+                data_type: c.data_type.clone(),
+                nullable: c.nullability,
+            })
+            .unwrap_or_else(|| TypeInfo {
                 data_type: DataType::Custom("unknown".to_string()),
                 nullable: true,
-            }
-        }
+            })
+    }
+
+    fn lookup_cte_column(
+        &mut self,
+        state: &mut QueryTypeState<'_>,
+        cte_name: &str,
+        col_name: &str,
+    ) -> TypeInfo {
+        let cte = state
+            .stmt
+            .ctes
+            .iter()
+            .find(|c| c.name.eq_ignore_ascii_case(cte_name));
+        let Some(cte) = cte else {
+            return TypeInfo {
+                data_type: DataType::Custom("unknown".to_string()),
+                nullable: true,
+            };
+        };
+        let cte_query = cte.query.clone();
+        let schema = self.output_schema_for_query_body(state, &cte_query);
+        schema
+            .columns
+            .iter()
+            .find(|c| c.name.eq_ignore_ascii_case(col_name))
+            .map(|c| TypeInfo {
+                data_type: c.data_type.clone(),
+                nullable: c.nullability,
+            })
+            .unwrap_or_else(|| TypeInfo {
+                data_type: DataType::Custom("unknown".to_string()),
+                nullable: true,
+            })
     }
 
     fn infer_literal(&self, value: &ast::Value) -> TypeInfo {
@@ -375,6 +353,15 @@ impl<'a> Inferrer<'a> {
             _ => TypeInfo {
                 data_type: DataType::Custom("unknown".to_string()),
                 nullable: true,
+            },
+        }
+    }
+
+    fn boolean_result_type(&self) -> DataType {
+        match self.dialect {
+            sqlex_common::dialect::Dialect::MySQL => DataType::BigInt(false),
+            sqlex_common::dialect::Dialect::Postgres | sqlex_common::dialect::Dialect::SQLite => {
+                DataType::Bool
             },
         }
     }

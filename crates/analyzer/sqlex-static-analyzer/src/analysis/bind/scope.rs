@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::{analysis::diagnostics::Diagnostic, ir::ids::ColumnId};
 
 #[derive(Debug, Clone, Default)]
-pub(super) struct BindScope {
+pub(crate) struct BindScope {
     tables: Vec<ScopeTable>,
     by_alias: HashMap<String, usize>,
 }
@@ -84,6 +84,7 @@ impl BindScope {
             .map(|idx| self.tables[*idx].columns.clone())
     }
 
+    #[allow(dead_code)]
     pub(super) fn tables(&self) -> impl Iterator<Item = (&str, &[ScopeColumn])> {
         self.tables
             .iter()

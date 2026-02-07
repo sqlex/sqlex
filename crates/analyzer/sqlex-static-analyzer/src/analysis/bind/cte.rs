@@ -1,20 +1,18 @@
-use std::{mem, sync::Arc};
-
 use sqlparser::ast::{self, Query, SetExpr};
 
 use crate::{
     analysis::{
-        bind::{Binder, CteBinding, scope::BindScope},
+        bind::{Binder, CteBinding, CteDefEntry, scope::BindScope},
         diagnostics::Diagnostic,
     },
-    ir::bound::{BoundCte, BoundQuery, BoundSetExpr},
+    ir::bound::BoundQueryBody,
 };
 
 impl<'a> Binder<'a> {
-    pub(super) fn bind_ctes(&mut self, with: Option<&ast::With>) -> Vec<Arc<BoundCte>> {
-        let mut ctes = self.cte_defs.clone();
+    pub(super) fn bind_ctes(&mut self, with: Option<&ast::With>) -> Vec<CteDefEntry> {
+        let mut entries = self.cte_defs.clone();
         let Some(with) = with else {
-            return ctes;
+            return entries;
         };
 
         for cte in &with.cte_tables {
@@ -27,21 +25,18 @@ impl<'a> Binder<'a> {
                 .collect::<Vec<_>>();
 
             if with.recursive {
-                let mut anchor_cols =
-                    self.bind_recursive_anchor_columns(&cte.query, &alias_columns);
-                if !alias_columns.is_empty() {
-                    anchor_cols = alias_columns.clone();
-                }
-                self.cte_scope.insert(
-                    name.clone(),
-                    CteBinding {
-                        columns: anchor_cols,
-                    },
-                );
+                let anchor_cols = self.bind_recursive_anchor_columns(&cte.query, &alias_columns);
+                let cols = if !alias_columns.is_empty() {
+                    alias_columns.clone()
+                } else {
+                    anchor_cols
+                };
+                self.cte_scope
+                    .insert(name.clone(), CteBinding { columns: cols });
             }
 
-            let bound_query = self.bind_subquery(&cte.query);
-            let mut output_cols = self.output_names_for_query(&bound_query);
+            let bound_query = self.bind_query_body(&cte.query);
+            let mut output_cols = self.output_names_for_query_body(&bound_query);
             if !alias_columns.is_empty() {
                 if alias_columns.len() != output_cols.len() {
                     self.diagnostics
@@ -57,78 +52,33 @@ impl<'a> Binder<'a> {
                 },
             );
 
-            let cte_def = Arc::new(BoundCte {
+            let entry = CteDefEntry {
                 name,
                 columns: output_cols,
-                query: Box::new(bound_query),
+                query: bound_query,
                 recursive: with.recursive,
-            });
-            self.cte_defs.push(cte_def.clone());
-            ctes.push(cte_def);
+            };
+            self.cte_defs.push(entry.clone());
+            entries.push(entry);
         }
 
-        ctes
+        entries
     }
 
-    pub(super) fn bind_subquery(&mut self, query: &Query) -> BoundQuery {
-        let mut child = Binder::new(self.dialect, self.catalog);
-        child.cte_scope = self.cte_scope.clone();
-        child.cte_defs = self.cte_defs.clone();
-        let bound = child
-            .bind_query(query)
-            .unwrap_or_else(|| child.empty_query());
-        self.diagnostics.extend(child.diagnostics);
-        bound
-    }
-
-    pub(super) fn bind_correlated_subquery(
+    pub(super) fn bind_correlated_subquery_body(
         &mut self,
         query: &Query,
         outer_scope: &BindScope,
-    ) -> BoundQuery {
-        let mut child = Binder::new(self.dialect, self.catalog);
-        child.cte_scope = self.cte_scope.clone();
-        child.cte_defs = self.cte_defs.clone();
+    ) -> BoundQueryBody {
+        let prev_outer = self.outer_scopes.clone();
+        let mut new_outers = vec![outer_scope.clone()];
+        new_outers.extend(prev_outer.iter().cloned());
+        self.outer_scopes = new_outers;
 
-        let mut outer_scopes = Vec::new();
-        outer_scopes.push(child.import_outer_scope(outer_scope, self));
-        for scope in &self.outer_scopes {
-            outer_scopes.push(child.import_outer_scope(scope, self));
-        }
-        child.outer_scopes = outer_scopes;
+        let body = self.bind_query_body(query);
 
-        let bound = child
-            .bind_query(query)
-            .unwrap_or_else(|| child.empty_query());
-        self.diagnostics.extend(child.diagnostics);
-        bound
-    }
-
-    pub(super) fn empty_query(&self) -> BoundQuery {
-        BoundQuery {
-            ctes: Vec::new(),
-            tables: crate::ir::arena::Arena::default(),
-            columns: crate::ir::arena::Arena::default(),
-            exprs: crate::ir::arena::Arena::default(),
-            body: BoundSetExpr::Unsupported,
-            order_by: Vec::new(),
-            limit: None,
-            offset: None,
-        }
-    }
-
-    fn import_outer_scope(&mut self, scope: &BindScope, outer: &Binder<'_>) -> BindScope {
-        let mut merged = BindScope::default();
-        for (alias, columns) in scope.tables() {
-            let Some(first_col) = columns.first() else {
-                continue;
-            };
-            let outer_col = outer.columns.get(first_col.id);
-            let outer_table = outer.tables.get(outer_col.table).clone();
-            let (_, table_scope) = self.register_table(outer_table, alias.to_string());
-            merged.merge(table_scope);
-        }
-        merged
+        self.outer_scopes = prev_outer;
+        body
     }
 
     fn bind_recursive_anchor_columns(
@@ -141,24 +91,15 @@ impl<'a> Binder<'a> {
             _ => query.body.as_ref(),
         };
 
-        let mut child = Binder::new(self.dialect, self.catalog);
-        child.cte_scope = self.cte_scope.clone();
-        let anchor_body = child.bind_set_expr(anchor_set);
-
-        let anchor_query = BoundQuery {
-            ctes: Vec::new(),
-            tables: mem::take(&mut child.tables),
-            columns: mem::take(&mut child.columns),
-            exprs: mem::take(&mut child.exprs),
+        let anchor_body = self.bind_set_expr(anchor_set);
+        let anchor_query = BoundQueryBody {
             body: anchor_body,
             order_by: Vec::new(),
             limit: None,
             offset: None,
         };
 
-        self.diagnostics.extend(child.diagnostics);
-
-        let mut names = self.output_names_for_query(&anchor_query);
+        let mut names = self.output_names_for_query_body(&anchor_query);
         if !alias_columns.is_empty() {
             names = alias_columns.to_vec();
         }

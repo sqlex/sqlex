@@ -4,45 +4,28 @@ use crate::analysis::{
     infer::{Inferrer, TypeInfo},
 };
 
-impl<'a> Inferrer<'a> {
+impl Inferrer {
     pub(super) fn infer_function(
         &mut self,
         name: &str,
+        kind: &FunctionKind,
         arg_types: &[sqlex_common::types::DataType],
         arg_nullables: &[bool],
-        distinct: bool,
+        _distinct: bool,
         over: bool,
     ) -> TypeInfo {
         let upper = name.to_uppercase();
         let meta = resolve_function(&upper);
 
-        if meta.requires_over && !over {
-            self.diagnostics
-                .push(Diagnostic::window_requires_over(&upper));
-        }
-        if over && !meta.allows_over {
-            self.diagnostics.push(Diagnostic::over_not_allowed(&upper));
-        }
-        if distinct && !meta.accepts_distinct {
-            self.diagnostics
-                .push(Diagnostic::distinct_not_allowed(&upper));
-        }
-        let arity_matches = meta.arity.matches(arg_types.len());
-        if !arity_matches {
-            self.diagnostics.push(Diagnostic::function_arity_mismatch(
-                &upper,
-                &meta.arity.describe(),
-                arg_types.len(),
-            ));
-        }
-        if arity_matches {
+        // Type-related validation (requires knowing types)
+        if meta.arity.matches(arg_types.len()) {
             if let Some(detail) = meta.validate_argument_types(self.dialect, arg_types) {
                 self.diagnostics
                     .push(Diagnostic::function_argument_type_mismatch(&upper, detail));
             }
         }
 
-        match meta.kind {
+        match kind {
             FunctionKind::Window(window) => {
                 let (data_type, nullable) = window.infer_type(self.dialect, arg_types);
                 TypeInfo {
@@ -52,7 +35,7 @@ impl<'a> Inferrer<'a> {
             },
             FunctionKind::Aggregate(agg) => {
                 let (data_type, nullable) = if over {
-                    WindowFunction::Aggregate(agg).infer_type(self.dialect, arg_types)
+                    WindowFunction::Aggregate(agg.clone()).infer_type(self.dialect, arg_types)
                 } else {
                     agg.infer_type(self.dialect, arg_types)
                 };
@@ -69,12 +52,9 @@ impl<'a> Inferrer<'a> {
                     nullable,
                 }
             },
-            FunctionKind::Unknown => {
-                self.diagnostics.push(Diagnostic::unknown_function(&upper));
-                TypeInfo {
-                    data_type: sqlex_common::types::DataType::Custom("unknown".to_string()),
-                    nullable: true,
-                }
+            FunctionKind::Unknown => TypeInfo {
+                data_type: sqlex_common::types::DataType::Custom("unknown".to_string()),
+                nullable: true,
             },
         }
     }
