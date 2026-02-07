@@ -4,7 +4,7 @@ use sqlparser::ast::Value;
 use crate::{
     analysis::{functions::FunctionKind, infer::Inferrer},
     ir::{
-        bound::{BoundExpr, BoundQueryBody, BoundSelect, BoundSetExpr, BoundStatement},
+        bound::{BoundExpr, BoundQueryBody, BoundSelect, BoundSetExpr, BoundSetOp, BoundStatement},
         ids::ExprId,
     },
 };
@@ -27,16 +27,99 @@ fn drop_lower_bound(cardinality: Cardinality) -> Cardinality {
     }
 }
 
+fn max_cardinality(left: Cardinality, right: Cardinality) -> Cardinality {
+    match (left, right) {
+        (Cardinality::ExactlyOne, Cardinality::ExactlyOne) => Cardinality::ExactlyOne,
+        (Cardinality::AtLeastOne, _) | (_, Cardinality::AtLeastOne) => Cardinality::AtLeastOne,
+        (Cardinality::ExactlyOne, _) | (_, Cardinality::ExactlyOne) => Cardinality::AtLeastOne,
+        _ => Cardinality::Unknown,
+    }
+}
+
+fn min_cardinality(left: Cardinality, right: Cardinality) -> Cardinality {
+    match (left, right) {
+        (Cardinality::AtMostOne, _) | (_, Cardinality::AtMostOne) => Cardinality::AtMostOne,
+        (Cardinality::ExactlyOne, Cardinality::ExactlyOne) => Cardinality::ExactlyOne,
+        _ => Cardinality::Unknown,
+    }
+}
+
+fn combine_join_cardinality(
+    left: Cardinality,
+    right: Cardinality,
+    join_kind: crate::ir::bound::BoundJoinKind,
+) -> Cardinality {
+    use crate::ir::bound::BoundJoinKind;
+
+    match join_kind {
+        BoundJoinKind::Inner | BoundJoinKind::Cross => drop_lower_bound(left),
+        BoundJoinKind::Left => left,
+        BoundJoinKind::Right => right,
+        BoundJoinKind::Full => max_cardinality(left, right),
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy)]
 struct QueryFacts {
     has_from: bool,
     has_aggregate_without_group_by: bool,
+    has_group_by: bool,
+    has_distinct: bool,
     values_len: Option<usize>,
     limit: Option<u64>,
     offset: Option<u64>,
 }
 
 impl Inferrer {
+    fn analyze_from_clause(&self, from: &[crate::ir::bound::BoundFromItem]) -> Cardinality {
+        if from.is_empty() {
+            return Cardinality::ExactlyOne;
+        }
+
+        let mut cardinality = Cardinality::Unknown;
+
+        for from_item in from {
+            for join in &from_item.joins {
+                cardinality =
+                    combine_join_cardinality(cardinality, Cardinality::Unknown, join.kind);
+            }
+        }
+
+        cardinality
+    }
+
+    fn analyze_where_condition(
+        &self,
+        stmt: &BoundStatement,
+        where_expr: Option<ExprId>,
+    ) -> Option<Cardinality> {
+        let expr_id = where_expr?;
+        let expr = stmt.exprs.get(expr_id);
+
+        match expr {
+            BoundExpr::Literal(Value::Boolean(false)) => Some(Cardinality::AtMostOne),
+            BoundExpr::Binary {
+                left,
+                op: sqlparser::ast::BinaryOperator::Eq,
+                right,
+            } => {
+                let left_expr = stmt.exprs.get(*left);
+                let right_expr = stmt.exprs.get(*right);
+
+                if let (BoundExpr::Literal(left_val), BoundExpr::Literal(right_val)) =
+                    (left_expr, right_expr)
+                {
+                    if left_val != right_val {
+                        return Some(Cardinality::AtMostOne);
+                    }
+                }
+
+                None
+            },
+            _ => None,
+        }
+    }
+
     pub(super) fn query_body_cardinality(
         &self,
         stmt: &BoundStatement,
@@ -45,11 +128,13 @@ impl Inferrer {
         let facts = self.query_body_facts(stmt, query);
 
         let mut cardinality = match &query.body {
-            BoundSetExpr::Select(_) => {
+            BoundSetExpr::Select(select) => {
                 if !facts.has_from || facts.has_aggregate_without_group_by {
                     Cardinality::ExactlyOne
-                } else {
+                } else if facts.has_group_by || facts.has_distinct {
                     Cardinality::Unknown
+                } else {
+                    self.analyze_from_clause(&select.from)
                 }
             },
             BoundSetExpr::Values { .. } => match facts.values_len {
@@ -58,9 +143,30 @@ impl Inferrer {
                 Some(_) => Cardinality::AtLeastOne,
                 None => Cardinality::Unknown,
             },
-            BoundSetExpr::SetOperation { .. } => Cardinality::Unknown,
+            BoundSetExpr::SetOperation {
+                op, left, right, ..
+            } => {
+                let left_card = self.set_expr_cardinality(stmt, left);
+                let right_card = self.set_expr_cardinality(stmt, right);
+
+                match op {
+                    BoundSetOp::Union => max_cardinality(left_card, right_card),
+                    BoundSetOp::Intersect => min_cardinality(left_card, right_card),
+                    BoundSetOp::Except => left_card,
+                }
+            },
             BoundSetExpr::Query(inner) => self.query_body_cardinality(stmt, inner),
         };
+
+        if let BoundSetExpr::Select(select) = &query.body {
+            if let Some(where_card) = self.analyze_where_condition(stmt, select.selection) {
+                cardinality = min_cardinality(cardinality, where_card);
+            }
+
+            if select.having.is_some() {
+                cardinality = drop_lower_bound(cardinality);
+            }
+        }
 
         if let Some(limit) = facts.limit {
             if limit == 0 {
@@ -79,6 +185,44 @@ impl Inferrer {
         cardinality
     }
 
+    fn set_expr_cardinality(&self, stmt: &BoundStatement, expr: &BoundSetExpr) -> Cardinality {
+        match expr {
+            BoundSetExpr::Select(select) => {
+                let facts = QueryFacts {
+                    has_from: !select.from.is_empty(),
+                    has_aggregate_without_group_by: Self::select_has_aggregate_without_group_by(
+                        stmt, select,
+                    ),
+                    ..Default::default()
+                };
+
+                if !facts.has_from || facts.has_aggregate_without_group_by {
+                    Cardinality::ExactlyOne
+                } else {
+                    Cardinality::Unknown
+                }
+            },
+            BoundSetExpr::Values { rows } => match rows.len() {
+                0 => Cardinality::AtMostOne,
+                1 => Cardinality::ExactlyOne,
+                _ => Cardinality::AtLeastOne,
+            },
+            BoundSetExpr::SetOperation {
+                op, left, right, ..
+            } => {
+                let left_card = self.set_expr_cardinality(stmt, left);
+                let right_card = self.set_expr_cardinality(stmt, right);
+
+                match op {
+                    BoundSetOp::Union => max_cardinality(left_card, right_card),
+                    BoundSetOp::Intersect => min_cardinality(left_card, right_card),
+                    BoundSetOp::Except => left_card,
+                }
+            },
+            BoundSetExpr::Query(query) => self.query_body_cardinality(stmt, query),
+        }
+    }
+
     fn query_body_facts(&self, stmt: &BoundStatement, query: &BoundQueryBody) -> QueryFacts {
         let mut facts = QueryFacts {
             limit: query
@@ -93,6 +237,8 @@ impl Inferrer {
         match &query.body {
             BoundSetExpr::Select(select) => {
                 facts.has_from = !select.from.is_empty();
+                facts.has_group_by = !select.group_by.is_empty();
+                facts.has_distinct = select.distinct;
                 facts.has_aggregate_without_group_by =
                     Self::select_has_aggregate_without_group_by(stmt, select);
             },
