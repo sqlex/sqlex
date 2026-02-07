@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Cardinality {
     /// Guarantees exactly one row will be returned
     ExactlyOne,
@@ -9,6 +9,7 @@ pub enum Cardinality {
     /// At most one row will be returned (0 or 1)
     AtMostOne,
     /// Row count is unknown
+    #[default]
     Unknown,
 }
 

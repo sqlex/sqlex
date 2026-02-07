@@ -1,0 +1,127 @@
+dialect: postgres
+migrations:
+  - |
+    CREATE TABLE users (
+      id INT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT
+    )
+  - |
+    CREATE TABLE orders (
+      id INT PRIMARY KEY,
+      user_id INT NOT NULL,
+      total DECIMAL
+    )
+
+queries:
+  # WHERE FALSE should return AtMostOne
+  - name: where_false
+    sql: SELECT * FROM users WHERE FALSE
+    cardinality: AtMostOne
+    expected:
+      - name: id
+        nullability: false
+      - name: name
+        nullability: false
+      - name: email
+        nullability: true
+
+  # WHERE 1=0 should return AtMostOne
+  - name: where_constant_false
+    sql: SELECT * FROM users WHERE 1 = 0
+    cardinality: AtMostOne
+    expected:
+      - name: id
+        nullability: false
+      - name: name
+        nullability: false
+      - name: email
+        nullability: true
+
+  # GROUP BY should return Unknown
+  - name: group_by
+    sql: SELECT user_id, SUM(total) as total_sum FROM orders GROUP BY user_id
+    cardinality: Unknown
+    expected:
+      - name: user_id
+        nullability: false
+      - name: total_sum
+        nullability: true
+
+  # DISTINCT should return Unknown
+  - name: distinct
+    sql: SELECT DISTINCT name FROM users
+    cardinality: Unknown
+    expected:
+      - name: name
+        nullability: false
+
+  # Aggregate without GROUP BY should return ExactlyOne
+  - name: aggregate_no_group_by
+    sql: SELECT COUNT(*) as cnt, SUM(total) as total_sum FROM orders
+    cardinality: ExactlyOne
+    expected:
+      - name: cnt
+        nullability: false
+      - name: total_sum
+        nullability: true
+
+  # LIMIT 0 should return AtMostOne
+  - name: limit_zero
+    sql: SELECT * FROM users LIMIT 0
+    cardinality: AtMostOne
+    expected:
+      - name: id
+        nullability: false
+      - name: name
+        nullability: false
+      - name: email
+        nullability: true
+
+  # LIMIT 1 should return AtMostOne
+  - name: limit_one
+    sql: SELECT * FROM users LIMIT 1
+    cardinality: AtMostOne
+    expected:
+      - name: id
+        nullability: false
+      - name: name
+        nullability: false
+      - name: email
+        nullability: true
+
+  # No FROM clause should return ExactlyOne
+  - name: no_from_clause
+    sql: SELECT 1 as one, 2 as two, 3 as three
+    cardinality: ExactlyOne
+    expected:
+      - name: one
+        nullability: false
+      - name: two
+        nullability: false
+      - name: three
+        nullability: false
+
+  # UNION should combine cardinality
+  - name: union_single_rows
+    sql: SELECT 1 as num UNION SELECT 2
+    cardinality: AtLeastOne
+    expected:
+      - name: num
+        nullability: false
+
+  # INTERSECT should take minimum
+  - name: intersect_single_rows
+    sql: SELECT 1 as num INTERSECT SELECT 1
+    cardinality: ExactlyOne
+    expected:
+      - name: num
+        nullability: false
+
+  # EXCEPT should take left cardinality
+  - name: except_single_rows
+    sql: SELECT 1 as num EXCEPT SELECT 2
+    cardinality: ExactlyOne
+    expected:
+      - name: num
+        nullability: false

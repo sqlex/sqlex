@@ -6,7 +6,10 @@ use std::{
 
 use serde::Deserialize;
 use sqlex_analyzer::Analyzer;
-use sqlex_common::{dialect::Dialect, types::DataType};
+use sqlex_common::{
+    dialect::Dialect,
+    types::{Cardinality, DataType},
+};
 use sqlex_database_analyzer::new_database_analyzer;
 use sqlex_static_analyzer::StaticAnalyzer;
 use tokio::fs as tokio_fs;
@@ -23,6 +26,8 @@ struct YamlTestSuite {
 struct YamlQuery {
     name: String,
     sql: String,
+    #[serde(default)]
+    cardinality: Cardinality,
     #[serde(default)]
     expected: Vec<YamlOutputColumn>,
 }
@@ -400,6 +405,13 @@ async fn run_test_file(path: &Path, specs_dir: &Path) {
             (Ok(db_result), Ok(static_result)) => {
                 let db_columns = db_result.columns;
                 let static_columns = static_result.columns;
+
+                // Verify cardinality
+                assert_eq!(
+                    static_result.cardinality, test.cardinality,
+                    "Test '{}' in {}: Cardinality mismatch (Expected: {:?}, Actual: {:?})",
+                    test.name, display_path, test.cardinality, static_result.cardinality
+                );
 
                 assert_eq!(
                     static_columns.len(),

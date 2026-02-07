@@ -29,7 +29,6 @@ fn drop_lower_bound(cardinality: Cardinality) -> Cardinality {
 
 fn max_cardinality(left: Cardinality, right: Cardinality) -> Cardinality {
     match (left, right) {
-        (Cardinality::ExactlyOne, Cardinality::ExactlyOne) => Cardinality::ExactlyOne,
         (Cardinality::AtLeastOne, _) | (_, Cardinality::AtLeastOne) => Cardinality::AtLeastOne,
         (Cardinality::ExactlyOne, _) | (_, Cardinality::ExactlyOne) => Cardinality::AtLeastOne,
         _ => Cardinality::Unknown,
