@@ -183,7 +183,8 @@ impl Inferrer {
             BoundExpr::Column(_)
             | BoundExpr::Literal(_)
             | BoundExpr::Subquery(_)
-            | BoundExpr::InSubquery { .. } => false,
+            | BoundExpr::InSubquery { .. }
+            | BoundExpr::Error => false,
         }
     }
 }

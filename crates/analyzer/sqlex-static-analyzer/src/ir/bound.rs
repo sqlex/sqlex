@@ -174,4 +174,7 @@ pub enum BoundExpr {
         negated: bool,
     },
     Subquery(BoundQueryBody),
+    /// Placeholder for expressions that failed to bind.
+    /// Diagnostics have already been reported; this allows analysis to continue.
+    Error,
 }

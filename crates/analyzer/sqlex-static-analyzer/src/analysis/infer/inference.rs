@@ -89,6 +89,10 @@ impl Inferrer {
                     nullable: expr_info.nullable,
                 }
             },
+            BoundExpr::Error => TypeInfo {
+                data_type: DataType::Custom("unknown".to_string()),
+                nullable: true,
+            },
         };
 
         state.types.insert(expr_id, info.clone());

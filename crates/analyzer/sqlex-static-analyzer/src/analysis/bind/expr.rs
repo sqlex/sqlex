@@ -17,7 +17,7 @@ impl<'a> Binder<'a> {
                     Ok(col_id) => self.exprs.alloc(BoundExpr::Column(col_id)),
                     Err(diag) => {
                         self.diagnostics.push(diag.with_context(expr.to_string()));
-                        self.exprs.alloc(BoundExpr::Literal(Value::Null))
+                        self.exprs.alloc(BoundExpr::Error)
                     },
                 }
             },
@@ -29,7 +29,7 @@ impl<'a> Binder<'a> {
                         Ok(col_id) => self.exprs.alloc(BoundExpr::Column(col_id)),
                         Err(diag) => {
                             self.diagnostics.push(diag.with_context(expr.to_string()));
-                            self.exprs.alloc(BoundExpr::Literal(Value::Null))
+                            self.exprs.alloc(BoundExpr::Error)
                         },
                     }
                 } else {
@@ -37,7 +37,7 @@ impl<'a> Binder<'a> {
                         Diagnostic::unsupported_feature("Deep compound identifiers")
                             .with_context(expr.to_string()),
                     );
-                    self.exprs.alloc(BoundExpr::Literal(Value::Null))
+                    self.exprs.alloc(BoundExpr::Error)
                 }
             },
             Expr::Value(value) => self.exprs.alloc(BoundExpr::Literal(value.clone())),
@@ -139,7 +139,7 @@ impl<'a> Binder<'a> {
                     Diagnostic::unsupported_feature("expression in binder")
                         .with_context(expr.to_string()),
                 );
-                self.exprs.alloc(BoundExpr::Literal(Value::Null))
+                self.exprs.alloc(BoundExpr::Error)
             },
         }
     }
