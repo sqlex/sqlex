@@ -7,7 +7,7 @@ use sqlparser::ast;
 use crate::{
     analysis::{
         diagnostics::Diagnostic,
-        typecheck::{QueryTypeState, TypeContext},
+        infer::{Inferrer, QueryTypeState},
     },
     ir::{
         bound::{
@@ -19,7 +19,7 @@ use crate::{
     },
 };
 
-impl<'a> TypeContext<'a> {
+impl<'a> Inferrer<'a> {
     pub(super) fn output_schema_for_query(&mut self, query: &BoundQuery) -> OutputSchema {
         let key = query as *const BoundQuery as usize;
         if let Some(schema) = self.schema_cache.get(&key) {

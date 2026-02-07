@@ -4,7 +4,7 @@ use crate::{
     analysis::{
         diagnostics::Diagnostic,
         functions::{FunctionKind, resolve_function},
-        typecheck::{QueryTypeState, TypeContext},
+        infer::{Inferrer, QueryTypeState},
     },
     ir::{
         bound::{BoundExpr, BoundJoinCondition, BoundSelect, BoundTableSource},
@@ -12,7 +12,7 @@ use crate::{
     },
 };
 
-impl<'a> TypeContext<'a> {
+impl<'a> Inferrer<'a> {
     pub(super) fn validate_grouping(&mut self, state: &QueryTypeState<'_>, select: &BoundSelect) {
         let has_group_by = !select.group_by.is_empty();
 

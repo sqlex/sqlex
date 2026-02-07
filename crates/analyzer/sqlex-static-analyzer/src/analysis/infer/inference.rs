@@ -5,7 +5,7 @@ use sqlparser::ast::{self, BinaryOperator};
 use crate::{
     analysis::{
         diagnostics::Diagnostic,
-        typecheck::{QueryTypeState, TypeContext, TypeInfo},
+        infer::{Inferrer, QueryTypeState, TypeInfo},
     },
     ir::{
         bound::{BoundExpr, BoundQuery, BoundTableSource},
@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-impl<'a> TypeContext<'a> {
+impl<'a> Inferrer<'a> {
     pub(super) fn infer_expr(
         &mut self,
         state: &mut QueryTypeState<'_>,

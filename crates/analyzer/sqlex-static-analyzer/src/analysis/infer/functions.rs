@@ -1,10 +1,10 @@
 use crate::analysis::{
     diagnostics::Diagnostic,
     functions::{FunctionKind, WindowFunction, resolve_function},
-    typecheck::{TypeContext, TypeInfo},
+    infer::{Inferrer, TypeInfo},
 };
 
-impl<'a> TypeContext<'a> {
+impl<'a> Inferrer<'a> {
     pub(super) fn infer_function(
         &mut self,
         name: &str,

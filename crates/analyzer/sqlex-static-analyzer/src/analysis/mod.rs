@@ -5,8 +5,8 @@ use crate::{analysis::diagnostics::Diagnostic, catalog::Catalog, ir::output::Out
 pub mod bind;
 pub mod diagnostics;
 pub(crate) mod functions;
+pub mod infer;
 pub(crate) mod keywords;
-pub mod typecheck;
 
 pub struct AnalysisResult {
     pub output: Option<OutputSchema>,
@@ -27,10 +27,10 @@ impl AnalysisEngine {
 
         if let Some(bound) = bind_result.bound {
             let mut diagnostics = bind_result.diagnostics;
-            let type_result = typecheck::TypeContext::new(self.dialect, catalog).typecheck(&bound);
-            diagnostics.extend(type_result.diagnostics);
+            let infer_result = infer::Inferrer::new(self.dialect, catalog).infer(&bound);
+            diagnostics.extend(infer_result.diagnostics);
             AnalysisResult {
-                output: type_result.output,
+                output: infer_result.output,
                 diagnostics,
             }
         } else {

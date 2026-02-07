@@ -1,7 +1,7 @@
 use sqlparser::ast::Value;
 
 use crate::{
-    analysis::typecheck::{QueryTypeState, TypeContext},
+    analysis::infer::{Inferrer, QueryTypeState},
     ir::{
         bound::{BoundExpr, BoundQuery, BoundSelect, BoundSetExpr},
         ids::ExprId,
@@ -49,7 +49,7 @@ struct QueryFacts {
     offset: Option<u64>,
 }
 
-impl<'a> TypeContext<'a> {
+impl<'a> Inferrer<'a> {
     pub(super) fn query_cardinality(&self, query: &BoundQuery) -> RowCardinality {
         let facts = self.query_facts(query);
 

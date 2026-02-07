@@ -11,7 +11,7 @@ use crate::{
 mod cardinality;
 mod functions;
 mod grouping;
-mod infer;
+mod inference;
 mod lineage;
 mod schema;
 
@@ -21,12 +21,12 @@ pub(super) struct TypeInfo {
     nullable: bool,
 }
 
-pub struct TypecheckResult {
+pub struct InferResult {
     pub output: Option<OutputSchema>,
     pub diagnostics: Vec<Diagnostic>,
 }
 
-pub(super) struct TypeContext<'a> {
+pub(super) struct Inferrer<'a> {
     #[allow(dead_code)]
     dialect: Dialect,
     catalog: &'a Catalog,
@@ -34,7 +34,7 @@ pub(super) struct TypeContext<'a> {
     schema_cache: HashMap<usize, OutputSchema>,
 }
 
-impl<'a> TypeContext<'a> {
+impl<'a> Inferrer<'a> {
     pub(super) fn new(dialect: Dialect, catalog: &'a Catalog) -> Self {
         Self {
             dialect,
@@ -44,9 +44,9 @@ impl<'a> TypeContext<'a> {
         }
     }
 
-    pub(super) fn typecheck(mut self, bound: &BoundQuery) -> TypecheckResult {
+    pub(super) fn infer(mut self, bound: &BoundQuery) -> InferResult {
         let output = Some(self.output_schema_for_query(bound));
-        TypecheckResult {
+        InferResult {
             output,
             diagnostics: self.diagnostics,
         }

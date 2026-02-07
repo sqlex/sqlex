@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    analysis::typecheck::{QueryTypeState, TypeContext},
+    analysis::infer::{Inferrer, QueryTypeState},
     ir::{
         bound::{BoundExpr, BoundTableSource},
         ids::{ColumnId, ExprId},
@@ -9,7 +9,7 @@ use crate::{
     },
 };
 
-impl<'a> TypeContext<'a> {
+impl<'a> Inferrer<'a> {
     pub(super) fn collect_lineage(
         &mut self,
         state: &QueryTypeState<'_>,
