@@ -27,7 +27,11 @@ impl Inferrer {
         }
         let mut state = QueryTypeState::new(stmt);
         let columns = self.infer_set_expr(&mut state, &stmt.query.body);
-        let schema = OutputSchema { columns };
+        let cardinality = self.query_body_cardinality(stmt, &stmt.query);
+        let schema = OutputSchema {
+            columns,
+            cardinality,
+        };
         self.schema_cache
             .insert(SchemaCacheKey::TopLevel, schema.clone());
         schema
@@ -39,7 +43,11 @@ impl Inferrer {
         query: &BoundQueryBody,
     ) -> OutputSchema {
         let columns = self.infer_set_expr(state, &query.body);
-        OutputSchema { columns }
+        let cardinality = self.query_body_cardinality(state.stmt, query);
+        OutputSchema {
+            columns,
+            cardinality,
+        }
     }
 
     // ------------------------------------------------------------------

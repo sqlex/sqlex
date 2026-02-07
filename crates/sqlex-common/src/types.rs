@@ -1,5 +1,29 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Cardinality {
+    /// Guarantees exactly one row will be returned
+    ExactlyOne,
+    /// Guarantees at least one row will be returned
+    AtLeastOne,
+    /// At most one row will be returned (0 or 1)
+    AtMostOne,
+    /// Row count is unknown
+    Unknown,
+}
+
+impl Cardinality {
+    /// Returns true if this cardinality guarantees at least one row
+    pub fn guarantees_row(self) -> bool {
+        matches!(self, Self::ExactlyOne | Self::AtLeastOne)
+    }
+
+    /// Returns true if this cardinality guarantees at most one row
+    pub fn is_single_row(self) -> bool {
+        matches!(self, Self::ExactlyOne | Self::AtMostOne)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DataType {
     // Integers
@@ -53,4 +77,5 @@ pub struct Table {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResultSet {
     pub columns: Vec<ColumnInfo>,
+    pub cardinality: Cardinality,
 }

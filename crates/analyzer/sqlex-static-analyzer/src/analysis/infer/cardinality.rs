@@ -1,3 +1,4 @@
+use sqlex_common::types::Cardinality;
 use sqlparser::ast::Value;
 
 use crate::{
@@ -8,35 +9,21 @@ use crate::{
     },
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum RowCardinality {
-    ExactlyOne,
-    AtLeastOne,
-    AtMostOne,
-    Unknown,
+fn constrain_at_most_one(cardinality: Cardinality) -> Cardinality {
+    match cardinality {
+        Cardinality::ExactlyOne => Cardinality::ExactlyOne,
+        Cardinality::AtLeastOne => Cardinality::ExactlyOne,
+        Cardinality::AtMostOne => Cardinality::AtMostOne,
+        Cardinality::Unknown => Cardinality::AtMostOne,
+    }
 }
 
-impl RowCardinality {
-    pub(super) fn guarantees_row(self) -> bool {
-        matches!(self, Self::ExactlyOne | Self::AtLeastOne)
-    }
-
-    fn constrain_at_most_one(self) -> Self {
-        match self {
-            Self::ExactlyOne => Self::ExactlyOne,
-            Self::AtLeastOne => Self::ExactlyOne,
-            Self::AtMostOne => Self::AtMostOne,
-            Self::Unknown => Self::AtMostOne,
-        }
-    }
-
-    fn drop_lower_bound(self) -> Self {
-        match self {
-            Self::ExactlyOne => Self::AtMostOne,
-            Self::AtLeastOne => Self::Unknown,
-            Self::AtMostOne => Self::AtMostOne,
-            Self::Unknown => Self::Unknown,
-        }
+fn drop_lower_bound(cardinality: Cardinality) -> Cardinality {
+    match cardinality {
+        Cardinality::ExactlyOne => Cardinality::AtMostOne,
+        Cardinality::AtLeastOne => Cardinality::Unknown,
+        Cardinality::AtMostOne => Cardinality::AtMostOne,
+        Cardinality::Unknown => Cardinality::Unknown,
     }
 }
 
@@ -54,38 +41,38 @@ impl Inferrer {
         &self,
         stmt: &BoundStatement,
         query: &BoundQueryBody,
-    ) -> RowCardinality {
+    ) -> Cardinality {
         let facts = self.query_body_facts(stmt, query);
 
         let mut cardinality = match &query.body {
             BoundSetExpr::Select(_) => {
                 if !facts.has_from || facts.has_aggregate_without_group_by {
-                    RowCardinality::ExactlyOne
+                    Cardinality::ExactlyOne
                 } else {
-                    RowCardinality::Unknown
+                    Cardinality::Unknown
                 }
             },
             BoundSetExpr::Values { .. } => match facts.values_len {
-                Some(0) => RowCardinality::AtMostOne,
-                Some(1) => RowCardinality::ExactlyOne,
-                Some(_) => RowCardinality::AtLeastOne,
-                None => RowCardinality::Unknown,
+                Some(0) => Cardinality::AtMostOne,
+                Some(1) => Cardinality::ExactlyOne,
+                Some(_) => Cardinality::AtLeastOne,
+                None => Cardinality::Unknown,
             },
-            BoundSetExpr::SetOperation { .. } => RowCardinality::Unknown,
+            BoundSetExpr::SetOperation { .. } => Cardinality::Unknown,
             BoundSetExpr::Query(inner) => self.query_body_cardinality(stmt, inner),
         };
 
         if let Some(limit) = facts.limit {
             if limit == 0 {
-                cardinality = RowCardinality::AtMostOne;
+                cardinality = Cardinality::AtMostOne;
             } else if limit == 1 {
-                cardinality = cardinality.constrain_at_most_one();
+                cardinality = constrain_at_most_one(cardinality);
             }
         }
 
         if let Some(offset) = facts.offset {
             if offset > 0 {
-                cardinality = cardinality.drop_lower_bound();
+                cardinality = drop_lower_bound(cardinality);
             }
         }
 

@@ -147,7 +147,10 @@ impl Analyzer for PostgresDatabaseAnalyzer {
             });
         }
 
-        Ok(ResultSet { columns })
+        Ok(ResultSet {
+            columns,
+            cardinality: sqlex_common::types::Cardinality::Unknown,
+        })
     }
 
     async fn get_all_tables(&self) -> Result<Vec<Table>> {

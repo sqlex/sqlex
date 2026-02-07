@@ -1,8 +1,9 @@
-use sqlex_common::types::DataType;
+use sqlex_common::types::{Cardinality, DataType};
 
 #[derive(Debug, Clone)]
 pub struct OutputSchema {
     pub columns: Vec<OutputColumn>,
+    pub cardinality: Cardinality,
 }
 
 #[derive(Debug, Clone)]
