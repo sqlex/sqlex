@@ -1,11 +1,13 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use sqlex_analyzer::Analyzer;
 use sqlex_common::{
-    config::SqlexConfig,
-    ir::{CompilationUnit, ParameterDescriptor, QueryDescriptor},
-    types::{ColumnInfo, DataType, Table},
+    config::{AnalyzerMode, SqlexConfig},
+    ir::{CompilationUnit, QueryDescriptor},
 };
+use sqlex_database_analyzer::new_database_analyzer;
+use sqlex_static_analyzer::StaticAnalyzer;
 
 mod factory;
 mod project;
@@ -13,80 +15,91 @@ mod project;
 pub use project::Project;
 
 pub struct Compiler {
-    project: Project,
+    config: SqlexConfig,
+    config_path: PathBuf,
 }
 
 impl Compiler {
-    pub async fn new(config: SqlexConfig, config_path: &Path) -> Result<Self> {
-        let project = Project::build(config, config_path).await?;
-        Ok(Self { project })
+    pub fn new(config: SqlexConfig, config_path: &Path) -> Self {
+        Self {
+            config,
+            config_path: config_path.to_path_buf(),
+        }
     }
 
     pub async fn compile(&self) -> Result<()> {
         println!("Compiler: Starting compilation process...");
 
         // 1. Scan Project
-        println!("Step 1: Project scanned");
-        println!("  Found {} migration(s)", self.project.migrations.len());
-        println!("  Found {} query(ies)", self.project.queries.len());
+        println!("Step 1: Scanning project files...");
+        let project = Project::build(self.config.clone(), &self.config_path).await?;
+        println!("  Found {} migration(s)", project.migrations.len());
+        println!("  Found {} query(ies)", project.queries.len());
 
         // 2. Initialize Analyzer
-        // todo!()
+        println!("Step 2: Initializing analyzer...");
+        let mut analyzer: Box<dyn Analyzer> = match self.config.analyzer {
+            AnalyzerMode::Static => {
+                println!("  Using static analyzer");
+                Box::new(StaticAnalyzer::new(self.config.dialect))
+            },
+            AnalyzerMode::Database => {
+                println!("  Using database analyzer");
+                new_database_analyzer(self.config.dialect).await?
+            },
+        };
 
         // 3. Analyze Queries
-        // todo!()
-        // Mock CompilationUnit for testing generator
+        println!("Step 3: Analyzing queries...");
+
+        // Execute migrations to build schema
+        println!("  Executing {} migration(s)...", project.migrations.len());
+        for migration in &project.migrations {
+            println!(
+                "    Executing migration: {} (version {})",
+                migration.name, migration.version
+            );
+            for statement in &migration.statements {
+                analyzer
+                    .execute(statement)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to execute migration: {}", e))?;
+            }
+        }
+
+        // Get all tables
+        let tables = analyzer
+            .get_all_tables()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get tables: {}", e))?;
+        println!("  Found {} table(s) in schema", tables.len());
+
+        // Analyze each query
+        println!("  Analyzing {} query(ies)...", project.queries.len());
+        let mut query_descriptors = Vec::new();
+        for query in &project.queries {
+            println!("    Analyzing query: {}", query.name);
+            let result_set = analyzer
+                .analyze(&query.sql)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to analyze query '{}': {}", query.name, e))?;
+            query_descriptors.push(QueryDescriptor {
+                name: query.name.clone(),
+                sql: query.sql.clone(),
+                params: Vec::new(), // TODO: Extract parameters from SQL
+                columns: result_set.columns,
+            });
+        }
+
+        // Build CompilationUnit
         let compilation_unit = CompilationUnit {
-            tables: vec![Table {
-                name: "users".to_string(),
-                columns: vec![
-                    ColumnInfo {
-                        name: "id".to_string(),
-                        data_type: DataType::Int(false),
-                        nullability: false,
-                    },
-                    ColumnInfo {
-                        name: "name".to_string(),
-                        data_type: DataType::Text,
-                        nullability: false,
-                    },
-                    ColumnInfo {
-                        name: "email".to_string(),
-                        data_type: DataType::Text,
-                        nullability: true,
-                    },
-                ],
-            }],
-            queries: vec![QueryDescriptor {
-                name: "find_user_by_id".to_string(),
-                sql: "SELECT * FROM users WHERE id = ?".to_string(),
-                params: vec![ParameterDescriptor {
-                    name: "id".to_string(),
-                    type_info: DataType::Int(false),
-                    nullable: false,
-                }],
-                columns: vec![
-                    ColumnInfo {
-                        name: "id".to_string(),
-                        data_type: DataType::Int(false),
-                        nullability: false,
-                    },
-                    ColumnInfo {
-                        name: "name".to_string(),
-                        data_type: DataType::Text,
-                        nullability: false,
-                    },
-                    ColumnInfo {
-                        name: "email".to_string(),
-                        data_type: DataType::Text,
-                        nullability: true,
-                    },
-                ],
-            }],
+            tables,
+            queries: query_descriptors,
         };
 
         // 4. Initialize & Run Generators
-        for gen_config in &self.project.config.generators {
+        println!("Step 4: Running generators...");
+        for gen_config in &self.config.generators {
             println!(
                 "Running generator: {} ({})",
                 gen_config.name, gen_config.generator

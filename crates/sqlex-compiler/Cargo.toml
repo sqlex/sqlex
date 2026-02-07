@@ -7,11 +7,13 @@ edition = "2021"
 # Internal
 sqlex-analyzer = { workspace = true }
 sqlex-common = { workspace = true }
+sqlex-database-analyzer = { workspace = true }
 sqlex-generator = { workspace = true }
 sqlex-generator-debug = { workspace = true }
 sqlex-generator-go = { workspace = true }
 sqlex-generator-java = { workspace = true }
 sqlex-generator-rust = { workspace = true }
+sqlex-static-analyzer = { workspace = true }
 
 # External
 anyhow = { workspace = true }

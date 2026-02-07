@@ -182,7 +182,7 @@ async fn run_watch(config_path: String) -> Result<()> {
 }
 
 async fn run_compiler(config: SqlexConfig, config_path: &Path) -> Result<()> {
-    let compiler = Compiler::new(config, config_path).await?;
+    let compiler = Compiler::new(config, config_path);
     compiler.compile().await?;
     Ok(())
 }
