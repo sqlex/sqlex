@@ -108,8 +108,8 @@ async fn run_init(name: String) -> Result<()> {
 }
 
 async fn run_generate(config_path: String) -> Result<()> {
-    let (_, config) = load_config(&config_path).await?;
-    run_compiler(config).await?;
+    let (config_file, config) = load_config(&config_path).await?;
+    run_compiler(config, &config_file).await?;
     println!("Generated successfully!");
     Ok(())
 }
@@ -181,8 +181,8 @@ async fn run_watch(config_path: String) -> Result<()> {
     Ok(())
 }
 
-async fn run_compiler(config: SqlexConfig) -> Result<()> {
-    let compiler = Compiler::new(config);
+async fn run_compiler(config: SqlexConfig, config_path: &Path) -> Result<()> {
+    let compiler = Compiler::new(config, config_path).await?;
     compiler.compile().await?;
     Ok(())
 }

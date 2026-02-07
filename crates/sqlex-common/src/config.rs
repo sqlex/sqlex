@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::dialect::Dialect;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SqlexConfig {
     pub name: String,
     pub dialect: Dialect, // postgres, mysql, sqlite

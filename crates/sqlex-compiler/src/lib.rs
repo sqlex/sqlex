@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use anyhow::Result;
 use sqlex_common::{
     config::SqlexConfig,
@@ -6,22 +8,27 @@ use sqlex_common::{
 };
 
 mod factory;
+mod project;
+
+pub use project::Project;
 
 pub struct Compiler {
-    #[allow(dead_code)]
-    config: SqlexConfig,
+    project: Project,
 }
 
 impl Compiler {
-    pub fn new(config: SqlexConfig) -> Self {
-        Self { config }
+    pub async fn new(config: SqlexConfig, config_path: &Path) -> Result<Self> {
+        let project = Project::build(config, config_path).await?;
+        Ok(Self { project })
     }
 
     pub async fn compile(&self) -> Result<()> {
         println!("Compiler: Starting compilation process...");
 
         // 1. Scan Project
-        // todo!()
+        println!("Step 1: Project scanned");
+        println!("  Found {} migration(s)", self.project.migrations.len());
+        println!("  Found {} query(ies)", self.project.queries.len());
 
         // 2. Initialize Analyzer
         // todo!()
@@ -79,7 +86,7 @@ impl Compiler {
         };
 
         // 4. Initialize & Run Generators
-        for gen_config in &self.config.generators {
+        for gen_config in &self.project.config.generators {
             println!(
                 "Running generator: {} ({})",
                 gen_config.name, gen_config.generator

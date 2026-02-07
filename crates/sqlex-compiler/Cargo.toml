@@ -16,4 +16,5 @@ sqlex-generator-rust = { workspace = true }
 # External
 anyhow = { workspace = true }
 serde_json = { workspace = true }
+sqlparser = { workspace = true }
 tokio = { workspace = true }
