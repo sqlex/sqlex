@@ -2,7 +2,9 @@
 /.idea
 *.iml
 
+# dist
 /target
+/tmp
 
 # AI
 /.claude
