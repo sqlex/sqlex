@@ -39,7 +39,7 @@ impl AnalysisEngine {
         diagnostics.extend(validation.diagnostics);
 
         // Phase 3: Infer
-        let infer_result = infer::Inferrer::new(self.dialect).infer(&bound);
+        let infer_result = infer::Inferrer::new(self.dialect, catalog).infer(&bound);
         diagnostics.extend(infer_result.diagnostics);
 
         AnalysisResult {

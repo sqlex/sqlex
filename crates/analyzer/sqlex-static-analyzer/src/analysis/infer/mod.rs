@@ -4,6 +4,7 @@ use sqlex_common::dialect::Dialect;
 
 use crate::{
     analysis::diagnostics::Diagnostic,
+    catalog::Catalog,
     ir::{bound::BoundStatement, ids::ExprId, output::OutputSchema},
 };
 
@@ -23,8 +24,9 @@ pub struct InferResult {
     pub diagnostics: Vec<Diagnostic>,
 }
 
-pub(crate) struct Inferrer {
+pub(crate) struct Inferrer<'a> {
     pub(super) dialect: Dialect,
+    pub(super) catalog: &'a Catalog,
     pub(super) diagnostics: Vec<Diagnostic>,
     schema_cache: HashMap<SchemaCacheKey, OutputSchema>,
 }
@@ -39,10 +41,11 @@ enum SchemaCacheKey {
     Subquery(ExprId),
 }
 
-impl Inferrer {
-    pub(crate) fn new(dialect: Dialect) -> Self {
+impl<'a> Inferrer<'a> {
+    pub(crate) fn new(dialect: Dialect, catalog: &'a Catalog) -> Self {
         Self {
             dialect,
+            catalog,
             diagnostics: Vec::new(),
             schema_cache: HashMap::new(),
         }

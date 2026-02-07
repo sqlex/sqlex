@@ -69,7 +69,7 @@ struct QueryFacts {
     offset: Option<u64>,
 }
 
-impl Inferrer {
+impl Inferrer<'_> {
     fn analyze_from_clause(&self, from: &[crate::ir::bound::BoundFromItem]) -> Cardinality {
         if from.is_empty() {
             return Cardinality::ExactlyOne;

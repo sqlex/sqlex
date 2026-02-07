@@ -16,7 +16,7 @@ use crate::{
     },
 };
 
-impl Inferrer {
+impl Inferrer<'_> {
     // ------------------------------------------------------------------
     // Entry points
     // ------------------------------------------------------------------
@@ -260,14 +260,65 @@ impl Inferrer {
         self.fk_guarantees_match(state, right_col, left_col)
     }
 
-    /// Without a catalog we cannot verify foreign-key relationships,
-    /// so this always returns `false`.
+    /// Check if a foreign key constraint guarantees that a join will match.
+    /// Returns true if:
+    /// 1. The foreign key column is NOT NULL
+    /// 2. There exists a foreign key constraint from fk_col to pk_col
     fn fk_guarantees_match(
         &self,
-        _state: &QueryTypeState<'_>,
-        _fk_col: ColumnId,
-        _pk_col: ColumnId,
+        state: &QueryTypeState<'_>,
+        fk_col: ColumnId,
+        pk_col: ColumnId,
     ) -> bool {
+        let fk_column = state.stmt.columns.get(fk_col);
+        let pk_column = state.stmt.columns.get(pk_col);
+
+        // Get table names
+        let fk_table = state.stmt.tables.get(fk_column.table);
+        let pk_table = state.stmt.tables.get(pk_column.table);
+
+        let fk_table_name = match &fk_table.source {
+            crate::ir::bound::BoundTableSource::Table { name } => name,
+            _ => return false,
+        };
+
+        let pk_table_name = match &pk_table.source {
+            crate::ir::bound::BoundTableSource::Table { name } => name,
+            _ => return false,
+        };
+
+        // Check if fk_col is NOT NULL
+        let fk_col_nullable = fk_column.nullable.unwrap_or(true);
+        if fk_col_nullable {
+            return false;
+        }
+
+        // Look up the table definition in catalog
+        let Some(fk_table_def) = self.catalog.get_table(fk_table_name) else {
+            return false;
+        };
+
+        // Check if there's a foreign key constraint from fk_col to pk_col
+        for fk in &fk_table_def.foreign_keys {
+            // Check if this FK references the right table
+            if !fk.ref_table.eq_ignore_ascii_case(pk_table_name) {
+                continue;
+            }
+
+            // Check if the FK columns match
+            // For simplicity, we only handle single-column FKs
+            if fk.columns.len() == 1 && fk.ref_columns.len() == 1 {
+                let fk_col_name = &fk.columns[0];
+                let ref_col_name = &fk.ref_columns[0];
+
+                if fk_col_name.eq_ignore_ascii_case(&fk_column.name)
+                    && ref_col_name.eq_ignore_ascii_case(&pk_column.name)
+                {
+                    return true;
+                }
+            }
+        }
+
         false
     }
 

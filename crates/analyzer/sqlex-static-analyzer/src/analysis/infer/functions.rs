@@ -4,7 +4,7 @@ use crate::analysis::{
     infer::{Inferrer, TypeInfo},
 };
 
-impl Inferrer {
+impl Inferrer<'_> {
     pub(super) fn infer_function(
         &mut self,
         name: &str,

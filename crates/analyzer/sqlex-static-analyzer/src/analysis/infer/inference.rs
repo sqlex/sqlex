@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-impl Inferrer {
+impl Inferrer<'_> {
     pub(super) fn infer_expr(
         &mut self,
         state: &mut QueryTypeState<'_>,
