@@ -4,14 +4,15 @@ members = [
     "crates/sqlex-common",
     "crates/sqlex-cli",
     "crates/analyzer/sqlex-analyzer",
+    "crates/analyzer/sqlex-hybrid-analyzer",
     "crates/analyzer/sqlex-database-analyzer",
     "crates/analyzer/sqlex-static-analyzer",
     "crates/generator/sqlex-generator",
+    "crates/generator/sqlex-generator-debug",
     "crates/generator/sqlex-generator-rust",
     "crates/generator/sqlex-generator-go",
     "crates/generator/sqlex-generator-java",
     "crates/sqlex-compiler",
-    "crates/generator/sqlex-generator-debug", "crates/analyzer/sqlex-hybrid-analyzer",
 ]
 
 [workspace.dependencies]
