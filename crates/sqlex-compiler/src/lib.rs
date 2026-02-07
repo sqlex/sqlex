@@ -9,7 +9,7 @@ use sqlex_common::{
 use sqlex_database_analyzer::new_database_analyzer;
 use sqlex_static_analyzer::StaticAnalyzer;
 
-mod factory;
+mod generators;
 mod project;
 
 pub use project::Project;
@@ -105,9 +105,10 @@ impl Compiler {
                 gen_config.name, gen_config.generator
             );
             let generator =
-                factory::get_generator(&gen_config.generator, gen_config.config.clone()).map_err(
-                    |e| anyhow::anyhow!("Failed to create generator '{}': {}", gen_config.name, e),
-                )?;
+                generators::get_generator(&gen_config.generator, gen_config.config.clone())
+                    .map_err(|e| {
+                        anyhow::anyhow!("Failed to create generator '{}': {}", gen_config.name, e)
+                    })?;
 
             generator.generate(&compilation_unit).await?;
 
