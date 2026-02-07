@@ -12,6 +12,7 @@ queries:
       SELECT region, SUM(amount) AS sum
       FROM sales
       GROUP BY region
+    cardinality: Unknown
     expected:
       - name: region
         nullability: false
@@ -23,6 +24,7 @@ queries:
       SELECT region, COUNT(*) AS cnt
       FROM sales
       GROUP BY region
+    cardinality: Unknown
     expected:
       - name: region
         nullability: false
@@ -35,6 +37,7 @@ queries:
       FROM sales
       GROUP BY region
       HAVING COUNT(*) > 1
+    cardinality: Unknown
     expected:
       - name: region
         nullability: false
@@ -45,6 +48,7 @@ queries:
     sql: |
       SELECT COUNT(amount) AS cnt
       FROM sales
+    cardinality: ExactlyOne
     expected:
       - name: cnt
         nullability: false

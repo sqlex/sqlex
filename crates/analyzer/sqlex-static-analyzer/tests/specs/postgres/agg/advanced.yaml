@@ -9,12 +9,14 @@ migrations:
 queries:
   - name: avg_amount
     sql: SELECT AVG(amount) AS avg_amount FROM sales
+    cardinality: ExactlyOne
     expected:
       - name: avg_amount
         nullability: true
 
   - name: count_distinct
     sql: SELECT COUNT(DISTINCT region) AS cnt FROM sales
+    cardinality: ExactlyOne
     expected:
       - name: cnt
         nullability: false
@@ -25,6 +27,7 @@ queries:
       FROM sales
       GROUP BY region
       HAVING region IS NOT NULL
+    cardinality: Unknown
     expected:
       - name: region
         nullability: true

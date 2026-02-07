@@ -9,6 +9,7 @@ migrations:
 queries:
   - name: min_max_nullable
     sql: SELECT MIN(amount) AS min_amt, MAX(amount) AS max_amt FROM sales
+    cardinality: ExactlyOne
     expected:
       - name: min_amt
         nullability: true
@@ -20,6 +21,7 @@ queries:
       SELECT region, COUNT(*) AS cnt
       FROM sales
       GROUP BY region
+    cardinality: Unknown
     expected:
       - name: region
         nullability: true
