@@ -120,27 +120,15 @@ async fn run_watch(config_path: String) -> Result<()> {
         eprintln!("Initial generation failed: {:#}", e);
     }
 
-    let (config_file, config) = load_config(&config_path).await?;
+    let (config_file, _config) = load_config(&config_path).await?;
     let project_root = config_file.parent().unwrap_or_else(|| Path::new("."));
-    let migrations_dir = project_root.join(&config.migrations);
 
     let (tx, rx) = channel();
     let mut watcher = notify::recommended_watcher(tx)?;
 
-    // Watch config file
-    watcher.watch(&config_file, RecursiveMode::NonRecursive)?;
-    println!("Watching config: {:?}", config_file);
-
-    // Watch migrations directory
-    if migrations_dir.exists() {
-        watcher.watch(&migrations_dir, RecursiveMode::Recursive)?;
-        println!("Watching migrations: {:?}", migrations_dir);
-    } else {
-        println!(
-            "Warning: migrations directory {:?} does not exist, not watching it.",
-            migrations_dir
-        );
-    }
+    // Watch entire project root directory recursively
+    watcher.watch(project_root, RecursiveMode::Recursive)?;
+    println!("Watching project directory: {:?}", project_root);
 
     // Debounce logic
     let debounce_duration = Duration::from_secs(2);
