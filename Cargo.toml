@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/common",
-    "crates/cli",
+    "crates/sqlex-common",
+    "crates/sqlex-cli",
     "crates/analyzer/sqlex-analyzer",
     "crates/analyzer/sqlex-database-analyzer",
     "crates/analyzer/sqlex-static-analyzer",
@@ -10,16 +10,16 @@ members = [
     "crates/generator/sqlex-generator-rust",
     "crates/generator/sqlex-generator-go",
     "crates/generator/sqlex-generator-java",
-    "crates/compiler",
+    "crates/sqlex-compiler",
     "crates/generator/sqlex-generator-debug",
 ]
 
 [workspace.dependencies]
 # Internal Crates
 sqlex-analyzer = { path = "crates/analyzer/sqlex-analyzer" }
-sqlex-cli = { path = "crates/cli" }
-sqlex-common = { path = "crates/common" }
-sqlex-compiler = { path = "crates/compiler" }
+sqlex-cli = { path = "crates/sqlex-cli" }
+sqlex-common = { path = "crates/sqlex-common" }
+sqlex-compiler = { path = "crates/sqlex-compiler" }
 sqlex-database-analyzer = { path = "crates/analyzer/sqlex-database-analyzer" }
 sqlex-generator = { path = "crates/generator/sqlex-generator" }
 sqlex-generator-debug = { path = "crates/generator/sqlex-generator-debug" }
