@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use sqlex_analyzer::extension::ObjectNameExt;
 use sqlparser::ast::{JoinConstraint, JoinOperator, TableFactor, TableWithJoins};
 
 use crate::{
@@ -135,7 +136,7 @@ impl<'a> Binder<'a> {
     ) -> (TableId, BindScope) {
         match table {
             TableFactor::Table { name, alias, .. } => {
-                let table_name = name.to_string();
+                let table_name = name.to_normalized_string(self.dialect);
                 let alias_name = alias.as_ref().map(|a| a.name.value.clone());
                 if let Some(alias) = alias.as_ref() {
                     if keywords::is_reserved_identifier(self.dialect, &alias.name) {

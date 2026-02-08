@@ -1,0 +1,25 @@
+dialect: Postgres
+migrations:
+  - |
+    create table department
+    (
+        id   varchar(22) primary key,
+        name varchar(255) not null
+    )
+  - |
+    create table "user"
+    (
+        id      varchar(22) primary key,
+        age     integer     not null,
+        dept_id varchar(22) not null
+    )
+queries:
+  - name: get_all_user
+    sql: select * from "user"
+    expected:
+      - name: id
+        nullability: false
+      - name: age
+        nullability: false
+      - name: dept_id
+        nullability: false

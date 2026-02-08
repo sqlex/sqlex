@@ -59,7 +59,7 @@ impl Catalog {
             ..
         } = create_table;
 
-        let table_name = name.to_dotted_string();
+        let table_name = name.to_normalized_string(self.dialect);
         let mut table = TableDef::new(&table_name);
 
         // Parse columns
@@ -89,7 +89,7 @@ impl Catalog {
                     } => {
                         let fk = ForeignKeyDef::new(
                             vec![col.name.value.clone()],
-                            foreign_table.to_dotted_string(),
+                            foreign_table.to_normalized_string(self.dialect),
                             referred_columns.iter().map(|id| id.value.clone()).collect(),
                         );
                         table.foreign_keys.push(fk);
@@ -101,7 +101,7 @@ impl Catalog {
 
         // Parse table constraints
         for constraint in constraints {
-            parse_table_constraint(constraint, &mut table)?;
+            parse_table_constraint(self.dialect, constraint, &mut table)?;
         }
 
         self.add_table(table);
@@ -115,7 +115,7 @@ impl Catalog {
             name, operations, ..
         } = stmt
         {
-            let table_name = name.to_dotted_string();
+            let table_name = name.to_normalized_string(self.dialect);
             if let Some(table) = self.tables.get_mut(&table_name) {
                 for op in operations {
                     match op {
@@ -147,7 +147,7 @@ impl Catalog {
                                         .to_string(),
                                 ));
                             }
-                            parse_table_constraint(constraint, table)?;
+                            parse_table_constraint(self.dialect, constraint, table)?;
                         },
                         _ => {
                             // Ignore other operations for now
@@ -177,7 +177,7 @@ impl Catalog {
                 return Ok(());
             }
             for name in names {
-                let table_name = name.to_dotted_string();
+                let table_name = name.to_normalized_string(self.dialect);
                 if self.dialect != Dialect::SQLite && !*cascade {
                     let referencing: Vec<String> = self
                         .tables
@@ -232,7 +232,11 @@ pub fn parse_column_def(dialect: Dialect, col: &ast::ColumnDef) -> Result<Column
 }
 
 /// Parse a table constraint from sqlparser AST
-pub fn parse_table_constraint(constraint: &TableConstraint, table: &mut TableDef) -> Result<()> {
+pub fn parse_table_constraint(
+    dialect: Dialect,
+    constraint: &TableConstraint,
+    table: &mut TableDef,
+) -> Result<()> {
     match constraint {
         TableConstraint::PrimaryKey { columns, .. } => {
             let pk_cols: Vec<String> = columns.iter().map(|c| c.value.clone()).collect();
@@ -259,7 +263,7 @@ pub fn parse_table_constraint(constraint: &TableConstraint, table: &mut TableDef
         } => {
             let mut fk = ForeignKeyDef::new(
                 columns.iter().map(|c| c.value.clone()).collect(),
-                foreign_table.to_dotted_string(),
+                foreign_table.to_normalized_string(dialect),
                 referred_columns.iter().map(|c| c.value.clone()).collect(),
             );
             fk.on_delete = map_referential_action(on_delete);
