@@ -6,6 +6,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use log::{LevelFilter, error, info};
 use notify::{RecursiveMode, Watcher};
 use sqlex_common::{
     config::{AnalyzerMode, GeneratorConfig, SqlexConfig},
@@ -45,6 +46,23 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    simple_logger::SimpleLogger::new()
+        .with_level(LevelFilter::Warn)
+        .with_module_level("sqlex_cli", LevelFilter::Info)
+        .with_module_level("sqlex_compiler", LevelFilter::Info)
+        .with_module_level("sqlex_analyzer", LevelFilter::Info)
+        .with_module_level("sqlex_generator", LevelFilter::Info)
+        .with_module_level("sqlex_static_analyzer", LevelFilter::Info)
+        .with_module_level("sqlex_database_analyzer", LevelFilter::Info)
+        .with_module_level("sqlex_hybrid_analyzer", LevelFilter::Info)
+        .with_module_level("sqlex_generator_rust", LevelFilter::Info)
+        .with_module_level("sqlex_generator_go", LevelFilter::Info)
+        .with_module_level("sqlex_generator_java", LevelFilter::Info)
+        .with_module_level("sqlex_generator_debug", LevelFilter::Info)
+        .with_module_level("sqlex_common", LevelFilter::Info)
+        .init()
+        .ok();
+
     let cli = Cli::parse();
 
     match cli.command {
@@ -72,7 +90,7 @@ async fn run_init(name: String) -> Result<()> {
 
     let config_path = root.join("sqlex.yaml");
     if config_path.exists() {
-        println!("Config file already exists at {:?}", config_path);
+        info!("config file already exists at {:?}", config_path);
     } else {
         let config = SqlexConfig {
             name: name.clone(),
@@ -92,7 +110,7 @@ async fn run_init(name: String) -> Result<()> {
         fs::write(&config_path, content)
             .await
             .context("Failed to write sqlex.yaml")?;
-        println!("Created {:?}", config_path);
+        info!("created {:?}", config_path);
     }
 
     let migrations_dir = root.join("migrations");
@@ -100,24 +118,24 @@ async fn run_init(name: String) -> Result<()> {
         fs::create_dir_all(&migrations_dir)
             .await
             .context("Failed to create migrations directory")?;
-        println!("Created {:?}", migrations_dir);
+        info!("created {:?}", migrations_dir);
     }
 
-    println!("Initialized sqlex project: {}", name);
+    info!("initialized sqlex project: {}", name);
     Ok(())
 }
 
 async fn run_generate(config_path: String) -> Result<()> {
     let (config_file, config) = load_config(&config_path).await?;
     run_compiler(config, &config_file).await?;
-    println!("Generated successfully!");
+    info!("generated successfully!");
     Ok(())
 }
 
 async fn run_watch(config_path: String) -> Result<()> {
     // Initial run
     if let Err(e) = run_generate(config_path.clone()).await {
-        eprintln!("Initial generation failed: {:#}", e);
+        error!("initial generation failed: {:#}", e);
     }
 
     let (config_file, _config) = load_config(&config_path).await?;
@@ -128,7 +146,7 @@ async fn run_watch(config_path: String) -> Result<()> {
 
     // Watch entire project root directory recursively
     watcher.watch(project_root, RecursiveMode::Recursive)?;
-    println!("Watching project directory: {:?}", project_root);
+    info!("watching project directory: {:?}", project_root);
 
     // Debounce logic
     let debounce_duration = Duration::from_secs(2);
@@ -147,20 +165,18 @@ async fn run_watch(config_path: String) -> Result<()> {
                         // Small delay to let FS settle and accumulate more events if any
                         tokio::time::sleep(Duration::from_millis(100)).await;
 
-                        // Clear screen
-                        print!("\x1B[2J\x1B[1;1H");
-                        println!("File change detected. Regenerating...");
+                        info!("file change detected. regenerating...");
 
                         if let Err(e) = run_generate(config_path.clone()).await {
-                            eprintln!("Generation failed: {:#}", e);
+                            error!("generation failed: {:#}", e);
                         }
                         last_processed = std::time::Instant::now();
                     },
-                    Err(e) => println!("Watch error: {:?}", e),
+                    Err(e) => error!("watch error: {:?}", e),
                 }
             },
             Err(e) => {
-                println!("Watch channel error: {:?}", e);
+                error!("watch channel error: {:?}", e);
                 break;
             },
         }

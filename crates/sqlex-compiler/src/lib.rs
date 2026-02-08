@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use log::{debug, info};
 use sqlex_analyzer::Analyzer;
 use sqlex_common::{
     config::{AnalyzerMode, SqlexConfig},
@@ -29,39 +30,39 @@ impl Compiler {
     }
 
     pub async fn compile(&self) -> Result<()> {
-        println!("Compiler: Starting compilation process...");
+        info!("compiler: starting compilation process...");
 
         // 1. Scan Project
-        println!("Step 1: Scanning project files...");
+        info!("step 1: scanning project files...");
         let project = Project::build(self.config.clone(), &self.config_path).await?;
-        println!("  Found {} migration(s)", project.migrations.len());
-        println!("  Found {} query(ies)", project.queries.len());
+        info!("  found {} migration(s)", project.migrations.len());
+        info!("  found {} query(ies)", project.queries.len());
 
         // 2. Initialize Analyzer
-        println!("Step 2: Initializing analyzer...");
+        info!("step 2: initializing analyzer...");
         let mut analyzer: Box<dyn Analyzer> = match self.config.analyzer {
             AnalyzerMode::Static => {
-                println!("  Using static analyzer");
+                info!("  using static analyzer");
                 Box::new(StaticAnalyzer::new(self.config.dialect))
             },
             AnalyzerMode::Database => {
-                println!("  Using database analyzer");
+                info!("  using database analyzer");
                 new_database_analyzer(self.config.dialect).await?
             },
             AnalyzerMode::Hybrid => {
-                println!("  Using hybrid analyzer");
+                info!("  using hybrid analyzer");
                 Box::new(HybridAnalyzer::new(self.config.dialect).await?)
             },
         };
 
         // 3. Analyze Queries
-        println!("Step 3: Analyzing queries...");
+        info!("step 3: analyzing queries...");
 
         // Execute migrations to build schema
-        println!("  Executing {} migration(s)...", project.migrations.len());
+        info!("  executing {} migration(s)...", project.migrations.len());
         for migration in &project.migrations {
-            println!(
-                "    Executing migration: {} (version {})",
+            debug!(
+                "    executing migration: {} (version {})",
                 migration.name, migration.version
             );
             for statement in &migration.statements {
@@ -77,13 +78,13 @@ impl Compiler {
             .get_all_tables()
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get tables: {}", e))?;
-        println!("  Found {} table(s) in schema", tables.len());
+        info!("  found {} table(s) in schema", tables.len());
 
         // Analyze each query
-        println!("  Analyzing {} query(ies)...", project.queries.len());
+        info!("  analyzing {} query(ies)...", project.queries.len());
         let mut query_descriptors = Vec::new();
         for query in &project.queries {
-            println!("    Analyzing query: {}", query.name);
+            debug!("    analyzing query: {}", query.name);
             let result_set = analyzer
                 .analyze(&query.sql)
                 .await
@@ -105,10 +106,10 @@ impl Compiler {
         };
 
         // 4. Initialize & Run Generators
-        println!("Step 4: Running generators...");
+        info!("step 4: running generators...");
         for gen_config in &self.config.generators {
-            println!(
-                "Running generator: {} ({})",
+            info!(
+                "running generator: {} ({})",
                 gen_config.name, gen_config.generator
             );
             let generator =
@@ -119,7 +120,7 @@ impl Compiler {
 
             generator.generate(&compilation_unit).await?;
 
-            println!("Generator {} finished.", gen_config.name);
+            info!("generator {} finished.", gen_config.name);
         }
 
         Ok(())

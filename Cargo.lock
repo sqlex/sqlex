@@ -334,6 +334,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
 
 [[package]]
+name = "colored"
+version = "3.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
+dependencies = [
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1390,6 +1399,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "num_threads"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c7398b9c8b70908f6371f47ed36737907c87c52af34c268fed0bf0ceb92ead9"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "object"
 version = "0.37.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2082,6 +2100,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "simple_logger"
+version = "5.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "291bee647ce7310b0ea721bfd7e0525517b4468eb7c7e15eb8bd774343179702"
+dependencies = [
+ "colored",
+ "log",
+ "time",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2143,11 +2173,13 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "clap",
+ "log",
  "notify",
  "predicates",
  "serde",
  "serde_json",
  "serde_yaml",
+ "simple_logger",
  "sqlex-common",
  "sqlex-compiler",
  "tempfile",
@@ -2168,6 +2200,7 @@ name = "sqlex-compiler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "log",
  "serde_json",
  "sqlex-analyzer",
  "sqlex-common",
@@ -2644,7 +2677,9 @@ checksum = "9da98b7d9b7dad93488a84b8248efc35352b0b2657397d4167e7ad67e5d535e5"
 dependencies = [
  "deranged",
  "itoa",
+ "libc",
  "num-conv",
+ "num_threads",
  "powerfmt",
  "serde_core",
  "time-core",
