@@ -243,18 +243,21 @@ impl Project {
 
         Self::validate_identifier(file_name, &format!("query file {}", path.display()))?;
 
-        // Calculate package path from relative path
+        // Calculate package path from relative path (including file name)
         let relative_path = path.strip_prefix(&self.config_dir).context(format!(
             "Failed to compute relative path for {}",
             path.display()
         ))?;
 
-        let package_path: Vec<String> = relative_path
+        let mut package_path: Vec<String> = relative_path
             .parent()
             .unwrap_or(Path::new(""))
             .components()
             .filter_map(|c| c.as_os_str().to_str().map(|s| s.to_string()))
             .collect();
+
+        // Add file name (without extension) to package path
+        package_path.push(file_name.to_string());
 
         let content = tokio::fs::read_to_string(path)
             .await
