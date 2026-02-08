@@ -26,7 +26,7 @@ pub fn cleanup_container_only_sync(container_id: &str) {
     }
 
     let _ = std::process::Command::new("docker")
-        .args(["rm", "-f", container_id])
+        .args(["rm", "-f", "-v", container_id])
         .output();
 }
 
@@ -89,7 +89,7 @@ fn remove_container_via_http(container_id: &str) -> std::io::Result<()> {
     let stop_path = format!("/containers/{}/stop?t=5", container_id);
     let _ = send_docker_http_request_raw("POST", &stop_path);
 
-    let remove_path = format!("/containers/{}?force=1", container_id);
+    let remove_path = format!("/containers/{}?force=1&v=1", container_id);
     let status = parse_http_status(&send_docker_http_request_raw("DELETE", &remove_path)?)?;
     if matches!(status, 200 | 204 | 404) {
         Ok(())
