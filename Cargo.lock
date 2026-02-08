@@ -2202,6 +2202,7 @@ dependencies = [
  "anyhow",
  "log",
  "serde_json",
+ "serde_yaml",
  "sqlex-analyzer",
  "sqlex-common",
  "sqlex-database-analyzer",

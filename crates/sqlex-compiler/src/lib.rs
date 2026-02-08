@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use log::{debug, info};
 use sqlex_analyzer::Analyzer;
 use sqlex_common::{
@@ -50,12 +50,35 @@ enum ChangeType {
 }
 
 impl Compiler {
-    pub fn new(config: SqlexConfig, config_path: &Path) -> Self {
-        Self {
+    pub async fn new(config_path: &Path) -> Result<Self> {
+        let config = Self::load_config(config_path).await?;
+        Ok(Self {
             config,
             config_path: config_path.to_path_buf(),
             state: None,
+        })
+    }
+
+    async fn load_config(config_path: &Path) -> Result<SqlexConfig> {
+        let content = tokio::fs::read_to_string(config_path)
+            .await
+            .context(format!("Failed to read config file: {:?}", config_path))?;
+
+        let mut config: SqlexConfig =
+            serde_yaml::from_str(&content).context("Failed to parse config file")?;
+
+        // Resolve relative paths for generator outputs
+        let config_dir = config_path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Failed to get config directory"))?;
+
+        for generator in &mut config.generators {
+            if generator.output.is_relative() {
+                generator.output = config_dir.join(&generator.output);
+            }
         }
+
+        Ok(config)
     }
 
     async fn compute_file_hash(path: &Path) -> Result<u64> {
@@ -65,22 +88,14 @@ impl Compiler {
         Ok(hasher.finish())
     }
 
-    fn compute_config_hash(config: &SqlexConfig) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        if let Ok(json) = serde_json::to_string(config) {
-            json.hash(&mut hasher);
-        }
-        hasher.finish()
-    }
-
     async fn detect_changes(&self, new_project: &Project) -> Result<ChangeType> {
         let Some(state) = &self.state else {
             return Ok(ChangeType::FirstRun);
         };
 
         // Check config changes
-        let new_config_hash = Self::compute_config_hash(&self.config);
-        if new_config_hash != state.config_hash {
+        let config_file_hash = Self::compute_file_hash(&self.config_path).await?;
+        if config_file_hash != state.config_hash {
             info!("detected config change");
             return Ok(ChangeType::ConfigChanged);
         }
@@ -277,10 +292,11 @@ impl Compiler {
         }
 
         // Save state
+        let config_hash = Self::compute_file_hash(&self.config_path).await?;
         self.state = Some(CompilationState {
             migration_hashes,
             query_file_hashes,
-            config_hash: Self::compute_config_hash(&self.config),
+            config_hash,
             analyzer,
             generators,
             compilation_unit,
@@ -397,6 +413,9 @@ impl Compiler {
 
     pub async fn compile(&mut self) -> Result<()> {
         info!("compiler: starting compilation process...");
+
+        // Reload config to pick up any changes
+        self.config = Self::load_config(&self.config_path).await?;
 
         // Scan project files
         info!("scanning project files...");

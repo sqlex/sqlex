@@ -20,5 +20,6 @@ sqlex-static-analyzer = { workspace = true }
 anyhow = { workspace = true }
 log = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true }
 sqlparser = { workspace = true }
 tokio = { workspace = true }

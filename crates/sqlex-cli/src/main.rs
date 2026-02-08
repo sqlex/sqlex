@@ -135,19 +135,19 @@ async fn run_init(name: Option<String>) -> Result<()> {
 }
 
 async fn run_generate(config_path: Option<String>) -> Result<()> {
-    let (config_file, config) = load_config(config_path).await?;
-    let mut compiler = Compiler::new(config, &config_file);
+    let config_file = find_config_file(config_path).await?;
+    let mut compiler = Compiler::new(&config_file).await?;
     compiler.compile().await?;
     info!("generated successfully!");
     Ok(())
 }
 
 async fn run_watch(config_path: Option<String>) -> Result<()> {
-    let (config_file, config) = load_config(config_path.clone()).await?;
+    let config_file = find_config_file(config_path.clone()).await?;
     let project_root = config_file.parent().unwrap_or_else(|| Path::new("."));
 
     // Create compiler instance (will be reused for incremental compilation)
-    let mut compiler = Compiler::new(config, &config_file);
+    let mut compiler = Compiler::new(&config_file).await?;
 
     // Initial run
     if let Err(e) = compiler.compile().await {
@@ -208,7 +208,7 @@ async fn run_watch(config_path: Option<String>) -> Result<()> {
     Ok(())
 }
 
-async fn load_config(path_str: Option<String>) -> Result<(PathBuf, SqlexConfig)> {
+async fn find_config_file(path_str: Option<String>) -> Result<PathBuf> {
     let config_path = if let Some(path_str) = path_str {
         // User provided a path
         let path = Path::new(&path_str);
@@ -237,23 +237,5 @@ async fn load_config(path_str: Option<String>) -> Result<(PathBuf, SqlexConfig)>
         anyhow::bail!("Config file not found at: {:?}", config_path);
     }
 
-    let content = fs::read_to_string(&config_path)
-        .await
-        .context(format!("Failed to read config file: {:?}", config_path))?;
-
-    let mut config: SqlexConfig =
-        serde_yaml::from_str(&content).context("Failed to parse config file")?;
-
-    // Resolve relative paths for generator outputs
-    let config_dir = config_path
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("Failed to get config directory"))?;
-
-    for generator in &mut config.generators {
-        if generator.output.is_relative() {
-            generator.output = config_dir.join(&generator.output);
-        }
-    }
-
-    Ok((config_path, config))
+    Ok(config_path)
 }
