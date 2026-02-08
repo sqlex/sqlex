@@ -90,6 +90,7 @@ impl Compiler {
                 .map_err(|e| anyhow::anyhow!("Failed to analyze query '{}': {}", query.name, e))?;
             query_descriptors.push(QueryDescriptor {
                 name: query.name.clone(),
+                package_path: query.package_path.clone(),
                 sql: query.sql.clone(),
                 params: Vec::new(), // TODO: Extract parameters from SQL
                 cardinality: result_set.cardinality,
