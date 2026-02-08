@@ -60,7 +60,7 @@ impl FunctionMeta {
             | ScalarFunction::CharLength => {
                 if dialect == Dialect::Postgres {
                     if let Some(first_arg) = arg_types.first() {
-                        if !matches!(first_arg, DataType::Custom(_)) && !first_arg.is_text_like() {
+                        if !first_arg.is_text_like() {
                             return Some(format!(
                                 "function {:?}(non-text) does not exist in PostgreSQL",
                                 scalar_fn
@@ -85,7 +85,7 @@ impl FunctionMeta {
             | ScalarFunction::Sign => {
                 if dialect == Dialect::Postgres {
                     if let Some(first_arg) = arg_types.first() {
-                        if !matches!(first_arg, DataType::Custom(_)) && !first_arg.is_numeric() {
+                        if !first_arg.is_numeric() {
                             return Some(format!(
                                 "function {:?}(non-numeric) does not exist in PostgreSQL",
                                 scalar_fn
@@ -98,7 +98,7 @@ impl FunctionMeta {
             ScalarFunction::Power | ScalarFunction::Mod => {
                 if dialect == Dialect::Postgres {
                     for (i, arg_type) in arg_types.iter().enumerate() {
-                        if !matches!(arg_type, DataType::Custom(_)) && !arg_type.is_numeric() {
+                        if !arg_type.is_numeric() {
                             return Some(format!(
                                 "function {:?}() requires numeric arguments in PostgreSQL, argument {} is non-numeric",
                                 scalar_fn,
@@ -123,7 +123,7 @@ impl FunctionMeta {
             AggregateFunction::Sum | AggregateFunction::Avg => {
                 if dialect == Dialect::Postgres {
                     if let Some(first_arg) = arg_types.first() {
-                        if !matches!(first_arg, DataType::Custom(_)) && !first_arg.is_numeric() {
+                        if !first_arg.is_numeric() {
                             return Some(format!("function {:?}(text) does not exist", agg_fn));
                         }
                     }

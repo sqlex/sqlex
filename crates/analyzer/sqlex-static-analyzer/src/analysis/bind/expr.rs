@@ -134,6 +134,57 @@ impl<'a> Binder<'a> {
                     negated: *negated,
                 })
             },
+            Expr::Trim {
+                expr,
+                trim_where,
+                trim_what: _,
+                trim_characters: _,
+            } => {
+                // Bind the main expression
+                let expr_id = self.bind_expr(expr, scope);
+
+                // TRIM is treated as a function call
+                // Map to TRIM, LTRIM, or RTRIM based on trim_where
+                let func_name = match trim_where {
+                    Some(sqlparser::ast::TrimWhereField::Leading) => "LTRIM",
+                    Some(sqlparser::ast::TrimWhereField::Trailing) => "RTRIM",
+                    Some(sqlparser::ast::TrimWhereField::Both) | None => "TRIM",
+                };
+
+                let meta = functions::resolve_function(func_name);
+
+                self.exprs.alloc(BoundExpr::Function {
+                    name: func_name.to_string(),
+                    kind: meta.kind,
+                    args: vec![expr_id],
+                    distinct: false,
+                    over: false,
+                })
+            },
+            Expr::Ceil { expr, field: _ } => {
+                let expr_id = self.bind_expr(expr, scope);
+                let meta = functions::resolve_function("CEIL");
+
+                self.exprs.alloc(BoundExpr::Function {
+                    name: "CEIL".to_string(),
+                    kind: meta.kind,
+                    args: vec![expr_id],
+                    distinct: false,
+                    over: false,
+                })
+            },
+            Expr::Floor { expr, field: _ } => {
+                let expr_id = self.bind_expr(expr, scope);
+                let meta = functions::resolve_function("FLOOR");
+
+                self.exprs.alloc(BoundExpr::Function {
+                    name: "FLOOR".to_string(),
+                    kind: meta.kind,
+                    args: vec![expr_id],
+                    distinct: false,
+                    over: false,
+                })
+            },
             _ => {
                 self.diagnostics.push(
                     Diagnostic::unsupported_feature("expression in binder")
