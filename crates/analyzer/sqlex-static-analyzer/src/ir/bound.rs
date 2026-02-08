@@ -157,6 +157,7 @@ pub enum BoundExpr {
         distinct: bool,
         over: bool,
     },
+    Wildcard,
     Case {
         operand: Option<ExprId>,
         conditions: Vec<ExprId>,

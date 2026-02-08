@@ -314,6 +314,7 @@ impl Inferrer<'_> {
             },
             BoundExpr::Column(_)
             | BoundExpr::Literal(_)
+            | BoundExpr::Wildcard
             | BoundExpr::Subquery(_)
             | BoundExpr::InSubquery { .. }
             | BoundExpr::Error => false,

@@ -37,6 +37,7 @@ impl<'a> ExprFormatter<'a> {
             BoundExpr::IsNull { expr, negated } => {
                 self.format_is_null_as_column_name(*expr, *negated)
             },
+            BoundExpr::Wildcard => "*".to_string(),
             _ => self.format_unknown_as_column_name(),
         }
     }
@@ -121,20 +122,11 @@ impl<'a> ExprFormatter<'a> {
     }
 
     fn format_function_call(&self, name: &str, args: &[ExprId], distinct: bool) -> String {
-        // Special handling for COUNT(*) - the wildcard is converted to literal 1 during binding
-        let args_str = if args.len() == 1 && name.eq_ignore_ascii_case("COUNT") {
-            let arg_expr = self.stmt.exprs.get(args[0]);
-            if matches!(arg_expr, BoundExpr::Literal(Value::Number(n, _)) if n == "1") {
-                "*".to_string()
-            } else {
-                self.format_expr(args[0])
-            }
-        } else {
-            args.iter()
-                .map(|arg| self.format_expr(*arg))
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
+        let args_str = args
+            .iter()
+            .map(|arg| self.format_expr(*arg))
+            .collect::<Vec<_>>()
+            .join(", ");
         if distinct {
             format!("{}(DISTINCT {})", name, args_str)
         } else {

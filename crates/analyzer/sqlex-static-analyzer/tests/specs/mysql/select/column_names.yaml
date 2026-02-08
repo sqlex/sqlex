@@ -45,6 +45,14 @@ queries:
       - name: "MIN(age)"
         nullability: true
 
+  # Test COUNT(1) without alias
+  - name: count_one_without_alias
+    sql: SELECT COUNT(1) FROM users
+    cardinality: ExactlyOne
+    expected:
+      - name: "COUNT(1)"
+        nullability: false
+
   # Test string functions without aliases
   - name: string_functions_without_alias
     sql: SELECT LENGTH(name), UPPER(name), LOWER(email) FROM users

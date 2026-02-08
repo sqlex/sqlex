@@ -157,7 +157,7 @@ fn analyze_group_expr_inner(stmt: &BoundStatement, expr_id: ExprId, analysis: &m
             }
         },
         BoundExpr::Subquery(_) | BoundExpr::InSubquery { .. } => {},
-        BoundExpr::Literal(_) | BoundExpr::Error => {},
+        BoundExpr::Literal(_) | BoundExpr::Wildcard | BoundExpr::Error => {},
     }
 }
 

@@ -89,6 +89,10 @@ impl Inferrer<'_> {
                     nullable: expr_info.nullable,
                 }
             },
+            BoundExpr::Wildcard => TypeInfo {
+                data_type: DataType::Custom("*".to_string()),
+                nullable: false,
+            },
             BoundExpr::Error => TypeInfo {
                 data_type: DataType::Custom("unknown".to_string()),
                 nullable: true,

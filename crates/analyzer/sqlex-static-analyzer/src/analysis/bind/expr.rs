@@ -1,4 +1,4 @@
-use sqlparser::ast::{Expr, FunctionArg, FunctionArgExpr, FunctionArguments, Value};
+use sqlparser::ast::{Expr, FunctionArg, FunctionArgExpr, FunctionArguments};
 
 use crate::{
     analysis::{
@@ -172,9 +172,7 @@ impl<'a> Binder<'a> {
                         args.push(self.bind_expr(e, scope));
                     },
                     FunctionArg::Unnamed(FunctionArgExpr::Wildcard) => {
-                        let expr_id = self
-                            .exprs
-                            .alloc(BoundExpr::Literal(Value::Number("1".to_string(), false)));
+                        let expr_id = self.exprs.alloc(BoundExpr::Wildcard);
                         args.push(expr_id);
                     },
                     _ => {
