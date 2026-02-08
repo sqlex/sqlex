@@ -16,20 +16,136 @@ impl FunctionMeta {
         dialect: Dialect,
         arg_types: &[DataType],
     ) -> Option<String> {
-        if let FunctionKind::Scalar(ScalarFunction::Substring) = &self.kind {
-            if dialect == Dialect::Postgres {
-                if let Some(first_arg) = arg_types.first() {
-                    if !matches!(first_arg, DataType::Custom(_)) && !first_arg.is_text_like() {
-                        return Some(
-                            "expected a text or bytea argument for position 1 in PostgreSQL"
-                                .to_string(),
-                        );
+        match &self.kind {
+            FunctionKind::Scalar(scalar_fn) => {
+                self.validate_scalar_function(dialect, scalar_fn, arg_types)
+            },
+            FunctionKind::Aggregate(agg_fn) => {
+                self.validate_aggregate_function(dialect, agg_fn, arg_types)
+            },
+            FunctionKind::Window(window_fn) => {
+                self.validate_window_function(dialect, window_fn, arg_types)
+            },
+            FunctionKind::Unknown => None,
+        }
+    }
+
+    fn validate_scalar_function(
+        &self,
+        dialect: Dialect,
+        scalar_fn: &ScalarFunction,
+        arg_types: &[DataType],
+    ) -> Option<String> {
+        match scalar_fn {
+            // String functions validation
+            ScalarFunction::Substring => {
+                if dialect == Dialect::Postgres {
+                    if let Some(first_arg) = arg_types.first() {
+                        if !matches!(first_arg, DataType::Custom(_)) && !first_arg.is_text_like() {
+                            return Some(
+                                "expected a text or bytea argument for position 1 in PostgreSQL"
+                                    .to_string(),
+                            );
+                        }
                     }
                 }
-            }
+                None
+            },
+            ScalarFunction::Upper
+            | ScalarFunction::Lower
+            | ScalarFunction::Trim
+            | ScalarFunction::Ltrim
+            | ScalarFunction::Rtrim
+            | ScalarFunction::Length
+            | ScalarFunction::CharLength => {
+                if dialect == Dialect::Postgres {
+                    if let Some(first_arg) = arg_types.first() {
+                        if !matches!(first_arg, DataType::Custom(_)) && !first_arg.is_text_like() {
+                            return Some(format!(
+                                "function {:?}(non-text) does not exist in PostgreSQL",
+                                scalar_fn
+                            ));
+                        }
+                    }
+                }
+                None
+            },
+            // Numeric functions validation
+            ScalarFunction::Abs
+            | ScalarFunction::Ceil
+            | ScalarFunction::Floor
+            | ScalarFunction::Round
+            | ScalarFunction::Truncate
+            | ScalarFunction::Sqrt
+            | ScalarFunction::Exp
+            | ScalarFunction::Log
+            | ScalarFunction::Ln
+            | ScalarFunction::Log10
+            | ScalarFunction::Log2
+            | ScalarFunction::Sign => {
+                if dialect == Dialect::Postgres {
+                    if let Some(first_arg) = arg_types.first() {
+                        if !matches!(first_arg, DataType::Custom(_)) && !first_arg.is_numeric() {
+                            return Some(format!(
+                                "function {:?}(non-numeric) does not exist in PostgreSQL",
+                                scalar_fn
+                            ));
+                        }
+                    }
+                }
+                None
+            },
+            ScalarFunction::Power | ScalarFunction::Mod => {
+                if dialect == Dialect::Postgres {
+                    for (i, arg_type) in arg_types.iter().enumerate() {
+                        if !matches!(arg_type, DataType::Custom(_)) && !arg_type.is_numeric() {
+                            return Some(format!(
+                                "function {:?}() requires numeric arguments in PostgreSQL, argument {} is non-numeric",
+                                scalar_fn,
+                                i + 1
+                            ));
+                        }
+                    }
+                }
+                None
+            },
+            _ => None,
         }
+    }
 
-        None
+    fn validate_aggregate_function(
+        &self,
+        dialect: Dialect,
+        agg_fn: &AggregateFunction,
+        arg_types: &[DataType],
+    ) -> Option<String> {
+        match agg_fn {
+            AggregateFunction::Sum | AggregateFunction::Avg => {
+                if dialect == Dialect::Postgres {
+                    if let Some(first_arg) = arg_types.first() {
+                        if !matches!(first_arg, DataType::Custom(_)) && !first_arg.is_numeric() {
+                            return Some(format!("function {:?}(text) does not exist", agg_fn));
+                        }
+                    }
+                }
+                None
+            },
+            _ => None,
+        }
+    }
+
+    fn validate_window_function(
+        &self,
+        dialect: Dialect,
+        window_fn: &WindowFunction,
+        arg_types: &[DataType],
+    ) -> Option<String> {
+        match window_fn {
+            WindowFunction::Aggregate(agg_fn) => {
+                self.validate_aggregate_function(dialect, agg_fn, arg_types)
+            },
+            _ => None,
+        }
     }
 }
 

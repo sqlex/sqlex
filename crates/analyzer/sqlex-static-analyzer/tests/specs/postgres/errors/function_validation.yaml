@@ -1,0 +1,30 @@
+dialect: postgres
+migrations:
+  - |
+    CREATE TABLE test_table (
+      id INT NOT NULL,
+      name TEXT NOT NULL,
+      amount DECIMAL
+    )
+queries:
+  # String functions with non-text arguments
+  - name: upper_on_numeric
+    sql: SELECT UPPER(id) FROM test_table
+
+  - name: lower_on_numeric
+    sql: SELECT LOWER(amount) FROM test_table
+
+  # Aggregate functions with non-numeric arguments
+  - name: sum_on_text
+    sql: SELECT SUM(name) FROM test_table
+
+  - name: avg_on_text
+    sql: SELECT AVG(name) FROM test_table
+
+  # Window functions with non-numeric arguments
+  - name: sum_window_on_text
+    sql: SELECT SUM(name) OVER () FROM test_table
+
+  - name: avg_window_on_text
+    sql: SELECT AVG(name) OVER () FROM test_table
+
