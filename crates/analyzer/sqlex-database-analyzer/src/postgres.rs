@@ -155,7 +155,7 @@ impl Analyzer for PostgresDatabaseAnalyzer {
 
     async fn get_all_tables(&self) -> Result<Vec<Table>> {
         let query = r#"
-            SELECT c.table_name, c.column_name, c.udt_name, c.is_nullable, c.character_maximum_length
+            SELECT c.table_name, c.column_name, c.udt_name, c.is_nullable
             FROM information_schema.columns c
             JOIN information_schema.tables t ON c.table_name = t.table_name AND c.table_schema = t.table_schema
             WHERE c.table_schema = 'public'
@@ -185,9 +185,8 @@ impl Analyzer for PostgresDatabaseAnalyzer {
             let is_nullable: String = row
                 .try_get("is_nullable")
                 .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
-            let char_max_length: Option<i32> = row.try_get("character_maximum_length").ok();
 
-            let data_type = map_udt_with_length(&udt_name, char_max_length);
+            let data_type = map_udt(&udt_name);
             let nullability = is_nullable == "YES";
 
             let col_info = ColumnInfo {
@@ -259,31 +258,9 @@ fn map_udt(udt: &str) -> DataType {
         "float4" | "real" => DataType::Float,
         "float8" | "double precision" => DataType::Double,
         "numeric" | "decimal" => DataType::Decimal,
-        "varchar" | "char" | "text" | "bpchar" => DataType::Text,
-        "date" => DataType::Date,
-        "time" | "timetz" => DataType::Time,
-        "timestamp" => DataType::DateTime,
-        "timestamptz" => DataType::Timestamp,
-        "uuid" => DataType::Uuid,
-        "json" | "jsonb" => DataType::Json,
-        "bytea" => DataType::Binary,
-        _ => DataType::Custom(udt.to_string()),
-    }
-}
-
-fn map_udt_with_length(udt: &str, char_max_length: Option<i32>) -> DataType {
-    match udt {
-        "bool" | "boolean" => DataType::Bool,
-        "int2" | "smallint" => DataType::SmallInt(false),
-        "int4" | "integer" | "int" => DataType::Int(false),
-        "int8" | "bigint" => DataType::BigInt(false),
-        "float4" | "real" => DataType::Float,
-        "float8" | "double precision" => DataType::Double,
-        "numeric" | "decimal" => DataType::Decimal,
-        "varchar" => DataType::Varchar(char_max_length.map(|l| l as u32)),
-        "bpchar" => DataType::Char(char_max_length.map(|l| l as u32)),
+        "varchar" => DataType::Varchar,
+        "bpchar" | "char" => DataType::Char,
         "text" => DataType::Text,
-        "char" => DataType::Char(char_max_length.map(|l| l as u32)),
         "date" => DataType::Date,
         "time" | "timetz" => DataType::Time,
         "timestamp" => DataType::DateTime,

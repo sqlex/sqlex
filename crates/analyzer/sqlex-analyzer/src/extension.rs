@@ -47,7 +47,7 @@ impl DataTypeExt for DataType {
     fn is_text_like(&self) -> bool {
         matches!(
             self,
-            DataType::Char(_) | DataType::Varchar(_) | DataType::Text | DataType::Binary
+            DataType::Char | DataType::Varchar | DataType::Text | DataType::Binary
         )
     }
 

@@ -40,8 +40,8 @@ pub enum DataType {
     Decimal,
 
     // Strings
-    Char(Option<u32>),
-    Varchar(Option<u32>),
+    Char,
+    Varchar,
     Text,
 
     // Time

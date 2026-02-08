@@ -390,7 +390,7 @@ mod tests {
         };
 
         let static_col = make_column("name", DataType::Text, false);
-        let db_col = make_column("name", DataType::Varchar(Some(255)), true);
+        let db_col = make_column("name", DataType::Varchar, true);
         let mut warnings = Vec::new();
 
         let result = analyzer.merge_column(0, static_col, db_col, &mut warnings);

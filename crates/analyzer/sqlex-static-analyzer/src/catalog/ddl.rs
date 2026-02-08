@@ -7,8 +7,8 @@ use sqlex_analyzer::{AnalyzerError, extension::ObjectNameExt};
 use sqlex_common::{dialect::Dialect, types::DataType};
 use sqlparser::{
     ast::{
-        self, AlterTableOperation, CharacterLength, ColumnOption, CreateTable,
-        DataType as SqlDataType, Statement, TableConstraint,
+        self, AlterTableOperation, ColumnOption, CreateTable, DataType as SqlDataType, Statement,
+        TableConstraint,
     },
     dialect::{Dialect as SqlParserDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect},
     parser::Parser,
@@ -325,19 +325,8 @@ pub fn map_data_type(dialect: Dialect, sql_type: &SqlDataType) -> DataType {
         SqlDataType::Decimal(_) | SqlDataType::Numeric(_) | SqlDataType::Dec(_) => {
             DataType::Decimal
         },
-        // Match Option<CharacterLength>
-        SqlDataType::Char(n) => match n {
-            Some(CharacterLength::IntegerLength { length, .. }) => {
-                DataType::Char(Some(*length as u32))
-            },
-            _ => DataType::Char(None),
-        },
-        SqlDataType::Varchar(n) => match n {
-            Some(CharacterLength::IntegerLength { length, .. }) => {
-                DataType::Varchar(Some(*length as u32))
-            },
-            _ => DataType::Varchar(None),
-        },
+        SqlDataType::Char(_) => DataType::Char,
+        SqlDataType::Varchar(_) => DataType::Varchar,
         SqlDataType::Text => DataType::Text,
         SqlDataType::Date => DataType::Date,
         SqlDataType::Time(_, _) => DataType::Time,

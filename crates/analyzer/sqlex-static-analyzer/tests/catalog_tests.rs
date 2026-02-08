@@ -292,8 +292,8 @@ fn test_data_type_mapping_text() {
 
     let table = schema.get_table("t").unwrap();
     assert_eq!(table.columns[0].data_type, DataType::Text);
-    assert_eq!(table.columns[1].data_type, DataType::Varchar(Some(255)));
-    assert_eq!(table.columns[2].data_type, DataType::Char(Some(10)));
+    assert_eq!(table.columns[1].data_type, DataType::Varchar);
+    assert_eq!(table.columns[2].data_type, DataType::Char);
 }
 
 #[test]
