@@ -1,0 +1,30 @@
+dialect: postgres
+migrations:
+  - |
+    CREATE TABLE string_types_test (
+      id INT NOT NULL PRIMARY KEY,
+      varchar_col VARCHAR(100) NOT NULL,
+      varchar_nullable VARCHAR(255),
+      char_col CHAR(10) NOT NULL,
+      char_nullable CHAR(20),
+      text_col TEXT NOT NULL,
+      text_nullable TEXT
+    )
+queries:
+  - name: select_all_string_types
+    sql: SELECT id, varchar_col, varchar_nullable, char_col, char_nullable, text_col, text_nullable FROM string_types_test
+    expected:
+      - name: id
+        nullability: false
+      - name: varchar_col
+        nullability: false
+      - name: varchar_nullable
+        nullability: true
+      - name: char_col
+        nullability: false
+      - name: char_nullable
+        nullability: true
+      - name: text_col
+        nullability: false
+      - name: text_nullable
+        nullability: true
