@@ -136,19 +136,23 @@ async fn run_init(name: Option<String>) -> Result<()> {
 
 async fn run_generate(config_path: Option<String>) -> Result<()> {
     let (config_file, config) = load_config(config_path).await?;
-    run_compiler(config, &config_file).await?;
+    let mut compiler = Compiler::new(config, &config_file);
+    compiler.compile().await?;
     info!("generated successfully!");
     Ok(())
 }
 
 async fn run_watch(config_path: Option<String>) -> Result<()> {
+    let (config_file, config) = load_config(config_path.clone()).await?;
+    let project_root = config_file.parent().unwrap_or_else(|| Path::new("."));
+
+    // Create compiler instance (will be reused for incremental compilation)
+    let mut compiler = Compiler::new(config, &config_file);
+
     // Initial run
-    if let Err(e) = run_generate(config_path.clone()).await {
+    if let Err(e) = compiler.compile().await {
         error!("initial generation failed: {:#}", e);
     }
-
-    let (config_file, _config) = load_config(config_path.clone()).await?;
-    let project_root = config_file.parent().unwrap_or_else(|| Path::new("."));
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let mut watcher = notify::recommended_watcher(move |res| {
@@ -182,7 +186,8 @@ async fn run_watch(config_path: Option<String>) -> Result<()> {
 
                         info!("file change detected. regenerating...");
 
-                        if let Err(e) = run_generate(config_path.clone()).await {
+                        // Reuse compiler for incremental compilation
+                        if let Err(e) = compiler.compile().await {
                             error!("generation failed: {:#}", e);
                         }
                         last_processed = std::time::Instant::now();
@@ -200,12 +205,6 @@ async fn run_watch(config_path: Option<String>) -> Result<()> {
     Ok(())
 }
 
-async fn run_compiler(config: SqlexConfig, config_path: &Path) -> Result<()> {
-    let compiler = Compiler::new(config, config_path);
-    compiler.compile().await?;
-    Ok(())
-}
-
 async fn load_config(path_str: Option<String>) -> Result<(PathBuf, SqlexConfig)> {
     let config_path = if let Some(path_str) = path_str {
         // User provided a path
@@ -217,7 +216,18 @@ async fn load_config(path_str: Option<String>) -> Result<(PathBuf, SqlexConfig)>
         }
     } else {
         // Search upward from current directory
-        find_config_file()?
+        let mut current = std::env::current_dir().context("Failed to get current directory")?;
+
+        loop {
+            let config_path = current.join("sqlex.yaml");
+            if config_path.exists() {
+                break config_path;
+            }
+
+            if !current.pop() {
+                anyhow::bail!("sqlex.yaml not found in current directory or any parent directory");
+            }
+        }
     };
 
     if !config_path.exists() {
@@ -243,19 +253,4 @@ async fn load_config(path_str: Option<String>) -> Result<(PathBuf, SqlexConfig)>
     }
 
     Ok((config_path, config))
-}
-
-fn find_config_file() -> Result<PathBuf> {
-    let mut current = std::env::current_dir().context("Failed to get current directory")?;
-
-    loop {
-        let config_path = current.join("sqlex.yaml");
-        if config_path.exists() {
-            return Ok(config_path);
-        }
-
-        if !current.pop() {
-            anyhow::bail!("sqlex.yaml not found in current directory or any parent directory");
-        }
-    }
 }
