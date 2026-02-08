@@ -224,6 +224,28 @@ fn matches_filter(filter: Option<&str>, rel_path: &Path) -> bool {
     false
 }
 
+/// Check if SQLite types are compatible.
+/// SQLite's database analyzer may return TEXT for VARCHAR/CHAR types in query results.
+/// Also returns "null" type for aggregate functions on empty tables.
+fn sqlite_types_compatible(static_type: &DataType, db_type: &DataType) -> bool {
+    // Exact match is always compatible
+    if static_type == db_type {
+        return true;
+    }
+
+    // SQLite returns "null" type for aggregate functions on empty tables
+    if matches!(db_type, DataType::Custom(s) if s == "null") {
+        return true;
+    }
+
+    // SQLite maps VARCHAR and CHAR to TEXT in query results
+    match (static_type, db_type) {
+        (DataType::Varchar, DataType::Text) => true,
+        (DataType::Char, DataType::Text) => true,
+        _ => false,
+    }
+}
+
 async fn run_test_file(path: &Path, specs_dir: &Path) {
     let display_path = path
         .strip_prefix(specs_dir)
@@ -448,18 +470,18 @@ async fn run_test_file(path: &Path, specs_dir: &Path) {
                         "Test '{}' in {}: Expected column {} name mismatch (Expected: {}, Actual: {})",
                         test.name, display_path, i, db_col.name, expected_col.name
                     );
-                    // SQLite returns "null" type for aggregate functions on empty tables,
-                    // which cannot be accurately mapped to a concrete type. Skip type
-                    // comparison when db_col.data_type is Custom("null").
-                    let skip_type_check = suite.dialect == Dialect::SQLite
-                        && matches!(&db_col.data_type, DataType::Custom(s) if s == "null");
-                    if !skip_type_check {
-                        assert_eq!(
-                            static_col.data_type, db_col.data_type,
-                            "Test '{}' in {}: Column {} type mismatch (Expected: {:?}, Actual: {:?})",
-                            test.name, display_path, i, db_col.data_type, static_col.data_type
-                        );
-                    }
+                    // Type checking: SQLite uses sqlite_types_compatible for special handling
+                    let types_match = if suite.dialect == Dialect::SQLite {
+                        sqlite_types_compatible(&static_col.data_type, &db_col.data_type)
+                    } else {
+                        static_col.data_type == db_col.data_type
+                    };
+
+                    assert!(
+                        types_match,
+                        "Test '{}' in {}: Column {} type mismatch (Expected: {:?}, Actual: {:?})",
+                        test.name, display_path, i, db_col.data_type, static_col.data_type
+                    );
                     assert_eq!(
                         static_col.nullability,
                         expected_col.nullability,

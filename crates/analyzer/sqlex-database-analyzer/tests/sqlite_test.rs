@@ -51,7 +51,7 @@ async fn test_sqlite_analyzer_basic() -> anyhow::Result<()> {
     assert!(!username_col.nullability);
 
     let email_col = columns.iter().find(|c| c.name == "email").unwrap();
-    assert_eq!(email_col.data_type, DataType::Text); // varchar contains char
+    assert_eq!(email_col.data_type, DataType::Varchar);
 
     let created_at_col = columns.iter().find(|c| c.name == "created_at").unwrap();
     // DATETIME is mapped to Custom because it's not explicitly handled in map_string_type logic for datetime keyword?
@@ -139,12 +139,12 @@ async fn test_sqlite_analyzer_all_types() -> anyhow::Result<()> {
     check_type("col_int8", DataType::BigInt(false));
 
     // Text-like types
-    check_type("col_character", DataType::Text);
-    check_type("col_varchar", DataType::Text);
-    check_type("col_varying_character", DataType::Text);
-    check_type("col_nchar", DataType::Text);
-    check_type("col_native_character", DataType::Text);
-    check_type("col_nvarchar", DataType::Text);
+    check_type("col_character", DataType::Char);
+    check_type("col_varchar", DataType::Varchar);
+    check_type("col_varying_character", DataType::Varchar);
+    check_type("col_nchar", DataType::Char);
+    check_type("col_native_character", DataType::Char);
+    check_type("col_nvarchar", DataType::Varchar);
     check_type("col_text", DataType::Text);
     check_type("col_clob", DataType::Text);
 

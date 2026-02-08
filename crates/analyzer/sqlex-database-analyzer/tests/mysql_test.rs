@@ -49,11 +49,11 @@ async fn test_mysql_analyzer_basic() -> anyhow::Result<()> {
     assert_eq!(id_col.data_type, DataType::Int(false));
 
     let username_col = columns.iter().find(|c| c.name == "username").unwrap();
-    assert_eq!(username_col.data_type, DataType::Text);
+    assert_eq!(username_col.data_type, DataType::Varchar);
     assert!(!username_col.nullability);
 
     let email_col = columns.iter().find(|c| c.name == "email").unwrap();
-    assert_eq!(email_col.data_type, DataType::Text);
+    assert_eq!(email_col.data_type, DataType::Varchar);
     assert!(email_col.nullability);
 
     // MySQL BOOLEAN is usually TINYINT(1)
@@ -108,8 +108,8 @@ async fn test_mysql_analyzer_all_types() -> anyhow::Result<()> {
     assert_eq!(find_col("col_decimal").data_type, DataType::Decimal);
     assert_eq!(find_col("col_float").data_type, DataType::Float);
     assert_eq!(find_col("col_double").data_type, DataType::Double);
-    assert_eq!(find_col("col_char").data_type, DataType::Text);
-    assert_eq!(find_col("col_varchar").data_type, DataType::Text);
+    assert_eq!(find_col("col_char").data_type, DataType::Char);
+    assert_eq!(find_col("col_varchar").data_type, DataType::Varchar);
     assert_eq!(find_col("col_text").data_type, DataType::Text);
     assert_eq!(find_col("col_date").data_type, DataType::Date);
     assert_eq!(find_col("col_datetime").data_type, DataType::DateTime);
@@ -145,7 +145,7 @@ async fn test_mysql_analyzer_query_analysis() -> anyhow::Result<()> {
     assert_eq!(result.columns[0].name, "id");
     assert_eq!(result.columns[0].data_type, DataType::Int(false));
     assert_eq!(result.columns[1].name, "name");
-    assert_eq!(result.columns[1].data_type, DataType::Text); // varchar -> text
+    assert_eq!(result.columns[1].data_type, DataType::Varchar);
     assert_eq!(result.columns[2].name, "price");
     assert_eq!(result.columns[2].data_type, DataType::Decimal);
     assert_eq!(result.columns[3].name, "in_stock");
