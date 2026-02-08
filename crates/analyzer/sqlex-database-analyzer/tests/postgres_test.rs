@@ -47,11 +47,11 @@ async fn test_postgres_analyzer_basic() -> anyhow::Result<()> {
     assert_eq!(id_col.data_type, DataType::Int(false)); // SERIAL is integer
 
     let username_col = columns.iter().find(|c| c.name == "username").unwrap();
-    assert_eq!(username_col.data_type, DataType::Text);
+    assert_eq!(username_col.data_type, DataType::Varchar);
     assert!(!username_col.nullability);
 
     let email_col = columns.iter().find(|c| c.name == "email").unwrap();
-    assert_eq!(email_col.data_type, DataType::Text);
+    assert_eq!(email_col.data_type, DataType::Varchar);
     assert!(email_col.nullability);
 
     let is_active_col = columns.iter().find(|c| c.name == "is_active").unwrap();
@@ -107,7 +107,7 @@ async fn test_postgres_analyzer_all_types() -> anyhow::Result<()> {
     assert_eq!(find_col("col_real").data_type, DataType::Float);
     assert_eq!(find_col("col_double").data_type, DataType::Double);
     assert_eq!(find_col("col_boolean").data_type, DataType::Bool);
-    assert_eq!(find_col("col_varchar").data_type, DataType::Text);
+    assert_eq!(find_col("col_varchar").data_type, DataType::Varchar);
     assert_eq!(find_col("col_text").data_type, DataType::Text);
     assert_eq!(find_col("col_date").data_type, DataType::Date);
     assert_eq!(find_col("col_time").data_type, DataType::Time);
@@ -146,7 +146,7 @@ async fn test_postgres_analyzer_query_analysis() -> anyhow::Result<()> {
     assert_eq!(result.columns[0].name, "id");
     assert_eq!(result.columns[0].data_type, DataType::Int(false)); // SERIAL is int4 which maps to Int
     assert_eq!(result.columns[1].name, "name");
-    assert_eq!(result.columns[1].data_type, DataType::Text);
+    assert_eq!(result.columns[1].data_type, DataType::Varchar);
     assert_eq!(result.columns[2].name, "price");
     assert_eq!(result.columns[2].data_type, DataType::Decimal);
 
