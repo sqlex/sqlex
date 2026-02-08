@@ -61,3 +61,13 @@ queries:
     expected:
       - name: SUM(s.amount)
         nullability: true
+
+  - name: sum_on_text_column
+    sql: |
+      SELECT SUM(region)
+      FROM sales
+    cardinality: ExactlyOne
+    expected:
+      - name: SUM(region)
+        data_type: Double
+        nullability: true
