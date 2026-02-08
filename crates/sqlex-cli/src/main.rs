@@ -1,6 +1,5 @@
 use std::{
     path::{Path, PathBuf},
-    sync::mpsc::channel,
     time::Duration,
 };
 
@@ -151,8 +150,10 @@ async fn run_watch(config_path: Option<String>) -> Result<()> {
     let (config_file, _config) = load_config(config_path.clone()).await?;
     let project_root = config_file.parent().unwrap_or_else(|| Path::new("."));
 
-    let (tx, rx) = channel();
-    let mut watcher = notify::recommended_watcher(tx)?;
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut watcher = notify::recommended_watcher(move |res| {
+        let _ = tx.send(res);
+    })?;
 
     // Watch entire project root directory recursively
     watcher.watch(project_root, RecursiveMode::Recursive)?;
@@ -163,10 +164,14 @@ async fn run_watch(config_path: Option<String>) -> Result<()> {
     let mut last_processed = std::time::Instant::now();
 
     loop {
-        match rx.recv() {
-            Ok(event_res) => {
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                info!("received interrupt signal, shutting down...");
+                break;
+            }
+            event_res = rx.recv() => {
                 match event_res {
-                    Ok(_) => {
+                    Some(Ok(_)) => {
                         let now = std::time::Instant::now();
                         if now.duration_since(last_processed) < debounce_duration {
                             continue;
@@ -182,13 +187,13 @@ async fn run_watch(config_path: Option<String>) -> Result<()> {
                         }
                         last_processed = std::time::Instant::now();
                     },
-                    Err(e) => error!("watch error: {:?}", e),
+                    Some(Err(e)) => error!("watch error: {:?}", e),
+                    None => {
+                        error!("watch channel closed");
+                        break;
+                    }
                 }
-            },
-            Err(e) => {
-                error!("watch channel error: {:?}", e);
-                break;
-            },
+            }
         }
     }
 
