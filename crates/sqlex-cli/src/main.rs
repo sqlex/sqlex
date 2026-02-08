@@ -27,20 +27,18 @@ struct Cli {
 enum Commands {
     /// Initialize a new sqlex project
     Init {
-        /// Project name
-        name: String,
+        /// Project name (defaults to current directory name if not provided)
+        name: Option<String>,
     },
     /// Generate code
     Generate {
-        /// Path to configuration file or directory
-        #[arg(default_value = ".")]
-        config: String,
+        /// Path to configuration file or directory (searches upward from current directory if not provided)
+        config: Option<String>,
     },
     /// Watch for changes and generate code
     Watch {
-        /// Path to configuration file or directory
-        #[arg(default_value = ".")]
-        config: String,
+        /// Path to configuration file or directory (searches upward from current directory if not provided)
+        config: Option<String>,
     },
 }
 
@@ -48,6 +46,7 @@ enum Commands {
 async fn main() -> Result<()> {
     simple_logger::SimpleLogger::new()
         .with_level(LevelFilter::Warn)
+        .with_module_level("sqlex", LevelFilter::Info)
         .with_module_level("sqlex_cli", LevelFilter::Info)
         .with_module_level("sqlex_compiler", LevelFilter::Info)
         .with_module_level("sqlex_analyzer", LevelFilter::Info)
@@ -74,26 +73,37 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn run_init(name: String) -> Result<()> {
-    let root = Path::new(&name);
+async fn run_init(name: Option<String>) -> Result<()> {
+    let (root, project_name) = if let Some(name) = name {
+        // Create new directory with given name
+        (PathBuf::from(&name), name)
+    } else {
+        // Use current directory
+        let current_dir = std::env::current_dir().context("Failed to get current directory")?;
+        let dir_name = current_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| anyhow::anyhow!("Failed to get current directory name"))?
+            .to_string();
+        (current_dir, dir_name)
+    };
+
     if root.exists() {
         if !root.is_dir() {
-            anyhow::bail!("path {} exists but is not a directory", name);
+            anyhow::bail!("path {} exists but is not a directory", root.display());
         }
-        // If it exists, we check if it's empty or assume user wants to init here.
-        // For safety, we just allow it.
     } else {
-        fs::create_dir_all(root)
+        fs::create_dir_all(&root)
             .await
             .context("Failed to create project directory")?;
     }
 
     let config_path = root.join("sqlex.yaml");
     if config_path.exists() {
-        info!("config file already exists at {:?}", config_path);
+        anyhow::bail!("config file already exists at {:?}", config_path);
     } else {
         let config = SqlexConfig {
-            name: name.clone(),
+            name: project_name.clone(),
             dialect: Dialect::Postgres,
             migrations: "migrations".to_string(),
             analyzer: AnalyzerMode::Hybrid,
@@ -121,24 +131,24 @@ async fn run_init(name: String) -> Result<()> {
         info!("created {:?}", migrations_dir);
     }
 
-    info!("initialized sqlex project: {}", name);
+    info!("initialized sqlex project: {}", project_name);
     Ok(())
 }
 
-async fn run_generate(config_path: String) -> Result<()> {
-    let (config_file, config) = load_config(&config_path).await?;
+async fn run_generate(config_path: Option<String>) -> Result<()> {
+    let (config_file, config) = load_config(config_path).await?;
     run_compiler(config, &config_file).await?;
     info!("generated successfully!");
     Ok(())
 }
 
-async fn run_watch(config_path: String) -> Result<()> {
+async fn run_watch(config_path: Option<String>) -> Result<()> {
     // Initial run
     if let Err(e) = run_generate(config_path.clone()).await {
         error!("initial generation failed: {:#}", e);
     }
 
-    let (config_file, _config) = load_config(&config_path).await?;
+    let (config_file, _config) = load_config(config_path.clone()).await?;
     let project_root = config_file.parent().unwrap_or_else(|| Path::new("."));
 
     let (tx, rx) = channel();
@@ -191,12 +201,18 @@ async fn run_compiler(config: SqlexConfig, config_path: &Path) -> Result<()> {
     Ok(())
 }
 
-async fn load_config(path_str: &str) -> Result<(PathBuf, SqlexConfig)> {
-    let path = Path::new(path_str);
-    let config_path = if path.is_dir() {
-        path.join("sqlex.yaml")
+async fn load_config(path_str: Option<String>) -> Result<(PathBuf, SqlexConfig)> {
+    let config_path = if let Some(path_str) = path_str {
+        // User provided a path
+        let path = Path::new(&path_str);
+        if path.is_dir() {
+            path.join("sqlex.yaml")
+        } else {
+            path.to_path_buf()
+        }
     } else {
-        path.to_path_buf()
+        // Search upward from current directory
+        find_config_file()?
     };
 
     if !config_path.exists() {
@@ -222,4 +238,19 @@ async fn load_config(path_str: &str) -> Result<(PathBuf, SqlexConfig)> {
     }
 
     Ok((config_path, config))
+}
+
+fn find_config_file() -> Result<PathBuf> {
+    let mut current = std::env::current_dir().context("Failed to get current directory")?;
+
+    loop {
+        let config_path = current.join("sqlex.yaml");
+        if config_path.exists() {
+            return Ok(config_path);
+        }
+
+        if !current.pop() {
+            anyhow::bail!("sqlex.yaml not found in current directory or any parent directory");
+        }
+    }
 }
