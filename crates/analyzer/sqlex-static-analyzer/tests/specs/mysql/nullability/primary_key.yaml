@@ -1,0 +1,46 @@
+dialect: mysql
+migrations:
+  - |
+    CREATE TABLE users (
+      id INT PRIMARY KEY,
+      name VARCHAR(100)
+    )
+  - |
+    CREATE TABLE posts (
+      id INT,
+      title VARCHAR(200) NOT NULL,
+      PRIMARY KEY (id)
+    )
+  - |
+    CREATE TABLE comments (
+      post_id INT,
+      user_id INT,
+      content TEXT,
+      PRIMARY KEY (post_id, user_id)
+    )
+queries:
+  - name: single_column_pk_inline
+    sql: SELECT id, name FROM users
+    expected:
+      - name: id
+        nullability: false
+      - name: name
+        nullability: true
+
+  - name: single_column_pk_table_constraint
+    sql: SELECT id, title FROM posts
+    expected:
+      - name: id
+        nullability: false
+      - name: title
+        nullability: false
+
+  - name: composite_pk
+    sql: SELECT post_id, user_id, content FROM comments
+    expected:
+      - name: post_id
+        nullability: false
+      - name: user_id
+        nullability: false
+      - name: content
+        nullability: true

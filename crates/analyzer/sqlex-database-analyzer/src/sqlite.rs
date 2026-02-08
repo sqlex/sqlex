@@ -87,9 +87,17 @@ impl Analyzer for SqliteDatabaseAnalyzer {
                 let notnull: i32 = col_row
                     .try_get("notnull")
                     .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+                let pk: i32 = col_row
+                    .try_get("pk")
+                    .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
 
                 let data_type = map_string_type(&type_str);
-                let nullability = notnull == 0;
+
+                // Special case: INTEGER PRIMARY KEY in SQLite
+                // When NULL is inserted, SQLite auto-generates a value (rowid)
+                // So it's effectively NOT NULL even though notnull=0
+                let is_integer_pk = pk > 0 && type_str.to_lowercase().contains("int");
+                let nullability = if is_integer_pk { false } else { notnull == 0 };
 
                 columns.push(ColumnInfo {
                     name,

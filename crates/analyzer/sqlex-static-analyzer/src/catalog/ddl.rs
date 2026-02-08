@@ -3,7 +3,10 @@
 //! Parses CREATE TABLE, ALTER TABLE, and DROP TABLE statements
 //! to build and maintain the catalog.
 
-use sqlex_analyzer::{AnalyzerError, extension::ObjectNameExt};
+use sqlex_analyzer::{
+    AnalyzerError,
+    extension::{DataTypeExt, ObjectNameExt},
+};
 use sqlex_common::{dialect::Dialect, types::DataType};
 use sqlparser::{
     ast::{
@@ -72,9 +75,18 @@ impl Catalog {
                         is_primary: true, ..
                     } => {
                         table.primary_key = Some(vec![col.name.value.clone()]);
-                        // PK implies NOT NULL
+                        // PK implies NOT NULL, except for SQLite non-INTEGER PRIMARY KEY
                         if let Some(c) = table.columns.last_mut() {
-                            c.nullable = false;
+                            let should_set_not_null = if self.dialect == Dialect::SQLite {
+                                // For SQLite, only INTEGER PRIMARY KEY is implicitly NOT NULL
+                                c.data_type.is_integer()
+                            } else {
+                                // For other databases, all PRIMARY KEY columns are NOT NULL
+                                true
+                            };
+                            if should_set_not_null {
+                                c.nullable = false;
+                            }
                         }
                     },
                     ColumnOption::Unique {
@@ -240,10 +252,19 @@ pub fn parse_table_constraint(
     match constraint {
         TableConstraint::PrimaryKey { columns, .. } => {
             let pk_cols: Vec<String> = columns.iter().map(|c| c.value.clone()).collect();
-            // PK columns are implicitly NOT NULL
+            // PK columns are implicitly NOT NULL, except for SQLite non-INTEGER PRIMARY KEY
             for col_name in &pk_cols {
                 if let Some(col) = table.columns.iter_mut().find(|c| c.name == *col_name) {
-                    col.nullable = false;
+                    let should_set_not_null = if dialect == Dialect::SQLite {
+                        // For SQLite, only INTEGER PRIMARY KEY is implicitly NOT NULL
+                        col.data_type.is_integer()
+                    } else {
+                        // For other databases, all PRIMARY KEY columns are NOT NULL
+                        true
+                    };
+                    if should_set_not_null {
+                        col.nullable = false;
+                    }
                 }
             }
             table.primary_key = Some(pk_cols);

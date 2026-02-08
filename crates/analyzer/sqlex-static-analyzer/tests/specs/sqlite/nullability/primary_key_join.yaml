@@ -1,0 +1,63 @@
+dialect: sqlite
+migrations:
+  - |
+    CREATE TABLE users (
+      id INTEGER PRIMARY KEY,
+      name TEXT
+    )
+  - |
+    CREATE TABLE posts (
+      id INTEGER PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      title TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )
+  - |
+    CREATE TABLE comments (
+      id INTEGER PRIMARY KEY,
+      post_id INTEGER NOT NULL,
+      content TEXT,
+      FOREIGN KEY (post_id) REFERENCES posts(id)
+    )
+queries:
+  - name: left_join_pk_nullable
+    sql: |
+      SELECT u.id, u.name, p.id, p.title
+      FROM users u
+      LEFT JOIN posts p ON u.id = p.user_id
+    expected:
+      - name: id
+        nullability: false
+      - name: name
+        nullability: true
+      - name: id
+        nullability: true
+      - name: title
+        nullability: true
+
+  - name: left_join_fk_nullable
+    sql: |
+      SELECT u.id, p.id, p.user_id
+      FROM users u
+      LEFT JOIN posts p ON u.id = p.user_id
+    expected:
+      - name: id
+        nullability: false
+      - name: id
+        nullability: true
+      - name: user_id
+        nullability: true
+
+  - name: nested_left_join
+    sql: |
+      SELECT u.id, p.id, c.id
+      FROM users u
+      LEFT JOIN posts p ON u.id = p.user_id
+      LEFT JOIN comments c ON p.id = c.post_id
+    expected:
+      - name: id
+        nullability: false
+      - name: id
+        nullability: true
+      - name: id
+        nullability: true

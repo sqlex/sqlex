@@ -48,6 +48,7 @@ impl ObjectNameExt for ObjectName {
 /// Extension trait for common DataType helpers.
 pub trait DataTypeExt {
     fn is_numeric(&self) -> bool;
+    fn is_integer(&self) -> bool;
     fn is_text_like(&self) -> bool;
     fn promote_numeric(&self, other: &DataType) -> DataType;
     fn merge_common_type(
@@ -69,6 +70,13 @@ impl DataTypeExt for DataType {
                 | DataType::Float
                 | DataType::Double
                 | DataType::Decimal
+        )
+    }
+
+    fn is_integer(&self) -> bool {
+        matches!(
+            self,
+            DataType::TinyInt(_) | DataType::SmallInt(_) | DataType::Int(_) | DataType::BigInt(_)
         )
     }
 

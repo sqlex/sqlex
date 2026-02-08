@@ -145,10 +145,10 @@ impl Analyzer for MySqlDatabaseAnalyzer {
 
     async fn get_all_tables(&self) -> Result<Vec<Table>> {
         let query = r#"
-            SELECT 
-                CAST(c.TABLE_NAME AS CHAR) as TABLE_NAME, 
-                CAST(c.COLUMN_NAME AS CHAR) as COLUMN_NAME, 
-                CAST(c.DATA_TYPE AS CHAR) as DATA_TYPE, 
+            SELECT
+                CAST(c.TABLE_NAME AS CHAR) as TABLE_NAME,
+                CAST(c.COLUMN_NAME AS CHAR) as COLUMN_NAME,
+                CAST(c.DATA_TYPE AS CHAR) as DATA_TYPE,
                 CAST(c.IS_NULLABLE AS CHAR) as IS_NULLABLE
             FROM information_schema.COLUMNS c
             JOIN information_schema.TABLES t ON c.TABLE_NAME = t.TABLE_NAME AND c.TABLE_SCHEMA = t.TABLE_SCHEMA
