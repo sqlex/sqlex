@@ -223,9 +223,10 @@ impl ScalarFunction {
         let input_type = arg_types.first().cloned().unwrap_or(DataType::Text);
 
         match self {
-            Self::Concat
-            | Self::ConcatWs
-            | Self::Upper
+            Self::Concat | Self::ConcatWs => (DataType::Text, true),
+
+            // String functions that preserve input type and nullability
+            Self::Upper
             | Self::Lower
             | Self::Trim
             | Self::Ltrim
@@ -234,13 +235,24 @@ impl ScalarFunction {
             | Self::Replace
             | Self::Left
             | Self::Right
-            | Self::Repeat => (DataType::Text, true),
+            | Self::Repeat => {
+                let nullable = arg_nullables.first().copied().unwrap_or(true);
+                (input_type, nullable)
+            },
 
             Self::Length
             | Self::CharLength
             | Self::OctetLength
             | Self::BitLength
-            | Self::Position => (DataType::Int(false), true),
+            | Self::Position => {
+                // MySQL returns BIGINT for these functions, others return INT
+                let data_type = match dialect {
+                    Dialect::MySQL => DataType::BigInt(false),
+                    _ => DataType::Int(false),
+                };
+                let nullable = arg_nullables.first().copied().unwrap_or(true);
+                (data_type, nullable)
+            },
 
             Self::Abs | Self::Ceil | Self::Floor | Self::Round | Self::Truncate | Self::Mod => {
                 (input_type, true)

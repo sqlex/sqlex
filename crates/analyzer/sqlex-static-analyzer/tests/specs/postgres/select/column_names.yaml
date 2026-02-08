@@ -52,9 +52,9 @@ queries:
     sql: SELECT LENGTH(name), UPPER(name), LOWER(email) FROM users
     expected:
       - name: "length"
-        nullability: true
+        nullability: false
       - name: "upper"
-        nullability: true
+        nullability: false
       - name: "lower"
         nullability: true
 

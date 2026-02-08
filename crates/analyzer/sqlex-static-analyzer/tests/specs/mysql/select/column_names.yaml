@@ -45,6 +45,17 @@ queries:
       - name: "MIN(age)"
         nullability: true
 
+  # Test string functions without aliases
+  - name: string_functions_without_alias
+    sql: SELECT LENGTH(name), UPPER(name), LOWER(email) FROM users
+    expected:
+      - name: "LENGTH(name)"
+        nullability: false
+      - name: "UPPER(name)"
+        nullability: false
+      - name: "LOWER(email)"
+        nullability: true
+
   # Test mixed columns and expressions
   - name: mixed_columns_and_expressions
     sql: SELECT id, age + 1, name FROM users
