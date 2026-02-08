@@ -52,3 +52,12 @@ queries:
     expected:
       - name: cnt
         nullability: false
+
+  - name: aggregate_with_table_alias
+    sql: |
+      SELECT SUM(s.amount)
+      FROM sales s
+    cardinality: ExactlyOne
+    expected:
+      - name: SUM(s.amount)
+        nullability: true

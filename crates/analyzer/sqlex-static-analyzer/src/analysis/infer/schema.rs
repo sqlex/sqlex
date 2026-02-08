@@ -352,23 +352,6 @@ impl Inferrer<'_> {
 
     fn infer_expr_name(&self, state: &QueryTypeState<'_>, expr_id: ExprId) -> String {
         let formatter = ExprFormatter::new(state.stmt, self.dialect);
-        let mut name = formatter.format_expr(expr_id);
-
-        // Special handling for top-level string literals in MySQL
-        if matches!(self.dialect, sqlex_common::dialect::Dialect::MySQL) {
-            let expr = state.stmt.exprs.get(expr_id);
-            if let BoundExpr::Literal(
-                sqlparser::ast::Value::SingleQuotedString(_)
-                | sqlparser::ast::Value::DoubleQuotedString(_),
-            ) = expr
-            {
-                // Remove quotes for top-level string literals
-                if name.starts_with('\'') && name.ends_with('\'') {
-                    name = name[1..name.len() - 1].to_string();
-                }
-            }
-        }
-
-        name
+        formatter.format_expr(expr_id, 0)
     }
 }
