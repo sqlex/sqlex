@@ -9,6 +9,7 @@ use crate::{
 };
 
 mod cardinality;
+mod expr_formatter;
 mod functions;
 mod inference;
 mod schema;
