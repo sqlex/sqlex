@@ -71,9 +71,30 @@ impl FunctionMeta {
                 None
             },
             // Numeric functions validation
+            ScalarFunction::Ceil | ScalarFunction::Floor => {
+                if dialect == Dialect::Postgres {
+                    if let Some(first_arg) = arg_types.first() {
+                        if !first_arg.is_numeric() {
+                            return Some(format!(
+                                "function {:?}(non-numeric) does not exist in PostgreSQL",
+                                scalar_fn
+                            ));
+                        }
+                    }
+                } else if dialect == Dialect::SQLite {
+                    // SQLite does not support CEIL/FLOOR on non-numeric types
+                    if let Some(first_arg) = arg_types.first() {
+                        if !first_arg.is_numeric() {
+                            return Some(format!(
+                                "function {:?}(non-numeric) does not exist in SQLite",
+                                scalar_fn
+                            ));
+                        }
+                    }
+                }
+                None
+            },
             ScalarFunction::Abs
-            | ScalarFunction::Ceil
-            | ScalarFunction::Floor
             | ScalarFunction::Round
             | ScalarFunction::Truncate
             | ScalarFunction::Sqrt
@@ -342,16 +363,23 @@ impl ScalarFunction {
             Self::Concat | Self::ConcatWs => (DataType::Text, true),
 
             // String functions that preserve input type and nullability
-            Self::Upper
-            | Self::Lower
-            | Self::Trim
-            | Self::Ltrim
-            | Self::Rtrim
-            | Self::Substring
-            | Self::Replace
-            | Self::Left
-            | Self::Right
-            | Self::Repeat => {
+            Self::Upper | Self::Lower | Self::Trim | Self::Ltrim | Self::Rtrim => {
+                let nullable = arg_nullables.first().copied().unwrap_or(true);
+                // MySQL and SQLite auto-convert non-text types to text
+                if matches!(dialect, Dialect::MySQL | Dialect::SQLite) && !input_type.is_text_like()
+                {
+                    // MySQL returns VARCHAR for string functions
+                    let text_type = if dialect == Dialect::MySQL {
+                        DataType::Varchar
+                    } else {
+                        DataType::Text
+                    };
+                    (text_type, nullable)
+                } else {
+                    (input_type, nullable)
+                }
+            },
+            Self::Substring | Self::Replace | Self::Left | Self::Right | Self::Repeat => {
                 let nullable = arg_nullables.first().copied().unwrap_or(true);
                 (input_type, nullable)
             },
@@ -370,8 +398,24 @@ impl ScalarFunction {
                 (data_type, nullable)
             },
 
-            Self::Abs | Self::Ceil | Self::Floor | Self::Round | Self::Truncate | Self::Mod => {
-                (input_type, true)
+            Self::Ceil | Self::Floor => {
+                let nullable = arg_nullables.first().copied().unwrap_or(true);
+                // Only MySQL auto-converts non-numeric types for CEIL/FLOOR
+                // SQLite requires numeric types
+                if dialect == Dialect::MySQL && !input_type.is_numeric() {
+                    (DataType::Double, nullable)
+                } else {
+                    (input_type, nullable)
+                }
+            },
+            Self::Abs | Self::Round | Self::Truncate | Self::Mod => {
+                let nullable = arg_nullables.first().copied().unwrap_or(true);
+                // MySQL and SQLite auto-convert non-numeric types to numeric
+                if matches!(dialect, Dialect::MySQL | Dialect::SQLite) && !input_type.is_numeric() {
+                    (DataType::Double, nullable)
+                } else {
+                    (input_type, nullable)
+                }
             },
 
             Self::Sqrt
