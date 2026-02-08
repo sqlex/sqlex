@@ -36,7 +36,7 @@ impl Inferrer<'_> {
             },
             BoundExpr::Function {
                 name,
-                kind,
+                function,
                 args,
                 distinct,
                 over,
@@ -50,7 +50,7 @@ impl Inferrer<'_> {
                     .map(|id| self.infer_expr(state, *id).nullable)
                     .collect::<Vec<_>>();
 
-                self.infer_function(name, kind, &arg_types, &arg_nullables, *distinct, *over)
+                self.infer_function(name, function, &arg_types, &arg_nullables, *distinct, *over)
             },
             BoundExpr::Case {
                 operand,

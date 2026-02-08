@@ -2,7 +2,7 @@ use sqlex_common::types::DataType;
 use sqlparser::ast::{BinaryOperator, UnaryOperator, Value};
 
 use crate::{
-    analysis::functions::FunctionKind,
+    analysis::functions::Function,
     ir::{
         arena::Arena,
         ids::{ColumnId, ExprId, TableId},
@@ -152,7 +152,7 @@ pub enum BoundExpr {
     },
     Function {
         name: String,
-        kind: FunctionKind,
+        function: Function,
         args: Vec<ExprId>,
         distinct: bool,
         over: bool,

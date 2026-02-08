@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    analysis::{diagnostics::Diagnostic, functions::FunctionKind, validate::Validator},
+    analysis::{diagnostics::Diagnostic, functions::Function, validate::Validator},
     ir::{
         bound::{BoundExpr, BoundSelect, BoundStatement, BoundTableSource},
         ids::{ColumnId, ExprId},
@@ -110,10 +110,13 @@ fn analyze_group_expr_inner(stmt: &BoundStatement, expr_id: ExprId, analysis: &m
             analyze_group_expr_inner(stmt, *expr, analysis);
         },
         BoundExpr::Function {
-            kind, args, over, ..
+            function,
+            args,
+            over,
+            ..
         } => {
-            let is_aggregate_name = matches!(kind, FunctionKind::Aggregate(_));
-            let is_window_name = matches!(kind, FunctionKind::Window(_));
+            let is_aggregate_name = matches!(function, Function::Aggregate(_));
+            let is_window_name = matches!(function, Function::Window(_));
             let is_window = is_window_name || (*over && is_aggregate_name);
             let is_aggregate = is_aggregate_name && !is_window;
 

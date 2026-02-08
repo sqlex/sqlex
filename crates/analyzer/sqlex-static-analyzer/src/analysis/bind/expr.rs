@@ -4,7 +4,7 @@ use crate::{
     analysis::{
         bind::{Binder, scope::BindScope},
         diagnostics::{Diagnostic, DiagnosticCode},
-        functions::{self, FunctionKind},
+        functions::{self, Function},
     },
     ir::{bound::BoundExpr, ids::ColumnId},
 };
@@ -151,11 +151,11 @@ impl<'a> Binder<'a> {
                     Some(sqlparser::ast::TrimWhereField::Both) | None => "TRIM",
                 };
 
-                let meta = functions::resolve_function(func_name);
+                let function = functions::resolve_function(func_name);
 
                 self.exprs.alloc(BoundExpr::Function {
                     name: func_name.to_string(),
-                    kind: meta.kind,
+                    function,
                     args: vec![expr_id],
                     distinct: false,
                     over: false,
@@ -163,11 +163,11 @@ impl<'a> Binder<'a> {
             },
             Expr::Ceil { expr, field: _ } => {
                 let expr_id = self.bind_expr(expr, scope);
-                let meta = functions::resolve_function("CEIL");
+                let function = functions::resolve_function("CEIL");
 
                 self.exprs.alloc(BoundExpr::Function {
                     name: "CEIL".to_string(),
-                    kind: meta.kind,
+                    function,
                     args: vec![expr_id],
                     distinct: false,
                     over: false,
@@ -175,11 +175,11 @@ impl<'a> Binder<'a> {
             },
             Expr::Floor { expr, field: _ } => {
                 let expr_id = self.bind_expr(expr, scope);
-                let meta = functions::resolve_function("FLOOR");
+                let function = functions::resolve_function("FLOOR");
 
                 self.exprs.alloc(BoundExpr::Function {
                     name: "FLOOR".to_string(),
-                    kind: meta.kind,
+                    function,
                     args: vec![expr_id],
                     distinct: false,
                     over: false,
@@ -203,7 +203,7 @@ impl<'a> Binder<'a> {
     ) -> crate::ir::ids::ExprId {
         let name = func.name.to_string();
         let upper = name.to_uppercase();
-        let meta = functions::resolve_function(&upper);
+        let function = functions::resolve_function(&upper);
 
         let mut args = Vec::new();
         let mut distinct = false;
@@ -237,31 +237,31 @@ impl<'a> Binder<'a> {
         }
 
         // Validate function at bind time
-        if matches!(meta.kind, FunctionKind::Unknown) {
+        if matches!(function, Function::Unknown) {
             self.diagnostics.push(Diagnostic::unknown_function(&upper));
         }
-        if meta.requires_over && !over {
+        if function.requires_over() && !over {
             self.diagnostics
                 .push(Diagnostic::window_requires_over(&upper));
         }
-        if over && !meta.allows_over {
+        if over && !function.allows_over() {
             self.diagnostics.push(Diagnostic::over_not_allowed(&upper));
         }
-        if distinct && !meta.accepts_distinct {
+        if distinct && !function.accepts_distinct() {
             self.diagnostics
                 .push(Diagnostic::distinct_not_allowed(&upper));
         }
-        if !meta.arity.matches(args.len()) {
+        if !function.arity().matches(args.len()) {
             self.diagnostics.push(Diagnostic::function_arity_mismatch(
                 &upper,
-                &meta.arity.describe(),
+                &function.arity().describe(),
                 args.len(),
             ));
         }
 
         self.exprs.alloc(BoundExpr::Function {
             name,
-            kind: meta.kind,
+            function,
             args,
             distinct,
             over,

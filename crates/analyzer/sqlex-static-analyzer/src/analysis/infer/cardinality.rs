@@ -2,7 +2,7 @@ use sqlex_common::types::Cardinality;
 use sqlparser::ast::Value;
 
 use crate::{
-    analysis::{functions::FunctionKind, infer::Inferrer},
+    analysis::{functions::Function, infer::Inferrer},
     ir::{
         bound::{BoundExpr, BoundQueryBody, BoundSelect, BoundSetExpr, BoundSetOp, BoundStatement},
         ids::ExprId,
@@ -279,9 +279,12 @@ impl Inferrer<'_> {
     fn expr_has_aggregate(stmt: &BoundStatement, expr_id: ExprId) -> bool {
         match stmt.exprs.get(expr_id) {
             BoundExpr::Function {
-                kind, args, over, ..
+                function,
+                args,
+                over,
+                ..
             } => {
-                let is_aggregate = matches!(kind, FunctionKind::Aggregate(_)) && !over;
+                let is_aggregate = matches!(function, Function::Aggregate(_)) && !over;
                 if is_aggregate {
                     return true;
                 }
