@@ -38,7 +38,7 @@ impl Analyzer for SqliteDatabaseAnalyzer {
             .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
         let mut columns = Vec::new();
         for col in stmt.columns() {
-            let name = col.name().to_string();
+            let name = col.name().trim().to_string();
             let data_type = {
                 let name = col.type_info().name().to_lowercase();
                 map_string_type(&name)

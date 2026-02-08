@@ -135,7 +135,7 @@ impl Analyzer for PostgresDatabaseAnalyzer {
 
         let mut columns = Vec::new();
         for col in stmt.columns() {
-            let name = col.name().to_string();
+            let name = col.name().trim().to_string();
             let data_type = {
                 let type_info = col.type_info();
                 map_udt(&type_info.name().to_lowercase())
