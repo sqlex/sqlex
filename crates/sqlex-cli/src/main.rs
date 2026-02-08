@@ -12,7 +12,7 @@ use sqlex_common::{
     dialect::Dialect,
 };
 use sqlex_compiler::Compiler;
-use tokio::fs;
+use tokio::{fs, time::Instant};
 
 #[derive(Parser)]
 #[command(name = "sqlex")]
@@ -164,33 +164,36 @@ async fn run_watch(config_path: Option<String>) -> Result<()> {
     info!("watching project directory: {:?}", project_root);
 
     // Debounce logic
-    let debounce_duration = Duration::from_secs(2);
-    let mut last_processed = std::time::Instant::now();
+    let debounce_duration = Duration::from_secs(1);
+    let mut next_run: Option<Instant> = None;
 
     loop {
+        // Use a far future deadline when next_run is None to effectively disable the timer branch
+        let deadline = next_run.unwrap_or(Instant::now() + Duration::from_secs(86400 * 365));
+
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {
                 info!("received interrupt signal, shutting down...");
                 break;
             }
+            _ = tokio::time::sleep_until(deadline) => {
+                // Timer expired, execute the compilation only if next_run was Some
+                if next_run.is_some() {
+                    info!("file change detected. regenerating...");
+
+                    // Reuse compiler for incremental compilation
+                    if let Err(e) = compiler.compile().await {
+                        error!("generation failed: {:#}", e);
+                    }
+
+                    next_run = None;
+                }
+            }
             event_res = rx.recv() => {
                 match event_res {
                     Some(Ok(_)) => {
-                        let now = std::time::Instant::now();
-                        if now.duration_since(last_processed) < debounce_duration {
-                            continue;
-                        }
-
-                        // Small delay to let FS settle and accumulate more events if any
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-
-                        info!("file change detected. regenerating...");
-
-                        // Reuse compiler for incremental compilation
-                        if let Err(e) = compiler.compile().await {
-                            error!("generation failed: {:#}", e);
-                        }
-                        last_processed = std::time::Instant::now();
+                        // Reset the debounce timer on each file change event
+                        next_run = Some(Instant::now() + debounce_duration);
                     },
                     Some(Err(e)) => error!("watch error: {:?}", e),
                     None => {
