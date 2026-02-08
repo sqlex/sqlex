@@ -21,8 +21,8 @@ analyzer: static
 generators:
   - name: debug_output
     generator: debug
-    config:
-      output: output/debug.txt
+    output: output/debug.txt
+    config: {}
 "#;
     fs::write(project_path.join("sqlex.yaml"), config_content)
         .expect("Failed to write config file");
@@ -64,7 +64,7 @@ fn test_generate_runs_successfully() {
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Generated successfully"));
+        .stdout(predicate::str::contains("generated successfully"));
 }
 
 #[test]
@@ -92,5 +92,5 @@ fn test_generate_fails_without_config() {
 
     cmd.assert()
         .failure()
-        .stderr(predicate::str::contains("Config file not found"));
+        .stderr(predicate::str::contains("sqlex.yaml not found"));
 }

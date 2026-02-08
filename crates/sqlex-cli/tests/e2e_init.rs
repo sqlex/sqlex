@@ -21,7 +21,7 @@ fn test_init_creates_project_structure() {
 
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Initialized sqlex project"));
+        .stdout(predicate::str::contains("initialized sqlex project"));
 
     // Verify project directory was created
     assert!(project_path.exists());
@@ -95,12 +95,12 @@ fn test_init_skips_existing_config() {
         .current_dir(temp_dir.path());
     cmd.assert().success();
 
-    // Second init - should skip existing config
+    // Second init - should fail with existing config
     let mut cmd = Command::cargo_bin("sqlex").expect("Failed to find binary");
     cmd.arg("init")
         .arg(project_name)
         .current_dir(temp_dir.path());
     cmd.assert()
-        .success()
-        .stdout(predicate::str::contains("Config file already exists"));
+        .failure()
+        .stderr(predicate::str::contains("config file already exists"));
 }
