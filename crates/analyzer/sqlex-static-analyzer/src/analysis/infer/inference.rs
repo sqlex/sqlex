@@ -347,7 +347,11 @@ impl Inferrer<'_> {
                 nullable: false,
             },
             ast::Value::SingleQuotedString(_) | ast::Value::DoubleQuotedString(_) => TypeInfo {
-                data_type: DataType::Text,
+                data_type: match self.dialect {
+                    sqlex_common::dialect::Dialect::MySQL => DataType::Varchar,
+                    sqlex_common::dialect::Dialect::Postgres
+                    | sqlex_common::dialect::Dialect::SQLite => DataType::Text,
+                },
                 nullable: false,
             },
             ast::Value::Null => TypeInfo {

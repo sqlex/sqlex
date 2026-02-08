@@ -239,11 +239,10 @@ fn sqlite_types_compatible(static_type: &DataType, db_type: &DataType) -> bool {
     }
 
     // SQLite maps VARCHAR and CHAR to TEXT in query results
-    match (static_type, db_type) {
-        (DataType::Varchar, DataType::Text) => true,
-        (DataType::Char, DataType::Text) => true,
-        _ => false,
-    }
+    matches!(
+        (static_type, db_type),
+        (DataType::Varchar, DataType::Text) | (DataType::Char, DataType::Text)
+    )
 }
 
 async fn run_test_file(path: &Path, specs_dir: &Path) {

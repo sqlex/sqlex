@@ -112,7 +112,10 @@ fn map_string_type(t: &str) -> DataType {
     let t = t.to_lowercase();
     if t.contains("int") {
         DataType::BigInt(false)
-    } else if t.starts_with("varchar") || t.starts_with("varying character") || t.starts_with("nvarchar") {
+    } else if t.starts_with("varchar")
+        || t.starts_with("varying character")
+        || t.starts_with("nvarchar")
+    {
         DataType::Varchar
     } else if t.starts_with("char") || t.starts_with("nchar") || t.starts_with("native character") {
         DataType::Char
