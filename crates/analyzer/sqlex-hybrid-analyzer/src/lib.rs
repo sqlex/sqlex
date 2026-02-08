@@ -151,12 +151,7 @@ impl HybridAnalyzer {
             match static_tables.iter().find(|t| t.name == db_table.name) {
                 Some(static_table) => {
                     // Validate columns for this table
-                    self.validate_table_columns(
-                        &db_table.name,
-                        static_table,
-                        db_table,
-                        &mut warnings,
-                    );
+                    self.validate_table_columns(static_table, db_table, &mut warnings);
                 },
                 None => {
                     warnings.push(AnalysisWarning::TableMissing {
@@ -183,19 +178,12 @@ impl HybridAnalyzer {
     /// Validates columns for a specific table.
     fn validate_table_columns(
         &self,
-        table_name: &str,
         static_table: &Table,
         db_table: &Table,
         warnings: &mut Vec<AnalysisWarning>,
     ) {
         // Check column count mismatch
         if static_table.columns.len() != db_table.columns.len() {
-            warn!(
-                "Table '{}': column count mismatch (static={}, db={})",
-                table_name,
-                static_table.columns.len(),
-                db_table.columns.len()
-            );
             warnings.push(AnalysisWarning::ColumnCountMismatch {
                 static_count: static_table.columns.len(),
                 db_count: db_table.columns.len(),
@@ -212,10 +200,6 @@ impl HybridAnalyzer {
         {
             // Check column name
             if static_col.name != db_col.name {
-                warn!(
-                    "Table '{}': column name mismatch at index {} (static='{}', db='{}')",
-                    table_name, i, static_col.name, db_col.name
-                );
                 warnings.push(AnalysisWarning::ColumnNameMismatch {
                     index: i,
                     static_name: static_col.name.clone(),
@@ -225,10 +209,6 @@ impl HybridAnalyzer {
 
             // Check data type
             if static_col.data_type != db_col.data_type {
-                warn!(
-                    "Table '{}': data type mismatch for column '{}' (static={:?}, db={:?})",
-                    table_name, db_col.name, static_col.data_type, db_col.data_type
-                );
                 warnings.push(AnalysisWarning::DataTypeMismatch {
                     index: i,
                     column_name: db_col.name.clone(),
@@ -239,12 +219,12 @@ impl HybridAnalyzer {
 
             // Check nullability
             if static_col.nullability != db_col.nullability {
-                warn!(
-                    "Table '{}': nullability mismatch for column '{}' (static={}, db={})",
-                    table_name, db_col.name, static_col.nullability, db_col.nullability
-                );
-                // Note: We don't have a NullabilityMismatch warning type yet
-                // For now, we just log it
+                warnings.push(AnalysisWarning::NullabilityMismatch {
+                    index: i,
+                    column_name: db_col.name.clone(),
+                    static_nullability: static_col.nullability,
+                    db_nullability: db_col.nullability,
+                });
             }
         }
     }

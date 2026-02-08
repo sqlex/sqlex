@@ -24,6 +24,14 @@ pub enum AnalysisWarning {
         db_type: DataType,
     },
 
+    /// Nullability mismatch for a column.
+    NullabilityMismatch {
+        index: usize,
+        column_name: String,
+        static_nullability: bool,
+        db_nullability: bool,
+    },
+
     /// Table count mismatch between static and database analyzers.
     TableCountMismatch {
         static_count: usize,
@@ -71,6 +79,18 @@ impl std::fmt::Display for AnalysisWarning {
                     f,
                     "Data type mismatch for column '{}' at index {}: static={:?}, database={:?}",
                     column_name, index, static_type, db_type
+                )
+            },
+            AnalysisWarning::NullabilityMismatch {
+                index,
+                column_name,
+                static_nullability,
+                db_nullability,
+            } => {
+                write!(
+                    f,
+                    "Nullability mismatch for column '{}' at index {}: static={:?}, database={:?}",
+                    column_name, index, static_nullability, db_nullability
                 )
             },
             AnalysisWarning::TableCountMismatch {
