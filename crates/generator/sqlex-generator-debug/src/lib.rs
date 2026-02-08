@@ -1,4 +1,7 @@
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -10,7 +13,6 @@ use sqlex_generator::Generator;
 pub struct DebugGeneratorConfig {
     #[serde(default)]
     pub format: OutputFormat,
-    pub output: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -23,13 +25,17 @@ pub enum OutputFormat {
 }
 
 pub struct DebugGenerator {
+    output: PathBuf,
     config: DebugGeneratorConfig,
 }
 
 impl DebugGenerator {
-    pub fn new(config: serde_json::Value) -> Result<Self> {
+    pub fn new(output: &Path, config: serde_json::Value) -> Result<Self> {
         let config: DebugGeneratorConfig = serde_json::from_value(config)?;
-        Ok(Self { config })
+        Ok(Self {
+            output: output.to_path_buf(),
+            config,
+        })
     }
 
     fn format_text(input: &CompilationUnit) -> String {
@@ -85,16 +91,10 @@ impl Generator for DebugGenerator {
             OutputFormat::Text => Self::format_text(input),
         };
 
-        if let Some(path) = &self.config.output {
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            fs::write(path, content)?;
-        } else {
-            // Fallback to stdout if no output file is specified,
-            // but this usage is discouraged in the new design.
-            println!("{}", content);
+        if let Some(parent) = self.output.parent() {
+            fs::create_dir_all(parent)?;
         }
+        fs::write(&self.output, content)?;
 
         Ok(())
     }

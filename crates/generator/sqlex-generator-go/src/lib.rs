@@ -1,19 +1,20 @@
+use std::path::{Path, PathBuf};
+
 use anyhow::Result;
 use async_trait::async_trait;
 use sqlex_common::ir::CompilationUnit;
 use sqlex_generator::Generator;
 
-pub struct GoGenerator;
-
-impl GoGenerator {
-    pub fn new() -> Self {
-        Self
-    }
+pub struct GoGenerator {
+    #[allow(dead_code)]
+    output: PathBuf,
 }
 
-impl Default for GoGenerator {
-    fn default() -> Self {
-        Self::new()
+impl GoGenerator {
+    pub fn new(output: &Path) -> Self {
+        Self {
+            output: output.to_path_buf(),
+        }
     }
 }
 

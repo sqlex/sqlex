@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 use crate::dialect::Dialect;
@@ -27,6 +29,7 @@ pub enum AnalyzerMode {
 pub struct GeneratorConfig {
     pub name: String,
     pub generator: String,
+    pub output: PathBuf,
     #[serde(default)]
     pub config: serde_json::Value,
 }

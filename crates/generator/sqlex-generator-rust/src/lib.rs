@@ -1,19 +1,20 @@
+use std::path::{Path, PathBuf};
+
 use anyhow::Result;
 use async_trait::async_trait;
 use sqlex_common::ir::CompilationUnit;
 use sqlex_generator::Generator;
 
-pub struct RustGenerator;
-
-impl RustGenerator {
-    pub fn new() -> Self {
-        Self
-    }
+pub struct RustGenerator {
+    #[allow(dead_code)]
+    output: PathBuf,
 }
 
-impl Default for RustGenerator {
-    fn default() -> Self {
-        Self::new()
+impl RustGenerator {
+    pub fn new(output: &Path) -> Self {
+        Self {
+            output: output.to_path_buf(),
+        }
     }
 }
 

@@ -112,11 +112,14 @@ impl Compiler {
                 "running generator: {} ({})",
                 gen_config.name, gen_config.generator
             );
-            let generator =
-                generators::get_generator(&gen_config.generator, gen_config.config.clone())
-                    .map_err(|e| {
-                        anyhow::anyhow!("Failed to create generator '{}': {}", gen_config.name, e)
-                    })?;
+            let generator = generators::get_generator(
+                &gen_config.generator,
+                &gen_config.output,
+                gen_config.config.clone(),
+            )
+            .map_err(|e| {
+                anyhow::anyhow!("Failed to create generator '{}': {}", gen_config.name, e)
+            })?;
 
             generator.generate(&compilation_unit).await?;
 

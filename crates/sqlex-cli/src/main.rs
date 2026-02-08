@@ -100,8 +100,8 @@ async fn run_init(name: String) -> Result<()> {
             generators: vec![GeneratorConfig {
                 name: "rust_entities".to_string(),
                 generator: "rust".to_string(),
+                output: PathBuf::from("src/entities"),
                 config: serde_json::json!({
-                    "output_dir": "src/entities",
                     "orm_mode": "sqlx"
                 }),
             }],
@@ -207,8 +207,19 @@ async fn load_config(path_str: &str) -> Result<(PathBuf, SqlexConfig)> {
         .await
         .context(format!("Failed to read config file: {:?}", config_path))?;
 
-    let config: SqlexConfig =
+    let mut config: SqlexConfig =
         serde_yaml::from_str(&content).context("Failed to parse config file")?;
+
+    // Resolve relative paths for generator outputs
+    let config_dir = config_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Failed to get config directory"))?;
+
+    for generator in &mut config.generators {
+        if generator.output.is_relative() {
+            generator.output = config_dir.join(&generator.output);
+        }
+    }
 
     Ok((config_path, config))
 }
