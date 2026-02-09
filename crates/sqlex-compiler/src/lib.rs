@@ -32,7 +32,6 @@ pub struct Compiler {
 struct CompilationState {
     migration_hashes: HashMap<PathBuf, u64>,
     query_file_hashes: HashMap<PathBuf, u64>, // file_path -> file_hash
-    config_hash: u64,
     analyzer: Box<dyn Analyzer>,
     generators: Vec<Box<dyn Generator>>,
     compilation_unit: CompilationUnit,
@@ -41,7 +40,6 @@ struct CompilationState {
 
 enum ChangeType {
     FirstRun,
-    ConfigChanged,
     MigrationsChanged,
     QueriesOnlyChanged {
         added: Vec<usize>,
@@ -53,15 +51,6 @@ enum ChangeType {
 
 impl Compiler {
     pub async fn new(config_path: &Path) -> Result<Self> {
-        let config = Self::load_config(config_path).await?;
-        Ok(Self {
-            config,
-            config_path: config_path.to_path_buf(),
-            state: None,
-        })
-    }
-
-    async fn load_config(config_path: &Path) -> Result<SqlexConfig> {
         let content = tokio::fs::read_to_string(config_path)
             .await
             .context(format!("Failed to read config file: {:?}", config_path))?;
@@ -80,7 +69,11 @@ impl Compiler {
             }
         }
 
-        Ok(config)
+        Ok(Self {
+            config,
+            config_path: config_path.to_path_buf(),
+            state: None,
+        })
     }
 
     async fn compute_file_hash(path: &Path) -> Result<u64> {
@@ -94,13 +87,6 @@ impl Compiler {
         let Some(state) = &self.state else {
             return Ok(ChangeType::FirstRun);
         };
-
-        // Check config changes
-        let config_file_hash = Self::compute_file_hash(&self.config_path).await?;
-        if config_file_hash != state.config_hash {
-            info!("detected config change");
-            return Ok(ChangeType::ConfigChanged);
-        }
 
         // Check migrations changes
         if new_project.migrations.len() != state.project.migrations.len() {
@@ -303,11 +289,9 @@ impl Compiler {
         }
 
         // Save state
-        let config_hash = Self::compute_file_hash(&self.config_path).await?;
         self.state = Some(CompilationState {
             migration_hashes,
             query_file_hashes,
-            config_hash,
             analyzer,
             generators,
             compilation_unit,
@@ -428,9 +412,6 @@ impl Compiler {
     pub async fn compile(&mut self) -> Result<()> {
         info!("compiler: starting compilation process...");
 
-        // Reload config to pick up any changes
-        self.config = Self::load_config(&self.config_path).await?;
-
         // Scan project files
         info!("scanning project files...");
         let project = Project::build(self.config.clone(), &self.config_path).await?;
@@ -441,7 +422,7 @@ impl Compiler {
         let change_type = self.detect_changes(&project).await?;
 
         match change_type {
-            ChangeType::FirstRun | ChangeType::ConfigChanged | ChangeType::MigrationsChanged => {
+            ChangeType::FirstRun | ChangeType::MigrationsChanged => {
                 // Full compilation
                 self.full_compile(project).await?;
             },
