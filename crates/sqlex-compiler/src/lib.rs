@@ -16,11 +16,9 @@ use sqlex_generator::Generator;
 use sqlex_hybrid_analyzer::HybridAnalyzer;
 use sqlex_static_analyzer::StaticAnalyzer;
 
-mod file_writer;
 mod generators;
 mod project;
 
-pub use file_writer::FileWriter;
 pub use project::Project;
 
 pub struct Compiler {
@@ -278,6 +276,7 @@ impl Compiler {
         for gen_config in &self.config.generators {
             info!("  initializing generator: {}", gen_config.name);
             let generator = generators::get_generator(
+                &project.root,
                 &gen_config.generator,
                 &gen_config.output,
                 gen_config.config.clone(),

@@ -22,6 +22,7 @@ members = [
     "crates/generator/sqlex-generator-rust",
     "crates/generator/sqlex-generator-go",
     "crates/generator/sqlex-generator-java",
+    "crates/generator/sqlex-generator-script",
     "crates/sqlex-compiler",
 ]
 
@@ -38,6 +39,7 @@ sqlex-generator-debug = { path = "crates/generator/sqlex-generator-debug" }
 sqlex-generator-go = { path = "crates/generator/sqlex-generator-go" }
 sqlex-generator-java = { path = "crates/generator/sqlex-generator-java" }
 sqlex-generator-rust = { path = "crates/generator/sqlex-generator-rust" }
+sqlex-generator-script = { path = "crates/generator/sqlex-generator-script" }
 sqlex-static-analyzer = { path = "crates/analyzer/sqlex-static-analyzer" }
 
 # Core
@@ -64,6 +66,10 @@ log = "0.4"
 simple_logger = "5.0"
 notify = "8.2.0"
 rand = "0.8"
+heck = "0.5"
+
+# JavaScript Runtime
+rquickjs = { version = "0.8", features = ["array-buffer", "classes"] }
 
 # Testing
 testcontainers = "0.23"

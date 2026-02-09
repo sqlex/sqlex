@@ -1771,6 +1771,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "rquickjs"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d16661bff09e9ed8e01094a188b463de45ec0693ade55b92ed54027d7ba7c40c"
+dependencies = [
+ "rquickjs-core",
+]
+
+[[package]]
+name = "rquickjs-core"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c8db6379e204ef84c0811e90e7cc3e3e4d7688701db68a00d14a6db6849087b"
+dependencies = [
+ "rquickjs-sys",
+]
+
+[[package]]
+name = "rquickjs-sys"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4bc352c6b663604c3c186c000cfcc6c271f4b50bc135a285dd6d4f2a42f9790a"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "rsa"
 version = "0.9.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2191,6 +2218,7 @@ dependencies = [
 name = "sqlex-common"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "serde",
  "serde_json",
 ]
@@ -2212,6 +2240,7 @@ dependencies = [
  "sqlex-generator-go",
  "sqlex-generator-java",
  "sqlex-generator-rust",
+ "sqlex-generator-script",
  "sqlex-hybrid-analyzer",
  "sqlex-static-analyzer",
  "sqlparser",
@@ -2243,7 +2272,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures",
  "sqlex-common",
+ "tokio",
 ]
 
 [[package]]
@@ -2287,6 +2318,23 @@ dependencies = [
  "async-trait",
  "sqlex-common",
  "sqlex-generator",
+]
+
+[[package]]
+name = "sqlex-generator-script"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "heck",
+ "log",
+ "rquickjs",
+ "serde",
+ "serde_json",
+ "sqlex-common",
+ "sqlex-generator",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
