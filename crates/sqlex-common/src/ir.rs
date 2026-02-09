@@ -13,8 +13,11 @@ pub struct QueryDescriptor {
     /// The name of the query (e.g., from filename or annotation)
     pub name: String,
 
-    /// Package path for code generation module organization
-    pub package_path: Vec<String>,
+    /// Package path for code generation module organization (directory structure)
+    pub package: Vec<String>,
+
+    /// Module name (file name without extension)
+    pub module: String,
 
     /// The original or processed SQL
     pub sql: String,

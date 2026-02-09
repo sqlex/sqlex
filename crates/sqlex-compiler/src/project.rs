@@ -24,7 +24,8 @@ pub struct Migration {
 pub struct Query {
     pub name: String,
     pub sql: String,
-    pub package_path: Vec<String>,
+    pub package: Vec<String>,
+    pub module: String,
     pub file_path: PathBuf,
 }
 
@@ -243,33 +244,33 @@ impl Project {
 
         Self::validate_identifier(file_name, &format!("query file {}", path.display()))?;
 
-        // Calculate package path from relative path (including file name)
+        // Calculate package from relative path (directory only, excluding file name)
         let relative_path = path.strip_prefix(&self.config_dir).context(format!(
             "Failed to compute relative path for {}",
             path.display()
         ))?;
 
-        let mut package_path: Vec<String> = relative_path
+        let package: Vec<String> = relative_path
             .parent()
             .unwrap_or(Path::new(""))
             .components()
             .filter_map(|c| c.as_os_str().to_str().map(|s| s.to_string()))
             .collect();
 
-        // Add file name (without extension) to package path
-        package_path.push(file_name.to_string());
+        let module = file_name.to_string();
 
         let content = tokio::fs::read_to_string(path)
             .await
             .context(format!("Failed to read query file: {}", path.display()))?;
 
-        Self::parse_queries_from_content(&content, package_path, path)
+        Self::parse_queries_from_content(&content, package, module, path)
     }
 
     /// Parse queries from content using sqlparser
     fn parse_queries_from_content(
         content: &str,
-        package_path: Vec<String>,
+        package: Vec<String>,
+        module: String,
         path: &Path,
     ) -> Result<Vec<Query>> {
         let dialect = GenericDialect {};
@@ -304,7 +305,8 @@ impl Project {
             queries.push(Query {
                 name,
                 sql: statement.to_string(),
-                package_path: package_path.clone(),
+                package: package.clone(),
+                module: module.clone(),
                 file_path: path.to_path_buf(),
             });
         }
@@ -601,16 +603,19 @@ mod tests {
     fn test_parse_queries_from_content_single() {
         let content = "-- name: get_user\nSELECT * FROM users WHERE id = 1";
         let path = Path::new("test.sql");
-        let package_path = vec![];
+        let package = vec![];
+        let module = "test".to_string();
 
-        let result = Project::parse_queries_from_content(content, package_path.clone(), path);
+        let result =
+            Project::parse_queries_from_content(content, package.clone(), module.clone(), path);
         assert!(result.is_ok());
 
         let queries = result.unwrap();
         assert_eq!(queries.len(), 1);
         assert_eq!(queries[0].name, "get_user");
         assert!(queries[0].sql.contains("SELECT"));
-        assert_eq!(queries[0].package_path, package_path);
+        assert_eq!(queries[0].package, package);
+        assert_eq!(queries[0].module, module);
     }
 
     #[test]
@@ -623,26 +628,31 @@ SELECT * FROM users WHERE id = 1;
 SELECT * FROM users;
 "#;
         let path = Path::new("test.sql");
-        let package_path = vec!["queries".to_string()];
+        let package = vec!["queries".to_string()];
+        let module = "test".to_string();
 
-        let result = Project::parse_queries_from_content(content, package_path.clone(), path);
+        let result =
+            Project::parse_queries_from_content(content, package.clone(), module.clone(), path);
         assert!(result.is_ok());
 
         let queries = result.unwrap();
         assert_eq!(queries.len(), 2);
         assert_eq!(queries[0].name, "get_user");
         assert_eq!(queries[1].name, "list_users");
-        assert_eq!(queries[0].package_path, package_path);
-        assert_eq!(queries[1].package_path, package_path);
+        assert_eq!(queries[0].package, package);
+        assert_eq!(queries[1].package, package);
+        assert_eq!(queries[0].module, module);
+        assert_eq!(queries[1].module, module);
     }
 
     #[test]
     fn test_parse_queries_from_content_mismatch() {
         let content = "-- name: get_user\nSELECT * FROM users; SELECT * FROM posts;";
         let path = Path::new("test.sql");
-        let package_path = vec![];
+        let package = vec![];
+        let module = "test".to_string();
 
-        let result = Project::parse_queries_from_content(content, package_path, path);
+        let result = Project::parse_queries_from_content(content, package, module, path);
         assert!(result.is_err());
         assert!(
             result
@@ -656,9 +666,10 @@ SELECT * FROM users;
     fn test_parse_queries_from_content_invalid_name() {
         let content = "-- name: InvalidName\nSELECT * FROM users";
         let path = Path::new("test.sql");
-        let package_path = vec![];
+        let package = vec![];
+        let module = "test".to_string();
 
-        let result = Project::parse_queries_from_content(content, package_path, path);
+        let result = Project::parse_queries_from_content(content, package, module, path);
         assert!(result.is_err());
         assert!(
             result

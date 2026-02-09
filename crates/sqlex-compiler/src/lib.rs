@@ -44,7 +44,7 @@ enum ChangeType {
     QueriesOnlyChanged {
         added: Vec<usize>,
         modified: Vec<usize>,
-        deleted: Vec<(Vec<String>, String)>, // (package_path, name)
+        deleted: Vec<(Vec<String>, String, String)>, // (package, module, name)
     },
     NoChange,
 }
@@ -116,9 +116,14 @@ impl Compiler {
             let old_hash = state.migration_hashes.get(&new_mig.file_path);
 
             if old_hash.is_none() || *old_hash.unwrap() != new_hash {
+                let relative_path = self
+                    .config_path
+                    .parent()
+                    .and_then(|base| new_mig.file_path.strip_prefix(base).ok())
+                    .unwrap_or(&new_mig.file_path);
                 info!(
                     "detected migration file content change: {:?}",
-                    new_mig.file_path
+                    relative_path
                 );
                 return Ok(ChangeType::MigrationsChanged);
             }
@@ -160,15 +165,19 @@ impl Compiler {
             }
         }
 
-        // Check for deleted queries using (package_path, name) as unique identifier
+        // Check for deleted queries using (package, module, name) as unique identifier
         let new_queries_set: std::collections::HashSet<_> = new_project
             .queries
             .iter()
-            .map(|q| (q.package_path.clone(), q.name.clone()))
+            .map(|q| (q.package.clone(), q.module.clone(), q.name.clone()))
             .collect();
 
         for old_query in &state.project.queries {
-            let query_key = (old_query.package_path.clone(), old_query.name.clone());
+            let query_key = (
+                old_query.package.clone(),
+                old_query.module.clone(),
+                old_query.name.clone(),
+            );
             if !new_queries_set.contains(&query_key) {
                 deleted.push(query_key);
             }
@@ -244,7 +253,8 @@ impl Compiler {
                 .map_err(|e| anyhow::anyhow!("Failed to analyze query '{}': {}", query.name, e))?;
             query_descriptors.push(QueryDescriptor {
                 name: query.name.clone(),
-                package_path: query.package_path.clone(),
+                package: query.package.clone(),
+                module: query.module.clone(),
                 sql: query.sql.clone(),
                 params: Vec::new(),
                 cardinality: result_set.cardinality,
@@ -311,7 +321,7 @@ impl Compiler {
         project: Project,
         added: Vec<usize>,
         modified: Vec<usize>,
-        deleted: Vec<(Vec<String>, String)>,
+        deleted: Vec<(Vec<String>, String, String)>,
     ) -> Result<()> {
         info!("performing incremental compilation");
 
@@ -341,7 +351,8 @@ impl Compiler {
                 idx,
                 QueryDescriptor {
                     name: query.name.clone(),
-                    package_path: query.package_path.clone(),
+                    package: query.package.clone(),
+                    module: query.module.clone(),
                     sql: query.sql.clone(),
                     params: Vec::new(),
                     cardinality: result_set.cardinality,
@@ -353,9 +364,9 @@ impl Compiler {
         // Update CompilationUnit queries
         // Remove deleted queries
         state.compilation_unit.queries.retain(|q| {
-            !deleted
-                .iter()
-                .any(|(package_path, name)| q.package_path == *package_path && q.name == *name)
+            !deleted.iter().any(|(package, module, name)| {
+                q.package == *package && q.module == *module && q.name == *name
+            })
         });
 
         // Update modified queries and add new queries
@@ -364,9 +375,11 @@ impl Compiler {
         for (idx, new_descriptor) in new_query_descriptors {
             let query = &project.queries[idx];
 
-            // Check if this is a modification using (package_path, name) as unique identifier
+            // Check if this is a modification using (package, module, name) as unique identifier
             if let Some(existing) = state.compilation_unit.queries.iter_mut().find(|q| {
-                q.package_path == new_descriptor.package_path && q.name == new_descriptor.name
+                q.package == new_descriptor.package
+                    && q.module == new_descriptor.module
+                    && q.name == new_descriptor.name
             }) {
                 *existing = new_descriptor;
             } else {
