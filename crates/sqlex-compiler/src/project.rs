@@ -4,10 +4,61 @@ use anyhow::{Context, Result, anyhow};
 use sqlex_common::config::SqlexConfig;
 use sqlparser::{dialect::GenericDialect, parser::Parser};
 
+/// Represents the root directory of a sqlex project
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectRoot {
+    path: PathBuf,
+}
+
+impl ProjectRoot {
+    /// Create from config file path (parent directory is the project root)
+    pub fn from_config_path(config_path: &Path) -> Result<Self> {
+        let root = config_path
+            .parent()
+            .ok_or_else(|| anyhow!("Invalid config path: {}", config_path.display()))?
+            .to_path_buf();
+        Ok(Self { path: root })
+    }
+
+    /// Create directly from directory path
+    pub fn from_dir(dir: impl AsRef<Path>) -> Self {
+        Self {
+            path: dir.as_ref().to_path_buf(),
+        }
+    }
+
+    /// Get the absolute path of the root directory
+    pub fn as_path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Resolve a relative path to an absolute path
+    pub fn resolve(&self, relative_path: impl AsRef<Path>) -> PathBuf {
+        self.path.join(relative_path)
+    }
+
+    /// Convert an absolute path to a relative path
+    pub fn relativize(&self, absolute_path: &Path) -> Result<PathBuf> {
+        absolute_path
+            .strip_prefix(&self.path)
+            .context(format!(
+                "Path {} is not under project root {}",
+                absolute_path.display(),
+                self.path.display()
+            ))
+            .map(|p| p.to_path_buf())
+    }
+
+    /// Check if a path is under the project root
+    pub fn contains(&self, path: &Path) -> bool {
+        path.starts_with(&self.path)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Project {
+    pub root: ProjectRoot,
     pub config: SqlexConfig,
-    pub config_dir: PathBuf,
     pub migrations: Vec<Migration>,
     pub queries: Vec<Query>,
 }
@@ -32,14 +83,11 @@ pub struct Query {
 impl Project {
     /// Build a project from SqlexConfig and config file path
     pub async fn build(config: SqlexConfig, config_path: &Path) -> Result<Self> {
-        let config_dir = config_path
-            .parent()
-            .ok_or_else(|| anyhow!("Invalid config path: {}", config_path.display()))?
-            .to_path_buf();
+        let root = ProjectRoot::from_config_path(config_path)?;
 
         let mut project = Self {
+            root,
             config,
-            config_dir,
             migrations: Vec::new(),
             queries: Vec::new(),
         };
@@ -52,7 +100,7 @@ impl Project {
 
     /// Scan migrations directory
     async fn scan_migrations(&mut self) -> Result<()> {
-        let migrations_dir = self.config_dir.join(&self.config.migrations);
+        let migrations_dir = self.root.resolve(&self.config.migrations);
 
         if !migrations_dir.exists() {
             return Err(anyhow!(
@@ -190,8 +238,9 @@ impl Project {
 
     /// Scan all query files (all .sql files except those in migrations directory)
     async fn scan_queries(&mut self) -> Result<()> {
-        let migrations_dir = self.config_dir.join(&self.config.migrations);
-        self.scan_queries_recursive(&self.config_dir.clone(), &migrations_dir)
+        let migrations_dir = self.root.resolve(&self.config.migrations);
+        let root_path = self.root.as_path().to_path_buf();
+        self.scan_queries_recursive(&root_path, &migrations_dir)
             .await?;
         Ok(())
     }
@@ -245,10 +294,7 @@ impl Project {
         Self::validate_identifier(file_name, &format!("query file {}", path.display()))?;
 
         // Calculate package from relative path (directory only, excluding file name)
-        let relative_path = path.strip_prefix(&self.config_dir).context(format!(
-            "Failed to compute relative path for {}",
-            path.display()
-        ))?;
+        let relative_path = self.root.relativize(path)?;
 
         let package: Vec<String> = relative_path
             .parent()
@@ -366,6 +412,51 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn test_project_root_from_config_path() {
+        let config_path = PathBuf::from("/path/to/project/sqlex.yaml");
+        let root = ProjectRoot::from_config_path(&config_path).unwrap();
+        assert_eq!(root.as_path(), Path::new("/path/to/project"));
+    }
+
+    #[test]
+    fn test_project_root_from_dir() {
+        let dir = PathBuf::from("/path/to/project");
+        let root = ProjectRoot::from_dir(&dir);
+        assert_eq!(root.as_path(), Path::new("/path/to/project"));
+    }
+
+    #[test]
+    fn test_project_root_resolve() {
+        let root = ProjectRoot::from_dir("/path/to/project");
+        let resolved = root.resolve("migrations");
+        assert_eq!(resolved, PathBuf::from("/path/to/project/migrations"));
+    }
+
+    #[test]
+    fn test_project_root_relativize() {
+        let root = ProjectRoot::from_dir("/path/to/project");
+        let absolute = PathBuf::from("/path/to/project/queries/users.sql");
+        let relative = root.relativize(&absolute).unwrap();
+        assert_eq!(relative, PathBuf::from("queries/users.sql"));
+    }
+
+    #[test]
+    fn test_project_root_relativize_error() {
+        let root = ProjectRoot::from_dir("/path/to/project");
+        let absolute = PathBuf::from("/other/path/file.sql");
+        let result = root.relativize(&absolute);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_project_root_contains() {
+        let root = ProjectRoot::from_dir("/path/to/project");
+        assert!(root.contains(Path::new("/path/to/project/queries/users.sql")));
+        assert!(root.contains(Path::new("/path/to/project")));
+        assert!(!root.contains(Path::new("/other/path/file.sql")));
+    }
+
     fn create_test_config() -> SqlexConfig {
         SqlexConfig {
             name: "test".to_string(),
@@ -476,8 +567,8 @@ mod tests {
     #[test]
     fn test_validate_version_sequence_empty() {
         let project = Project {
+            root: ProjectRoot::from_dir(PathBuf::new()),
             config: create_test_config(),
-            config_dir: PathBuf::new(),
             migrations: vec![],
             queries: vec![],
         };
@@ -487,8 +578,8 @@ mod tests {
     #[test]
     fn test_validate_version_sequence_valid() {
         let project = Project {
+            root: ProjectRoot::from_dir(PathBuf::new()),
             config: create_test_config(),
-            config_dir: PathBuf::new(),
             migrations: vec![
                 Migration {
                     version: 0,
@@ -517,8 +608,8 @@ mod tests {
     #[test]
     fn test_validate_version_sequence_invalid_start() {
         let project = Project {
+            root: ProjectRoot::from_dir(PathBuf::new()),
             config: create_test_config(),
-            config_dir: PathBuf::new(),
             migrations: vec![Migration {
                 version: 1,
                 name: "init".to_string(),
@@ -540,8 +631,8 @@ mod tests {
     #[test]
     fn test_validate_version_sequence_duplicate() {
         let project = Project {
+            root: ProjectRoot::from_dir(PathBuf::new()),
             config: create_test_config(),
-            config_dir: PathBuf::new(),
             migrations: vec![
                 Migration {
                     version: 0,
@@ -571,8 +662,8 @@ mod tests {
     #[test]
     fn test_validate_version_sequence_gap() {
         let project = Project {
+            root: ProjectRoot::from_dir(PathBuf::new()),
             config: create_test_config(),
-            config_dir: PathBuf::new(),
             migrations: vec![
                 Migration {
                     version: 0,

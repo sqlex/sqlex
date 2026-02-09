@@ -118,11 +118,10 @@ impl Compiler {
             let old_hash = state.migration_hashes.get(&new_mig.file_path);
 
             if old_hash.is_none() || *old_hash.unwrap() != new_hash {
-                let relative_path = self
-                    .config_path
-                    .parent()
-                    .and_then(|base| new_mig.file_path.strip_prefix(base).ok())
-                    .unwrap_or(&new_mig.file_path);
+                let relative_path = new_project
+                    .root
+                    .relativize(&new_mig.file_path)
+                    .unwrap_or_else(|_| new_mig.file_path.clone());
                 info!(
                     "detected migration file content change: {:?}",
                     relative_path
