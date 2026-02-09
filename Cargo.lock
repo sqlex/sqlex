@@ -2200,6 +2200,7 @@ name = "sqlex-compiler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "futures",
  "log",
  "serde_json",
  "serde_yaml",
@@ -2214,6 +2215,7 @@ dependencies = [
  "sqlex-hybrid-analyzer",
  "sqlex-static-analyzer",
  "sqlparser",
+ "tempfile",
  "tokio",
 ]
 

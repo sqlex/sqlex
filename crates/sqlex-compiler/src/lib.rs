@@ -16,9 +16,11 @@ use sqlex_generator::Generator;
 use sqlex_hybrid_analyzer::HybridAnalyzer;
 use sqlex_static_analyzer::StaticAnalyzer;
 
+mod file_writer;
 mod generators;
 mod project;
 
+pub use file_writer::FileWriter;
 pub use project::Project;
 
 pub struct Compiler {
