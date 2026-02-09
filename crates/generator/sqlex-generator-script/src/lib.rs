@@ -51,8 +51,45 @@ impl ScriptGenerator {
             self.inject_string_utils(&ctx)?;
             self.inject_console(&ctx)?;
 
-            ctx.eval::<(), _>(script)
-                .context("Failed to execute script")?;
+            // Wrap script to capture detailed error information
+            let wrapped_script = format!(
+                r#"
+                (function() {{
+                    try {{
+                        {}
+                    }} catch (e) {{
+                        globalThis.__scriptError = {{
+                            name: e.name || 'Error',
+                            message: e.message || String(e),
+                            stack: e.stack || 'No stack trace'
+                        }};
+                        throw e;
+                    }}
+                }})();
+                "#,
+                script
+            );
+
+            if let Err(e) = ctx.eval::<(), _>(wrapped_script.as_str()) {
+                // Try to get detailed error information
+                let error_details: Result<String, _> = ctx.eval(
+                    r#"
+                    (function() {{
+                        if (globalThis.__scriptError) {{
+                            const e = globalThis.__scriptError;
+                            return e.name + ': ' + e.message + '\n\n' + e.stack;
+                        }}
+                        return null;
+                    }})()
+                    "#,
+                );
+
+                if let Ok(details) = error_details {
+                    return Err(anyhow::anyhow!("Failed to execute script:\n{}", details));
+                } else {
+                    return Err(anyhow::anyhow!("Failed to execute script: {:?}", e));
+                }
+            }
 
             Ok::<_, anyhow::Error>(())
         })?;
@@ -473,5 +510,40 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(content3, "Content 3");
+    }
+
+    #[tokio::test]
+    async fn test_detailed_error_message() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_root = ProjectRoot::from_dir(temp_dir.path());
+        let output_dir = temp_dir.path().join("output");
+
+        let script_path = temp_dir.path().join("error.js");
+        tokio::fs::write(
+            &script_path,
+            r#"
+                // This will cause a ReferenceError
+                undefinedVariable.someMethod();
+            "#,
+        )
+        .await
+        .unwrap();
+
+        let config = serde_json::json!({ "script": "error.js" });
+        let generator = ScriptGenerator::new(&project_root, &output_dir, config).unwrap();
+        let input = create_test_compilation_unit();
+
+        let result = generator.generate(&input).await;
+        assert!(result.is_err());
+
+        let error_msg = result.unwrap_err().to_string();
+        println!("Error message:\n{}", error_msg);
+
+        // The error message should contain detailed information
+        assert!(
+            error_msg.contains("ReferenceError") || error_msg.contains("not defined"),
+            "Error message should contain error type or description, got: {}",
+            error_msg
+        );
     }
 }
