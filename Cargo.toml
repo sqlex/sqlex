@@ -1,3 +1,13 @@
+cargo-features = ["trim-paths"]
+
+[profile.release]
+strip = "symbols"
+trim-paths = "all"
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+panic = "abort"
+
 [workspace]
 resolver = "2"
 members = [
