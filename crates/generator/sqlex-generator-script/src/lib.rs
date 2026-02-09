@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -35,7 +38,7 @@ impl ScriptGenerator {
         &self,
         script: &str,
         input: &CompilationUnit,
-        file_writer: &mut FileWriter,
+        file_writer: Arc<Mutex<FileWriter>>,
     ) -> Result<()> {
         use rquickjs::{Context, Runtime};
 
@@ -44,7 +47,7 @@ impl ScriptGenerator {
 
         context.with(|ctx| {
             self.inject_project(&ctx, input)?;
-            self.inject_writer(&ctx, file_writer)?;
+            self.inject_writer(&ctx, file_writer.clone())?;
             self.inject_string_utils(&ctx)?;
             self.inject_console(&ctx)?;
 
@@ -80,20 +83,22 @@ impl ScriptGenerator {
         Ok(())
     }
 
-    fn inject_writer(&self, ctx: &rquickjs::Ctx, file_writer: &mut FileWriter) -> Result<()> {
+    fn inject_writer(
+        &self,
+        ctx: &rquickjs::Ctx,
+        file_writer: Arc<Mutex<FileWriter>>,
+    ) -> Result<()> {
         use rquickjs::{Function, Object};
-
-        let writer_ptr = file_writer as *mut FileWriter;
 
         let write_fn = Function::new(
             ctx.clone(),
             move |path: String, content: String| -> Result<(), rquickjs::Error> {
-                unsafe {
-                    let writer = &mut *writer_ptr;
-                    writer
-                        .write(path, content)
-                        .map_err(|_| rquickjs::Error::new_from_js("Error", "Write failed"))?;
-                }
+                let mut writer = file_writer.lock().map_err(|_| {
+                    rquickjs::Error::new_from_js("Error", "FileWriter mutex poisoned")
+                })?;
+                writer
+                    .write(path, content)
+                    .map_err(|_| rquickjs::Error::new_from_js("Error", "Write failed"))?;
                 Ok(())
             },
         )?;
@@ -185,11 +190,15 @@ impl Generator for ScriptGenerator {
             .await
             .context(format!("Failed to read script: {:?}", script_full_path))?;
 
-        let mut file_writer = FileWriter::new(&self.output).await?;
+        let file_writer = Arc::new(Mutex::new(FileWriter::new(&self.output).await?));
 
-        self.execute_script(&script_content, input, &mut file_writer)?;
+        self.execute_script(&script_content, input, file_writer.clone())?;
 
-        file_writer.flush().await?;
+        let mut writer = Arc::try_unwrap(file_writer)
+            .map_err(|_| anyhow::anyhow!("Failed to unwrap Arc: multiple references still exist"))?
+            .into_inner()
+            .map_err(|e| anyhow::anyhow!("FileWriter mutex poisoned: {}", e))?;
+        writer.flush().await?;
 
         Ok(())
     }
