@@ -74,7 +74,6 @@ impl AggregateFunction {
                         Dialect::SQLite => DataType::Double,
                     },
                     DataType::Float | DataType::Double => DataType::Double,
-                    // For non-numeric types, MySQL and SQLite return Double
                     _ => match dialect {
                         Dialect::MySQL | Dialect::SQLite => DataType::Double,
                         Dialect::Postgres => input_type,

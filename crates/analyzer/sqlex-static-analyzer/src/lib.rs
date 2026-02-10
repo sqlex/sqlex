@@ -3,7 +3,6 @@
 //! A static SQL analyzer that infers result set types and nullability
 //! without requiring a database connection.
 
-// Re-exports (Internal imports now)
 use async_trait::async_trait;
 use sqlex_analyzer::{Analyzer, AnalyzerError, Result};
 use sqlex_common::{
@@ -12,18 +11,21 @@ use sqlex_common::{
 };
 
 use crate::{
-    analysis::{AnalysisEngine, diagnostics::DiagnosticSeverity},
-    catalog::Catalog,
+    algebraize::Algebraizer, catalog::Catalog, diagnostics::DiagnosticSeverity, infer::Inferrer,
 };
 
-pub mod analysis;
+mod algebraize;
 pub mod catalog;
+mod diagnostics;
+mod functions;
+mod infer;
 pub mod ir;
+mod keywords;
 
 /// Static SQL analyzer implementation
 pub struct StaticAnalyzer {
     catalog: Catalog,
-    analysis: AnalysisEngine,
+    dialect: Dialect,
 }
 
 impl StaticAnalyzer {
@@ -31,7 +33,7 @@ impl StaticAnalyzer {
     pub fn new(dialect: Dialect) -> Self {
         Self {
             catalog: Catalog::new(dialect),
-            analysis: AnalysisEngine::new(dialect),
+            dialect,
         }
     }
 }
@@ -45,13 +47,15 @@ impl Analyzer for StaticAnalyzer {
     }
 
     async fn analyze(&self, sql: &str) -> Result<ResultSet> {
-        let analysis = self.analysis.analyze(&self.catalog, sql);
-        if analysis
+        // Phase 2: Algebraize — AST + Catalog → RelationalExpr
+        let alg_result = Algebraizer::new(self.dialect, &self.catalog).algebraize(sql);
+
+        if alg_result
             .diagnostics
             .iter()
             .any(|d| d.severity == DiagnosticSeverity::Error)
         {
-            let message = analysis
+            let message = alg_result
                 .diagnostics
                 .iter()
                 .filter(|d| d.severity == DiagnosticSeverity::Error)
@@ -61,8 +65,31 @@ impl Analyzer for StaticAnalyzer {
             return Err(AnalyzerError::AnalysisError(message));
         }
 
-        let output = analysis.output.ok_or_else(|| {
-            AnalyzerError::AnalysisError("Analysis produced no output schema".to_string())
+        let expr = alg_result.expr.ok_or_else(|| {
+            AnalyzerError::AnalysisError("Algebraize produced no expression".to_string())
+        })?;
+
+        // Phase 3: Infer — RelationalExpr → OutputSchema
+        let infer_result = Inferrer::new(self.dialect, &self.catalog).infer(&expr);
+
+        // Check for inference errors (e.g. ambiguous columns)
+        if infer_result
+            .diagnostics
+            .iter()
+            .any(|d| d.severity == DiagnosticSeverity::Error)
+        {
+            let message = infer_result
+                .diagnostics
+                .iter()
+                .filter(|d| d.severity == DiagnosticSeverity::Error)
+                .map(|d| d.message.clone())
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(AnalyzerError::AnalysisError(message));
+        }
+
+        let output = infer_result.output.ok_or_else(|| {
+            AnalyzerError::AnalysisError("Inference produced no output schema".to_string())
         })?;
 
         let columns = output

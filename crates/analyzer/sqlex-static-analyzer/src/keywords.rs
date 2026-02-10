@@ -6,8 +6,6 @@ use sqlparser::ast::Ident;
 static MYSQL_RESERVED: OnceLock<Vec<&'static str>> = OnceLock::new();
 static POSTGRES_RESERVED: OnceLock<Vec<&'static str>> = OnceLock::new();
 
-// Reserved keyword lists are stored as uppercase, sorted files generated
-// from the target database catalogs to keep static analysis aligned.
 fn mysql_reserved() -> &'static [&'static str] {
     MYSQL_RESERVED
         .get_or_init(|| {

@@ -216,13 +216,10 @@ impl ScalarFunction {
         match self {
             Self::Concat | Self::ConcatWs => (DataType::Text, true),
 
-            // String functions that preserve input type and nullability
             Self::Upper | Self::Lower | Self::Trim | Self::Ltrim | Self::Rtrim => {
                 let nullable = arg_nullables.first().copied().unwrap_or(true);
-                // MySQL and SQLite auto-convert non-text types to text
                 if matches!(dialect, Dialect::MySQL | Dialect::SQLite) && !input_type.is_text_like()
                 {
-                    // MySQL returns VARCHAR for string functions
                     let text_type = if dialect == Dialect::MySQL {
                         DataType::Varchar
                     } else {
@@ -243,7 +240,6 @@ impl ScalarFunction {
             | Self::OctetLength
             | Self::BitLength
             | Self::Position => {
-                // MySQL returns BIGINT for these functions, others return INT
                 let data_type = match dialect {
                     Dialect::MySQL => DataType::BigInt,
                     _ => DataType::Int,
@@ -254,8 +250,6 @@ impl ScalarFunction {
 
             Self::Ceil | Self::Floor => {
                 let nullable = arg_nullables.first().copied().unwrap_or(true);
-                // Only MySQL auto-converts non-numeric types for CEIL/FLOOR
-                // SQLite requires numeric types
                 if dialect == Dialect::MySQL && !input_type.is_numeric() {
                     (DataType::Double, nullable)
                 } else {
@@ -264,7 +258,6 @@ impl ScalarFunction {
             },
             Self::Abs | Self::Round | Self::Truncate | Self::Mod => {
                 let nullable = arg_nullables.first().copied().unwrap_or(true);
-                // MySQL and SQLite auto-convert non-numeric types to numeric
                 if matches!(dialect, Dialect::MySQL | Dialect::SQLite) && !input_type.is_numeric() {
                     (DataType::Double, nullable)
                 } else {
@@ -320,7 +313,6 @@ impl ScalarFunction {
         arg_types: &[DataType],
     ) -> Option<String> {
         match self {
-            // String functions validation
             Self::Substring => {
                 if dialect == Dialect::Postgres {
                     if let Some(first_arg) = arg_types.first() {
@@ -353,7 +345,6 @@ impl ScalarFunction {
                 }
                 None
             },
-            // Numeric functions validation
             Self::Ceil | Self::Floor => {
                 if dialect == Dialect::Postgres {
                     if let Some(first_arg) = arg_types.first() {
@@ -365,7 +356,6 @@ impl ScalarFunction {
                         }
                     }
                 } else if dialect == Dialect::SQLite {
-                    // SQLite does not support CEIL/FLOOR on non-numeric types
                     if let Some(first_arg) = arg_types.first() {
                         if !first_arg.is_numeric() {
                             return Some(format!(

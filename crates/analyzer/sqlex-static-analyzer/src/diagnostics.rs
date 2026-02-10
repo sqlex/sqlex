@@ -4,6 +4,7 @@ pub enum DiagnosticSeverity {
     Warning,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagnosticCode {
     ParseError,
@@ -27,10 +28,12 @@ pub enum DiagnosticCode {
 pub struct Diagnostic {
     pub severity: DiagnosticSeverity,
     pub message: String,
+    #[allow(dead_code)]
     pub code: Option<DiagnosticCode>,
     pub context: Option<String>,
 }
 
+#[allow(dead_code)]
 impl Diagnostic {
     pub fn error(message: impl Into<String>) -> Self {
         Self {

@@ -1,4 +1,4 @@
-pub mod arena;
-pub mod bound;
-pub mod ids;
+pub mod auxiliary;
 pub mod output;
+pub mod relational;
+pub mod scalar;
