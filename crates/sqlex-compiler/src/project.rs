@@ -1,8 +1,20 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, anyhow};
-use sqlex_common::{config::SqlexConfig, project_root::ProjectRoot};
-use sqlparser::{dialect::GenericDialect, parser::Parser};
+use sqlex_common::{config::SqlexConfig, dialect::Dialect, project_root::ProjectRoot};
+use sqlparser::{
+    dialect::{Dialect as SqlParserDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect},
+    parser::Parser,
+};
+
+/// Convert sqlex Dialect to sqlparser Dialect
+fn to_sqlparser_dialect(dialect: Dialect) -> Box<dyn SqlParserDialect> {
+    match dialect {
+        Dialect::Postgres => Box::new(PostgreSqlDialect {}),
+        Dialect::MySQL => Box::new(MySqlDialect {}),
+        Dialect::SQLite => Box::new(SQLiteDialect {}),
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Project {
@@ -120,7 +132,7 @@ impl Project {
             .await
             .context(format!("Failed to read migration file: {}", path.display()))?;
 
-        let statements = Self::split_sql_statements(&content);
+        let statements = Self::split_sql_statements(&content, self.config.dialect);
 
         Ok(Migration {
             version,
@@ -131,9 +143,9 @@ impl Project {
     }
 
     /// Split SQL content into individual statements
-    fn split_sql_statements(content: &str) -> Vec<String> {
-        let dialect = GenericDialect {};
-        match Parser::parse_sql(&dialect, content) {
+    fn split_sql_statements(content: &str, dialect: Dialect) -> Vec<String> {
+        let sqlparser_dialect = to_sqlparser_dialect(dialect);
+        match Parser::parse_sql(sqlparser_dialect.as_ref(), content) {
             Ok(statements) => statements.iter().map(|stmt| stmt.to_string()).collect(),
             Err(_) => {
                 // Fallback to simple split if parsing fails
@@ -258,7 +270,7 @@ impl Project {
             .await
             .context(format!("Failed to read query file: {}", path.display()))?;
 
-        Self::parse_queries_from_content(&content, package, module, path)
+        Self::parse_queries_from_content(&content, package, module, path, self.config.dialect)
     }
 
     /// Parse queries from content using sqlparser
@@ -267,12 +279,13 @@ impl Project {
         package: Vec<String>,
         module: String,
         path: &Path,
+        dialect: Dialect,
     ) -> Result<Vec<Query>> {
-        let dialect = GenericDialect {};
+        let sqlparser_dialect = to_sqlparser_dialect(dialect);
         let mut queries = Vec::new();
 
         // First, parse the entire file to get all SQL statements (AST)
-        let statements = Parser::parse_sql(&dialect, content)
+        let statements = Parser::parse_sql(sqlparser_dialect.as_ref(), content)
             .context(format!("Failed to parse SQL file: {}", path.display()))?;
 
         // Extract query names from comments by scanning the content
@@ -485,7 +498,7 @@ mod tests {
     #[test]
     fn test_split_sql_statements_single() {
         let sql = "SELECT * FROM users";
-        let statements = Project::split_sql_statements(sql);
+        let statements = Project::split_sql_statements(sql, Dialect::SQLite);
         assert_eq!(statements.len(), 1);
         assert!(statements[0].contains("SELECT"));
     }
@@ -493,7 +506,7 @@ mod tests {
     #[test]
     fn test_split_sql_statements_multiple() {
         let sql = "CREATE TABLE users (id INT); INSERT INTO users VALUES (1);";
-        let statements = Project::split_sql_statements(sql);
+        let statements = Project::split_sql_statements(sql, Dialect::SQLite);
         assert_eq!(statements.len(), 2);
         assert!(statements[0].contains("CREATE TABLE"));
         assert!(statements[1].contains("INSERT INTO"));
@@ -502,14 +515,14 @@ mod tests {
     #[test]
     fn test_split_sql_statements_with_whitespace() {
         let sql = "  SELECT * FROM users  ;  \n  INSERT INTO logs VALUES (1)  ;  ";
-        let statements = Project::split_sql_statements(sql);
+        let statements = Project::split_sql_statements(sql, Dialect::SQLite);
         assert_eq!(statements.len(), 2);
     }
 
     #[test]
     fn test_split_sql_statements_empty() {
         let sql = "";
-        let statements = Project::split_sql_statements(sql);
+        let statements = Project::split_sql_statements(sql, Dialect::SQLite);
         assert_eq!(statements.len(), 0);
     }
 
@@ -646,8 +659,13 @@ mod tests {
         let package = vec![];
         let module = "test".to_string();
 
-        let result =
-            Project::parse_queries_from_content(content, package.clone(), module.clone(), path);
+        let result = Project::parse_queries_from_content(
+            content,
+            package.clone(),
+            module.clone(),
+            path,
+            Dialect::SQLite,
+        );
         assert!(result.is_ok());
 
         let queries = result.unwrap();
@@ -671,8 +689,13 @@ SELECT * FROM users;
         let package = vec!["queries".to_string()];
         let module = "test".to_string();
 
-        let result =
-            Project::parse_queries_from_content(content, package.clone(), module.clone(), path);
+        let result = Project::parse_queries_from_content(
+            content,
+            package.clone(),
+            module.clone(),
+            path,
+            Dialect::SQLite,
+        );
         assert!(result.is_ok());
 
         let queries = result.unwrap();
@@ -692,7 +715,8 @@ SELECT * FROM users;
         let package = vec![];
         let module = "test".to_string();
 
-        let result = Project::parse_queries_from_content(content, package, module, path);
+        let result =
+            Project::parse_queries_from_content(content, package, module, path, Dialect::SQLite);
         assert!(result.is_err());
         assert!(
             result
@@ -709,7 +733,8 @@ SELECT * FROM users;
         let package = vec![];
         let module = "test".to_string();
 
-        let result = Project::parse_queries_from_content(content, package, module, path);
+        let result =
+            Project::parse_queries_from_content(content, package, module, path, Dialect::SQLite);
         assert!(result.is_err());
         assert!(
             result
@@ -717,5 +742,32 @@ SELECT * FROM users;
                 .to_string()
                 .contains("must be lowercase")
         );
+    }
+
+    #[test]
+    fn test_parse_queries_with_reserved_keyword_table_name() {
+        // Test that MySQL dialect can parse queries with reserved keywords as table names
+        let content = r#"-- name: get_users
+select *
+from user
+         left join role on role.id = user.role_id"#;
+        let path = Path::new("user_dao.sql");
+        let package = vec![];
+        let module = "user_dao".to_string();
+
+        let result = Project::parse_queries_from_content(
+            content,
+            package.clone(),
+            module.clone(),
+            path,
+            Dialect::MySQL,
+        );
+        assert!(result.is_ok());
+
+        let queries = result.unwrap();
+        assert_eq!(queries.len(), 1);
+        assert_eq!(queries[0].name, "get_users");
+        assert!(queries[0].sql.contains("user"));
+        assert!(queries[0].sql.contains("role"));
     }
 }
