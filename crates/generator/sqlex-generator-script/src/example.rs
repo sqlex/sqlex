@@ -1,6 +1,8 @@
 /// Generates an example TypeScript script demonstrating the script generator API
 pub fn generate_example_script() -> String {
-    r#"// Example TypeScript script for sqlex code generation
+    r#"/// <reference path="./sqlex-types.d.ts" />
+
+// Example TypeScript script for sqlex code generation
 // This script demonstrates how to use the script generator API
 
 // Access project tables
@@ -13,20 +15,19 @@ for (const table of project.tables) {
     const className = toPascalCase(table.name);
     const fileName = toSnakeCase(table.name);
 
-    let content = `// Generated model for ${table.name}\n\n`;
-    content += `export interface ${className} {\n`;
+    let content = `# Generated model for ${table.name}\n\n`;
+    content += `class ${className}:\n`;
+    content += `    def __init__(self):\n`;
 
     for (const column of table.columns) {
-        const fieldName = toCamelCase(column.name);
-        const fieldType = getTypeScriptType(column.data_type);
-        const optional = column.nullability ? '?' : '';
-        content += `    ${fieldName}${optional}: ${fieldType};\n`;
+        const fieldName = toSnakeCase(column.name);
+        const fieldType = getPythonType(column.data_type);
+        const optional = column.nullability ? ` | None` : '';
+        content += `        self.${fieldName}: ${fieldType}${optional}\n`;
     }
 
-    content += `}\n`;
-
     // Write the generated file
-    writer.write(`models/${fileName}.ts`, content);
+    writer.write(`models/${fileName}.py`, content);
 }
 
 // Access project queries
@@ -37,33 +38,33 @@ for (const query of project.queries) {
     // You can generate query-related code here
 }
 
-// Helper function to map database types to TypeScript types
-function getTypeScriptType(dataType: any): string {
+// Helper function to map database types to Python types
+function getPythonType(dataType: any): string {
     if (typeof dataType === 'string') {
         switch (dataType) {
-            case 'Text': return 'string';
-            case 'Boolean': return 'boolean';
+            case 'Text': return 'str';
+            case 'Boolean': return 'bool';
             case 'Float':
             case 'Double':
-            case 'Decimal': return 'number';
+            case 'Decimal': return 'float';
             case 'Date':
             case 'Time':
-            case 'Timestamp': return 'Date';
-            case 'Uuid': return 'string';
-            case 'Json': return 'any';
-            case 'Blob': return 'Buffer';
-            default: return 'unknown';
+            case 'Timestamp': return 'datetime';
+            case 'Uuid': return 'str';
+            case 'Json': return 'dict';
+            case 'Blob': return 'bytes';
+            default: return 'Any';
         }
     }
 
     // Handle object types like { Int: boolean }
     if (typeof dataType === 'object') {
         if ('Int' in dataType || 'BigInt' in dataType || 'SmallInt' in dataType) {
-            return 'number';
+            return 'int';
         }
     }
 
-    return 'unknown';
+    return 'Any';
 }
 
 console.log('Code generation completed!');

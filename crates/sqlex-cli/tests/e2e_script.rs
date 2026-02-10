@@ -29,9 +29,9 @@ fn test_script_adds_generator_successfully() {
     let mut cmd = Command::cargo_bin("sqlex").expect("Failed to find binary");
     cmd.arg("script").current_dir(&project_path);
 
-    cmd.assert()
-        .success()
-        .stdout(predicate::str::contains("script generator added successfully"));
+    cmd.assert().success().stdout(predicate::str::contains(
+        "script generator added successfully",
+    ));
 }
 
 #[test]
@@ -115,6 +115,3 @@ fn test_script_fails_without_config() {
         .failure()
         .stderr(predicate::str::contains("sqlex.yaml not found"));
 }
-
-
-

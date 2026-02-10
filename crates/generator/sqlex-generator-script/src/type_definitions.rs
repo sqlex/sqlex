@@ -68,20 +68,9 @@ interface Writer {
     write(path: string, content: string): void;
 }
 
-/**
- * Console for logging
- */
-interface Console {
-    log(message: string): void;
-    info(message: string): void;
-    warn(message: string): void;
-    error(message: string): void;
-}
-
 // Global variables available in scripts
 declare const project: Project;
 declare const writer: Writer;
-declare const console: Console;
 
 // String utility functions
 declare function toSnakeCase(str: string): string;
