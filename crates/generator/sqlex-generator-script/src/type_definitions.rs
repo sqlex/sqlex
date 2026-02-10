@@ -24,10 +24,22 @@ interface Table {
  */
 interface Query {
     name: string;
+    package: string[];
+    module: string;
     sql: string;
     params: Column[];
+    cardinality: Cardinality;
     result_columns: Column[];
 }
+
+/**
+ * Query result cardinality
+ */
+type Cardinality =
+    | "ExactlyOne"
+    | "AtLeastOne"
+    | "AtMostOne"
+    | "Unknown";
 
 /**
  * Data type union

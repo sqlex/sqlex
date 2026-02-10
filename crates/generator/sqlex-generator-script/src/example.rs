@@ -35,6 +35,9 @@ console.log(`Found ${project.queries.length} queries`);
 
 for (const query of project.queries) {
     console.log(`Processing query: ${query.name}`);
+    console.log(`  Package: ${query.package.join('.')}`);
+    console.log(`  Module: ${query.module}`);
+    console.log(`  Cardinality: ${query.cardinality}`);
     // You can generate query-related code here
 }
 

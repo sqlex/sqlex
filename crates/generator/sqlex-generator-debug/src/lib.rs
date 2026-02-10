@@ -58,6 +58,9 @@ impl DebugGenerator {
         output.push_str("--- Queries ---\n");
         for query in &input.queries {
             output.push_str(&format!("Query: {}\n", query.name));
+            output.push_str(&format!("  Package: {}\n", query.package.join(".")));
+            output.push_str(&format!("  Module: {}\n", query.module));
+            output.push_str(&format!("  Cardinality: {:?}\n", query.cardinality));
             output.push_str("  SQL:\n");
             for line in query.sql.lines() {
                 output.push_str(&format!("    {}\n", line));
