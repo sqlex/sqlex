@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use sqlex_common::types::Cardinality;
 use sqlparser::ast::Value;
 
@@ -5,9 +7,20 @@ use crate::{
     analysis::{functions::Function, infer::Inferrer},
     ir::{
         bound::{BoundExpr, BoundQueryBody, BoundSelect, BoundSetExpr, BoundSetOp, BoundStatement},
-        ids::ExprId,
+        ids::{ColumnId, ExprId},
     },
 };
+
+/// Represents constraint information extracted from WHERE conditions
+#[derive(Debug, Default)]
+struct ConstraintInfo {
+    /// Equality constraints: column -> whether it's compared to a constant
+    equality_constraints: HashMap<ColumnId, bool>,
+    /// IN constraints: column -> list length
+    in_constraints: HashMap<ColumnId, usize>,
+    /// IS NULL constraints: set of columns
+    is_null_constraints: HashSet<ColumnId>,
+}
 
 fn constrain_at_most_one(cardinality: Cardinality) -> Cardinality {
     match cardinality {
@@ -70,6 +83,243 @@ struct QueryFacts {
 }
 
 impl Inferrer<'_> {
+    /// Get the TableDef for a column from the catalog
+    fn get_table_def_for_column(
+        &self,
+        stmt: &BoundStatement,
+        column_id: ColumnId,
+    ) -> Option<&crate::catalog::types::TableDef> {
+        let column = stmt.columns.get(column_id);
+        let table = stmt.tables.get(column.table);
+
+        match &table.source {
+            crate::ir::bound::BoundTableSource::Table { name } => self.catalog.get_table(name),
+            // CTE and derived tables don't have catalog information
+            crate::ir::bound::BoundTableSource::Cte { .. }
+            | crate::ir::bound::BoundTableSource::Derived { .. } => None,
+        }
+    }
+
+    /// Extract constraint information from WHERE expression
+    /// Returns false if the expression contains OR or other conditions that make constraints unreliable
+    fn extract_constraints_from_expr(
+        &self,
+        stmt: &BoundStatement,
+        expr_id: ExprId,
+        constraints: &mut ConstraintInfo,
+    ) -> bool {
+        let expr = stmt.exprs.get(expr_id);
+
+        match expr {
+            // Handle equality: column = literal or literal = column
+            BoundExpr::Binary {
+                left,
+                op: sqlparser::ast::BinaryOperator::Eq,
+                right,
+            } => {
+                let left_expr = stmt.exprs.get(*left);
+                let right_expr = stmt.exprs.get(*right);
+
+                match (left_expr, right_expr) {
+                    (BoundExpr::Column(col_id), BoundExpr::Literal(_)) => {
+                        constraints.equality_constraints.insert(*col_id, true);
+                        true
+                    },
+                    (BoundExpr::Literal(_), BoundExpr::Column(col_id)) => {
+                        constraints.equality_constraints.insert(*col_id, true);
+                        true
+                    },
+                    _ => false,
+                }
+            },
+            // Handle AND: merge constraints from both sides
+            BoundExpr::Binary {
+                left,
+                op: sqlparser::ast::BinaryOperator::And,
+                right,
+            } => {
+                let left_ok = self.extract_constraints_from_expr(stmt, *left, constraints);
+                let right_ok = self.extract_constraints_from_expr(stmt, *right, constraints);
+                left_ok && right_ok
+            },
+            // Handle OR: constraints are unreliable
+            BoundExpr::Binary {
+                op: sqlparser::ast::BinaryOperator::Or,
+                ..
+            } => false,
+            // Handle IN list
+            BoundExpr::InList {
+                expr,
+                list,
+                negated: false,
+            } => {
+                if let BoundExpr::Column(col_id) = stmt.exprs.get(*expr) {
+                    // Check if all items in the list are literals
+                    let all_literals = list
+                        .iter()
+                        .all(|item_id| matches!(stmt.exprs.get(*item_id), BoundExpr::Literal(_)));
+                    if all_literals {
+                        constraints.in_constraints.insert(*col_id, list.len());
+                        return true;
+                    }
+                }
+                false
+            },
+            // Handle IS NULL
+            BoundExpr::IsNull {
+                expr,
+                negated: false,
+            } => {
+                if let BoundExpr::Column(col_id) = stmt.exprs.get(*expr) {
+                    constraints.is_null_constraints.insert(*col_id);
+                    true
+                } else {
+                    false
+                }
+            },
+            _ => false,
+        }
+    }
+
+    /// Check if equality constraints match a primary key
+    fn check_primary_key_match(
+        &self,
+        stmt: &BoundStatement,
+        constraints: &ConstraintInfo,
+    ) -> Option<Cardinality> {
+        // Group constraints by table
+        let mut table_constraints: HashMap<crate::ir::ids::TableId, HashSet<String>> =
+            HashMap::new();
+
+        for col_id in constraints.equality_constraints.keys() {
+            let column = stmt.columns.get(*col_id);
+            table_constraints
+                .entry(column.table)
+                .or_default()
+                .insert(column.name.clone());
+        }
+
+        // Check each table's primary key
+        for (table_id, constrained_columns) in table_constraints {
+            let table = stmt.tables.get(table_id);
+            if let crate::ir::bound::BoundTableSource::Table { name } = &table.source {
+                if let Some(table_def) = self.catalog.get_table(name) {
+                    if let Some(pk_columns) = &table_def.primary_key {
+                        // Check if all primary key columns are in equality constraints
+                        // Additional constraints are fine (e.g., WHERE id = 1 AND name = 'John')
+                        if pk_columns
+                            .iter()
+                            .all(|pk_col| constrained_columns.contains(pk_col))
+                        {
+                            return Some(Cardinality::AtMostOne);
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Check if equality constraints match a unique constraint
+    fn check_unique_constraint_match(
+        &self,
+        stmt: &BoundStatement,
+        constraints: &ConstraintInfo,
+    ) -> Option<Cardinality> {
+        // Group constraints by table
+        let mut table_constraints: HashMap<crate::ir::ids::TableId, HashSet<String>> =
+            HashMap::new();
+
+        for col_id in constraints.equality_constraints.keys() {
+            let column = stmt.columns.get(*col_id);
+            table_constraints
+                .entry(column.table)
+                .or_default()
+                .insert(column.name.clone());
+        }
+
+        // Check each table's unique constraints
+        for (table_id, constrained_columns) in table_constraints {
+            let table = stmt.tables.get(table_id);
+            if let crate::ir::bound::BoundTableSource::Table { name } = &table.source {
+                if let Some(table_def) = self.catalog.get_table(name) {
+                    for unique_constraint in &table_def.unique_constraints {
+                        // Check if all unique constraint columns are in equality constraints
+                        // Additional constraints are fine
+                        if unique_constraint
+                            .iter()
+                            .all(|uc_col| constrained_columns.contains(uc_col))
+                        {
+                            return Some(Cardinality::AtMostOne);
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Analyze IN constraint for cardinality
+    fn analyze_in_constraint(
+        &self,
+        stmt: &BoundStatement,
+        constraints: &ConstraintInfo,
+    ) -> Option<Cardinality> {
+        for (col_id, list_len) in &constraints.in_constraints {
+            // Check if this column is a primary key or unique constraint (single column)
+            if let Some(table_def) = self.get_table_def_for_column(stmt, *col_id) {
+                let column = stmt.columns.get(*col_id);
+
+                // Check if it's a single-column primary key
+                let is_pk = table_def
+                    .primary_key
+                    .as_ref()
+                    .map(|pk| pk.len() == 1 && pk[0] == column.name)
+                    .unwrap_or(false);
+
+                // Check if it's a single-column unique constraint
+                let is_unique = table_def
+                    .unique_constraints
+                    .iter()
+                    .any(|uc| uc.len() == 1 && uc[0] == column.name);
+
+                if is_pk || is_unique {
+                    // IN with 0 or 1 items returns at most one row
+                    if *list_len <= 1 {
+                        return Some(Cardinality::AtMostOne);
+                    }
+                    // IN with multiple items could return multiple rows
+                    return Some(Cardinality::Unknown);
+                }
+            }
+        }
+        None
+    }
+
+    /// Analyze IS NULL constraint for cardinality
+    fn analyze_is_null_constraint(
+        &self,
+        stmt: &BoundStatement,
+        constraints: &ConstraintInfo,
+    ) -> Option<Cardinality> {
+        for col_id in &constraints.is_null_constraints {
+            if let Some(table_def) = self.get_table_def_for_column(stmt, *col_id) {
+                let column = stmt.columns.get(*col_id);
+
+                // Check if this column is part of the primary key
+                if let Some(pk_columns) = &table_def.primary_key {
+                    if pk_columns.contains(&column.name) {
+                        // Primary key cannot be NULL, so result is empty (AtMostOne)
+                        return Some(Cardinality::AtMostOne);
+                    }
+                }
+            }
+        }
+        None
+    }
+
     fn analyze_from_clause(&self, from: &[crate::ir::bound::BoundFromItem]) -> Cardinality {
         if from.is_empty() {
             return Cardinality::ExactlyOne;
@@ -95,8 +345,9 @@ impl Inferrer<'_> {
         let expr_id = where_expr?;
         let expr = stmt.exprs.get(expr_id);
 
+        // Check for simple constant false conditions
         match expr {
-            BoundExpr::Literal(Value::Boolean(false)) => Some(Cardinality::AtMostOne),
+            BoundExpr::Literal(Value::Boolean(false)) => return Some(Cardinality::AtMostOne),
             BoundExpr::Binary {
                 left,
                 op: sqlparser::ast::BinaryOperator::Eq,
@@ -112,11 +363,41 @@ impl Inferrer<'_> {
                         return Some(Cardinality::AtMostOne);
                     }
                 }
-
-                None
             },
-            _ => None,
+            _ => {},
         }
+
+        // Extract constraints from WHERE expression
+        let mut constraints = ConstraintInfo::default();
+        if !self.extract_constraints_from_expr(stmt, expr_id, &mut constraints) {
+            return None;
+        }
+
+        // Check equality constraints for primary key match
+        if !constraints.equality_constraints.is_empty() {
+            if let Some(card) = self.check_primary_key_match(stmt, &constraints) {
+                return Some(card);
+            }
+            if let Some(card) = self.check_unique_constraint_match(stmt, &constraints) {
+                return Some(card);
+            }
+        }
+
+        // Check IN constraints
+        if !constraints.in_constraints.is_empty() {
+            if let Some(card) = self.analyze_in_constraint(stmt, &constraints) {
+                return Some(card);
+            }
+        }
+
+        // Check IS NULL constraints
+        if !constraints.is_null_constraints.is_empty() {
+            if let Some(card) = self.analyze_is_null_constraint(stmt, &constraints) {
+                return Some(card);
+            }
+        }
+
+        None
     }
 
     pub(super) fn query_body_cardinality(
