@@ -11,6 +11,7 @@ path = "src/main.rs"
 # Internal
 sqlex-common = { workspace = true }
 sqlex-compiler = { workspace = true }
+sqlex-generator-script = { workspace = true }
 
 # External
 anyhow = { workspace = true }

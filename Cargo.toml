@@ -71,6 +71,9 @@ heck = "0.5"
 # JavaScript Runtime
 rquickjs = { version = "0.8", features = ["array-buffer", "classes"] }
 
+# TypeScript Compiler
+oxc = { version = "0.42", features = ["transformer", "semantic", "codegen"] }
+
 # Testing
 testcontainers = "0.23"
 

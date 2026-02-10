@@ -1,0 +1,94 @@
+/// Generates TypeScript type definitions for the script generator API
+pub fn generate_type_definitions() -> String {
+    r#"// TypeScript type definitions for sqlex script generator
+
+/**
+ * Column information in a table
+ */
+interface Column {
+    name: string;
+    data_type: DataType;
+    nullability: boolean;
+}
+
+/**
+ * Database table structure
+ */
+interface Table {
+    name: string;
+    columns: Column[];
+}
+
+/**
+ * SQL query descriptor
+ */
+interface Query {
+    name: string;
+    sql: string;
+    params: Column[];
+    result_columns: Column[];
+}
+
+/**
+ * Data type union
+ */
+type DataType =
+    | { Int: boolean }
+    | { BigInt: boolean }
+    | { SmallInt: boolean }
+    | "Text"
+    | "Boolean"
+    | "Float"
+    | "Double"
+    | "Decimal"
+    | "Date"
+    | "Time"
+    | "Timestamp"
+    | "Uuid"
+    | "Json"
+    | "Blob";
+
+/**
+ * Project structure containing tables and queries
+ */
+interface Project {
+    tables: Table[];
+    queries: Query[];
+}
+
+/**
+ * File writer for generating output files
+ */
+interface Writer {
+    /**
+     * Write content to a file
+     * @param path - Relative path to the output file
+     * @param content - Content to write
+     */
+    write(path: string, content: string): void;
+}
+
+/**
+ * Console for logging
+ */
+interface Console {
+    log(message: string): void;
+    info(message: string): void;
+    warn(message: string): void;
+    error(message: string): void;
+}
+
+// Global variables available in scripts
+declare const project: Project;
+declare const writer: Writer;
+declare const console: Console;
+
+// String utility functions
+declare function toSnakeCase(str: string): string;
+declare function toCamelCase(str: string): string;
+declare function toPascalCase(str: string): string;
+declare function toKebabCase(str: string): string;
+declare function toScreamingSnakeCase(str: string): string;
+"#
+    .to_string()
+}

@@ -29,6 +29,11 @@ enum Commands {
         /// Project name (defaults to current directory name if not provided)
         name: Option<String>,
     },
+    /// Add script generator to existing project
+    Script {
+        /// Path to configuration file or directory (searches upward from current directory if not provided)
+        config: Option<String>,
+    },
     /// Generate code
     Generate {
         /// Path to configuration file or directory (searches upward from current directory if not provided)
@@ -65,6 +70,7 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Init { name } => run_init(name).await?,
+        Commands::Script { config } => run_script(config).await?,
         Commands::Generate { config } => run_generate(config).await?,
         Commands::Watch { config } => run_watch(config).await?,
     }
@@ -107,11 +113,11 @@ async fn run_init(name: Option<String>) -> Result<()> {
             migrations: "migrations".to_string(),
             analyzer: AnalyzerMode::Hybrid,
             generators: vec![GeneratorConfig {
-                name: "rust_entities".to_string(),
-                generator: "rust".to_string(),
-                output: PathBuf::from("src/entities"),
+                name: "debug_output".to_string(),
+                generator: "debug".to_string(),
+                output: PathBuf::from("generated"),
                 config: serde_json::json!({
-                    "orm_mode": "sqlx"
+                    "format": "text"
                 }),
             }],
         };
@@ -131,6 +137,79 @@ async fn run_init(name: Option<String>) -> Result<()> {
     }
 
     info!("initialized sqlex project: {}", project_name);
+    Ok(())
+}
+
+async fn run_script(config_path: Option<String>) -> Result<()> {
+    let config_file = find_config_file(config_path).await?;
+    let project_root = config_file
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Failed to get project root"))?;
+
+    // Read existing config
+    let config_content = fs::read_to_string(&config_file)
+        .await
+        .context("Failed to read sqlex.yaml")?;
+    let mut config: SqlexConfig = serde_yaml::from_str(&config_content)?;
+
+    // Check if script generator already exists
+    let has_script_generator = config.generators.iter().any(|g| g.generator == "script");
+
+    if has_script_generator {
+        anyhow::bail!("Script generator already exists in configuration");
+    }
+
+    // Add script generator configuration
+    config.generators.push(GeneratorConfig {
+        name: "script_generator".to_string(),
+        generator: "script".to_string(),
+        output: PathBuf::from("generated"),
+        config: serde_json::json!({
+            "script": "scripts/generate.ts"
+        }),
+    });
+
+    // Save updated config
+    let updated_content = serde_yaml::to_string(&config)?;
+    fs::write(&config_file, updated_content)
+        .await
+        .context("Failed to write updated sqlex.yaml")?;
+    info!("updated {:?}", config_file);
+
+    // Create scripts directory
+    let scripts_dir = project_root.join("scripts");
+    if !scripts_dir.exists() {
+        fs::create_dir_all(&scripts_dir)
+            .await
+            .context("Failed to create scripts directory")?;
+        info!("created {:?}", scripts_dir);
+    }
+
+    // Generate example script
+    let example_script_path = scripts_dir.join("generate.ts");
+    if !example_script_path.exists() {
+        let example_content = sqlex_generator_script::generate_example_script();
+        fs::write(&example_script_path, example_content)
+            .await
+            .context("Failed to write example script")?;
+        info!("created {:?}", example_script_path);
+    } else {
+        info!("skipped {:?} (already exists)", example_script_path);
+    }
+
+    // Generate type definitions
+    let type_defs_path = scripts_dir.join("sqlex-types.d.ts");
+    if !type_defs_path.exists() {
+        let type_defs_content = sqlex_generator_script::generate_type_definitions();
+        fs::write(&type_defs_path, type_defs_content)
+            .await
+            .context("Failed to write type definitions")?;
+        info!("created {:?}", type_defs_path);
+    } else {
+        info!("skipped {:?} (already exists)", type_defs_path);
+    }
+
+    info!("script generator added successfully!");
     Ok(())
 }
 

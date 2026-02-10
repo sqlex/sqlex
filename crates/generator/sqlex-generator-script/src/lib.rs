@@ -9,6 +9,16 @@ use serde::{Deserialize, Serialize};
 use sqlex_common::{ir::CompilationUnit, project_root::ProjectRoot};
 use sqlex_generator::{FileWriter, Generator};
 
+mod example;
+mod script_type;
+mod type_definitions;
+mod typescript_compiler;
+
+pub use example::generate_example_script;
+use script_type::ScriptType;
+pub use type_definitions::generate_type_definitions;
+use typescript_compiler::TypeScriptCompiler;
+
 #[derive(Debug, Serialize, Deserialize)]
 struct ScriptGeneratorConfig {
     script: PathBuf,
@@ -18,6 +28,7 @@ pub struct ScriptGenerator {
     project_root: ProjectRoot,
     script_path: PathBuf,
     output: PathBuf,
+    ts_compiler: TypeScriptCompiler,
 }
 
 impl ScriptGenerator {
@@ -31,7 +42,23 @@ impl ScriptGenerator {
             project_root: project_root.clone(),
             script_path: config.script,
             output: output.to_path_buf(),
+            ts_compiler: TypeScriptCompiler::new(),
         })
+    }
+
+    fn compile_if_needed(&self, script_content: &str, script_path: &Path) -> Result<String> {
+        let script_type = ScriptType::from_path(script_path)
+            .ok_or_else(|| anyhow::anyhow!("Unable to determine script type from path"))?;
+
+        if script_type.is_typescript() {
+            let filename = script_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("script.ts");
+            self.ts_compiler.compile(script_content, filename)
+        } else {
+            Ok(script_content.to_string())
+        }
     }
 
     fn execute_script(
@@ -227,9 +254,12 @@ impl Generator for ScriptGenerator {
             .await
             .context(format!("Failed to read script: {:?}", script_full_path))?;
 
+        // Compile TypeScript to JavaScript if needed
+        let js_content = self.compile_if_needed(&script_content, &script_full_path)?;
+
         let file_writer = Arc::new(Mutex::new(FileWriter::new(&self.output).await?));
 
-        self.execute_script(&script_content, input, file_writer.clone())?;
+        self.execute_script(&js_content, input, file_writer.clone())?;
 
         let mut writer = Arc::try_unwrap(file_writer)
             .map_err(|_| anyhow::anyhow!("Failed to unwrap Arc: multiple references still exist"))?
@@ -545,5 +575,127 @@ mod tests {
             "Error message should contain error type or description, got: {}",
             error_msg
         );
+    }
+
+    #[tokio::test]
+    async fn test_typescript_basic_compilation() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_root = ProjectRoot::from_dir(temp_dir.path());
+        let output_dir = temp_dir.path().join("output");
+
+        let script_path = temp_dir.path().join("generate.ts");
+        tokio::fs::write(
+            &script_path,
+            r#"
+                const message: string = "Hello from TypeScript!";
+                writer.write("test.txt", message);
+            "#,
+        )
+        .await
+        .unwrap();
+
+        let config = serde_json::json!({ "script": "generate.ts" });
+        let generator = ScriptGenerator::new(&project_root, &output_dir, config).unwrap();
+        let input = create_test_compilation_unit();
+
+        generator.generate(&input).await.unwrap();
+
+        let output_file = output_dir.join("test.txt");
+        assert!(output_file.exists());
+        let content = tokio::fs::read_to_string(&output_file).await.unwrap();
+        assert_eq!(content, "Hello from TypeScript!");
+    }
+
+    #[tokio::test]
+    async fn test_typescript_with_types() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_root = ProjectRoot::from_dir(temp_dir.path());
+        let output_dir = temp_dir.path().join("output");
+
+        let script_path = temp_dir.path().join("generate.ts");
+        tokio::fs::write(
+            &script_path,
+            r#"
+                interface User {
+                    id: number;
+                    name: string;
+                }
+
+                const user: User = { id: 1, name: "Alice" };
+                writer.write("user.txt", `${user.id}: ${user.name}`);
+            "#,
+        )
+        .await
+        .unwrap();
+
+        let config = serde_json::json!({ "script": "generate.ts" });
+        let generator = ScriptGenerator::new(&project_root, &output_dir, config).unwrap();
+        let input = create_test_compilation_unit();
+
+        generator.generate(&input).await.unwrap();
+
+        let output_file = output_dir.join("user.txt");
+        let content = tokio::fs::read_to_string(&output_file).await.unwrap();
+        assert_eq!(content, "1: Alice");
+    }
+
+    #[tokio::test]
+    async fn test_typescript_syntax_error() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_root = ProjectRoot::from_dir(temp_dir.path());
+        let output_dir = temp_dir.path().join("output");
+
+        let script_path = temp_dir.path().join("invalid.ts");
+        tokio::fs::write(
+            &script_path,
+            r#"
+                // Invalid TypeScript syntax
+                const x: string = 123;
+                const y = {
+            "#,
+        )
+        .await
+        .unwrap();
+
+        let config = serde_json::json!({ "script": "invalid.ts" });
+        let generator = ScriptGenerator::new(&project_root, &output_dir, config).unwrap();
+        let input = create_test_compilation_unit();
+
+        let result = generator.generate(&input).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_typescript_advanced_features() {
+        let temp_dir = TempDir::new().unwrap();
+        let project_root = ProjectRoot::from_dir(temp_dir.path());
+        let output_dir = temp_dir.path().join("output");
+
+        let script_path = temp_dir.path().join("advanced.ts");
+        tokio::fs::write(
+            &script_path,
+            r#"
+                // Test generics and optional chaining
+                function identity<T>(value: T): T {
+                    return value;
+                }
+
+                const result = identity<string>("test");
+                const optional = project.tables[0]?.name ?? "default";
+                writer.write("output.txt", `${result},${optional}`);
+            "#,
+        )
+        .await
+        .unwrap();
+
+        let config = serde_json::json!({ "script": "advanced.ts" });
+        let generator = ScriptGenerator::new(&project_root, &output_dir, config).unwrap();
+        let input = create_test_compilation_unit();
+
+        generator.generate(&input).await.unwrap();
+
+        let output_file = output_dir.join("output.txt");
+        let content = tokio::fs::read_to_string(&output_file).await.unwrap();
+        assert_eq!(content, "test,users");
     }
 }
