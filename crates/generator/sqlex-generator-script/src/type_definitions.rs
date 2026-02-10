@@ -33,20 +33,28 @@ interface Query {
  * Data type union
  */
 type DataType =
-    | { Int: boolean }
-    | { BigInt: boolean }
-    | { SmallInt: boolean }
-    | "Text"
-    | "Boolean"
+    | "Bool"
+    | "TinyInt"
+    | "UnsignedTinyInt"
+    | "SmallInt"
+    | "UnsignedSmallInt"
+    | "Int"
+    | "UnsignedInt"
+    | "BigInt"
+    | "UnsignedBigInt"
     | "Float"
     | "Double"
     | "Decimal"
+    | "Char"
+    | "Varchar"
+    | "Text"
     | "Date"
     | "Time"
+    | "DateTime"
     | "Timestamp"
     | "Uuid"
     | "Json"
-    | "Blob";
+    | "Binary";
 
 /**
  * Project structure containing tables and queries

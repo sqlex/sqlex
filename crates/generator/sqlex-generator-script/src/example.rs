@@ -39,32 +39,32 @@ for (const query of project.queries) {
 }
 
 // Helper function to map database types to Python types
-function getPythonType(dataType: any): string {
-    if (typeof dataType === 'string') {
-        switch (dataType) {
-            case 'Text': return 'str';
-            case 'Boolean': return 'bool';
-            case 'Float':
-            case 'Double':
-            case 'Decimal': return 'float';
-            case 'Date':
-            case 'Time':
-            case 'Timestamp': return 'datetime';
-            case 'Uuid': return 'str';
-            case 'Json': return 'dict';
-            case 'Blob': return 'bytes';
-            default: return 'Any';
-        }
+function getPythonType(dataType: string): string {
+    switch (dataType) {
+        case 'Bool': return 'bool';
+        case 'TinyInt':
+        case 'UnsignedTinyInt':
+        case 'SmallInt':
+        case 'UnsignedSmallInt':
+        case 'Int':
+        case 'UnsignedInt':
+        case 'BigInt':
+        case 'UnsignedBigInt': return 'int';
+        case 'Float':
+        case 'Double':
+        case 'Decimal': return 'float';
+        case 'Char':
+        case 'Varchar':
+        case 'Text': return 'str';
+        case 'Date':
+        case 'Time':
+        case 'DateTime':
+        case 'Timestamp': return 'datetime';
+        case 'Uuid': return 'str';
+        case 'Json': return 'dict';
+        case 'Binary': return 'bytes';
+        default: return 'Any';
     }
-
-    // Handle object types like { Int: boolean }
-    if (typeof dataType === 'object') {
-        if ('Int' in dataType || 'BigInt' in dataType || 'SmallInt' in dataType) {
-            return 'int';
-        }
-    }
-
-    return 'Any';
 }
 
 console.log('Code generation completed!');
