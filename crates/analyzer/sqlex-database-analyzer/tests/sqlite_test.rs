@@ -44,7 +44,7 @@ async fn test_sqlite_analyzer_basic() -> anyhow::Result<()> {
     assert_eq!(columns.len(), 6);
 
     let id_col = columns.iter().find(|c| c.name == "id").unwrap();
-    assert_eq!(id_col.data_type, DataType::BigInt(false)); // INTEGER is mapped to BigInt
+    assert_eq!(id_col.data_type, DataType::BigInt); // INTEGER is mapped to BigInt
 
     let username_col = columns.iter().find(|c| c.name == "username").unwrap();
     assert_eq!(username_col.data_type, DataType::Text);
@@ -128,15 +128,15 @@ async fn test_sqlite_analyzer_all_types() -> anyhow::Result<()> {
     };
 
     // All int-like types should map to BigInt because they contain "int"
-    check_type("col_int", DataType::BigInt(false));
-    check_type("col_integer", DataType::BigInt(false));
-    check_type("col_tinyint", DataType::BigInt(false));
-    check_type("col_smallint", DataType::BigInt(false));
-    check_type("col_mediumint", DataType::BigInt(false));
-    check_type("col_bigint", DataType::BigInt(false));
-    check_type("col_unsigned_big_int", DataType::BigInt(false));
-    check_type("col_int2", DataType::BigInt(false));
-    check_type("col_int8", DataType::BigInt(false));
+    check_type("col_int", DataType::BigInt);
+    check_type("col_integer", DataType::BigInt);
+    check_type("col_tinyint", DataType::BigInt);
+    check_type("col_smallint", DataType::BigInt);
+    check_type("col_mediumint", DataType::BigInt);
+    check_type("col_bigint", DataType::BigInt);
+    check_type("col_unsigned_big_int", DataType::BigInt);
+    check_type("col_int2", DataType::BigInt);
+    check_type("col_int8", DataType::BigInt);
 
     // Text-like types
     check_type("col_character", DataType::Char);
@@ -187,7 +187,7 @@ async fn test_sqlite_analyzer_query_analysis() -> anyhow::Result<()> {
     // But usually for prepared statements it infers from schema if available.
 
     assert_eq!(result.columns[0].name, "id");
-    assert_eq!(result.columns[0].data_type, DataType::BigInt(false));
+    assert_eq!(result.columns[0].data_type, DataType::BigInt);
 
     assert_eq!(result.columns[1].name, "name");
     assert_eq!(result.columns[1].data_type, DataType::Text);
@@ -196,7 +196,7 @@ async fn test_sqlite_analyzer_query_analysis() -> anyhow::Result<()> {
     assert_eq!(result.columns[2].data_type, DataType::Double);
 
     assert_eq!(result.columns[3].name, "in_stock");
-    assert_eq!(result.columns[3].data_type, DataType::BigInt(false));
+    assert_eq!(result.columns[3].data_type, DataType::BigInt);
 
     Ok(())
 }

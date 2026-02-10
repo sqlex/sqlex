@@ -245,8 +245,8 @@ impl ScalarFunction {
             | Self::Position => {
                 // MySQL returns BIGINT for these functions, others return INT
                 let data_type = match dialect {
-                    Dialect::MySQL => DataType::BigInt(false),
-                    _ => DataType::Int(false),
+                    Dialect::MySQL => DataType::BigInt,
+                    _ => DataType::Int,
                 };
                 let nullable = arg_nullables.first().copied().unwrap_or(true);
                 (data_type, nullable)
@@ -281,7 +281,7 @@ impl ScalarFunction {
             | Self::Power
             | Self::Random => (DataType::Double, true),
 
-            Self::Sign => (DataType::Int(false), true),
+            Self::Sign => (DataType::Int, true),
 
             Self::CurrentTimestamp => (DataType::Timestamp, false),
             Self::CurrentDate => (DataType::Date, false),
@@ -294,7 +294,7 @@ impl ScalarFunction {
             | Self::Hour
             | Self::Minute
             | Self::Second
-            | Self::Extract => (DataType::Int(false), true),
+            | Self::Extract => (DataType::Int, true),
 
             Self::JsonObject | Self::JsonArray | Self::ToJson | Self::ToJsonb => {
                 (DataType::Json, true)

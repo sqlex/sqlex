@@ -248,14 +248,32 @@ fn map_string_type(t: &str) -> DataType {
         "boolean" | "bool" => DataType::Bool,
         "tinyint" => {
             if unsigned {
-                DataType::TinyInt(true)
+                DataType::UnsignedTinyInt
             } else {
                 DataType::Bool
             }
         },
-        "smallint" => DataType::SmallInt(unsigned),
-        "int" | "integer" | "mediumint" => DataType::Int(unsigned),
-        "bigint" => DataType::BigInt(unsigned),
+        "smallint" => {
+            if unsigned {
+                DataType::UnsignedSmallInt
+            } else {
+                DataType::SmallInt
+            }
+        },
+        "int" | "integer" | "mediumint" => {
+            if unsigned {
+                DataType::UnsignedInt
+            } else {
+                DataType::Int
+            }
+        },
+        "bigint" => {
+            if unsigned {
+                DataType::UnsignedBigInt
+            } else {
+                DataType::BigInt
+            }
+        },
         "float" => DataType::Float,
         "double" => DataType::Double,
         "decimal" | "numeric" => DataType::Decimal,

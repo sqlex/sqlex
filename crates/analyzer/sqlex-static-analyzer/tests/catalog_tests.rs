@@ -263,10 +263,10 @@ fn test_data_type_mapping_int() {
         .unwrap();
 
     let table = schema.get_table("t").unwrap();
-    assert_eq!(table.columns[0].data_type, DataType::Int(false));
-    assert_eq!(table.columns[1].data_type, DataType::Int(false));
-    assert_eq!(table.columns[2].data_type, DataType::SmallInt(false));
-    assert_eq!(table.columns[3].data_type, DataType::BigInt(false));
+    assert_eq!(table.columns[0].data_type, DataType::Int);
+    assert_eq!(table.columns[1].data_type, DataType::Int);
+    assert_eq!(table.columns[2].data_type, DataType::SmallInt);
+    assert_eq!(table.columns[3].data_type, DataType::BigInt);
 }
 
 #[test]

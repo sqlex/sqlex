@@ -56,20 +56,19 @@ impl AggregateFunction {
     }
 
     pub(crate) fn infer_type(&self, dialect: Dialect, arg_types: &[DataType]) -> (DataType, bool) {
-        let input_type = arg_types.first().cloned().unwrap_or(DataType::Int(false));
+        let input_type = arg_types.first().cloned().unwrap_or(DataType::Int);
 
         match self {
-            Self::Count => (DataType::BigInt(false), false),
+            Self::Count => (DataType::BigInt, false),
             Self::Sum => {
                 let data_type = match input_type {
-                    DataType::TinyInt(true)
-                    | DataType::SmallInt(true)
-                    | DataType::Int(true)
-                    | DataType::BigInt(true) => DataType::BigInt(true),
-                    DataType::TinyInt(false)
-                    | DataType::SmallInt(false)
-                    | DataType::Int(false)
-                    | DataType::BigInt(false) => DataType::BigInt(false),
+                    DataType::UnsignedTinyInt
+                    | DataType::UnsignedSmallInt
+                    | DataType::UnsignedInt
+                    | DataType::UnsignedBigInt => DataType::UnsignedBigInt,
+                    DataType::TinyInt | DataType::SmallInt | DataType::Int | DataType::BigInt => {
+                        DataType::BigInt
+                    },
                     DataType::Decimal => match dialect {
                         Dialect::MySQL | Dialect::Postgres => DataType::Decimal,
                         Dialect::SQLite => DataType::Double,
@@ -87,10 +86,14 @@ impl AggregateFunction {
                 let data_type = match dialect {
                     Dialect::SQLite => DataType::Double,
                     Dialect::MySQL | Dialect::Postgres => match input_type {
-                        DataType::TinyInt(_)
-                        | DataType::SmallInt(_)
-                        | DataType::Int(_)
-                        | DataType::BigInt(_)
+                        DataType::TinyInt
+                        | DataType::UnsignedTinyInt
+                        | DataType::SmallInt
+                        | DataType::UnsignedSmallInt
+                        | DataType::Int
+                        | DataType::UnsignedInt
+                        | DataType::BigInt
+                        | DataType::UnsignedBigInt
                         | DataType::Decimal => DataType::Decimal,
                         DataType::Float | DataType::Double => DataType::Double,
                         _ => DataType::Double,

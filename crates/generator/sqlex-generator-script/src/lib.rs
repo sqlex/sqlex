@@ -285,7 +285,7 @@ mod tests {
                 columns: vec![
                     ColumnInfo {
                         name: "id".to_string(),
-                        data_type: DataType::Int(false),
+                        data_type: DataType::Int,
                         nullability: false,
                     },
                     ColumnInfo {

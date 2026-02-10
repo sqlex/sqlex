@@ -327,22 +327,24 @@ pub fn map_data_type(dialect: Dialect, sql_type: &SqlDataType) -> DataType {
                 | SqlDataType::UnsignedInt8(_)
         )
     {
-        return DataType::BigInt(false);
+        return DataType::BigInt;
     }
 
     match sql_type {
         SqlDataType::Boolean => DataType::Bool,
-        SqlDataType::TinyInt(_) => DataType::TinyInt(false),
-        SqlDataType::SmallInt(_) => DataType::SmallInt(false),
-        SqlDataType::Int(_) | SqlDataType::Integer(_) => DataType::Int(false),
-        SqlDataType::BigInt(_) => DataType::BigInt(false),
-        SqlDataType::UnsignedTinyInt(_) => DataType::TinyInt(true),
-        SqlDataType::UnsignedSmallInt(_) | SqlDataType::UnsignedInt2(_) => DataType::SmallInt(true),
+        SqlDataType::TinyInt(_) => DataType::TinyInt,
+        SqlDataType::SmallInt(_) => DataType::SmallInt,
+        SqlDataType::Int(_) | SqlDataType::Integer(_) => DataType::Int,
+        SqlDataType::BigInt(_) => DataType::BigInt,
+        SqlDataType::UnsignedTinyInt(_) => DataType::UnsignedTinyInt,
+        SqlDataType::UnsignedSmallInt(_) | SqlDataType::UnsignedInt2(_) => {
+            DataType::UnsignedSmallInt
+        },
         SqlDataType::UnsignedInt(_)
         | SqlDataType::UnsignedInt4(_)
-        | SqlDataType::UnsignedInteger(_) => DataType::Int(true),
-        SqlDataType::UnsignedMediumInt(_) => DataType::Int(true),
-        SqlDataType::UnsignedBigInt(_) | SqlDataType::UnsignedInt8(_) => DataType::BigInt(true),
+        | SqlDataType::UnsignedInteger(_) => DataType::UnsignedInt,
+        SqlDataType::UnsignedMediumInt(_) => DataType::UnsignedInt,
+        SqlDataType::UnsignedBigInt(_) | SqlDataType::UnsignedInt8(_) => DataType::UnsignedBigInt,
         SqlDataType::Float(_) => DataType::Float,
         SqlDataType::Real | SqlDataType::Double(_) | SqlDataType::DoublePrecision => {
             DataType::Double

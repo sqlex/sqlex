@@ -63,10 +63,14 @@ impl DataTypeExt for DataType {
     fn is_numeric(&self) -> bool {
         matches!(
             self,
-            DataType::TinyInt(_)
-                | DataType::SmallInt(_)
-                | DataType::Int(_)
-                | DataType::BigInt(_)
+            DataType::TinyInt
+                | DataType::UnsignedTinyInt
+                | DataType::SmallInt
+                | DataType::UnsignedSmallInt
+                | DataType::Int
+                | DataType::UnsignedInt
+                | DataType::BigInt
+                | DataType::UnsignedBigInt
                 | DataType::Float
                 | DataType::Double
                 | DataType::Decimal
@@ -76,7 +80,14 @@ impl DataTypeExt for DataType {
     fn is_integer(&self) -> bool {
         matches!(
             self,
-            DataType::TinyInt(_) | DataType::SmallInt(_) | DataType::Int(_) | DataType::BigInt(_)
+            DataType::TinyInt
+                | DataType::UnsignedTinyInt
+                | DataType::SmallInt
+                | DataType::UnsignedSmallInt
+                | DataType::Int
+                | DataType::UnsignedInt
+                | DataType::BigInt
+                | DataType::UnsignedBigInt
         )
     }
 
@@ -94,17 +105,25 @@ impl DataTypeExt for DataType {
             (DataType::Decimal, _) | (_, DataType::Decimal) => DataType::Decimal,
             _ => {
                 let left = match self {
-                    DataType::TinyInt(unsigned) => Some((1, *unsigned)),
-                    DataType::SmallInt(unsigned) => Some((2, *unsigned)),
-                    DataType::Int(unsigned) => Some((3, *unsigned)),
-                    DataType::BigInt(unsigned) => Some((4, *unsigned)),
+                    DataType::TinyInt => Some((1, false)),
+                    DataType::UnsignedTinyInt => Some((1, true)),
+                    DataType::SmallInt => Some((2, false)),
+                    DataType::UnsignedSmallInt => Some((2, true)),
+                    DataType::Int => Some((3, false)),
+                    DataType::UnsignedInt => Some((3, true)),
+                    DataType::BigInt => Some((4, false)),
+                    DataType::UnsignedBigInt => Some((4, true)),
                     _ => None,
                 };
                 let right = match other {
-                    DataType::TinyInt(unsigned) => Some((1, *unsigned)),
-                    DataType::SmallInt(unsigned) => Some((2, *unsigned)),
-                    DataType::Int(unsigned) => Some((3, *unsigned)),
-                    DataType::BigInt(unsigned) => Some((4, *unsigned)),
+                    DataType::TinyInt => Some((1, false)),
+                    DataType::UnsignedTinyInt => Some((1, true)),
+                    DataType::SmallInt => Some((2, false)),
+                    DataType::UnsignedSmallInt => Some((2, true)),
+                    DataType::Int => Some((3, false)),
+                    DataType::UnsignedInt => Some((3, true)),
+                    DataType::BigInt => Some((4, false)),
+                    DataType::UnsignedBigInt => Some((4, true)),
                     _ => None,
                 };
 
@@ -113,11 +132,15 @@ impl DataTypeExt for DataType {
                 {
                     let rank = left_rank.max(right_rank);
                     let unsigned = left_unsigned && right_unsigned;
-                    return match rank {
-                        1 => DataType::TinyInt(unsigned),
-                        2 => DataType::SmallInt(unsigned),
-                        3 => DataType::Int(unsigned),
-                        _ => DataType::BigInt(unsigned),
+                    return match (rank, unsigned) {
+                        (1, false) => DataType::TinyInt,
+                        (1, true) => DataType::UnsignedTinyInt,
+                        (2, false) => DataType::SmallInt,
+                        (2, true) => DataType::UnsignedSmallInt,
+                        (3, false) => DataType::Int,
+                        (3, true) => DataType::UnsignedInt,
+                        (_, false) => DataType::BigInt,
+                        (_, true) => DataType::UnsignedBigInt,
                     };
                 }
                 self.clone()

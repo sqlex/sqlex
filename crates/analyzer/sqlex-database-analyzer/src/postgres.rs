@@ -252,9 +252,9 @@ impl Drop for PostgresDatabaseAnalyzer {
 fn map_udt(udt: &str) -> DataType {
     match udt {
         "bool" | "boolean" => DataType::Bool,
-        "int2" | "smallint" => DataType::SmallInt(false),
-        "int4" | "integer" | "int" => DataType::Int(false),
-        "int8" | "bigint" => DataType::BigInt(false),
+        "int2" | "smallint" => DataType::SmallInt,
+        "int4" | "integer" | "int" => DataType::Int,
+        "int8" | "bigint" => DataType::BigInt,
         "float4" | "real" => DataType::Float,
         "float8" | "double precision" => DataType::Double,
         "numeric" | "decimal" => DataType::Decimal,

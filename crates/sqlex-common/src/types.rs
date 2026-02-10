@@ -29,10 +29,14 @@ impl Cardinality {
 pub enum DataType {
     // Integers
     Bool,
-    TinyInt(bool),
-    SmallInt(bool),
-    Int(bool),
-    BigInt(bool),
+    TinyInt,
+    UnsignedTinyInt,
+    SmallInt,
+    UnsignedSmallInt,
+    Int,
+    UnsignedInt,
+    BigInt,
+    UnsignedBigInt,
 
     // Floats
     Float,

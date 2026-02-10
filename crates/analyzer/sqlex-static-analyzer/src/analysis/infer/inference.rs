@@ -338,9 +338,9 @@ impl Inferrer<'_> {
                         }
                     } else {
                         match self.dialect {
-                            sqlex_common::dialect::Dialect::MySQL => DataType::BigInt(false),
+                            sqlex_common::dialect::Dialect::MySQL => DataType::BigInt,
                             sqlex_common::dialect::Dialect::Postgres
-                            | sqlex_common::dialect::Dialect::SQLite => DataType::Int(false),
+                            | sqlex_common::dialect::Dialect::SQLite => DataType::Int,
                         }
                     },
                     nullable: false,
@@ -371,7 +371,7 @@ impl Inferrer<'_> {
 
     fn boolean_result_type(&self) -> DataType {
         match self.dialect {
-            sqlex_common::dialect::Dialect::MySQL => DataType::BigInt(false),
+            sqlex_common::dialect::Dialect::MySQL => DataType::BigInt,
             sqlex_common::dialect::Dialect::Postgres | sqlex_common::dialect::Dialect::SQLite => {
                 DataType::Bool
             },

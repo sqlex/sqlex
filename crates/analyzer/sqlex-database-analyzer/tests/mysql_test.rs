@@ -46,7 +46,7 @@ async fn test_mysql_analyzer_basic() -> anyhow::Result<()> {
     assert_eq!(columns.len(), 5);
 
     let id_col = columns.iter().find(|c| c.name == "id").unwrap();
-    assert_eq!(id_col.data_type, DataType::Int(false));
+    assert_eq!(id_col.data_type, DataType::Int);
 
     let username_col = columns.iter().find(|c| c.name == "username").unwrap();
     assert_eq!(username_col.data_type, DataType::Varchar);
@@ -99,12 +99,9 @@ async fn test_mysql_analyzer_all_types() -> anyhow::Result<()> {
     let find_col = |name: &str| table.columns.iter().find(|c| c.name == name).unwrap();
 
     assert_eq!(find_col("col_tinyint").data_type, DataType::Bool); // map_string_type "tinyint" -> Bool
-    assert_eq!(
-        find_col("col_smallint").data_type,
-        DataType::SmallInt(false)
-    );
-    assert_eq!(find_col("col_int").data_type, DataType::Int(false));
-    assert_eq!(find_col("col_bigint").data_type, DataType::BigInt(false));
+    assert_eq!(find_col("col_smallint").data_type, DataType::SmallInt);
+    assert_eq!(find_col("col_int").data_type, DataType::Int);
+    assert_eq!(find_col("col_bigint").data_type, DataType::BigInt);
     assert_eq!(find_col("col_decimal").data_type, DataType::Decimal);
     assert_eq!(find_col("col_float").data_type, DataType::Float);
     assert_eq!(find_col("col_double").data_type, DataType::Double);
@@ -143,7 +140,7 @@ async fn test_mysql_analyzer_query_analysis() -> anyhow::Result<()> {
         .await?;
     assert_eq!(result.columns.len(), 4);
     assert_eq!(result.columns[0].name, "id");
-    assert_eq!(result.columns[0].data_type, DataType::Int(false));
+    assert_eq!(result.columns[0].data_type, DataType::Int);
     assert_eq!(result.columns[1].name, "name");
     assert_eq!(result.columns[1].data_type, DataType::Varchar);
     assert_eq!(result.columns[2].name, "price");

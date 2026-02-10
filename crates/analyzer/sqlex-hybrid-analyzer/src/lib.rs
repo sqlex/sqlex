@@ -325,15 +325,15 @@ mod tests {
             db_analyzer: Box::new(MockAnalyzer),
         };
 
-        let static_col = make_column("id", DataType::Int(false), false);
-        let db_col = make_column("id", DataType::Int(false), true);
+        let static_col = make_column("id", DataType::Int, false);
+        let db_col = make_column("id", DataType::Int, true);
         let mut warnings = Vec::new();
 
         let result = analyzer.merge_column(0, static_col, db_col, &mut warnings);
 
         // For MySQL: use db type, static nullability
         assert_eq!(result.name, "id");
-        assert_eq!(result.data_type, DataType::Int(false));
+        assert_eq!(result.data_type, DataType::Int);
         assert!(!result.nullability); // static nullability
         assert!(warnings.is_empty());
     }
@@ -346,14 +346,14 @@ mod tests {
             db_analyzer: Box::new(MockAnalyzer),
         };
 
-        let static_col = make_column("id", DataType::Int(false), false);
-        let db_col = make_column("id", DataType::BigInt(false), true);
+        let static_col = make_column("id", DataType::Int, false);
+        let db_col = make_column("id", DataType::BigInt, true);
         let mut warnings = Vec::new();
 
         let result = analyzer.merge_column(0, static_col, db_col, &mut warnings);
 
         // Should use db type and emit warning
-        assert_eq!(result.data_type, DataType::BigInt(false));
+        assert_eq!(result.data_type, DataType::BigInt);
         assert_eq!(warnings.len(), 1);
         assert!(matches!(
             warnings[0],
@@ -390,8 +390,8 @@ mod tests {
             db_analyzer: Box::new(MockAnalyzer),
         };
 
-        let static_col = make_column("user_id", DataType::Int(false), false);
-        let db_col = make_column("userId", DataType::Int(false), true);
+        let static_col = make_column("user_id", DataType::Int, false);
+        let db_col = make_column("userId", DataType::Int, true);
         let mut warnings = Vec::new();
 
         let result = analyzer.merge_column(0, static_col, db_col, &mut warnings);

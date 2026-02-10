@@ -54,14 +54,14 @@ impl WindowFunction {
         match self {
             Self::RowNumber | Self::Rank | Self::DenseRank | Self::NTile => {
                 let data_type = match dialect {
-                    Dialect::MySQL => DataType::BigInt(true),
-                    Dialect::Postgres | Dialect::SQLite => DataType::BigInt(false),
+                    Dialect::MySQL => DataType::UnsignedBigInt,
+                    Dialect::Postgres | Dialect::SQLite => DataType::BigInt,
                 };
                 (data_type, false)
             },
             Self::PercentRank | Self::CumeDist => (DataType::Double, false),
             Self::Lead | Self::Lag | Self::FirstValue | Self::LastValue | Self::NthValue => {
-                let data_type = arg_types.first().cloned().unwrap_or(DataType::Int(false));
+                let data_type = arg_types.first().cloned().unwrap_or(DataType::Int);
                 (data_type, true)
             },
             Self::Aggregate(agg) => agg.infer_type(dialect, arg_types),
