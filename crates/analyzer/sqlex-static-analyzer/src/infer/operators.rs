@@ -179,6 +179,8 @@ impl Inferrer<'_> {
         condition: &ScalarExpr,
     ) -> RelationalMetadata {
         let mut meta = self.infer_expr(input);
+        // Validate WHERE expressions (triggers unknown/ambiguous column diagnostics)
+        self.infer_scalar(condition, &meta.columns);
         // Analyze the WHERE condition for cardinality refinement
         if let Some(refined) = self.analyze_selection_cardinality(input, condition) {
             meta.cardinality = refined;
@@ -203,8 +205,8 @@ impl Inferrer<'_> {
                     }
                 },
                 ScalarExpr::QualifiedWildcard { table } => {
-                    // Expand qualified wildcard to columns from the specified table
-                    let expanded = self.expand_qualified_wildcard(input, table);
+                    // Expand qualified wildcard from the current input scope.
+                    let expanded = self.expand_qualified_wildcard(&input_meta.columns, table);
                     result_columns.extend(expanded);
                 },
                 expr => {
@@ -330,6 +332,33 @@ impl Inferrer<'_> {
         let left_meta = self.infer_expr(left);
         let right_meta = self.infer_expr(right);
 
+        if let Some(join_condition) = condition {
+            match join_condition {
+                JoinCondition::On(expr) => {
+                    let mut join_columns = left_meta.columns.clone();
+                    join_columns.extend(right_meta.columns.iter().cloned());
+                    self.infer_scalar(expr, &join_columns);
+                },
+                JoinCondition::Using(cols) => {
+                    for using_col in cols {
+                        let left_has = left_meta
+                            .columns
+                            .iter()
+                            .any(|c| c.name.eq_ignore_ascii_case(using_col));
+                        let right_has = right_meta
+                            .columns
+                            .iter()
+                            .any(|c| c.name.eq_ignore_ascii_case(using_col));
+                        if !left_has || !right_has {
+                            self.diagnostics
+                                .push(Diagnostic::join_using_column_missing(using_col));
+                        }
+                    }
+                },
+                JoinCondition::Natural => {},
+            }
+        }
+
         // Collect USING column names for deduplication
         let using_cols: Vec<String> = match condition {
             Some(JoinCondition::Using(cols)) => cols.iter().map(|c| c.to_lowercase()).collect(),
@@ -380,31 +409,29 @@ impl Inferrer<'_> {
     // Qualified wildcard expansion
     // ------------------------------------------------------------------
 
-    /// Expand `t.*` by walking the input tree to find the Scan for `table`
-    /// and returning its catalog columns (with join-induced nullability).
+    /// Expand `t.*` by matching table/alias labels in the current input scope.
     pub(super) fn expand_qualified_wildcard(
-        &self,
-        input: &RelationalExpr,
+        &mut self,
+        input_columns: &[ColumnMetadata],
         table: &str,
     ) -> Vec<ColumnMetadata> {
-        let real_table = find_scan_table(input, table);
-        let Some(real_table) = real_table else {
-            return Vec::new();
-        };
+        let expanded: Vec<ColumnMetadata> = input_columns
+            .iter()
+            .filter(|col| {
+                col.table
+                    .as_deref()
+                    .map(|t| t.eq_ignore_ascii_case(table))
+                    .unwrap_or(false)
+            })
+            .cloned()
+            .collect();
 
-        match self.catalog.get_table(&real_table) {
-            Some(table_def) => table_def
-                .columns
-                .iter()
-                .map(|col| ColumnMetadata {
-                    table: Some(table.to_string()),
-                    name: col.name.clone(),
-                    data_type: col.data_type.clone(),
-                    nullable: col.nullable,
-                })
-                .collect(),
-            None => Vec::new(),
+        if expanded.is_empty() {
+            self.diagnostics
+                .push(Diagnostic::unknown_table_alias(table));
         }
+
+        expanded
     }
 
     // ------------------------------------------------------------------
@@ -664,47 +691,6 @@ fn scalar_to_u64(expr: &ScalarExpr) -> Option<u64> {
         u64::try_from(*n).ok()
     } else {
         None
-    }
-}
-
-/// Find the real table name for a Scan node whose table or alias matches `name`.
-fn find_scan_table(expr: &RelationalExpr, name: &str) -> Option<String> {
-    match expr {
-        RelationalExpr::Scan { table, alias } => {
-            if alias
-                .as_deref()
-                .map(|a| a.eq_ignore_ascii_case(name))
-                .unwrap_or(false)
-            {
-                return Some(table.clone());
-            }
-            if table.eq_ignore_ascii_case(name) {
-                return Some(table.clone());
-            }
-            None
-        },
-        RelationalExpr::Alias {
-            input, name: alias, ..
-        } => {
-            if alias.eq_ignore_ascii_case(name) {
-                // The alias itself matches — return the alias as the "table"
-                // (derived tables don't have a real catalog table)
-                return Some(alias.clone());
-            }
-            find_scan_table(input, name)
-        },
-        RelationalExpr::Selection { input, .. }
-        | RelationalExpr::Projection { input, .. }
-        | RelationalExpr::Aggregation { input, .. }
-        | RelationalExpr::Window { input, .. }
-        | RelationalExpr::Distinct { input }
-        | RelationalExpr::Sort { input, .. }
-        | RelationalExpr::Limit { input, .. } => find_scan_table(input, name),
-        RelationalExpr::Join { left, right, .. }
-        | RelationalExpr::SetOperation { left, right, .. } => {
-            find_scan_table(left, name).or_else(|| find_scan_table(right, name))
-        },
-        RelationalExpr::Values { .. } => None,
     }
 }
 

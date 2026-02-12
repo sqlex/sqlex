@@ -25,6 +25,14 @@ queries:
       - name: total
         nullability: true
 
+  - name: qualified_wildcard_derived_table
+    sql: |
+      SELECT t.*
+      FROM (SELECT user_id FROM orders) AS t
+    expected:
+      - name: user_id
+        nullability: false
+
   - name: scalar_subquery
     sql: |
       SELECT id,

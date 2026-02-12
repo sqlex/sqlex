@@ -16,3 +16,12 @@ queries:
 
   - name: invalid_group_by
     sql: SELECT name, COUNT(*) FROM users
+
+  - name: table_name_hidden_by_alias
+    sql: SELECT users.id FROM users AS u
+
+  - name: missing_column_in_where
+    sql: SELECT id FROM users WHERE missing_col = 1
+
+  - name: join_using_missing_column
+    sql: SELECT * FROM users u1 JOIN users u2 USING (missing_col)

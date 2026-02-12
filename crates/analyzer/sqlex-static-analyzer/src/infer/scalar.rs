@@ -69,7 +69,9 @@ impl Inferrer<'_> {
                 when_clauses,
                 else_result,
             } => self.infer_case(operand, when_clauses, else_result, input_columns),
-            ScalarExpr::ScalarSubquery(subquery) => self.infer_scalar_subquery(subquery),
+            ScalarExpr::ScalarSubquery(subquery) => {
+                self.infer_scalar_subquery(subquery, input_columns)
+            },
             ScalarExpr::InSubquery { expr, .. } => {
                 let expr_info = self.infer_scalar(expr, input_columns);
                 TypeInfo {
@@ -116,30 +118,53 @@ impl Inferrer<'_> {
                     }
                 }
             }
-            // Fall back to catalog lookup (for aliases that map to real tables)
-            if let Some(table_def) = self.catalog.get_table(table_name) {
-                if let Some(col_def) = table_def.get_column(column) {
-                    return TypeInfo {
-                        data_type: col_def.data_type.clone(),
-                        nullable: col_def.nullable,
-                    };
+            for col in &self.correlated_columns {
+                if let Some(ref col_table) = col.table {
+                    if col_table.eq_ignore_ascii_case(table_name)
+                        && col.name.eq_ignore_ascii_case(column)
+                    {
+                        return TypeInfo {
+                            data_type: col.data_type.clone(),
+                            nullable: col.nullable,
+                        };
+                    }
                 }
             }
         } else {
             // Unqualified column — check for ambiguity
-            let matches: Vec<&ColumnMetadata> = input_columns
+            let local_matches: Vec<&ColumnMetadata> = input_columns
                 .iter()
                 .filter(|col| col.name.eq_ignore_ascii_case(column))
                 .collect();
 
-            if matches.len() > 1 {
+            if local_matches.len() > 1 {
                 self.diagnostics.push(Diagnostic::ambiguous_column(column));
                 return TypeInfo {
-                    data_type: matches[0].data_type.clone(),
+                    data_type: local_matches[0].data_type.clone(),
                     nullable: true,
                 };
             }
-            if let Some(col) = matches.first() {
+            if let Some(col) = local_matches.first() {
+                return TypeInfo {
+                    data_type: col.data_type.clone(),
+                    nullable: col.nullable,
+                };
+            }
+
+            let outer_matches: Vec<&ColumnMetadata> = self
+                .correlated_columns
+                .iter()
+                .filter(|col| col.name.eq_ignore_ascii_case(column))
+                .collect();
+
+            if outer_matches.len() > 1 {
+                self.diagnostics.push(Diagnostic::ambiguous_column(column));
+                return TypeInfo {
+                    data_type: outer_matches[0].data_type.clone(),
+                    nullable: true,
+                };
+            }
+            if let Some(col) = outer_matches.first() {
                 return TypeInfo {
                     data_type: col.data_type.clone(),
                     nullable: col.nullable,
@@ -452,8 +477,16 @@ impl Inferrer<'_> {
     fn infer_scalar_subquery(
         &mut self,
         subquery: &crate::ir::relational::RelationalExpr,
+        outer_columns: &[ColumnMetadata],
     ) -> TypeInfo {
+        let previous_len = self.correlated_columns.len();
+        self.correlated_columns
+            .extend(outer_columns.iter().cloned());
+
         let schema = self.infer_expr(subquery);
+
+        self.correlated_columns.truncate(previous_len);
+
         if schema.columns.len() == 1 {
             let col = &schema.columns[0];
             let guaranteed_row = schema.cardinality.guarantees_row();

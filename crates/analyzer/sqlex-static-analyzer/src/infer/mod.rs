@@ -66,6 +66,7 @@ pub(crate) struct Inferrer<'a> {
     pub(super) dialect: Dialect,
     pub(super) catalog: &'a Catalog,
     pub(super) diagnostics: Vec<Diagnostic>,
+    pub(super) correlated_columns: Vec<ColumnMetadata>,
 }
 
 impl<'a> Inferrer<'a> {
@@ -74,6 +75,7 @@ impl<'a> Inferrer<'a> {
             dialect,
             catalog,
             diagnostics: Vec::new(),
+            correlated_columns: Vec::new(),
         }
     }
 
