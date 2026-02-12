@@ -283,6 +283,37 @@ impl Inferrer<'_> {
         column_aliases: Option<&[String]>,
     ) -> RelationalMetadata {
         let mut meta = self.infer_expr(input);
+
+        // MySQL applies integer expression assignment when a projection is materialized
+        // as a derived-table schema. Example:
+        // SELECT t.* FROM (SELECT 1 AS x) AS t;  -- x is reported as INT
+        // SELECT t.* FROM (SELECT 99999999 AS x) AS t;  -- x is reported as INT
+        // SELECT t.* FROM (SELECT 999999999 AS x) AS t; -- x is reported as BIGINT
+        // while:
+        // SELECT 1 AS x;                         -- x is reported as BIGINT
+        if matches!(self.dialect, sqlex_common::dialect::Dialect::MySQL) {
+            if let RelationalExpr::Projection {
+                columns: projection_columns,
+                ..
+            } = input
+            {
+                if projection_columns.len() == meta.columns.len() {
+                    for (output_col, projection_col) in
+                        meta.columns.iter_mut().zip(projection_columns)
+                    {
+                        if let Some(digit_len) = mysql_integer_expression_info(&projection_col.expr)
+                        {
+                            output_col.data_type = if digit_len <= 8 {
+                                DataType::Int
+                            } else {
+                                DataType::BigInt
+                            };
+                        }
+                    }
+                }
+            }
+        }
+
         // Re-label all output columns with the alias name
         for col in &mut meta.columns {
             col.table = Some(name.to_string());
@@ -624,7 +655,7 @@ impl Inferrer<'_> {
                 let formatted = match lit {
                     LiteralValue::Null => "NULL".to_string(),
                     LiteralValue::Boolean(b) => if *b { "TRUE" } else { "FALSE" }.to_string(),
-                    LiteralValue::Integer(n) => n.to_string(),
+                    LiteralValue::Integer(integer) => integer.raw.clone(),
                     LiteralValue::Float(f) => format!("{f}"),
                     LiteralValue::String(s) => format!("'{s}'"),
                 };
@@ -687,10 +718,21 @@ impl Inferrer<'_> {
 // ------------------------------------------------------------------
 
 fn scalar_to_u64(expr: &ScalarExpr) -> Option<u64> {
-    if let ScalarExpr::Literal(LiteralValue::Integer(n)) = expr {
-        u64::try_from(*n).ok()
+    if let ScalarExpr::Literal(LiteralValue::Integer(integer)) = expr {
+        integer.parsed.and_then(|n| u64::try_from(n).ok())
     } else {
         None
+    }
+}
+
+fn mysql_integer_expression_info(expr: &ScalarExpr) -> Option<usize> {
+    match expr {
+        ScalarExpr::Literal(LiteralValue::Integer(integer)) => Some(integer.raw.len()),
+        ScalarExpr::UnaryOp {
+            op: crate::ir::auxiliary::UnaryOp::Neg | crate::ir::auxiliary::UnaryOp::Plus,
+            expr,
+        } => mysql_integer_expression_info(expr),
+        _ => None,
     }
 }
 

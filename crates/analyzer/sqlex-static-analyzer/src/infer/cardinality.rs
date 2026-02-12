@@ -267,7 +267,8 @@ fn is_constant_false(expr: &ScalarExpr) -> bool {
             {
                 matches!(
                     (l, r),
-                    (LiteralValue::Integer(a), LiteralValue::Integer(b)) if a != b
+                    (LiteralValue::Integer(a), LiteralValue::Integer(b))
+                        if a.parsed.zip(b.parsed).map(|(x, y)| x != y).unwrap_or(false)
                 ) || matches!(
                     (l, r),
                     (LiteralValue::String(a), LiteralValue::String(b)) if a != b

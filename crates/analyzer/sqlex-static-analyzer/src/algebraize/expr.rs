@@ -6,7 +6,7 @@ use crate::{
     functions::{self, Function},
     ir::{
         auxiliary::{BinaryOp, UnaryOp},
-        scalar::{LiteralValue, ScalarExpr, WhenClause},
+        scalar::{IntegerLiteral, LiteralValue, ScalarExpr, WhenClause},
     },
 };
 
@@ -152,8 +152,11 @@ impl<'a> Algebraizer<'a> {
             sqlparser::ast::Value::Null => ScalarExpr::Literal(LiteralValue::Null),
             sqlparser::ast::Value::Boolean(b) => ScalarExpr::Literal(LiteralValue::Boolean(*b)),
             sqlparser::ast::Value::Number(num, _) => {
-                if let Ok(i) = num.parse::<i64>() {
-                    ScalarExpr::Literal(LiteralValue::Integer(i))
+                if !num.is_empty() && num.as_bytes().iter().all(|c| c.is_ascii_digit()) {
+                    ScalarExpr::Literal(LiteralValue::Integer(IntegerLiteral {
+                        raw: num.clone(),
+                        parsed: num.parse::<i128>().ok(),
+                    }))
                 } else if let Ok(f) = num.parse::<f64>() {
                     ScalarExpr::Literal(LiteralValue::Float(f))
                 } else {

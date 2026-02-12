@@ -1,0 +1,100 @@
+dialect: mysql
+queries:
+  - name: qualified_wildcard_literal_derived_table
+    cardinality: ExactlyOne
+    sql: |
+      SELECT t.*
+      FROM (SELECT 1 AS x) AS t
+    expected:
+      - name: x
+        nullability: false
+
+  - name: qualified_wildcard_literal_with_plus_sign
+    cardinality: ExactlyOne
+    sql: |
+      SELECT t.*
+      FROM (SELECT +1 AS x) AS t
+    expected:
+      - name: x
+        nullability: false
+
+  - name: qualified_wildcard_literal_with_negative_sign
+    cardinality: ExactlyOne
+    sql: |
+      SELECT t.*
+      FROM (SELECT -1 AS x) AS t
+    expected:
+      - name: x
+        nullability: false
+
+  - name: qualified_wildcard_literal_eight_digits
+    cardinality: ExactlyOne
+    sql: |
+      SELECT t.*
+      FROM (SELECT 99999999 AS x) AS t
+    expected:
+      - name: x
+        nullability: false
+
+  - name: qualified_wildcard_literal_negative_eight_digits
+    cardinality: ExactlyOne
+    sql: |
+      SELECT t.*
+      FROM (SELECT -99999999 AS x) AS t
+    expected:
+      - name: x
+        nullability: false
+
+  - name: qualified_wildcard_literal_nine_digits
+    cardinality: ExactlyOne
+    sql: |
+      SELECT t.*
+      FROM (SELECT 999999999 AS x) AS t
+    expected:
+      - name: x
+        nullability: false
+
+  - name: qualified_wildcard_literal_negative_nine_digits
+    cardinality: ExactlyOne
+    sql: |
+      SELECT t.*
+      FROM (SELECT -999999999 AS x) AS t
+    expected:
+      - name: x
+        nullability: false
+
+  - name: qualified_wildcard_literal_ten_digits_non_boundary
+    cardinality: ExactlyOne
+    sql: |
+      SELECT t.*
+      FROM (SELECT 2000000000 AS x) AS t
+    expected:
+      - name: x
+        nullability: false
+
+  - name: qualified_wildcard_literal_int_boundary
+    cardinality: ExactlyOne
+    sql: |
+      SELECT t.*
+      FROM (SELECT 2147483647 AS x) AS t
+    expected:
+      - name: x
+        nullability: false
+
+  - name: qualified_wildcard_literal_over_int
+    cardinality: ExactlyOne
+    sql: |
+      SELECT t.*
+      FROM (SELECT 2147483648 AS x) AS t
+    expected:
+      - name: x
+        nullability: false
+
+  - name: qualified_wildcard_literal_long_leading_zero
+    cardinality: ExactlyOne
+    sql: |
+      SELECT t.*
+      FROM (SELECT 000000000001 AS x) AS t
+    expected:
+      - name: x
+        nullability: false

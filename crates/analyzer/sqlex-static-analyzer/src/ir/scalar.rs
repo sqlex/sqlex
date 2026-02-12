@@ -106,9 +106,15 @@ pub enum ScalarExpr {
 pub enum LiteralValue {
     Null,
     Boolean(bool),
-    Integer(i64),
+    Integer(IntegerLiteral),
     Float(f64),
     String(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct IntegerLiteral {
+    pub raw: String,
+    pub parsed: Option<i128>,
 }
 
 #[derive(Debug, Clone)]
