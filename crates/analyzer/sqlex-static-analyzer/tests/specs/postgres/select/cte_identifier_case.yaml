@@ -1,0 +1,29 @@
+dialect: postgres
+migrations: []
+queries:
+  - name: unquoted_cte_name_is_folded_to_lowercase
+    sql: |
+      WITH MixedCase AS (SELECT 1 AS n)
+      SELECT n FROM mixedcase
+    cardinality: ExactlyOne
+    expected:
+      - name: n
+        nullability: false
+
+  - name: quoted_cte_name_exact_reference
+    sql: |
+      WITH "MixedCase" AS (SELECT 1 AS n)
+      SELECT n FROM "MixedCase"
+    cardinality: ExactlyOne
+    expected:
+      - name: n
+        nullability: false
+
+  - name: quoted_lowercase_can_reference_unquoted_cte
+    sql: |
+      WITH MixedCase AS (SELECT 1 AS n)
+      SELECT n FROM "mixedcase"
+    cardinality: ExactlyOne
+    expected:
+      - name: n
+        nullability: false

@@ -1,0 +1,12 @@
+dialect: postgres
+migrations: []
+queries:
+  - name: quoted_cte_not_found_when_referenced_unquoted
+    sql: |
+      WITH "MixedCase" AS (SELECT 1 AS n)
+      SELECT n FROM mixedcase
+
+  - name: unquoted_cte_not_found_when_referenced_quoted_mixed_case
+    sql: |
+      WITH mixedcase AS (SELECT 1 AS n)
+      SELECT n FROM "MixedCase"

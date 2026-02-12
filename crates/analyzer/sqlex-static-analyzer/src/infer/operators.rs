@@ -41,7 +41,11 @@ impl Inferrer<'_> {
             RelationalExpr::SetOperation {
                 left, right, op, ..
             } => self.infer_set_operation(left, right, *op),
-            RelationalExpr::Alias { input, name } => self.infer_alias(input, name),
+            RelationalExpr::Alias {
+                input,
+                name,
+                column_aliases,
+            } => self.infer_alias(input, name, column_aliases.as_deref()),
         }
     }
 
@@ -270,11 +274,23 @@ impl Inferrer<'_> {
         self.infer_expr(input)
     }
 
-    fn infer_alias(&mut self, input: &RelationalExpr, name: &str) -> RelationalMetadata {
+    fn infer_alias(
+        &mut self,
+        input: &RelationalExpr,
+        name: &str,
+        column_aliases: Option<&[String]>,
+    ) -> RelationalMetadata {
         let mut meta = self.infer_expr(input);
         // Re-label all output columns with the alias name
         for col in &mut meta.columns {
             col.table = Some(name.to_string());
+        }
+        if let Some(alias_names) = column_aliases {
+            if alias_names.len() == meta.columns.len() {
+                for (col, alias_name) in meta.columns.iter_mut().zip(alias_names.iter()) {
+                    col.name = alias_name.clone();
+                }
+            }
         }
         meta
     }
@@ -667,7 +683,9 @@ fn find_scan_table(expr: &RelationalExpr, name: &str) -> Option<String> {
             }
             None
         },
-        RelationalExpr::Alias { input, name: alias } => {
+        RelationalExpr::Alias {
+            input, name: alias, ..
+        } => {
             if alias.eq_ignore_ascii_case(name) {
                 // The alias itself matches — return the alias as the "table"
                 // (derived tables don't have a real catalog table)

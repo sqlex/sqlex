@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use sqlex_common::dialect::Dialect;
 use sqlparser::{
     ast::Statement,
@@ -7,12 +5,14 @@ use sqlparser::{
     parser::Parser,
 };
 
+use self::scope::cte::CteScopes;
 use crate::{catalog::Catalog, diagnostics::Diagnostic, ir::relational::RelationalExpr};
 
 mod cte;
 mod expr;
 mod from;
 mod names;
+mod scope;
 mod select;
 mod set_ops;
 mod validate;
@@ -26,8 +26,8 @@ pub(crate) struct Algebraizer<'a> {
     pub(super) dialect: Dialect,
     pub(super) catalog: &'a Catalog,
     pub(super) diagnostics: Vec<Diagnostic>,
-    /// CTE definitions available in current scope
-    pub(super) cte_scope: HashMap<String, CteEntry>,
+    /// CTE definitions available across nested query scopes.
+    cte_scopes: CteScopes,
 }
 
 #[derive(Debug, Clone)]
@@ -43,7 +43,7 @@ impl<'a> Algebraizer<'a> {
             dialect,
             catalog,
             diagnostics: Vec::new(),
-            cte_scope: HashMap::new(),
+            cte_scopes: CteScopes::new(),
         }
     }
 

@@ -124,12 +124,18 @@ impl<'a> Algebraizer<'a> {
                 }
 
                 // Check CTE scope first
-                if let Some(cte_entry) = self.cte_scope.get(&table_name) {
+                if let Some(cte_entry) = self.cte_scopes.get(&table_name) {
                     let expr = cte_entry.expr.clone();
                     let label = alias_name.unwrap_or_else(|| table_name.clone());
+                    let column_aliases = if cte_entry.column_names.is_empty() {
+                        None
+                    } else {
+                        Some(cte_entry.column_names.clone())
+                    };
                     return Some(RelationalExpr::Alias {
                         input: Box::new(expr),
                         name: label,
+                        column_aliases,
                     });
                 }
 
@@ -165,6 +171,18 @@ impl<'a> Algebraizer<'a> {
         alias: Option<&sqlparser::ast::TableAlias>,
     ) -> Option<RelationalExpr> {
         let alias_name = alias.map(|a| a.name.value.clone());
+        let column_aliases = alias.and_then(|a| {
+            if a.columns.is_empty() {
+                None
+            } else {
+                Some(
+                    a.columns
+                        .iter()
+                        .map(|ident| ident.name.value.clone())
+                        .collect(),
+                )
+            }
+        });
 
         if alias_name.is_none() {
             self.diagnostics
@@ -195,6 +213,7 @@ impl<'a> Algebraizer<'a> {
             Some(RelationalExpr::Alias {
                 input: Box::new(expr),
                 name,
+                column_aliases,
             })
         } else {
             Some(expr)

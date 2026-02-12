@@ -1,0 +1,11 @@
+dialect: postgres
+migrations: []
+queries:
+  - name: cte_from_derived_should_not_leak_to_outer_query
+    sql: |
+      SELECT s.id
+      FROM (
+        WITH t AS (SELECT 1 AS id)
+        SELECT id FROM t
+      ) s
+      JOIN t ON 1 = 1

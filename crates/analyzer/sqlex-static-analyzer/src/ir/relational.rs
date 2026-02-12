@@ -54,6 +54,7 @@ pub enum RelationalExpr {
     Alias {
         input: Box<RelationalExpr>,
         name: String,
+        column_aliases: Option<Vec<String>>,
     },
 
     // ── Binary operators (two input relations) ──

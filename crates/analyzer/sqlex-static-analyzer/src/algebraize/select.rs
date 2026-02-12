@@ -13,11 +13,19 @@ use crate::{
 
 impl<'a> Algebraizer<'a> {
     pub(super) fn algebraize_query(&mut self, query: &Query) -> Option<RelationalExpr> {
+        self.cte_scopes.push();
+
         // Handle CTEs
         self.process_ctes(query.with.as_ref());
 
         // Build the main body
-        let mut expr = self.algebraize_set_expr(&query.body)?;
+        let mut expr = match self.algebraize_set_expr(&query.body) {
+            Some(expr) => expr,
+            None => {
+                self.cte_scopes.pop();
+                return None;
+            },
+        };
 
         // ORDER BY
         if let Some(order_by) = &query.order_by {
@@ -52,6 +60,7 @@ impl<'a> Algebraizer<'a> {
             };
         }
 
+        self.cte_scopes.pop();
         Some(expr)
     }
 

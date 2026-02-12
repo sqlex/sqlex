@@ -1,0 +1,42 @@
+dialect: mysql
+migrations: []
+queries:
+  - name: undefined_cte_reference
+    sql: |
+      WITH a AS (SELECT 1 AS n)
+      SELECT * FROM b
+
+  - name: duplicate_cte_name
+    sql: |
+      WITH a AS (SELECT 1 AS n),
+           a AS (SELECT 2 AS n)
+      SELECT * FROM a
+
+  - name: cte_column_alias_count_mismatch
+    sql: |
+      WITH a(x, y) AS (SELECT 1 AS n)
+      SELECT * FROM a
+
+  - name: non_recursive_self_reference
+    sql: |
+      WITH a AS (
+        SELECT 1 AS n
+        UNION ALL
+        SELECT n + 1 FROM a
+      )
+      SELECT * FROM a
+
+  - name: recursive_column_count_mismatch
+    sql: |
+      WITH RECURSIVE a(n) AS (
+        SELECT 1
+        UNION ALL
+        SELECT n, n + 1 FROM a
+      )
+      SELECT * FROM a
+
+  - name: cte_forward_reference
+    sql: |
+      WITH a AS (SELECT * FROM b),
+           b AS (SELECT 1 AS n)
+      SELECT * FROM a

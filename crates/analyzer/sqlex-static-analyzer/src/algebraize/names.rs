@@ -18,8 +18,18 @@ impl<'a> Algebraizer<'a> {
             | RelationalExpr::Limit { input, .. }
             | RelationalExpr::Distinct { input, .. }
             | RelationalExpr::Selection { input, .. }
-            | RelationalExpr::Window { input, .. }
-            | RelationalExpr::Alias { input, .. } => self.output_names_for_expr(input),
+            | RelationalExpr::Window { input, .. } => self.output_names_for_expr(input),
+            RelationalExpr::Alias {
+                input,
+                column_aliases,
+                ..
+            } => {
+                let names = self.output_names_for_expr(input);
+                match column_aliases {
+                    Some(alias_names) if alias_names.len() == names.len() => alias_names.clone(),
+                    _ => names,
+                }
+            },
             RelationalExpr::Aggregation {
                 group_by,
                 aggregates,
