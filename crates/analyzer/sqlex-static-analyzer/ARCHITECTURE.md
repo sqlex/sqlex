@@ -1,5 +1,39 @@
 # Static Analyzer Architecture
 
+## What Is Static Analyzer
+
+Given an input SQL statement together with Catalog metadata (and dialect/function registry context), the static analyzer derives query result metadata without executing the query against a live database.
+
+For each analyzable SQL statement, the output model contains:
+- output columns (names)
+- output data types
+- output nullability
+- result cardinality
+- diagnostics for structural semantic errors and type-dependent errors
+
+## What Analysis Results Enable
+
+In application code, query results are often mapped into handwritten structs or maps. Those mappings drift easily when SQL changes, when table schemas evolve, or when result shape assumptions are wrong.
+
+The static analyzer removes that drift by producing metadata that generators can consume directly:
+- **Column names + data types** define generated row-object fields and field types (type safety).
+- **Nullability** defines whether generated fields are optional/nullable (null safety).
+- **Cardinality** defines the generated return shape (single value, optional value, collection, or guaranteed empty).
+
+Recommended cardinality-to-return-shape mapping:
+
+```
+Cardinality   Generated API Shape
+────────────────────────────────────────────────────────────────────
+ExactlyZero   no value / unit-like return (query is guaranteed empty)
+ExactlyOne    non-null single row object
+AtMostOne     optional single row object
+OneOrMore     collection with non-empty guarantee (or collection + contract)
+ZeroOrMore    collection
+```
+
+This mapping turns common runtime failures (wrong receiver shape, wrong nullable assumptions, stale field mapping) into compile-time diagnostics and generated-type constraints.
+
 ## Theoretical Foundation
 
 ### Why Relational Algebra?
@@ -33,7 +67,7 @@ SQL text ──► Parse ──► Algebraize ──► Infer ──► ResultSe
 
 ### Phase 1: Parse
 
-SQL text is parsed into an Abstract Syntax Tree (AST). This phase uses an external SQL parser with dialect-specific support (MySQL, PostgreSQL, SQLite). The AST preserves the syntactic structure of the SQL statement.
+SQL text is parsed into an Abstract Syntax Tree (AST). This phase uses an external SQL parser with dialect-aware support. The AST preserves the syntactic structure of the SQL statement.
 
 **Available information**: SQL text, dialect
 
@@ -59,6 +93,7 @@ The AST is converted into a **RelationalExpr** tree — a relational algebra rep
 - Validate function arity (argument count)
 - Validate SQL semantics: GROUP BY rules, aggregate context restrictions (no aggregates in WHERE), window function context restrictions
 - Infer output column names (aliases, expression-based naming)
+- Expand projection wildcards (`*`, `t.*`) into explicit column references for structural planning
 - Build the RelationalExpr tree bottom-up following SQL's logical execution order
 
 **Not responsible for**:
@@ -82,15 +117,14 @@ The RelationalExpr tree is traversed **bottom-up recursively**, computing metada
 - Infer data types for all output columns (from catalog lookups, literal types, operator rules, function return types)
 - Infer nullability for all output columns (from catalog constraints, operator semantics, function nullability rules)
 - Infer cardinality (from operator rules, primary key / unique constraint analysis, limit analysis)
-- Expand wildcards (`*`, `t.*`) into concrete column lists using catalog metadata
 - Validate function argument types (requires type information computed during inference)
 
 **Not responsible for**:
 - Name resolution (all references are already resolved in the RelationalExpr tree)
-- Semantic validation (the tree is assumed to be structurally valid)
+- Structural semantic validation (the tree shape and name resolution are assumed valid)
 - Modifying the RelationalExpr tree (inference is read-only)
 
-**Key principle**: The Infer phase is a **pure function** from RelationalExpr to metadata. It does not modify the tree, does not report semantic errors, and does not resolve names. Each operator has deterministic rules that derive output metadata from input metadata.
+**Key principle**: The Infer phase is **read-only** with respect to `RelationalExpr` and deterministic in metadata derivation. It may emit type-dependent diagnostics (for example, function argument type mismatch), but it does not perform structural validation or name resolution.
 
 ```
 infer(node):
@@ -150,6 +184,18 @@ RelationalExpr =
     | SetOperation(left: RelationalExpr, right: RelationalExpr, op: SetOp, all: bool)
 ```
 
+Projection columns carry visibility:
+
+```
+ProjectionColumn = {
+    expr: ScalarExpr,
+    alias?: String,
+    visibility: Visible | Hidden
+}
+```
+
+`Hidden` projection columns are internal-only columns used for planning (for example, sorting by an expression not present in the final output). A final Projection step drops hidden columns before producing the query ResultSet.
+
 ## Scalar Expression Tree
 
 Relational operators work on relations (sets of rows). The expressions **within** operators — predicates, computed columns, sort keys — are **scalar expressions** that compute a single value per row.
@@ -185,10 +231,14 @@ ScalarExpr =
     | InSubquery(expr: ScalarExpr, RelationalExpr, negated?)
     | Exists(RelationalExpr, negated?)
 
-    // Wildcards (for SELECT * and COUNT(*))
+    // Wildcards (for SELECT *)
     | Wildcard
     | QualifiedWildcard(table)
 ```
+
+`Wildcard` and `QualifiedWildcard` used by projection (`SELECT *`, `SELECT t.*`) are normalized into explicit projection columns during Algebraize projection construction. Infer operates on the expanded representation.
+
+`COUNT(*)` is handled as an aggregate-specific star argument and is **not** expanded into projection columns.
 
 ### Key Design Decision: Aggregates in ScalarExpr
 
@@ -201,17 +251,18 @@ Aggregate functions (COUNT, SUM, ...) appear as `AggregateCall` nodes within `Sc
 SQL has a well-defined logical execution order that differs from its syntactic order. The Algebraize phase builds the RelationalExpr tree **bottom-up** following this logical order:
 
 ```
-Step    SQL Clause        Relational Operator     What it does
-────────────────────────────────────────────────────────────────────────
-1st     FROM / JOIN       Scan, Join, Alias       Establish input relations
-2nd     WHERE             Selection               Filter rows before grouping
-3rd     GROUP BY + aggs   Aggregation             Group and aggregate
-4th     HAVING            Selection               Filter groups
-5th     Window funcs      Window                  Compute window functions
-6th     SELECT            Projection              Choose / compute output columns
-7th     DISTINCT          Distinct                Eliminate duplicates
-8th     ORDER BY          Sort                    Order result rows
-9th     LIMIT / OFFSET    Limit                   Restrict output row count
+Step    SQL Clause                Relational Operator        What it does
+────────────────────────────────────────────────────────────────────────────────
+1st     FROM / JOIN               Scan, Join, Alias          Establish input relations
+2nd     WHERE                     Selection                  Filter rows before grouping
+3rd     GROUP BY + aggregates*    Aggregation               Group and aggregate (*aggregates detected across SELECT/HAVING/ORDER BY)
+4th     HAVING                    Selection                 Filter groups
+5th     Window functions*         Window                    Compute window expressions (*detected across SELECT/ORDER BY)
+6th     SELECT (+ hidden sort)    Projection                Build visible output columns plus optional hidden sort columns
+7th     DISTINCT                  Distinct                  Eliminate duplicates
+8th     ORDER BY                  Sort                      Order result rows
+9th     LIMIT / OFFSET            Limit                     Restrict output row count
+10th    FINAL OUTPUT              Projection                Drop hidden columns
 ```
 
 ### Conversion Pseudocode
@@ -221,6 +272,10 @@ algebraize_select(query):
     // Step 1: FROM → base relation
     expr = build_from(query.from)          // Scan, Join, Alias nodes
 
+    // Pre-scan expression classes across clauses
+    agg_usage = collect_aggregate_usage(query.select, query.having, query.order_by)
+    win_usage = collect_window_usage(query.select, query.order_by)
+
     // Step 2: WHERE → Selection
     if query.where:
         validate_no_aggregates(query.where)
@@ -228,7 +283,7 @@ algebraize_select(query):
         expr = Selection(expr, build_scalar(query.where))
 
     // Step 3: GROUP BY + aggregates → Aggregation
-    if query.group_by or has_aggregates(query.select):
+    if query.group_by or agg_usage.any:
         validate_grouping_rules(query)
         expr = Aggregation(expr, build_group_by(query), build_projections(query))
 
@@ -237,11 +292,31 @@ algebraize_select(query):
         expr = Selection(expr, build_scalar(query.having))
 
     // Step 5: Window functions → Window
-    if has_window_functions(query.select):
+    if win_usage.any:
         expr = Window(expr, build_window_exprs(query))
 
-    // Step 6: SELECT → Projection
-    expr = Projection(expr, build_projection_columns(query.select))
+    // Step 6.1: Build visible SELECT projection columns
+    // (including wildcard expansion: `*`, `t.*`)
+    visible_cols = build_visible_projection_columns(query.select)
+
+    // Step 6.2: ORDER BY planning block
+    {
+        // 1) Resolve ORDER BY references (ordinal / alias / expression equivalence)
+        order_refs = resolve_order_by_refs(query.order_by, visible_cols)
+
+        // 2) Validate ORDER BY constraints (DISTINCT restrictions, alias ambiguity, etc.)
+        validate_order_by_constraints(order_refs, query.distinct)
+
+        // 3) Materialize hidden sort columns when allowed, then build sort keys
+        hidden_sort_cols, rewritten_order_refs = materialize_hidden_sort_columns(
+            order_refs,
+            query.distinct
+        )
+        sort_keys = build_sort_keys(rewritten_order_refs)
+    }
+
+    // Step 6.3: SELECT + optional hidden ORDER BY expressions → Projection
+    expr = Projection(expr, visible_cols + hidden_sort_cols)
 
     // Step 7: DISTINCT → Distinct
     if query.distinct:
@@ -249,14 +324,44 @@ algebraize_select(query):
 
     // Step 8: ORDER BY → Sort
     if query.order_by:
-        expr = Sort(expr, build_sort_keys(query.order_by))
+        expr = Sort(expr, sort_keys)
 
     // Step 9: LIMIT / OFFSET → Limit
     if query.limit or query.offset:
         expr = Limit(expr, query.limit, query.offset)
 
+    // Step 10: Final output projection (drop hidden columns)
+    if hidden_sort_cols not empty:
+        expr = Projection(expr, visible_cols)
+
     return expr
 ```
+
+Notes:
+- Hidden sort columns allow ordering by non-output expressions for non-`DISTINCT` queries.
+- For `DISTINCT`, if `ORDER BY` references expressions not present in visible output, emit a diagnostic (no hidden-sort fallback).
+
+### ORDER BY Binding Policy
+
+`ORDER BY` items are resolved against the post-SELECT projection with this priority:
+1. **Ordinal reference** (`ORDER BY 1`, `ORDER BY 2`, ...): bind to visible projection position.
+2. **Alias reference**: bind to a uniquely named visible projection alias.
+3. **Expression equivalence**: bind to a visible projection expression if normalized scalar expression is equivalent.
+4. **Fallback**:
+   - if `DISTINCT` is absent: materialize the expression as a hidden projection column and bind to it.
+   - if `DISTINCT` is present: emit a diagnostic.
+
+Distributed ORDER BY planning flow:
+1. For each `ORDER BY` item, try binding in this order: ordinal position, unique visible alias, then normalized expression equivalence.
+2. If binding succeeds, generate a sort key pointing to the bound visible column.
+3. If binding fails and query is not `DISTINCT`, materialize a hidden projection column for that expression, deduplicated by normalized expression shape, then bind sort key to that hidden column.
+4. If binding fails and query is `DISTINCT`, emit a diagnostic.
+5. Return both planned hidden columns and sort keys.
+
+Implementation notes:
+- Hidden columns are deduplicated by normalized scalar expression, not by textual SQL.
+- Hidden aliases use an internal reserved prefix (for example `__ord$`) and are never exposed in final output.
+- If alias binding is ambiguous (duplicate visible aliases), emit a diagnostic.
 
 ### Example: SQL to Relational Algebra Tree
 
@@ -288,6 +393,8 @@ Limit(count=10)
                                      └─ Scan(orders)
 ```
 
+In this example, `ORDER BY` uses a visible alias (`order_count`), so no hidden sort column is needed and the final output projection step is elided.
+
 ### Validation During Construction
 
 Semantic validation is performed **during** tree construction, not as a separate pass:
@@ -295,7 +402,11 @@ Semantic validation is performed **during** tree construction, not as a separate
 - **Unknown table/column** — detected when resolving references against the Catalog
 - **Aggregate in WHERE** — detected when building the Selection node for WHERE
 - **Window function in WHERE/HAVING** — detected when building scalar expressions
+- **Aggregate / window detection scope** — aggregate usage is collected across `SELECT`, `HAVING`, `ORDER BY`; window usage across `SELECT`, `ORDER BY`
 - **Non-aggregated column in SELECT with GROUP BY** — detected when building the Aggregation/Projection
+- **ORDER BY / DISTINCT restriction** — if `DISTINCT` is present, `ORDER BY` must reference visible output expressions (or ordinal/alias equivalents)
+- **ORDER BY hidden-column planning** — if `DISTINCT` is absent, non-output `ORDER BY` expressions are materialized as hidden projection columns and trimmed in final projection
+- **ORDER BY alias ambiguity** — duplicate visible aliases make alias-based ORDER BY binding invalid
 - **Ambiguous column reference** — detected when resolving unqualified column names against multiple input relations
 
 ## Infer: Operator Semantic Rules
@@ -317,10 +428,21 @@ ColumnMetadata = {
     nullable: bool                -- whether the column can be NULL
 }
 
-Cardinality = ExactlyOne | AtMostOne | Unknown
-    -- ExactlyOne: guaranteed exactly one row (e.g., SELECT 1, aggregate without GROUP BY)
-    -- AtMostOne:  zero or one row (e.g., WHERE on primary key, LIMIT 1)
-    -- Unknown:    zero or more rows (general case)
+Cardinality = {
+    min: MinRows,                -- lower bound
+    max: MaxRows                 -- upper bound
+}
+
+MinRows = Zero | One
+MaxRows = Zero | One | Many
+    -- invariant: min <= max
+
+Aliases:
+    ExactlyZero = [Zero, Zero]
+    ExactlyOne  = [One, One]
+    AtMostOne   = [Zero, One]
+    OneOrMore   = [One, Many]
+    ZeroOrMore  = [Zero, Many]
 ```
 
 ### Inference Pseudocode
@@ -339,7 +461,7 @@ infer(expr):
         Limit(input, count, offset)  → infer_limit(infer(input), count, offset)
         Alias(input, name)           → infer_alias(infer(input), name)
         Join(left, right, kind, cond)→ infer_join(infer(left), infer(right), kind, cond)
-        SetOperation(left, right, op)→ infer_set_op(infer(left), infer(right), op)
+        SetOperation(left, right, op, all)→ infer_set_op(infer(left), infer(right), op, all)
 ```
 
 ### Per-Operator Rules
@@ -349,12 +471,12 @@ infer(expr):
 **Scan(table)**
 - Schema: columns from the Catalog's table definition
 - Nullability: from the Catalog (column's NOT NULL constraint)
-- Cardinality: `Unknown` (a table may have any number of rows)
+- Cardinality: `ZeroOrMore` (a base table may contain any number of rows)
 
 **Values(rows)**
-- Schema: inferred from the literal types in the first row
-- Nullability: NULL literals → nullable; non-NULL literals → not nullable
-- Cardinality: `ExactlyOne` if exactly one row; `Unknown` otherwise
+- Schema: inferred per column by combining all rows (common type / type promotion across row values)
+- Nullability: inferred per column across all rows (`nullable = OR(row_i_col_nullable)`)
+- Cardinality: `ExactlyZero` if empty, `ExactlyOne` if one row, `OneOrMore` if multiple rows
 
 #### Unary Operators
 
@@ -371,7 +493,7 @@ infer(expr):
 **Aggregation(input, group_by, aggregates)** — γ
 - Schema: group-by columns (pass-through from input) + aggregate result columns
 - Nullability: group-by columns retain input nullability; aggregate results follow function-specific rules
-- Cardinality: if `group_by` is empty → `ExactlyOne`; otherwise → `Unknown`
+- Cardinality: if `group_by` is empty → `ExactlyOne`; otherwise → `= input`
 
 **Window(input, window_exprs)** — ω
 - Schema: = input (window functions do not remove or reorder columns; they add computed columns)
@@ -381,7 +503,7 @@ infer(expr):
 **Distinct(input)** — δ
 - Schema: = input
 - Nullability: = input
-- Cardinality: `drop_lower_bound(input)` — deduplication may reduce rows but never increase them
+- Cardinality: = input (conservative; deduplication never increases row count)
 
 **Sort(input, keys)** — τ
 - Schema: = input
@@ -402,69 +524,87 @@ infer(expr):
 
 **Join(left, right, kind, condition)** — ⋈
 
-The Join operator combines two relations. Its behavior depends on the join kind:
+Schema:
+- `left ++ right` for all join kinds (except `JOIN USING`, see dedicated section below)
 
-```
-Join Kind    Schema          Nullability                     Cardinality
-─────────────────────────────────────────────────────────────────────────────
-Inner        left ++ right   left ++ right                   drop_lower_bound(left)
-Left         left ++ right   left ++ make_nullable(right)    = left
-Right        left ++ right   make_nullable(left) ++ right    = right
-Full         left ++ right   make_nullable(left ++ right)    max(left, right)
-Cross        left ++ right   left ++ right                   drop_lower_bound(left)
-```
+Cardinality (interval model):
+- **Inner**
+  - `min = One` iff (`guaranteed_match_from_left && left.min == One`) OR (`guaranteed_match_from_right && right.min == One`); otherwise `Zero`
+  - `max = upper_mul(left.max, right.max)`
+  - if `at_most_one_right_per_left`, then `max = upper_min(max, left.max)`
+  - if `at_most_one_left_per_right`, then `max = upper_min(max, right.max)`
+- **Left**
+  - `min = left.min`
+  - `max = left.max` if (`right.max == Zero` OR `at_most_one_right_per_left`), else `upper_mul(left.max, right.max)`
+- **Right**
+  - `min = right.min`
+  - `max = right.max` if (`left.max == Zero` OR `at_most_one_left_per_right`), else `upper_mul(left.max, right.max)`
+- **Full**
+  - `min = lower_or(left.min, right.min)`
+  - `max = right.max` if `left.max == Zero`
+  - `max = left.max` if `right.max == Zero`
+  - otherwise `max = Many`
+- **Cross**
+  - `min = lower_and(left.min, right.min)`
+  - `max = upper_mul(left.max, right.max)`
 
-Where:
-- `left ++ right` means concatenating the column lists from both sides
-- `make_nullable(cols)` forces all columns to be nullable (because unmatched rows produce NULLs)
-- `drop_lower_bound` means ExactlyOne → Unknown (inner join may produce 0 or many rows)
+Nullability:
+- `Inner/Cross`: preserve side nullability.
+- `Left/Right/Full`: follow outer-join nullability forcing rules (see Join Nullability Refinement).
 
 **SetOperation(left, right, op, all)** — ∪ ∩ −
 
-```
-Set Op       Schema       Nullability                  Cardinality
-──────────────────────────────────────────────────────────────────────
-Union        from left    merge(left, right)           max(left, right)
-Intersect    from left    merge(left, right)           min(left, right)
-Except       from left    = left                       = left
-```
+Schema and nullability:
+- schema comes from the left side (after compatibility checks)
+- `Union All / Union` (distinct): nullability is merged (`nullable = left.nullable OR right.nullable`)
+- `Intersect All / Intersect` (distinct): nullability is merged (`nullable = left.nullable OR right.nullable`)
+- `Except All / Except` (distinct): nullability is inherited from left
 
-Where:
-- `merge(left, right)` means: a column is nullable if it is nullable on **either** side
-- `min/max` on cardinality: `min(ExactlyOne, Unknown) = ExactlyOne`, `max(AtMostOne, Unknown) = Unknown`
+Cardinality:
+- `Union All`: `min = lower_or(left.min, right.min)`, `max = upper_add(left.max, right.max)`
+- `Union` (distinct): same lower bound; conservative upper bound `upper_add(left.max, right.max)`
+- `Intersect All`: `min = Zero`, `max = upper_min(left.max, right.max)`
+- `Intersect` (distinct): `min = Zero`, `max = upper_min(left.max, right.max)`
+- `Except All`: `max = left.max`, `min = left.min` if `right.max == Zero` else `Zero`
+- `Except` (distinct): `max = left.max`, `min = left.min` if `right.max == Zero` else `Zero`
 
 ## Cardinality Analysis
 
 Cardinality represents the **row count bounds** of a query result. It is critical for downstream code generation — a query guaranteed to return at most one row can be mapped to a scalar value instead of a collection.
 
-### Cardinality Lattice
+### Cardinality Domain
+
+Cardinality is represented as an interval:
 
 ```
-ExactlyOne  ⊂  AtMostOne  ⊂  Unknown
+[min, max]
+min ∈ {Zero, One}
+max ∈ {Zero, One, Many}
+constraint: min <= max
+```
 
-ExactlyOne  — guaranteed exactly one row (e.g., aggregate without GROUP BY)
-AtMostOne   — zero or one row (e.g., WHERE on full primary key, LIMIT 1)
-Unknown     — zero or more rows (general case)
+Canonical aliases:
+
+```
+ExactlyZero = [Zero, Zero]
+ExactlyOne  = [One, One]
+AtMostOne   = [Zero, One]
+OneOrMore   = [One, Many]
+ZeroOrMore  = [Zero, Many]
 ```
 
 ### Cardinality Combinators
 
 ```
-drop_lower_bound(ExactlyOne) = Unknown      -- may produce 0 or many rows
-drop_lower_bound(AtMostOne)  = AtMostOne    -- already allows 0
-drop_lower_bound(Unknown)    = Unknown
+drop_lower_bound([m, M]) = [Zero, M]
 
-constrain_at_most_one(ExactlyOne) = ExactlyOne
-constrain_at_most_one(AtMostOne)  = AtMostOne
-constrain_at_most_one(Unknown)    = AtMostOne
+constrain_at_most_one([m, M]) = [m, min(M, One)]
 
-max(ExactlyOne, ExactlyOne) = ExactlyOne
-max(ExactlyOne, AtMostOne)  = AtMostOne
-max(ExactlyOne, Unknown)    = Unknown
-max(AtMostOne, Unknown)     = Unknown
-
-min(ExactlyOne, Unknown)    = ExactlyOne
-min(AtMostOne, Unknown)     = AtMostOne
+upper_min(a, b):   max-domain minimum (Zero < One < Many)
+upper_add(a, b):   Zero+Zero=Zero, Zero+One=One, One+One=Many, Many+x=Many
+upper_mul(a, b):   Zero*x=Zero, One*One=One, otherwise Many
+lower_or(a, b):    One if either side is One, else Zero
+lower_and(a, b):   One only if both sides are One, else Zero
 ```
 
 ### Selection Cardinality Rules
@@ -474,36 +614,57 @@ The Selection operator (WHERE) is the most interesting operator for cardinality 
 ```
 Condition Pattern                                  Effect
 ──────────────────────────────────────────────────────────────────────
-WHERE false / WHERE 1=0                            → AtMostOne
-WHERE pk_col = <value> (all PK columns covered)    → AtMostOne
-WHERE unique_col = <value> (all UK columns covered) → AtMostOne
-WHERE pk_col IN (<single_value>)                   → AtMostOne
-WHERE pk_col IS NULL (PK is NOT NULL by definition) → AtMostOne
-WHERE c1 = ? AND c2 = ? (AND covers full PK/UK)   → AtMostOne
+WHERE false / WHERE 1=0                            → ExactlyZero
+WHERE all columns of an input primary key are equality-constrained       → AtMostOne
+WHERE all columns of an input unique key are equality-constrained         → AtMostOne
+WHERE full input key IN (<single tuple>)                                  → AtMostOne
+WHERE a full proven-NOT-NULL input key is constrained to NULL             → ExactlyZero
+WHERE key column IS NULL with nullable/unknown key nullability            → no refinement
+WHERE c1 = ? AND c2 = ? (AND covers a full input PK/UK key)              → AtMostOne
+WHERE c = v AND c = w (v != w)                     → ExactlyZero
 WHERE ... OR ...                                   → no refinement (conservative)
 Other                                              → no refinement
 ```
 
 The analysis works by:
 1. Extracting equality constraints from the condition (column = value pairs)
-2. Collecting all constrained columns across AND conjuncts
-3. Checking if the constrained columns **cover** a primary key or unique constraint
-4. If covered → the result is at most one row
+2. Extracting single-tuple `IN` constraints on full keys
+3. Collecting constrained columns across AND conjuncts
+4. Detecting contradiction patterns (for example `c = v AND c = w`, `v != w`) and impossible null checks on proven non-null keys
+5. Checking if constrained columns **cover** a full primary/unique constraint that is valid for the current input relation
+6. If covered → the result is at most one row
+
+`input_constraints` denotes the primary/unique constraints that are valid for the current input relation at this point in the relational tree (derived from Catalog constraints and relational-operator semantics).
 
 ```
-analyze_selection_cardinality(input_cardinality, condition, catalog):
+analyze_selection_cardinality(input_cardinality, condition, input_constraints):
+
     if is_always_false(condition):
-        return AtMostOne
+        return ExactlyZero
 
-    eq_columns = extract_equality_columns(condition)  // {col1, col2, ...}
+    // Step 1: contradiction and impossible-predicate checks
+    if has_contradictory_equalities(condition):
+        return ExactlyZero
 
-    for each primary_key in catalog:
-        if eq_columns ⊇ primary_key.columns:
-            return constrain_at_most_one(input_cardinality)
+    if has_full_key_is_null_on_proven_non_nullable_key(condition, input_constraints):
+        return ExactlyZero
 
-    for each unique_constraint in catalog:
-        if eq_columns ⊇ unique_constraint.columns:
-            return constrain_at_most_one(input_cardinality)
+    // Conservative rule: do not refine through OR disjunctions
+    if contains_or(condition):
+        return input_cardinality
+
+    // Step 2: gather key constraints from equality and single-tuple IN
+    eq_columns = extract_equality_columns(condition)            // columns constrained by "="
+    in_single_tuple_keys = extract_single_tuple_in_keys(condition) // key columns constrained by IN(single tuple)
+    constrained_columns = union(eq_columns, in_single_tuple_keys)
+
+    // Step 3: full primary-key coverage implies at-most-one
+    if covers_any_primary_key(constrained_columns, input_constraints):
+        return constrain_at_most_one(input_cardinality)
+
+    // Step 4: full unique-key coverage implies at-most-one
+    if covers_any_unique_key(constrained_columns, input_constraints):
+        return constrain_at_most_one(input_cardinality)
 
     return input_cardinality  // no refinement possible
 ```
@@ -511,54 +672,82 @@ analyze_selection_cardinality(input_cardinality, condition, catalog):
 ### Limit Cardinality Rules
 
 ```
-LIMIT 0                → AtMostOne (empty result)
+LIMIT 0                → ExactlyZero (empty result)
 LIMIT 1                → constrain_at_most_one(input)
 LIMIT n (n > 1)        → input (no useful refinement)
-OFFSET > 0             → drop_lower_bound(input) (offset may skip all rows)
-LIMIT 1 + OFFSET > 0   → constrain_at_most_one(drop_lower_bound(input))
+OFFSET > 0             → ExactlyZero if input.max <= One; otherwise drop_lower_bound(input)
+LIMIT 1 + OFFSET > 0   → ExactlyZero if input.max <= One; otherwise AtMostOne
 ```
 
 ## Join Nullability Refinement
 
-### The General Rule
-
-In a LEFT JOIN, all columns from the right side are forced nullable — because unmatched rows produce NULLs. Similarly for RIGHT JOIN (left side nullable) and FULL JOIN (both sides nullable).
-
-### Foreign Key Optimization
-
-There is an important exception: if a **foreign key constraint** guarantees that every row on the FK side has a matching row on the PK side, then the join-side columns need not be forced nullable.
+### Base Rules
 
 ```
-Given:  orders.user_id REFERENCES users(id)
-        orders.user_id is NOT NULL
-
-Query:  SELECT * FROM orders LEFT JOIN users ON orders.user_id = users.id
-
-Analysis:
-  - Every order has a non-NULL user_id (NOT NULL constraint)
-  - Every user_id references a valid users.id (FK constraint)
-  - Therefore: every order row WILL match a users row
-  - Therefore: users columns need NOT be forced nullable
+Join Kind    Nullability Transformation
+──────────────────────────────────────────────────────────────
+Inner        preserve both sides
+Cross        preserve both sides
+Left         preserve left, force right nullable
+Right        preserve right, force left nullable
+Full         force both sides nullable
 ```
+
+### Guaranteed-Match Optimization (Strict)
+
+Outer-join nullability forcing can be skipped only when **all** conditions hold:
+1. `ON` is a pure conjunction of equi-join predicates (`a.col = b.col`).
+2. The equi-join pairs cover a full FK mapping from the preserved side to the nullable side.
+3. All FK columns on the preserved side are `NOT NULL`.
+4. The referenced side columns covered by those pairs form a full `PRIMARY KEY` or `UNIQUE` key.
+5. No extra `ON` predicate exists beyond those equi-key predicates.
+
+If all hold:
+- `LEFT JOIN`: keep right-side original nullability (no forced nullable).
+- `RIGHT JOIN`: symmetric for left side.
+- `FULL JOIN`: no optimization (still force both sides nullable).
 
 Pseudocode:
 
 ```
-fk_guarantees_match(join_condition, left_table, right_table, catalog):
-    // Extract the join column pairs from the ON condition
-    (left_col, right_col) = extract_equijoin_columns(join_condition)
+guaranteed_match_from_left(on, left, right, catalog):
+    if !is_pure_equi_join_conjunction(on):
+        return false
+    // reject any ON predicate beyond equi-join key pairs
+    if has_extra_on_predicates(on):
+        return false
 
-    // Check if there's a FK from left to right (or right to left)
-    fk = catalog.find_foreign_key(from=left_table.left_col, to=right_table.right_col)
-    if fk exists AND left_col is NOT NULL:
-        return true  // FK guarantees a match for every row
+    pairs = extract_equijoin_pairs(on)
+    if !covers_full_fk_not_null(left -> right, pairs, catalog):
+        return false
 
-    return false
+    if !covers_full_unique_or_pk(right, pairs, catalog):
+        return false
+
+    return true
 ```
+
+### Companion Predicates for Join Cardinality
+
+```
+at_most_one_right_per_left(on, left, right, catalog):
+    if !is_pure_equi_join_conjunction(on):
+        return false
+    pairs = extract_equijoin_pairs(on)
+    return covers_full_unique_or_pk_not_null(right, pairs, catalog)
+```
+
+`guaranteed_match_from_right` and `at_most_one_left_per_right` are defined symmetrically by swapping left/right roles in the same predicates.
 
 ### JOIN USING Column Coalescing
 
-When a JOIN uses `USING(col)`, the SQL standard specifies that the USING columns appear only once in the output (not duplicated from both sides). The right side's copy is excluded from the output schema, and the left side's copy is kept.
+`JOIN USING(col)` outputs only one copy of each `USING` column pair.
+
+Nullability of the merged output column:
+- `INNER USING`: conservative baseline `left.nullable OR right.nullable` (can be tightened by equivalence/constraint propagation in later refinements)
+- `LEFT USING`: `left.nullable`
+- `RIGHT USING`: `right.nullable`
+- `FULL USING`: `left.nullable OR right.nullable`
 
 ## Scalar Expression Type Inference
 
@@ -577,15 +766,16 @@ UnaryOp(NOT, e)         Bool                            nullable(e)
 UnaryOp(-, e)           type(e)                         nullable(e)
 Function(name, args)    from function registry           from function registry
 AggregateCall(name, ..) from function registry           from function registry
-WindowCall(name, ...)   from function registry           typically true (frame may be empty)
+WindowCall(name, ...)   from function registry           function-specific and frame-aware
 Cast(e, target)         target                          nullable(e)
 IsNull(e)               Bool                            false (IS NULL never returns NULL)
 InList(e, list)         Bool                            nullable(e) OR any nullable in list
+InSubquery(e, q)        Bool                            nullable(e) OR nullable(subquery output expression)
 Between(e, lo, hi)      Bool                            nullable(e) OR nullable(lo) OR nullable(hi)
 Case(...)               see below                       see below
 ScalarSubquery(q)       from subquery's single column   true (subquery may return no rows)
 Exists(q)               Bool                            false
-Wildcard / QualifiedWildcard  expanded during Projection
+Wildcard / QualifiedWildcard  expanded during Algebraize projection construction
 ```
 
 ### CASE Expression Rules
@@ -622,13 +812,20 @@ Window        ROW_NUMBER, RANK, DENSE_RANK,     Only with OVER clause
 When resolving a function name, the priority order is:
 
 1. **Window functions** — if the function has an OVER clause and matches a known window function
-2. **Aggregate functions** — if the function matches a known aggregate
-3. **Scalar functions** — if the function matches a known scalar function
-4. **Unknown** — fallback for unrecognized functions
+2. **Aggregate-as-window** — if the function has an OVER clause and matches a known aggregate, classify it as window
+3. **Aggregate functions** — if the function matches a known aggregate without OVER and appears in an aggregate-valid context (using signature/context checks)
+4. **Scalar functions** — if the function matches a known scalar function
+5. **Unknown** — fallback for unrecognized functions
 
 ### Aggregate-as-Window
 
-When an aggregate function (e.g., SUM) is used with an OVER clause, it becomes a window function. This changes its nullability semantics — window aggregates are **always nullable** because the window frame may be empty, unlike regular aggregates which always produce a value (e.g., COUNT returns 0, not NULL, for empty groups).
+When an aggregate function (for example `SUM`) is used with an `OVER` clause, it is treated as a window expression. Its nullability is **not universally always-nullable**; it is function-specific and frame-aware.
+
+Safe baseline rules:
+- Ranking/distribution window functions (for example `ROW_NUMBER`, `RANK`, `DENSE_RANK`, `NTILE`) are non-null for each produced row.
+- `COUNT(...) OVER (...)` is non-null.
+- Other window aggregates (`SUM/AVG/MIN/MAX/...`) are nullable when an empty frame or function semantics can produce `NULL`.
+- Value window functions (`LAG/LEAD/FIRST_VALUE/LAST_VALUE/NTH_VALUE`) use function-specific nullability rules (arguments, defaults, and frame behavior).
 
 ### Function Type Inference
 
@@ -649,9 +846,7 @@ Common nullability patterns:
 Pattern             Meaning                              Examples
 ────────────────────────────────────────────────────────────────────
 AnyArgNullable      nullable if ANY argument is nullable  UPPER(x), ABS(x), x + y
-AlwaysNullable      always nullable regardless of args    LAG, LEAD, FIRST_VALUE
-NeverNullable       never nullable regardless of args     COUNT, EXISTS, COALESCE*
-Custom              function-specific logic               IF, CASE, IFNULL
-
-* COALESCE is never nullable only if at least one argument is not nullable
+AlwaysNullable      always nullable regardless of args    nullable-only implementation-specific functions
+NeverNullable       never nullable regardless of args     COUNT, EXISTS
+Custom              function-specific logic               IF, CASE, IFNULL, COALESCE
 ```
