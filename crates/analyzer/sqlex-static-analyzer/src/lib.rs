@@ -10,17 +10,9 @@ use sqlex_common::{
     types::{ResultSet, Table},
 };
 
-use crate::{
-    algebraize::Algebraizer, catalog::Catalog, diagnostics::DiagnosticSeverity, infer::Inferrer,
-};
+use crate::catalog::Catalog;
 
-mod algebraize;
 pub mod catalog;
-mod diagnostics;
-mod functions;
-mod infer;
-pub mod ir;
-mod keywords;
 
 /// Static SQL analyzer implementation
 pub struct StaticAnalyzer {
@@ -47,65 +39,7 @@ impl Analyzer for StaticAnalyzer {
     }
 
     async fn analyze(&self, sql: &str) -> Result<ResultSet> {
-        // Phase 2: Algebraize — AST + Catalog → RelationalExpr
-        let alg_result = Algebraizer::new(self.dialect, &self.catalog).algebraize(sql);
-
-        if alg_result
-            .diagnostics
-            .iter()
-            .any(|d| d.severity == DiagnosticSeverity::Error)
-        {
-            let message = alg_result
-                .diagnostics
-                .iter()
-                .filter(|d| d.severity == DiagnosticSeverity::Error)
-                .map(|d| d.message.clone())
-                .collect::<Vec<_>>()
-                .join("; ");
-            return Err(AnalyzerError::AnalysisError(message));
-        }
-
-        let expr = alg_result.expr.ok_or_else(|| {
-            AnalyzerError::AnalysisError("Algebraize produced no expression".to_string())
-        })?;
-
-        // Phase 3: Infer — RelationalExpr → OutputSchema
-        let infer_result = Inferrer::new(self.dialect, &self.catalog).infer(&expr);
-
-        // Check for inference errors (e.g. ambiguous columns)
-        if infer_result
-            .diagnostics
-            .iter()
-            .any(|d| d.severity == DiagnosticSeverity::Error)
-        {
-            let message = infer_result
-                .diagnostics
-                .iter()
-                .filter(|d| d.severity == DiagnosticSeverity::Error)
-                .map(|d| d.message.clone())
-                .collect::<Vec<_>>()
-                .join("; ");
-            return Err(AnalyzerError::AnalysisError(message));
-        }
-
-        let output = infer_result.output.ok_or_else(|| {
-            AnalyzerError::AnalysisError("Inference produced no output schema".to_string())
-        })?;
-
-        let columns = output
-            .columns
-            .into_iter()
-            .map(|c| sqlex_common::types::ColumnInfo {
-                name: c.name,
-                data_type: c.data_type,
-                nullability: c.nullability,
-            })
-            .collect();
-
-        Ok(ResultSet {
-            columns,
-            cardinality: output.cardinality,
-        })
+        todo!()
     }
 
     async fn get_all_tables(&self) -> Result<Vec<Table>> {
