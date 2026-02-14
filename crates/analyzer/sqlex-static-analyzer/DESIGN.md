@@ -1,4 +1,4 @@
-# Static Analyzer Architecture
+# Static Analyzer Design
 
 ## What Is Static Analyzer
 

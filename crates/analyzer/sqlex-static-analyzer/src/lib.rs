@@ -10,32 +10,22 @@ use sqlex_common::{
     types::{ResultSet, Table},
 };
 
-use crate::catalog::Catalog;
-
-pub mod catalog;
-
 /// Static SQL analyzer implementation
 pub struct StaticAnalyzer {
-    catalog: Catalog,
     dialect: Dialect,
 }
 
 impl StaticAnalyzer {
     /// Create a new static analyzer with the given dialect
     pub fn new(dialect: Dialect) -> Self {
-        Self {
-            catalog: Catalog::new(dialect),
-            dialect,
-        }
+        Self { dialect }
     }
 }
 
 #[async_trait]
 impl Analyzer for StaticAnalyzer {
     async fn execute(&mut self, sql: &str) -> Result<()> {
-        self.catalog
-            .apply_ddl(sql)
-            .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))
+        todo!()
     }
 
     async fn analyze(&self, sql: &str) -> Result<ResultSet> {
@@ -43,23 +33,6 @@ impl Analyzer for StaticAnalyzer {
     }
 
     async fn get_all_tables(&self) -> Result<Vec<Table>> {
-        let tables = self
-            .catalog
-            .tables
-            .values()
-            .map(|t| Table {
-                name: t.name.clone(),
-                columns: t
-                    .columns
-                    .iter()
-                    .map(|c| sqlex_common::types::ColumnInfo {
-                        name: c.name.clone(),
-                        data_type: c.data_type.clone(),
-                        nullability: c.nullable,
-                    })
-                    .collect(),
-            })
-            .collect();
-        Ok(tables)
+        todo!()
     }
 }
