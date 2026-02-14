@@ -36,10 +36,11 @@ interface Query {
  * Query result cardinality
  */
 type Cardinality =
+    | "ExactlyZero"
     | "ExactlyOne"
-    | "AtLeastOne"
     | "AtMostOne"
-    | "Unknown";
+    | "OneOrMore"
+    | "ZeroOrMore";
 
 /**
  * Data type union

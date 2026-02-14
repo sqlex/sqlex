@@ -291,7 +291,7 @@ mod tests {
         async fn analyze(&self, _sql: &str) -> Result<ResultSet> {
             Ok(ResultSet {
                 columns: vec![],
-                cardinality: sqlex_common::types::Cardinality::Unknown,
+                cardinality: sqlex_common::types::Cardinality::ZeroOrMore,
             })
         }
 

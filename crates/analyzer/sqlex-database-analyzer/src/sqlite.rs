@@ -51,7 +51,7 @@ impl Analyzer for SqliteDatabaseAnalyzer {
         }
         Ok(ResultSet {
             columns,
-            cardinality: sqlex_common::types::Cardinality::Unknown,
+            cardinality: sqlex_common::types::Cardinality::ZeroOrMore,
         })
     }
 
