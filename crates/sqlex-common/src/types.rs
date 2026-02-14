@@ -1,24 +1,22 @@
 use serde::{Deserialize, Serialize};
 
+/// Row-count bound of a query result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Cardinality {
-    /// Guarantees exactly one row will be returned
+    /// The query result is guaranteed to contain no rows.
+    ExactlyZero,
+    /// The query result is guaranteed to contain exactly one row.
     ExactlyOne,
-    /// Guarantees at least one row will be returned
-    AtLeastOne,
-    /// At most one row will be returned (0 or 1)
+    /// The query result may contain zero or one row.
     AtMostOne,
-    /// Row count is unknown
+    /// The query result is guaranteed to contain at least one row.
+    OneOrMore,
+    /// The query result may contain any number of rows, including zero.
     #[default]
-    Unknown,
+    ZeroOrMore,
 }
 
 impl Cardinality {
-    /// Returns true if this cardinality guarantees at least one row
-    pub fn guarantees_row(self) -> bool {
-        matches!(self, Self::ExactlyOne | Self::AtLeastOne)
-    }
-
     /// Returns true if this cardinality guarantees at most one row
     pub fn is_single_row(self) -> bool {
         matches!(self, Self::ExactlyOne | Self::AtMostOne)
