@@ -66,7 +66,7 @@ queries:
         SELECT n + 1 FROM nums WHERE n < 3
       )
       SELECT n FROM nums
-    cardinality: AtLeastOne
+    cardinality: OneOrMore
     expected:
       - name: n
         nullability: false
@@ -79,7 +79,7 @@ queries:
         SELECT n + 1 FROM a WHERE n < 3
       )
       SELECT n FROM a
-    cardinality: AtLeastOne
+    cardinality: OneOrMore
     expected:
       - name: n
         nullability: false

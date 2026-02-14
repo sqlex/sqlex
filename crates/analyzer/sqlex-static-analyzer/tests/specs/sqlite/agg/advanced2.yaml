@@ -21,7 +21,7 @@ queries:
       SELECT region, COUNT(*) AS cnt
       FROM sales
       GROUP BY region
-    cardinality: Unknown
+    cardinality: ZeroOrMore
     expected:
       - name: region
         nullability: true

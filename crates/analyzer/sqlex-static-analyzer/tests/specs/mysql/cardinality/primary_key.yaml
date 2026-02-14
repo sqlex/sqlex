@@ -74,10 +74,10 @@ queries:
       - name: quantity
         nullability: false
 
-  # Composite primary key with partial match should return Unknown
+  # Composite primary key with partial match should return ZeroOrMore
   - name: composite_pk_partial_match
     sql: SELECT * FROM order_items WHERE order_id = 1
-    cardinality: Unknown
+    cardinality: ZeroOrMore
     expected:
       - name: order_id
         nullability: false
@@ -100,10 +100,10 @@ queries:
       - name: age
         nullability: true
 
-  # Primary key IN multiple values should return Unknown
+  # Primary key IN multiple values should return ZeroOrMore
   - name: pk_in_multiple_values
     sql: SELECT * FROM users WHERE id IN (1, 2, 3)
-    cardinality: Unknown
+    cardinality: ZeroOrMore
     expected:
       - name: id
         nullability: false
@@ -142,10 +142,10 @@ queries:
       - name: age
         nullability: true
 
-  # Primary key with OR condition should return Unknown
+  # Primary key with OR condition should return ZeroOrMore
   - name: pk_with_or_condition
     sql: SELECT * FROM users WHERE id = 1 OR name = 'John'
-    cardinality: Unknown
+    cardinality: ZeroOrMore
     expected:
       - name: id
         nullability: false

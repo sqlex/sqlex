@@ -1,5 +1,7 @@
 # Static Analyzer Design
 
+> Detailed implementation plan: see `IMPLEMENTATION.md`.
+
 ## What Is Static Analyzer
 
 Given an input SQL statement together with Catalog metadata (and dialect/function registry context), the static analyzer derives query result metadata without executing the query against a live database.

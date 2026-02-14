@@ -27,7 +27,7 @@ queries:
       FROM sales
       GROUP BY region
       HAVING region IS NOT NULL
-    cardinality: Unknown
+    cardinality: ZeroOrMore
     expected:
       - name: region
         nullability: true

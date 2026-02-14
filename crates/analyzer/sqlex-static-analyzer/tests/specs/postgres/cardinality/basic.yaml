@@ -38,20 +38,20 @@ queries:
       - name: email
         nullability: true
 
-  # GROUP BY should return Unknown
+  # GROUP BY should return ZeroOrMore
   - name: group_by
     sql: SELECT user_id, SUM(total) as total_sum FROM orders GROUP BY user_id
-    cardinality: Unknown
+    cardinality: ZeroOrMore
     expected:
       - name: user_id
         nullability: false
       - name: total_sum
         nullability: true
 
-  # DISTINCT should return Unknown
+  # DISTINCT should return ZeroOrMore
   - name: distinct
     sql: SELECT DISTINCT name FROM users
-    cardinality: Unknown
+    cardinality: ZeroOrMore
     expected:
       - name: name
         nullability: false
@@ -105,7 +105,7 @@ queries:
   # UNION should combine cardinality
   - name: union_single_rows
     sql: SELECT 1 as num UNION SELECT 2
-    cardinality: AtLeastOne
+    cardinality: OneOrMore
     expected:
       - name: num
         nullability: false
