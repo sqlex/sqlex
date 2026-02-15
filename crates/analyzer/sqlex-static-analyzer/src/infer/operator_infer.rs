@@ -5,8 +5,11 @@ use sqlex_common::{dialect::Dialect, types::DataType};
 
 use crate::{
     algebra::{
-        expr::{JoinKind, JoinNode, LimitNode, ProjectionNode, RelExpr, SetOp, SetOpNode},
-        scalar::ColumnOrigin as BoundColumnOrigin,
+        expr::{
+            AggregationNode, AliasNode, JoinKind, JoinNode, LimitNode, ProjectionNode, RelExpr,
+            SetOp, SetOpNode, SortNode, WindowNode,
+        },
+        scalar::{ColumnOrigin as BoundColumnOrigin, OutputSchema},
     },
     catalog::model::Catalog,
     diagnostics::{Diagnostic, Phase},
@@ -49,20 +52,18 @@ pub(crate) fn infer_operator(
             }
             Ok(child)
         },
+        RelExpr::Aggregation(node) => infer_aggregation(node, catalog, dialect, functions),
+        RelExpr::Window(node) => infer_window(node, catalog, dialect, functions),
         RelExpr::Projection(node) => infer_projection(node, catalog, dialect, functions),
         RelExpr::Join(node) => infer_join(node, catalog, dialect, functions),
         RelExpr::Distinct(node) => infer_operator(&node.input, catalog, dialect, functions),
-        RelExpr::Sort(node) => infer_operator(&node.input, catalog, dialect, functions),
+        RelExpr::Sort(node) => infer_sort(node, catalog, dialect, functions),
         RelExpr::Limit(node) => infer_limit(node, catalog, dialect, functions),
-        RelExpr::Alias(node) => infer_operator(&node.input, catalog, dialect, functions),
+        RelExpr::Alias(node) => infer_alias(node, catalog, dialect, functions),
         RelExpr::SetOperation(node) => infer_set_operation(node, catalog, dialect, functions),
         RelExpr::PlaceholderQuery => Err(Diagnostic::todo(
             Phase::Infer,
             "placeholder query inference",
-        )),
-        _ => Err(Diagnostic::todo(
-            Phase::Infer,
-            "operator inference for this relational operator",
         )),
     }
 }
@@ -110,6 +111,55 @@ fn infer_scan(node: &crate::algebra::expr::ScanNode) -> Result<InferMetadata, Di
     })
 }
 
+fn infer_aggregation(
+    node: &AggregationNode,
+    catalog: &Catalog,
+    dialect: Dialect,
+    functions: &FunctionRegistry,
+) -> Result<InferMetadata, Diagnostic> {
+    let child = infer_operator(&node.input, catalog, dialect, functions)?;
+    for projection in &node.group_by {
+        let _ = infer_scalar(&projection.expr, &child.columns, dialect, functions)?;
+    }
+    for projection in &node.aggregates {
+        let _ = infer_scalar(&projection.expr, &child.columns, dialect, functions)?;
+    }
+
+    let columns = align_columns_to_schema(&child.columns, &node.schema);
+    let cardinality = if node.group_by.is_empty() && !node.aggregates.is_empty() {
+        CardInterval {
+            min: MinRows::One,
+            max: MaxRows::One,
+        }
+    } else {
+        child.cardinality
+    };
+
+    Ok(InferMetadata {
+        columns,
+        cardinality,
+        keys: Vec::new(),
+    })
+}
+
+fn infer_window(
+    node: &WindowNode,
+    catalog: &Catalog,
+    dialect: Dialect,
+    functions: &FunctionRegistry,
+) -> Result<InferMetadata, Diagnostic> {
+    let child = infer_operator(&node.input, catalog, dialect, functions)?;
+    for projection in &node.window_exprs {
+        let _ = infer_scalar(&projection.expr, &child.columns, dialect, functions)?;
+    }
+
+    Ok(InferMetadata {
+        columns: align_columns_to_schema(&child.columns, &node.schema),
+        cardinality: child.cardinality,
+        keys: Vec::new(),
+    })
+}
+
 fn infer_projection(
     node: &ProjectionNode,
     catalog: &Catalog,
@@ -139,17 +189,9 @@ fn infer_projection(
         });
     }
 
-    let mut cardinality = child.cardinality;
-    if node.is_aggregate && node.group_by_count == 0 {
-        cardinality = CardInterval {
-            min: MinRows::One,
-            max: MaxRows::One,
-        };
-    }
-
     Ok(InferMetadata {
         columns,
-        cardinality,
+        cardinality: child.cardinality,
         keys: Vec::new(),
     })
 }
@@ -204,6 +246,37 @@ fn infer_join(
     Ok(InferMetadata {
         columns,
         cardinality,
+        keys: Vec::new(),
+    })
+}
+
+fn infer_sort(
+    node: &SortNode,
+    catalog: &Catalog,
+    dialect: Dialect,
+    functions: &FunctionRegistry,
+) -> Result<InferMetadata, Diagnostic> {
+    let child = infer_operator(&node.input, catalog, dialect, functions)?;
+    for key in &node.keys {
+        let _ = infer_scalar(&key.expr, &child.columns, dialect, functions)?;
+    }
+    Ok(InferMetadata {
+        columns: align_columns_to_schema(&child.columns, &node.schema),
+        cardinality: child.cardinality,
+        keys: Vec::new(),
+    })
+}
+
+fn infer_alias(
+    node: &AliasNode,
+    catalog: &Catalog,
+    dialect: Dialect,
+    functions: &FunctionRegistry,
+) -> Result<InferMetadata, Diagnostic> {
+    let child = infer_operator(&node.input, catalog, dialect, functions)?;
+    Ok(InferMetadata {
+        columns: align_columns_to_schema(&child.columns, &node.schema),
+        cardinality: child.cardinality,
         keys: Vec::new(),
     })
 }
@@ -333,6 +406,27 @@ fn min_max_rows(left: MaxRows, right: MaxRows) -> MaxRows {
         (MaxRows::One, MaxRows::One) => MaxRows::One,
         _ => MaxRows::Many,
     }
+}
+
+fn align_columns_to_schema(
+    child_columns: &[InferColumn],
+    schema: &OutputSchema,
+) -> Vec<InferColumn> {
+    if child_columns.len() != schema.columns.len() {
+        return child_columns.to_vec();
+    }
+
+    child_columns
+        .iter()
+        .zip(schema.columns.iter())
+        .map(|(column, schema_column)| InferColumn {
+            slot_id: Some(schema_column.slot_id),
+            name: schema_column.name.clone(),
+            data_type: column.data_type.clone(),
+            nullable: column.nullable,
+            origin: column.origin.clone(),
+        })
+        .collect()
 }
 
 fn always_false_condition(condition: &crate::algebra::scalar::BoundScalarExpr) -> bool {

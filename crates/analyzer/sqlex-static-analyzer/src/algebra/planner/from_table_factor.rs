@@ -2,7 +2,7 @@ use sqlparser::ast::TableFactor;
 
 use crate::{
     algebra::{
-        expr::{RelExpr, ScanNode},
+        expr::{AliasNode, RelExpr, ScanNode},
         planner::{
             Algebraizer,
             context::{BuildContext, RelationScope},
@@ -54,13 +54,21 @@ impl Algebraizer {
                     visible_names,
                     schema: schema.clone(),
                 };
-                Ok((
-                    RelExpr::Scan(ScanNode {
-                        table: normalized_table_name,
-                        schema,
-                    }),
-                    scope,
-                ))
+                let scan_expr = RelExpr::Scan(ScanNode {
+                    table: normalized_table_name,
+                    schema,
+                });
+                let relation_expr = if let Some(alias) = alias.as_ref() {
+                    let alias_name = normalize_ident(&alias.name, self.dialect);
+                    RelExpr::Alias(AliasNode {
+                        input: Box::new(scan_expr),
+                        alias: alias_name,
+                        schema: scope.schema.clone(),
+                    })
+                } else {
+                    scan_expr
+                };
+                Ok((relation_expr, scope))
             },
             TableFactor::Derived {
                 lateral,
@@ -118,10 +126,17 @@ impl Algebraizer {
                 }
 
                 let scope = RelationScope {
-                    visible_names: vec![alias_name],
+                    visible_names: vec![alias_name.clone()],
                     schema,
                 };
-                Ok((subquery_expr, scope))
+                Ok((
+                    RelExpr::Alias(AliasNode {
+                        input: Box::new(subquery_expr),
+                        alias: alias_name,
+                        schema: scope.schema.clone(),
+                    }),
+                    scope,
+                ))
             },
             _ => Err(Diagnostic::todo(
                 Phase::Algebraize,
