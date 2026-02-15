@@ -22,7 +22,7 @@ impl Algebraizer {
         expr: &Expr,
         catalog: &Catalog,
         functions: &FunctionRegistry,
-        context: &BuildContext,
+        context: &mut BuildContext,
     ) -> Result<(Expression, bool), Diagnostic> {
         match expr {
             Expr::Identifier(ident) => {
@@ -51,7 +51,7 @@ impl Algebraizer {
                 Ok((binding.into_scalar_expr(), false))
             },
             Expr::Value(value) => Ok((
-                Expression::Literal(self.bind_literal(value, context.literal_assignment_mode)?),
+                Expression::Literal(self.bind_literal(value, context.literal_assignment_mode())?),
                 false,
             )),
             Expr::Nested(inner) => self.bind_expression(inner, catalog, functions, context),

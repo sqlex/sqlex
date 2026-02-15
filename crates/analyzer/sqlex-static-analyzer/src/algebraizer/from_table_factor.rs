@@ -5,7 +5,7 @@ use sqlparser::ast::TableFactor;
 use crate::{
     algebraizer::{
         Algebraizer,
-        context::{BuildContext, RelationScope},
+        context::{BuildContext, RelationBinding},
         model::{
             relation::{AliasNode, Relation, ScanNode},
             schema::{BoundColumn, ColumnOrigin, OutputSchema},
@@ -27,19 +27,19 @@ impl Algebraizer {
         catalog: &Catalog,
         functions: &FunctionRegistry,
         context: &mut BuildContext,
-    ) -> Result<(Relation, RelationScope), Diagnostic> {
+    ) -> Result<(Relation, RelationBinding), Diagnostic> {
         match relation {
             TableFactor::Table { name, alias, .. } => {
                 if let Some(alias) = alias {
                     self.validate_alias_ident(&alias.name)?;
                 }
                 let normalized_table_name = normalize_object_name(name, self.dialect);
-                if let Some(cte_binding) = context.ctes.get(&normalized_table_name) {
-                    let scope = RelationScope {
-                        visible_names: self
-                            .visible_names_for_relation(&normalized_table_name, alias.as_ref()),
+                if let Some(cte_binding) = context.resolve_cte(&normalized_table_name) {
+                    let scope = RelationBinding {
+                        qualifier_names: self
+                            .qualifier_names_for_relation(&normalized_table_name, alias.as_ref()),
                         schema: cte_binding.exposed_schema.clone(),
-                        hidden_unqualified_slots: HashSet::new(),
+                        hidden_unqualified_slot_ids: HashSet::new(),
                     };
                     return Ok((cte_binding.relation.clone(), scope));
                 }
@@ -52,12 +52,12 @@ impl Algebraizer {
                     ));
                 };
 
-                let (schema, visible_names) =
+                let (schema, qualifier_names) =
                     self.build_table_scope(table, &normalized_table_name, alias.as_ref(), context);
-                let scope = RelationScope {
-                    visible_names,
+                let scope = RelationBinding {
+                    qualifier_names,
                     schema: schema.clone(),
-                    hidden_unqualified_slots: HashSet::new(),
+                    hidden_unqualified_slot_ids: HashSet::new(),
                 };
                 let scan_relation = Relation::Scan(ScanNode {
                     table: normalized_table_name,
@@ -86,23 +86,11 @@ impl Algebraizer {
                     ));
                 }
 
-                let mut subquery_context = BuildContext {
-                    relation_scopes: context.relation_scopes.clone(),
-                    outer_relation_scopes: context.outer_relation_scopes.clone(),
-                    next_relation_id: context.next_relation_id,
-                    next_slot_id: context.next_slot_id,
-                    ctes: context.ctes.clone(),
-                    named_windows: std::collections::HashMap::new(),
-                    literal_assignment_mode: true,
-                };
-                let subquery_relation = self.build_set_relation(
-                    &subquery.body,
-                    catalog,
-                    functions,
-                    &mut subquery_context,
-                )?;
-                context.next_relation_id = subquery_context.next_relation_id;
-                context.next_slot_id = subquery_context.next_slot_id;
+                context.push_query_scope(true);
+                let subquery_relation_result =
+                    self.build_set_relation(&subquery.body, catalog, functions, context);
+                context.pop_query_scope();
+                let subquery_relation = subquery_relation_result?;
 
                 let Some(alias) = alias.as_ref() else {
                     return Err(Diagnostic::new(
@@ -136,10 +124,10 @@ impl Algebraizer {
                     }
                 }
 
-                let scope = RelationScope {
-                    visible_names: vec![alias_name.clone()],
+                let scope = RelationBinding {
+                    qualifier_names: vec![alias_name.clone()],
                     schema,
-                    hidden_unqualified_slots: HashSet::new(),
+                    hidden_unqualified_slot_ids: HashSet::new(),
                 };
                 Ok((
                     Relation::Alias(AliasNode {
@@ -157,7 +145,7 @@ impl Algebraizer {
         }
     }
 
-    fn visible_names_for_relation(
+    fn qualifier_names_for_relation(
         &self,
         normalized_table_name: &str,
         alias: Option<&sqlparser::ast::TableAlias>,
@@ -166,14 +154,14 @@ impl Algebraizer {
             return vec![normalize_ident(&alias.name, self.dialect)];
         }
 
-        let mut visible_names = Vec::new();
-        visible_names.push(normalized_table_name.to_string());
+        let mut qualifier_names = Vec::new();
+        qualifier_names.push(normalized_table_name.to_string());
         if let Some(last_segment) = normalized_table_name.split('.').next_back() {
-            if !visible_names.iter().any(|name| name == last_segment) {
-                visible_names.push(last_segment.to_string());
+            if !qualifier_names.iter().any(|name| name == last_segment) {
+                qualifier_names.push(last_segment.to_string());
             }
         }
-        visible_names
+        qualifier_names
     }
 
     fn build_table_scope(
@@ -207,14 +195,14 @@ impl Algebraizer {
             });
         }
 
-        let visible_names = self.visible_names_for_relation(normalized_table_name, alias);
+        let qualifier_names = self.qualifier_names_for_relation(normalized_table_name, alias);
 
         (
             OutputSchema {
                 relation_id: context.allocate_relation_id(),
                 columns,
             },
-            visible_names,
+            qualifier_names,
         )
     }
 }

@@ -21,32 +21,23 @@ impl Algebraizer {
         query: &sqlparser::ast::Query,
         catalog: &Catalog,
         functions: &FunctionRegistry,
-        context: &BuildContext,
+        context: &mut BuildContext,
     ) -> Result<Relation, Diagnostic> {
-        let mut subquery_context = BuildContext {
-            relation_scopes: context.relation_scopes.clone(),
-            outer_relation_scopes: context.outer_relation_scopes.clone(),
-            next_relation_id: context.next_relation_id,
-            next_slot_id: context.next_slot_id,
-            ctes: context.ctes.clone(),
-            named_windows: std::collections::HashMap::new(),
-            literal_assignment_mode: true,
-        };
+        context.push_query_scope(true);
+        context.push_cte_scope();
+        let result = (|| {
+            if let Some(with_clause) = &query.with {
+                self.register_ctes(with_clause, catalog, functions, context)?;
+            }
 
-        if let Some(with_clause) = &query.with {
-            self.register_ctes(with_clause, catalog, functions, &mut subquery_context)?;
-        }
-
-        let relation =
-            self.build_set_relation(&query.body, catalog, functions, &mut subquery_context)?;
-        let relation = self.apply_top_level_order_by(
-            relation,
-            query,
-            catalog,
-            functions,
-            &mut subquery_context,
-        )?;
-        self.apply_top_level_limit_offset(relation, query)
+            let relation = self.build_set_relation(&query.body, catalog, functions, context)?;
+            let relation =
+                self.apply_top_level_order_by(relation, query, catalog, functions, context)?;
+            self.apply_top_level_limit_offset(relation, query)
+        })();
+        context.pop_cte_scope();
+        context.pop_query_scope();
+        result
     }
 
     pub(crate) fn bind_single_column_subquery(
@@ -54,7 +45,7 @@ impl Algebraizer {
         query: &sqlparser::ast::Query,
         catalog: &Catalog,
         functions: &FunctionRegistry,
-        context: &BuildContext,
+        context: &mut BuildContext,
         usage: &str,
     ) -> Result<Relation, Diagnostic> {
         let relation = self.bind_subquery_relation(query, catalog, functions, context)?;
@@ -170,17 +161,17 @@ impl Algebraizer {
         let table = catalog.table(&normalized_table_name)?;
 
         if let Some(qualifier) = qualifier {
-            let mut visible_names = vec![normalized_table_name.clone()];
+            let mut qualifier_names = vec![normalized_table_name.clone()];
             if let Some(last_segment) = normalized_table_name.split('.').next_back() {
-                if !visible_names.iter().any(|name| name == last_segment) {
-                    visible_names.push(last_segment.to_string());
+                if !qualifier_names.iter().any(|name| name == last_segment) {
+                    qualifier_names.push(last_segment.to_string());
                 }
             }
             if let Some(alias) = alias {
-                visible_names.push(normalize_ident(&alias.name, self.dialect));
+                qualifier_names.push(normalize_ident(&alias.name, self.dialect));
             }
 
-            if !visible_names.iter().any(|name| name == qualifier) {
+            if !qualifier_names.iter().any(|name| name == qualifier) {
                 return None;
             }
         }

@@ -37,7 +37,7 @@ impl Algebraizer {
         function: &Function,
         catalog: &Catalog,
         functions: &FunctionRegistry,
-        context: &BuildContext,
+        context: &mut BuildContext,
     ) -> Result<(Expression, bool), Diagnostic> {
         let function_name = normalize_object_name(&function.name, self.dialect);
         let function_name_lower = function_name.to_ascii_lowercase();
@@ -93,14 +93,18 @@ impl Algebraizer {
                 },
                 Some(WindowType::NamedWindow(window_name)) => {
                     let normalized_name = normalize_ident(window_name, self.dialect);
-                    let Some(spec) = context.named_windows.get(&normalized_name) else {
+                    let Some(spec) = context
+                        .current_named_windows()
+                        .get(&normalized_name)
+                        .cloned()
+                    else {
                         return Err(Diagnostic::new(
                             "A3048",
                             Phase::Algebraize,
                             format!("unknown WINDOW definition: {normalized_name}"),
                         ));
                     };
-                    self.bind_window_spec(spec, catalog, functions, context)?
+                    self.bind_window_spec(&spec, catalog, functions, context)?
                 },
                 None => {
                     return Err(Diagnostic::new(
@@ -188,7 +192,7 @@ impl Algebraizer {
         spec: &WindowSpec,
         catalog: &Catalog,
         functions: &FunctionRegistry,
-        context: &BuildContext,
+        context: &mut BuildContext,
     ) -> Result<(Vec<Expression>, Vec<SortKey>), Diagnostic> {
         let resolved_spec = self.resolve_window_spec_for_over(spec, context)?;
 
@@ -226,7 +230,7 @@ impl Algebraizer {
     ) -> Result<WindowSpec, Diagnostic> {
         let mut resolved_spec = if let Some(base_name) = &spec.window_name {
             let normalized_base = normalize_ident(base_name, self.dialect);
-            let Some(base_spec) = context.named_windows.get(&normalized_base) else {
+            let Some(base_spec) = context.current_named_windows().get(&normalized_base) else {
                 return Err(Diagnostic::new(
                     "A3048",
                     Phase::Algebraize,
@@ -262,7 +266,7 @@ impl Algebraizer {
         arg: &FunctionArg,
         catalog: &Catalog,
         functions: &FunctionRegistry,
-        context: &BuildContext,
+        context: &mut BuildContext,
     ) -> Result<(Expression, bool), Diagnostic> {
         let arg_expr = match arg {
             FunctionArg::Named { arg, .. } => arg,
@@ -369,7 +373,7 @@ impl Algebraizer {
         field: &CeilFloorKind,
         catalog: &Catalog,
         functions: &FunctionRegistry,
-        context: &BuildContext,
+        context: &mut BuildContext,
     ) -> Result<(Expression, bool), Diagnostic> {
         let (bound_expr, has_aggregate) =
             self.bind_expression(expr, catalog, functions, context)?;
@@ -431,7 +435,7 @@ impl Algebraizer {
         let expr = expr?;
         match expr {
             Expression::SlotRef(slot_id) => context
-                .relation_scopes
+                .current_relation_bindings()
                 .iter()
                 .flat_map(|scope| scope.schema.columns.iter())
                 .find(|column| column.slot_id == *slot_id)

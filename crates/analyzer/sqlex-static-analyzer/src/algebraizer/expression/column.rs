@@ -4,7 +4,7 @@ use sqlparser::ast::{Expr, Value};
 use crate::{
     algebraizer::{
         Algebraizer,
-        context::{BuildContext, RelationScope},
+        context::{BuildContext, RelationBinding},
         model::expression::Expression,
     },
     catalog::normalize::{normalize_ident, normalize_object_name},
@@ -38,13 +38,13 @@ impl Algebraizer {
         column_name: &str,
         context: &BuildContext,
     ) -> Result<ResolvedColumnBinding, Diagnostic> {
-        if let Some(slot_id) =
-            self.resolve_unqualified_in_scope_level(&context.relation_scopes, column_name)?
+        if let Some(slot_id) = self
+            .resolve_unqualified_in_scope_level(context.current_relation_bindings(), column_name)?
         {
             return Ok(ResolvedColumnBinding::Local { slot_id });
         }
 
-        for (index, scope_level) in context.outer_relation_scopes.iter().rev().enumerate() {
+        for (index, scope_level) in context.iter_outer_query_relation_bindings().enumerate() {
             if let Some(slot_id) =
                 self.resolve_unqualified_in_scope_level(scope_level, column_name)?
             {
@@ -69,7 +69,7 @@ impl Algebraizer {
         context: &BuildContext,
     ) -> Result<ResolvedColumnBinding, Diagnostic> {
         match self.resolve_qualified_in_scope_level(
-            &context.relation_scopes,
+            context.current_relation_bindings(),
             qualifier,
             column_name,
         )? {
@@ -87,7 +87,7 @@ impl Algebraizer {
         }
 
         let mut relation_found = false;
-        for (index, scope_level) in context.outer_relation_scopes.iter().rev().enumerate() {
+        for (index, scope_level) in context.iter_outer_query_relation_bindings().enumerate() {
             match self.resolve_qualified_in_scope_level(scope_level, qualifier, column_name)? {
                 QualifiedResolution::Found(slot_id) => {
                     return Ok(ResolvedColumnBinding::Correlated {
@@ -119,19 +119,18 @@ impl Algebraizer {
 
     fn resolve_unqualified_in_scope_level(
         &self,
-        scope_level: &[RelationScope],
+        scope_level: &[RelationBinding],
         column_name: &str,
     ) -> Result<Option<u32>, Diagnostic> {
-        let mut matched_slots =
-            scope_level
-                .iter()
-                .flat_map(|scope| {
-                    scope.schema.columns.iter().filter(move |column| {
-                        !scope.hidden_unqualified_slots.contains(&column.slot_id)
-                    })
+        let mut matched_slots = scope_level
+            .iter()
+            .flat_map(|scope| {
+                scope.schema.columns.iter().filter(move |column| {
+                    !scope.hidden_unqualified_slot_ids.contains(&column.slot_id)
                 })
-                .filter(|column| column.name == column_name)
-                .map(|column| column.slot_id);
+            })
+            .filter(|column| column.name == column_name)
+            .map(|column| column.slot_id);
 
         match (matched_slots.next(), matched_slots.next()) {
             (None, _) => Ok(None),
@@ -146,13 +145,13 @@ impl Algebraizer {
 
     fn resolve_qualified_in_scope_level(
         &self,
-        scope_level: &[RelationScope],
+        scope_level: &[RelationBinding],
         qualifier: &str,
         column_name: &str,
     ) -> Result<QualifiedResolution, Diagnostic> {
         let mut matched_scopes = scope_level.iter().filter(|scope| {
             scope
-                .visible_names
+                .qualifier_names
                 .iter()
                 .any(|visible_name| visible_name == qualifier)
         });
@@ -245,16 +244,20 @@ mod tests {
 
     use crate::algebraizer::{
         Algebraizer,
-        context::{BuildContext, RelationScope},
+        context::{BuildContext, RelationBinding},
         model::{
             expression::Expression,
             schema::{BoundColumn, ColumnOrigin, OutputSchema},
         },
     };
 
-    fn make_scope(relation_id: u32, visible_name: &str, columns: &[(u32, &str)]) -> RelationScope {
-        RelationScope {
-            visible_names: vec![visible_name.to_string()],
+    fn make_scope(
+        relation_id: u32,
+        visible_name: &str,
+        columns: &[(u32, &str)],
+    ) -> RelationBinding {
+        RelationBinding {
+            qualifier_names: vec![visible_name.to_string()],
             schema: OutputSchema {
                 relation_id,
                 columns: columns
@@ -269,7 +272,7 @@ mod tests {
                     })
                     .collect(),
             },
-            hidden_unqualified_slots: HashSet::new(),
+            hidden_unqualified_slot_ids: HashSet::new(),
         }
     }
 
@@ -277,8 +280,9 @@ mod tests {
     fn resolve_unqualified_prefers_current_scope() {
         let algebraizer = Algebraizer::new(Dialect::Postgres);
         let mut context = BuildContext::new();
-        context.relation_scopes = vec![make_scope(1, "cur", &[(1, "id")])];
-        context.outer_relation_scopes = vec![vec![make_scope(2, "outer", &[(2, "id")])]];
+        context.set_current_relation_bindings(vec![make_scope(2, "outer", &[(2, "id")])]);
+        context.push_query_scope(false);
+        context.set_current_relation_bindings(vec![make_scope(1, "cur", &[(1, "id")])]);
 
         let binding = algebraizer
             .resolve_unqualified_column("id", &context)
@@ -290,11 +294,11 @@ mod tests {
     fn resolve_unqualified_binds_correlated_depth() {
         let algebraizer = Algebraizer::new(Dialect::Postgres);
         let mut context = BuildContext::new();
-        context.relation_scopes = vec![make_scope(1, "cur", &[(1, "cur_col")])];
-        context.outer_relation_scopes = vec![
-            vec![make_scope(2, "outer_lv2", &[(20, "id")])],
-            vec![make_scope(3, "outer_lv1", &[(30, "id")])],
-        ];
+        context.set_current_relation_bindings(vec![make_scope(2, "outer_lv2", &[(20, "id")])]);
+        context.push_query_scope(false);
+        context.set_current_relation_bindings(vec![make_scope(3, "outer_lv1", &[(30, "id")])]);
+        context.push_query_scope(false);
+        context.set_current_relation_bindings(vec![make_scope(1, "cur", &[(1, "cur_col")])]);
 
         let binding = algebraizer
             .resolve_unqualified_column("id", &context)
@@ -312,11 +316,11 @@ mod tests {
     fn resolve_qualified_binds_correlated_depth() {
         let algebraizer = Algebraizer::new(Dialect::Postgres);
         let mut context = BuildContext::new();
-        context.relation_scopes = vec![make_scope(1, "cur", &[(1, "cur_col")])];
-        context.outer_relation_scopes = vec![
-            vec![make_scope(2, "t2", &[(20, "id")])],
-            vec![make_scope(3, "t1", &[(30, "id")])],
-        ];
+        context.set_current_relation_bindings(vec![make_scope(2, "t2", &[(20, "id")])]);
+        context.push_query_scope(false);
+        context.set_current_relation_bindings(vec![make_scope(3, "t1", &[(30, "id")])]);
+        context.push_query_scope(false);
+        context.set_current_relation_bindings(vec![make_scope(1, "cur", &[(1, "cur_col")])]);
 
         let binding = algebraizer
             .resolve_qualified_column("t1", "id", &context)
@@ -334,10 +338,10 @@ mod tests {
     fn resolve_unqualified_reports_ambiguous_current_scope() {
         let algebraizer = Algebraizer::new(Dialect::Postgres);
         let mut context = BuildContext::new();
-        context.relation_scopes = vec![
+        context.set_current_relation_bindings(vec![
             make_scope(1, "t1", &[(1, "id")]),
             make_scope(2, "t2", &[(2, "id")]),
-        ];
+        ]);
 
         let error = algebraizer
             .resolve_unqualified_column("id", &context)

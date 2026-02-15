@@ -5,7 +5,7 @@ use sqlparser::ast::{Expr, OrderByExpr, Statement, UnaryOperator, Value};
 
 use crate::{
     algebraizer::{
-        context::{BuildContext, RelationScope},
+        context::{BuildContext, RelationBinding},
         model::{
             expression::Expression,
             relation::{LimitNode, ProjectionNode, Relation, SortNode},
@@ -85,76 +85,74 @@ impl Algebraizer {
         }
 
         let input_schema = output_schema_of(&input_relation)?;
-        let order_context = BuildContext {
-            relation_scopes: vec![RelationScope {
-                visible_names: Vec::new(),
-                schema: input_schema.clone(),
-                hidden_unqualified_slots: HashSet::new(),
-            }],
-            outer_relation_scopes: context.outer_relation_scopes.clone(),
-            next_relation_id: context.next_relation_id,
-            next_slot_id: context.next_slot_id,
-            ctes: context.ctes.clone(),
-            named_windows: context.named_windows.clone(),
-            literal_assignment_mode: false,
-        };
+        let inherited_named_windows = context.current_named_windows().clone();
+        context.push_query_scope(false);
+        context.set_current_named_windows(inherited_named_windows);
+        context.set_current_relation_bindings(vec![RelationBinding {
+            qualifier_names: Vec::new(),
+            schema: input_schema.clone(),
+            hidden_unqualified_slot_ids: HashSet::new(),
+        }]);
 
-        let mut hidden_columns = Vec::new();
-        let mut hidden_schema_columns = Vec::new();
-        let mut hidden_expr_slots = HashMap::new();
-        let disallow_hidden = disallow_hidden_order_by(&input_relation);
-        let mut sort_keys = Vec::new();
-        for order_expr in &order_by.exprs {
-            sort_keys.push(self.bind_top_level_order_key(
-                order_expr,
-                &input_schema,
-                catalog,
-                functions,
-                &order_context,
-                &mut hidden_columns,
-                &mut hidden_schema_columns,
-                &mut hidden_expr_slots,
-                disallow_hidden,
-                context,
-            )?);
-        }
+        let result = (|| {
+            let mut hidden_columns = Vec::new();
+            let mut hidden_schema_columns = Vec::new();
+            let mut hidden_expr_slots = HashMap::new();
+            let disallow_hidden = disallow_hidden_order_by(&input_relation);
+            let mut sort_keys = Vec::new();
+            for order_expr in &order_by.exprs {
+                sort_keys.push(self.bind_top_level_order_key(
+                    order_expr,
+                    &input_schema,
+                    catalog,
+                    functions,
+                    &mut hidden_columns,
+                    &mut hidden_schema_columns,
+                    &mut hidden_expr_slots,
+                    disallow_hidden,
+                    context,
+                )?);
+            }
 
-        if hidden_columns.is_empty() {
-            let schema = input_schema.clone();
-            return Ok(Relation::Sort(SortNode {
+            if hidden_columns.is_empty() {
+                let schema = input_schema.clone();
+                return Ok(Relation::Sort(SortNode {
+                    input: Box::new(input_relation),
+                    keys: sort_keys,
+                    schema,
+                }));
+            }
+
+            let mut pre_projection_columns =
+                project_all_slots(&input_schema.columns, Visibility::Visible);
+            pre_projection_columns.extend(hidden_columns);
+
+            let mut pre_projection_schema_columns = input_schema.columns.clone();
+            pre_projection_schema_columns.extend(hidden_schema_columns);
+            let pre_projection_schema = OutputSchema {
+                relation_id: context.allocate_relation_id(),
+                columns: pre_projection_schema_columns,
+            };
+
+            let pre_projection_relation = Relation::Projection(ProjectionNode {
                 input: Box::new(input_relation),
+                columns: pre_projection_columns,
+                schema: pre_projection_schema.clone(),
+            });
+            let sorted_relation = Relation::Sort(SortNode {
+                input: Box::new(pre_projection_relation),
                 keys: sort_keys,
-                schema,
-            }));
-        }
+                schema: pre_projection_schema,
+            });
 
-        let mut pre_projection_columns =
-            project_all_slots(&input_schema.columns, Visibility::Visible);
-        pre_projection_columns.extend(hidden_columns);
-
-        let mut pre_projection_schema_columns = input_schema.columns.clone();
-        pre_projection_schema_columns.extend(hidden_schema_columns);
-        let pre_projection_schema = OutputSchema {
-            relation_id: context.allocate_relation_id(),
-            columns: pre_projection_schema_columns,
-        };
-
-        let pre_projection_relation = Relation::Projection(ProjectionNode {
-            input: Box::new(input_relation),
-            columns: pre_projection_columns,
-            schema: pre_projection_schema.clone(),
-        });
-        let sorted_relation = Relation::Sort(SortNode {
-            input: Box::new(pre_projection_relation),
-            keys: sort_keys,
-            schema: pre_projection_schema,
-        });
-
-        Ok(Relation::Projection(ProjectionNode {
-            input: Box::new(sorted_relation),
-            columns: project_all_slots(&input_schema.columns, Visibility::Visible),
-            schema: input_schema,
-        }))
+            Ok(Relation::Projection(ProjectionNode {
+                input: Box::new(sorted_relation),
+                columns: project_all_slots(&input_schema.columns, Visibility::Visible),
+                schema: input_schema,
+            }))
+        })();
+        context.pop_query_scope();
+        result
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -164,7 +162,6 @@ impl Algebraizer {
         input_schema: &OutputSchema,
         catalog: &Catalog,
         functions: &FunctionRegistry,
-        order_context: &BuildContext,
         hidden_columns: &mut Vec<ProjectionColumn>,
         hidden_schema_columns: &mut Vec<BoundColumn>,
         hidden_expr_slots: &mut HashMap<String, u32>,
@@ -196,7 +193,7 @@ impl Algebraizer {
             Expression::SlotRef(column.slot_id)
         } else {
             let (bound_expr, _) =
-                self.bind_expression(&order_expr.expr, catalog, functions, order_context)?;
+                self.bind_expression(&order_expr.expr, catalog, functions, context)?;
             bound_expr
         };
 

@@ -5,7 +5,7 @@ use sqlparser::ast::Select;
 use crate::{
     algebraizer::{
         Algebraizer,
-        context::{BuildContext, RelationScope},
+        context::{BuildContext, RelationBinding},
         model::{
             relation::{Relation, ValuesNode},
             schema::OutputSchema,
@@ -29,11 +29,11 @@ impl Algebraizer {
                 relation_id: context.allocate_relation_id(),
                 columns: Vec::new(),
             };
-            context.relation_scopes = vec![RelationScope {
-                visible_names: vec![],
+            context.set_current_relation_bindings(vec![RelationBinding {
+                qualifier_names: vec![],
                 schema: schema.clone(),
-                hidden_unqualified_slots: HashSet::new(),
-            }];
+                hidden_unqualified_slot_ids: HashSet::new(),
+            }]);
             return Ok(Relation::Values(ValuesNode { schema }));
         }
 
@@ -49,13 +49,13 @@ impl Algebraizer {
         let (mut relation, left_scope) =
             self.build_table_factor(&from_item.relation, catalog, functions, context)?;
         let mut scopes = vec![left_scope];
-        context.relation_scopes = scopes.clone();
+        context.set_current_relation_bindings(scopes.clone());
 
         for join in &from_item.joins {
             relation = self.build_join(relation, &mut scopes, join, catalog, functions, context)?;
         }
 
-        context.relation_scopes = scopes;
+        context.set_current_relation_bindings(scopes);
         Ok(relation)
     }
 }

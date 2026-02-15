@@ -6,7 +6,7 @@ use sqlparser::ast::{Expr, Join, JoinConstraint, JoinOperator};
 use crate::{
     algebraizer::{
         Algebraizer,
-        context::{BuildContext, RelationScope},
+        context::{BuildContext, RelationBinding},
         model::{
             expression::{BoundBinaryOp, Expression},
             relation::{JoinKind, Relation, SelectionNode},
@@ -29,7 +29,7 @@ impl Algebraizer {
     pub(crate) fn build_join(
         &self,
         left_relation: Relation,
-        scopes: &mut Vec<RelationScope>,
+        scopes: &mut Vec<RelationBinding>,
         join: &Join,
         catalog: &Catalog,
         functions: &FunctionRegistry,
@@ -50,7 +50,7 @@ impl Algebraizer {
 
         let mut join_scopes = scopes.clone();
         join_scopes.push(right_scope.clone());
-        context.relation_scopes = join_scopes.clone();
+        context.set_current_relation_bindings(join_scopes.clone());
 
         let left_schema = super::output_schema_of(&left_relation)?;
         let right_schema = super::output_schema_of(&right_relation)?;
@@ -187,18 +187,18 @@ impl Algebraizer {
         }
         updated_scopes.push(updated_right_scope);
         if !merged_columns.is_empty() {
-            updated_scopes.push(RelationScope {
-                visible_names: Vec::new(),
+            updated_scopes.push(RelationBinding {
+                qualifier_names: Vec::new(),
                 schema: OutputSchema {
                     relation_id: context.allocate_relation_id(),
                     columns: merged_columns,
                 },
-                hidden_unqualified_slots: HashSet::new(),
+                hidden_unqualified_slot_ids: HashSet::new(),
             });
         }
 
         *scopes = updated_scopes.clone();
-        context.relation_scopes = updated_scopes;
+        context.set_current_relation_bindings(updated_scopes);
         Ok(join_relation)
     }
 
@@ -277,8 +277,8 @@ impl Algebraizer {
     fn resolve_join_using_pairs(
         &self,
         using_columns: &[String],
-        left_scopes: &[RelationScope],
-        right_scope: &RelationScope,
+        left_scopes: &[RelationBinding],
+        right_scope: &RelationBinding,
         left_schema: &OutputSchema,
         right_schema: &OutputSchema,
     ) -> Result<Vec<JoinUsingPair>, Diagnostic> {
@@ -353,19 +353,18 @@ impl Algebraizer {
 
     fn resolve_join_using_slot_in_scopes(
         &self,
-        scopes: &[RelationScope],
+        scopes: &[RelationBinding],
         column_name: &str,
     ) -> Result<u32, Diagnostic> {
-        let mut slots =
-            scopes
-                .iter()
-                .flat_map(|scope| {
-                    scope.schema.columns.iter().filter(move |column| {
-                        !scope.hidden_unqualified_slots.contains(&column.slot_id)
-                    })
+        let mut slots = scopes
+            .iter()
+            .flat_map(|scope| {
+                scope.schema.columns.iter().filter(move |column| {
+                    !scope.hidden_unqualified_slot_ids.contains(&column.slot_id)
                 })
-                .filter(|column| column.name == column_name)
-                .map(|column| column.slot_id);
+            })
+            .filter(|column| column.name == column_name)
+            .map(|column| column.slot_id);
 
         let Some(slot_id) = slots.next() else {
             return Err(Diagnostic::new(
@@ -589,10 +588,10 @@ fn merged_using_nullability(kind: JoinKind, left_nullable: bool, right_nullable:
     }
 }
 
-fn hide_unqualified_slots(scope: &mut RelationScope, hidden_slots: &HashSet<u32>) {
+fn hide_unqualified_slots(scope: &mut RelationBinding, hidden_slots: &HashSet<u32>) {
     for column in &scope.schema.columns {
         if hidden_slots.contains(&column.slot_id) {
-            scope.hidden_unqualified_slots.insert(column.slot_id);
+            scope.hidden_unqualified_slot_ids.insert(column.slot_id);
         }
     }
 }

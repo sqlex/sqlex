@@ -30,7 +30,9 @@ impl Algebraizer {
         if with_clause.recursive {
             for cte in &with_clause.cte_tables {
                 let cte_name = normalize_ident(&cte.alias.name, self.dialect);
-                if !seen_names.insert(cte_name.clone()) || context.ctes.contains_key(&cte_name) {
+                if !seen_names.insert(cte_name.clone())
+                    || context.cte_exists_in_any_scope(&cte_name)
+                {
                     return Err(Diagnostic::new(
                         "A3025",
                         Phase::Algebraize,
@@ -38,7 +40,7 @@ impl Algebraizer {
                     ));
                 }
                 let binding = self.build_recursive_cte_stub(cte, catalog, context)?;
-                context.ctes.insert(cte_name, binding);
+                let _ = context.insert_cte(cte_name, binding);
             }
             return Ok(());
         }
@@ -54,7 +56,9 @@ impl Algebraizer {
                 }
 
                 let cte_name = normalize_ident(&cte.alias.name, self.dialect);
-                if !seen_names.insert(cte_name.clone()) || context.ctes.contains_key(&cte_name) {
+                if !seen_names.insert(cte_name.clone())
+                    || context.cte_exists_in_any_scope(&cte_name)
+                {
                     return Err(Diagnostic::new(
                         "A3025",
                         Phase::Algebraize,
@@ -62,29 +66,17 @@ impl Algebraizer {
                     ));
                 }
                 let binding = self.build_recursive_cte_stub(cte, catalog, context)?;
-                context.ctes.insert(cte_name, binding);
+                let _ = context.insert_cte(cte_name, binding);
             }
 
             for _ in 0..with_clause.cte_tables.len() {
                 for cte in &with_clause.cte_tables {
                     let cte_name = normalize_ident(&cte.alias.name, self.dialect);
-                    let mut cte_context = BuildContext {
-                        relation_scopes: Vec::new(),
-                        outer_relation_scopes: context.outer_relation_scopes.clone(),
-                        next_relation_id: context.next_relation_id,
-                        next_slot_id: context.next_slot_id,
-                        ctes: context.ctes.clone(),
-                        named_windows: std::collections::HashMap::new(),
-                        literal_assignment_mode: context.literal_assignment_mode,
-                    };
-                    let cte_relation = self.build_set_relation(
-                        &cte.query.body,
-                        catalog,
-                        functions,
-                        &mut cte_context,
-                    )?;
-                    context.next_relation_id = cte_context.next_relation_id;
-                    context.next_slot_id = cte_context.next_slot_id;
+                    context.push_query_scope(context.literal_assignment_mode());
+                    let cte_relation_result =
+                        self.build_set_relation(&cte.query.body, catalog, functions, context);
+                    context.pop_query_scope();
+                    let cte_relation = cte_relation_result?;
 
                     let mut exposed_schema = super::output_schema_of(&cte_relation)?;
                     if !cte.alias.columns.is_empty() {
@@ -108,7 +100,7 @@ impl Algebraizer {
                         }
                     }
 
-                    context.ctes.insert(
+                    let _ = context.insert_cte(
                         cte_name.clone(),
                         CteBinding {
                             relation: cte_relation,
@@ -130,26 +122,18 @@ impl Algebraizer {
             }
 
             let cte_name = normalize_ident(&cte.alias.name, self.dialect);
-            if !seen_names.insert(cte_name.clone()) || context.ctes.contains_key(&cte_name) {
+            if !seen_names.insert(cte_name.clone()) || context.cte_exists_in_any_scope(&cte_name) {
                 return Err(Diagnostic::new(
                     "A3025",
                     Phase::Algebraize,
                     format!("duplicate CTE name: {cte_name}"),
                 ));
             }
-            let mut cte_context = BuildContext {
-                relation_scopes: Vec::new(),
-                outer_relation_scopes: context.outer_relation_scopes.clone(),
-                next_relation_id: context.next_relation_id,
-                next_slot_id: context.next_slot_id,
-                ctes: context.ctes.clone(),
-                named_windows: std::collections::HashMap::new(),
-                literal_assignment_mode: context.literal_assignment_mode,
-            };
-            let cte_relation =
-                self.build_set_relation(&cte.query.body, catalog, functions, &mut cte_context)?;
-            context.next_relation_id = cte_context.next_relation_id;
-            context.next_slot_id = cte_context.next_slot_id;
+            context.push_query_scope(context.literal_assignment_mode());
+            let cte_relation_result =
+                self.build_set_relation(&cte.query.body, catalog, functions, context);
+            context.pop_query_scope();
+            let cte_relation = cte_relation_result?;
 
             let mut exposed_schema = super::output_schema_of(&cte_relation)?;
             if !cte.alias.columns.is_empty() {
@@ -173,7 +157,7 @@ impl Algebraizer {
                 }
             }
 
-            context.ctes.insert(
+            let _ = context.insert_cte(
                 cte_name,
                 CteBinding {
                     relation: cte_relation,

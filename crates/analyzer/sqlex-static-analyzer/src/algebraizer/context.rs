@@ -4,11 +4,13 @@ use sqlparser::ast::WindowSpec;
 
 use crate::algebraizer::model::{relation::Relation, schema::OutputSchema};
 
+type CteScope = HashMap<String, CteBinding>;
+
 #[derive(Debug, Clone)]
-pub(crate) struct RelationScope {
-    pub(crate) visible_names: Vec<String>,
+pub(crate) struct RelationBinding {
+    pub(crate) qualifier_names: Vec<String>,
     pub(crate) schema: OutputSchema,
-    pub(crate) hidden_unqualified_slots: HashSet<u32>,
+    pub(crate) hidden_unqualified_slot_ids: HashSet<u32>,
 }
 
 #[derive(Debug, Clone)]
@@ -17,30 +19,149 @@ pub(crate) struct CteBinding {
     pub(crate) exposed_schema: OutputSchema,
 }
 
+#[derive(Debug, Clone)]
+struct QueryScope {
+    relation_bindings: Vec<RelationBinding>,
+    named_windows: HashMap<String, WindowSpec>,
+    literal_assignment_mode: bool,
+}
+
 #[derive(Debug)]
 pub(crate) struct BuildContext {
-    pub(crate) relation_scopes: Vec<RelationScope>,
-    pub(crate) outer_relation_scopes: Vec<Vec<RelationScope>>,
-    pub(crate) next_relation_id: u32,
-    pub(crate) next_slot_id: u32,
-    pub(crate) ctes: HashMap<String, CteBinding>,
-    pub(crate) named_windows: HashMap<String, WindowSpec>,
-    pub(crate) literal_assignment_mode: bool,
+    query_scope_stack: Vec<QueryScope>,
+    cte_scope_stack: Vec<CteScope>,
+    next_relation_id: u32,
+    next_slot_id: u32,
 }
 
 impl BuildContext {
     pub(crate) fn new() -> Self {
         Self {
-            relation_scopes: Vec::new(),
-            outer_relation_scopes: Vec::new(),
+            query_scope_stack: vec![QueryScope {
+                relation_bindings: Vec::new(),
+                named_windows: HashMap::new(),
+                literal_assignment_mode: false,
+            }],
+            cte_scope_stack: vec![HashMap::new()],
             next_relation_id: 1,
             next_slot_id: 1,
-            ctes: HashMap::new(),
-            named_windows: HashMap::new(),
-            literal_assignment_mode: false,
         }
     }
+}
 
+impl BuildContext {
+    pub(crate) fn push_query_scope(&mut self, literal_assignment_mode: bool) {
+        self.query_scope_stack.push(QueryScope {
+            relation_bindings: Vec::new(),
+            named_windows: HashMap::new(),
+            literal_assignment_mode,
+        });
+    }
+
+    pub(crate) fn pop_query_scope(&mut self) {
+        if self.query_scope_stack.len() <= 1 {
+            panic!("cannot pop root query scope");
+        }
+        let _ = self.query_scope_stack.pop();
+    }
+}
+
+impl BuildContext {
+    pub(crate) fn current_relation_bindings(&self) -> &[RelationBinding] {
+        self.query_scope_stack
+            .last()
+            .expect("query scope stack is never empty")
+            .relation_bindings
+            .as_slice()
+    }
+
+    pub(crate) fn set_current_relation_bindings(&mut self, bindings: Vec<RelationBinding>) {
+        self.query_scope_stack
+            .last_mut()
+            .expect("query scope stack is never empty")
+            .relation_bindings = bindings;
+    }
+
+    pub(crate) fn iter_outer_query_relation_bindings(
+        &self,
+    ) -> impl Iterator<Item = &[RelationBinding]> {
+        self.query_scope_stack[..self.query_scope_stack.len() - 1]
+            .iter()
+            .rev()
+            .map(|scope| scope.relation_bindings.as_slice())
+    }
+}
+
+impl BuildContext {
+    pub(crate) fn current_named_windows(&self) -> &HashMap<String, WindowSpec> {
+        &self
+            .query_scope_stack
+            .last()
+            .expect("query scope stack is never empty")
+            .named_windows
+    }
+
+    pub(crate) fn take_current_named_windows(&mut self) -> HashMap<String, WindowSpec> {
+        std::mem::take(
+            &mut self
+                .query_scope_stack
+                .last_mut()
+                .expect("query scope stack is never empty")
+                .named_windows,
+        )
+    }
+
+    pub(crate) fn set_current_named_windows(&mut self, windows: HashMap<String, WindowSpec>) {
+        self.query_scope_stack
+            .last_mut()
+            .expect("query scope stack is never empty")
+            .named_windows = windows;
+    }
+}
+
+impl BuildContext {
+    pub(crate) fn literal_assignment_mode(&self) -> bool {
+        self.query_scope_stack
+            .last()
+            .expect("query scope stack is never empty")
+            .literal_assignment_mode
+    }
+}
+
+impl BuildContext {
+    pub(crate) fn push_cte_scope(&mut self) {
+        self.cte_scope_stack.push(HashMap::new());
+    }
+
+    pub(crate) fn pop_cte_scope(&mut self) {
+        if self.cte_scope_stack.len() <= 1 {
+            panic!("cannot pop root CTE scope");
+        }
+        let _ = self.cte_scope_stack.pop();
+    }
+
+    pub(crate) fn resolve_cte(&self, name: &str) -> Option<&CteBinding> {
+        self.cte_scope_stack
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(name))
+    }
+
+    pub(crate) fn insert_cte(&mut self, name: String, binding: CteBinding) -> Option<CteBinding> {
+        self.cte_scope_stack
+            .last_mut()
+            .expect("CTE scope stack is never empty")
+            .insert(name, binding)
+    }
+
+    pub(crate) fn cte_exists_in_any_scope(&self, name: &str) -> bool {
+        self.cte_scope_stack
+            .iter()
+            .any(|scope| scope.contains_key(name))
+    }
+}
+
+impl BuildContext {
     pub(crate) fn allocate_relation_id(&mut self) -> u32 {
         let relation_id = self.next_relation_id;
         self.next_relation_id += 1;

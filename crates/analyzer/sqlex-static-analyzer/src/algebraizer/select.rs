@@ -48,15 +48,8 @@ impl Algebraizer {
             ));
         }
 
-        let previous_scope_level = context.relation_scopes.clone();
-        let previous_named_windows = context.named_windows.clone();
-        let has_outer_scope = !previous_scope_level.is_empty();
-        if has_outer_scope {
-            context
-                .outer_relation_scopes
-                .push(previous_scope_level.clone());
-        }
-        context.named_windows.clear();
+        let previous_scope_level = context.current_relation_bindings().to_vec();
+        let previous_named_windows = context.take_current_named_windows();
 
         let build_result = (|| {
             self.register_named_windows(&select.named_window, context)?;
@@ -64,7 +57,7 @@ impl Algebraizer {
             let group_by_exprs = self.group_by_expressions(&select.group_by)?;
             let mut bound_group_by = Vec::with_capacity(group_by_exprs.len());
 
-            context.relation_scopes.clear();
+            context.set_current_relation_bindings(Vec::new());
             let mut input_relation = self.build_from(select, catalog, functions, context)?;
             if let Some(selection) = &select.selection {
                 let (condition, where_has_aggregate) =
@@ -166,12 +159,14 @@ impl Algebraizer {
                     SelectItem::QualifiedWildcard(qualifier, _) => {
                         has_non_aggregate_projection = true;
                         let qualifier_name = normalize_object_name(qualifier, self.dialect);
-                        let Some(scope) = context.relation_scopes.iter().find(|scope| {
-                            scope
-                                .visible_names
-                                .iter()
-                                .any(|name| name == &qualifier_name)
-                        }) else {
+                        let Some(scope) =
+                            context.current_relation_bindings().iter().find(|scope| {
+                                scope
+                                    .qualifier_names
+                                    .iter()
+                                    .any(|name| name == &qualifier_name)
+                            })
+                        else {
                             return Err(Diagnostic::new(
                                 "A3002",
                                 Phase::Algebraize,
@@ -365,11 +360,8 @@ impl Algebraizer {
             Ok(relation)
         })();
 
-        context.relation_scopes = previous_scope_level;
-        context.named_windows = previous_named_windows;
-        if has_outer_scope {
-            let _ = context.outer_relation_scopes.pop();
-        }
+        context.set_current_relation_bindings(previous_scope_level);
+        context.set_current_named_windows(previous_named_windows);
 
         build_result
     }
@@ -424,7 +416,7 @@ impl Algebraizer {
             resolved.insert(name.clone(), spec);
         }
 
-        context.named_windows = resolved;
+        context.set_current_named_windows(resolved);
         Ok(())
     }
 
