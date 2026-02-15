@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use sqlparser::ast::Select;
 
 use crate::{
@@ -30,6 +32,7 @@ impl Algebraizer {
             context.relation_scopes = vec![RelationScope {
                 visible_names: vec![],
                 schema: schema.clone(),
+                hidden_unqualified_slots: HashSet::new(),
             }];
             return Ok(RelExpr::Values(ValuesNode { schema }));
         }

@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use sqlparser::ast::TableFactor;
 
 use crate::{
@@ -36,6 +38,7 @@ impl Algebraizer {
                         visible_names: self
                             .visible_names_for_relation(&normalized_table_name, alias.as_ref()),
                         schema: cte_binding.exposed_schema.clone(),
+                        hidden_unqualified_slots: HashSet::new(),
                     };
                     return Ok((cte_binding.expr.clone(), scope));
                 }
@@ -53,6 +56,7 @@ impl Algebraizer {
                 let scope = RelationScope {
                     visible_names,
                     schema: schema.clone(),
+                    hidden_unqualified_slots: HashSet::new(),
                 };
                 let scan_expr = RelExpr::Scan(ScanNode {
                     table: normalized_table_name,
@@ -130,6 +134,7 @@ impl Algebraizer {
                 let scope = RelationScope {
                     visible_names: vec![alias_name.clone()],
                     schema,
+                    hidden_unqualified_slots: HashSet::new(),
                 };
                 Ok((
                     RelExpr::Alias(AliasNode {

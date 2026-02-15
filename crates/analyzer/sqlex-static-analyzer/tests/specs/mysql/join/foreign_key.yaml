@@ -30,6 +30,17 @@ queries:
       - name: name
         nullability: false
 
+  - name: left_join_with_fk_and_extra_on_predicate
+    sql: |
+      SELECT u.id, d.id
+      FROM users u
+      LEFT JOIN departments d ON u.department_id = d.id AND d.name = 'sales'
+    expected:
+      - name: id
+        nullability: false
+      - name: id
+        nullability: true
+
   - name: left_join_without_fk
     sql: |
       SELECT d.id, d.name, u.id, u.name
@@ -58,4 +69,15 @@ queries:
       - name: id
         nullability: false
       - name: name
+        nullability: false
+
+  - name: right_join_with_fk_and_extra_on_predicate
+    sql: |
+      SELECT d.id, u.id
+      FROM departments d
+      RIGHT JOIN users u ON d.id = u.department_id AND d.name = 'sales'
+    expected:
+      - name: id
+        nullability: true
+      - name: id
         nullability: false

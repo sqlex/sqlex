@@ -126,11 +126,16 @@ impl Algebraizer {
         scope_level: &[RelationScope],
         column_name: &str,
     ) -> Result<Option<u32>, Diagnostic> {
-        let mut matched_slots = scope_level
-            .iter()
-            .flat_map(|scope| scope.schema.columns.iter())
-            .filter(|column| column.name == column_name)
-            .map(|column| column.slot_id);
+        let mut matched_slots =
+            scope_level
+                .iter()
+                .flat_map(|scope| {
+                    scope.schema.columns.iter().filter(move |column| {
+                        !scope.hidden_unqualified_slots.contains(&column.slot_id)
+                    })
+                })
+                .filter(|column| column.name == column_name)
+                .map(|column| column.slot_id);
 
         match (matched_slots.next(), matched_slots.next()) {
             (None, _) => Ok(None),
@@ -238,6 +243,8 @@ impl Algebraizer {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use sqlex_common::dialect::Dialect;
 
     use crate::algebra::{
@@ -265,6 +272,7 @@ mod tests {
                     })
                     .collect(),
             },
+            hidden_unqualified_slots: HashSet::new(),
         }
     }
 

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use sqlex_common::dialect::Dialect;
 use sqlparser::ast::{Expr, OrderByExpr, Statement, UnaryOperator, Value};
@@ -90,6 +90,7 @@ impl Algebraizer {
             relation_scopes: vec![RelationScope {
                 visible_names: Vec::new(),
                 schema: input_schema.clone(),
+                hidden_unqualified_slots: HashSet::new(),
             }],
             outer_relation_scopes: context.outer_relation_scopes.clone(),
             next_relation_id: context.next_relation_id,

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use sqlparser::ast::WindowSpec;
 
@@ -8,6 +8,7 @@ use crate::algebra::{expr::RelExpr, scalar::OutputSchema};
 pub(crate) struct RelationScope {
     pub(crate) visible_names: Vec<String>,
     pub(crate) schema: OutputSchema,
+    pub(crate) hidden_unqualified_slots: HashSet<u32>,
 }
 
 #[derive(Debug, Clone)]
