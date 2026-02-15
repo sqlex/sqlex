@@ -3,44 +3,138 @@ use sqlparser::ast::{Expr, Value};
 
 use crate::{
     algebra::{
-        planner::{Algebraizer, context::BuildContext},
-        scalar::BoundColumn,
+        planner::{
+            Algebraizer,
+            context::{BuildContext, RelationScope},
+        },
+        scalar::BoundScalarExpr,
     },
     catalog::normalize::{normalize_ident, normalize_object_name},
     diagnostics::{Diagnostic, Phase},
 };
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ResolvedColumnBinding {
+    Local { slot_id: u32 },
+    Correlated { depth: usize, slot_id: u32 },
+}
+
+impl ResolvedColumnBinding {
+    pub(crate) fn into_scalar_expr(self) -> BoundScalarExpr {
+        match self {
+            Self::Local { slot_id } => BoundScalarExpr::SlotRef(slot_id),
+            Self::Correlated { depth, slot_id } => {
+                BoundScalarExpr::CorrelatedRef { depth, slot_id }
+            },
+        }
+    }
+}
+
+enum QualifiedResolution {
+    Found(u32),
+    RelationFoundColumnMissing,
+    RelationMissing,
+}
+
 impl Algebraizer {
-    pub(crate) fn resolve_unqualified_column<'a>(
+    pub(crate) fn resolve_unqualified_column(
         &self,
         column_name: &str,
-        context: &'a BuildContext,
-    ) -> Result<&'a BoundColumn, Diagnostic> {
-        let columns = context.current_columns();
-        let mut matched = columns
-            .into_iter()
-            .filter(|column| column.name == column_name);
-        let first = matched.next();
-        let second = matched.next();
+        context: &BuildContext,
+    ) -> Result<ResolvedColumnBinding, Diagnostic> {
+        if let Some(slot_id) =
+            self.resolve_unqualified_in_scope_level(&context.relation_scopes, column_name)?
+        {
+            return Ok(ResolvedColumnBinding::Local { slot_id });
+        }
 
-        match (first, second) {
-            (Some(column), None) => context
-                .relation_scopes
-                .iter()
-                .flat_map(|scope| scope.schema.columns.iter())
-                .find(|candidate| candidate.slot_id == column.slot_id)
-                .ok_or_else(|| {
-                    Diagnostic::new(
-                        "A3007",
-                        Phase::Algebraize,
-                        format!("failed to resolve column '{column_name}'"),
-                    )
-                }),
-            (None, _) => Err(Diagnostic::new(
-                "A3008",
+        for (index, scope_level) in context.outer_relation_scopes.iter().rev().enumerate() {
+            if let Some(slot_id) =
+                self.resolve_unqualified_in_scope_level(scope_level, column_name)?
+            {
+                return Ok(ResolvedColumnBinding::Correlated {
+                    depth: index + 1,
+                    slot_id,
+                });
+            }
+        }
+
+        Err(Diagnostic::new(
+            "A3008",
+            Phase::Algebraize,
+            format!("column not found: {column_name}"),
+        ))
+    }
+
+    pub(crate) fn resolve_qualified_column(
+        &self,
+        qualifier: &str,
+        column_name: &str,
+        context: &BuildContext,
+    ) -> Result<ResolvedColumnBinding, Diagnostic> {
+        match self.resolve_qualified_in_scope_level(
+            &context.relation_scopes,
+            qualifier,
+            column_name,
+        )? {
+            QualifiedResolution::Found(slot_id) => {
+                return Ok(ResolvedColumnBinding::Local { slot_id });
+            },
+            QualifiedResolution::RelationFoundColumnMissing => {
+                return Err(Diagnostic::new(
+                    "A3011",
+                    Phase::Algebraize,
+                    format!("column not found: {qualifier}.{column_name}"),
+                ));
+            },
+            QualifiedResolution::RelationMissing => {},
+        }
+
+        let mut relation_found = false;
+        for (index, scope_level) in context.outer_relation_scopes.iter().rev().enumerate() {
+            match self.resolve_qualified_in_scope_level(scope_level, qualifier, column_name)? {
+                QualifiedResolution::Found(slot_id) => {
+                    return Ok(ResolvedColumnBinding::Correlated {
+                        depth: index + 1,
+                        slot_id,
+                    });
+                },
+                QualifiedResolution::RelationFoundColumnMissing => {
+                    relation_found = true;
+                },
+                QualifiedResolution::RelationMissing => {},
+            }
+        }
+
+        if relation_found {
+            Err(Diagnostic::new(
+                "A3011",
                 Phase::Algebraize,
-                format!("column not found: {column_name}"),
-            )),
+                format!("column not found: {qualifier}.{column_name}"),
+            ))
+        } else {
+            Err(Diagnostic::new(
+                "A3010",
+                Phase::Algebraize,
+                format!("unknown relation reference: {qualifier}"),
+            ))
+        }
+    }
+
+    fn resolve_unqualified_in_scope_level(
+        &self,
+        scope_level: &[RelationScope],
+        column_name: &str,
+    ) -> Result<Option<u32>, Diagnostic> {
+        let mut matched_slots = scope_level
+            .iter()
+            .flat_map(|scope| scope.schema.columns.iter())
+            .filter(|column| column.name == column_name)
+            .map(|column| column.slot_id);
+
+        match (matched_slots.next(), matched_slots.next()) {
+            (None, _) => Ok(None),
+            (Some(slot_id), None) => Ok(Some(slot_id)),
             (Some(_), Some(_)) => Err(Diagnostic::new(
                 "A3009",
                 Phase::Algebraize,
@@ -49,37 +143,46 @@ impl Algebraizer {
         }
     }
 
-    pub(crate) fn resolve_qualified_column<'a>(
+    fn resolve_qualified_in_scope_level(
         &self,
+        scope_level: &[RelationScope],
         qualifier: &str,
         column_name: &str,
-        context: &'a BuildContext,
-    ) -> Result<&'a BoundColumn, Diagnostic> {
-        let Some(scope) = context.relation_scopes.iter().find(|scope| {
+    ) -> Result<QualifiedResolution, Diagnostic> {
+        let mut matched_scopes = scope_level.iter().filter(|scope| {
             scope
                 .visible_names
                 .iter()
                 .any(|visible_name| visible_name == qualifier)
-        }) else {
+        });
+
+        let first_scope = matched_scopes.next();
+        if matched_scopes.next().is_some() {
             return Err(Diagnostic::new(
                 "A3010",
                 Phase::Algebraize,
-                format!("unknown relation reference: {qualifier}"),
+                format!("ambiguous relation reference: {qualifier}"),
             ));
+        }
+        let Some(scope) = first_scope else {
+            return Ok(QualifiedResolution::RelationMissing);
         };
 
-        scope
+        let mut matched_slots = scope
             .schema
             .columns
             .iter()
-            .find(|column| column.name == column_name)
-            .ok_or_else(|| {
-                Diagnostic::new(
-                    "A3011",
-                    Phase::Algebraize,
-                    format!("column not found: {qualifier}.{column_name}"),
-                )
-            })
+            .filter(|column| column.name == column_name)
+            .map(|column| column.slot_id);
+        match (matched_slots.next(), matched_slots.next()) {
+            (None, _) => Ok(QualifiedResolution::RelationFoundColumnMissing),
+            (Some(slot_id), None) => Ok(QualifiedResolution::Found(slot_id)),
+            (Some(_), Some(_)) => Err(Diagnostic::new(
+                "A3009",
+                Phase::Algebraize,
+                format!("ambiguous column reference: {qualifier}.{column_name}"),
+            )),
+        }
     }
 
     pub(crate) fn derive_output_name(&self, expr: &Expr) -> Result<String, Diagnostic> {
@@ -130,5 +233,113 @@ impl Algebraizer {
                 Dialect::MySQL | Dialect::SQLite => Ok(expr.to_string()),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sqlex_common::dialect::Dialect;
+
+    use crate::algebra::{
+        planner::{
+            Algebraizer,
+            context::{BuildContext, RelationScope},
+        },
+        scalar::{BoundColumn, BoundScalarExpr, ColumnOrigin, OutputSchema},
+    };
+
+    fn make_scope(relation_id: u32, visible_name: &str, columns: &[(u32, &str)]) -> RelationScope {
+        RelationScope {
+            visible_names: vec![visible_name.to_string()],
+            schema: OutputSchema {
+                relation_id,
+                columns: columns
+                    .iter()
+                    .map(|(slot_id, name)| BoundColumn {
+                        slot_id: *slot_id,
+                        name: (*name).to_string(),
+                        table_alias: Some(visible_name.to_string()),
+                        data_type: None,
+                        nullable: true,
+                        origin: ColumnOrigin::Derived,
+                    })
+                    .collect(),
+            },
+        }
+    }
+
+    #[test]
+    fn resolve_unqualified_prefers_current_scope() {
+        let algebraizer = Algebraizer::new(Dialect::Postgres);
+        let mut context = BuildContext::new();
+        context.relation_scopes = vec![make_scope(1, "cur", &[(1, "id")])];
+        context.outer_relation_scopes = vec![vec![make_scope(2, "outer", &[(2, "id")])]];
+
+        let binding = algebraizer
+            .resolve_unqualified_column("id", &context)
+            .expect("binding should succeed");
+        assert!(matches!(
+            binding.into_scalar_expr(),
+            BoundScalarExpr::SlotRef(1)
+        ));
+    }
+
+    #[test]
+    fn resolve_unqualified_binds_correlated_depth() {
+        let algebraizer = Algebraizer::new(Dialect::Postgres);
+        let mut context = BuildContext::new();
+        context.relation_scopes = vec![make_scope(1, "cur", &[(1, "cur_col")])];
+        context.outer_relation_scopes = vec![
+            vec![make_scope(2, "outer_lv2", &[(20, "id")])],
+            vec![make_scope(3, "outer_lv1", &[(30, "id")])],
+        ];
+
+        let binding = algebraizer
+            .resolve_unqualified_column("id", &context)
+            .expect("binding should succeed");
+        assert!(matches!(
+            binding.into_scalar_expr(),
+            BoundScalarExpr::CorrelatedRef {
+                depth: 1,
+                slot_id: 30
+            }
+        ));
+    }
+
+    #[test]
+    fn resolve_qualified_binds_correlated_depth() {
+        let algebraizer = Algebraizer::new(Dialect::Postgres);
+        let mut context = BuildContext::new();
+        context.relation_scopes = vec![make_scope(1, "cur", &[(1, "cur_col")])];
+        context.outer_relation_scopes = vec![
+            vec![make_scope(2, "t2", &[(20, "id")])],
+            vec![make_scope(3, "t1", &[(30, "id")])],
+        ];
+
+        let binding = algebraizer
+            .resolve_qualified_column("t1", "id", &context)
+            .expect("binding should succeed");
+        assert!(matches!(
+            binding.into_scalar_expr(),
+            BoundScalarExpr::CorrelatedRef {
+                depth: 1,
+                slot_id: 30
+            }
+        ));
+    }
+
+    #[test]
+    fn resolve_unqualified_reports_ambiguous_current_scope() {
+        let algebraizer = Algebraizer::new(Dialect::Postgres);
+        let mut context = BuildContext::new();
+        context.relation_scopes = vec![
+            make_scope(1, "t1", &[(1, "id")]),
+            make_scope(2, "t2", &[(2, "id")]),
+        ];
+
+        let error = algebraizer
+            .resolve_unqualified_column("id", &context)
+            .expect_err("binding should fail");
+        assert_eq!(error.code, "A3009");
     }
 }

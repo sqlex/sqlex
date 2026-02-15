@@ -3,9 +3,13 @@ use sqlex_common::{dialect::Dialect, types::DataType};
 
 use crate::{
     algebra::scalar::{BoundBinaryOp, BoundLiteral, BoundScalarExpr, BoundUnaryOp},
+    catalog::model::Catalog,
     diagnostics::{Diagnostic, Phase},
     functions::registry::FunctionRegistry,
-    infer::metadata::InferColumn,
+    infer::{
+        cardinality::MinRows, metadata::InferColumn,
+        operator_infer::infer_operator_with_outer_scopes,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -17,16 +21,34 @@ pub(crate) struct ScalarInference {
 pub(crate) fn infer_scalar(
     expr: &BoundScalarExpr,
     input_columns: &[InferColumn],
+    catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
+    outer_scopes: &[Vec<InferColumn>],
 ) -> Result<ScalarInference, Diagnostic> {
     match expr {
         BoundScalarExpr::SlotRef(slot_id) => infer_slot(*slot_id, input_columns),
-        BoundScalarExpr::CorrelatedRef { slot_id, .. } => infer_slot(*slot_id, input_columns),
+        BoundScalarExpr::CorrelatedRef { depth, slot_id } => {
+            infer_correlated_slot(*depth, *slot_id, outer_scopes)
+        },
         BoundScalarExpr::Literal(literal) => Ok(infer_literal(literal, dialect)),
         BoundScalarExpr::BinaryOp { left, op, right } => {
-            let left_info = infer_scalar(left, input_columns, dialect, functions)?;
-            let right_info = infer_scalar(right, input_columns, dialect, functions)?;
+            let left_info = infer_scalar(
+                left,
+                input_columns,
+                catalog,
+                dialect,
+                functions,
+                outer_scopes,
+            )?;
+            let right_info = infer_scalar(
+                right,
+                input_columns,
+                catalog,
+                dialect,
+                functions,
+                outer_scopes,
+            )?;
             validate_binary_op(op, &left_info.data_type, &right_info.data_type, dialect)?;
 
             let data_type = match op {
@@ -50,7 +72,14 @@ pub(crate) fn infer_scalar(
             })
         },
         BoundScalarExpr::UnaryOp { op, expr } => {
-            let info = infer_scalar(expr, input_columns, dialect, functions)?;
+            let info = infer_scalar(
+                expr,
+                input_columns,
+                catalog,
+                dialect,
+                functions,
+                outer_scopes,
+            )?;
             let data_type = match op {
                 BoundUnaryOp::Not => boolean_result_type(dialect),
                 BoundUnaryOp::Neg | BoundUnaryOp::Pos => info.data_type.clone(),
@@ -61,19 +90,47 @@ pub(crate) fn infer_scalar(
             })
         },
         BoundScalarExpr::Function { name, args } => {
-            let args_info = infer_args(args, input_columns, dialect, functions)?;
+            let args_info = infer_args(
+                args,
+                input_columns,
+                catalog,
+                dialect,
+                functions,
+                outer_scopes,
+            )?;
             Ok(infer_function(name, args_info, dialect))
         },
         BoundScalarExpr::AggregateCall { name, args, .. } => {
-            let args_info = infer_args(args, input_columns, dialect, functions)?;
+            let args_info = infer_args(
+                args,
+                input_columns,
+                catalog,
+                dialect,
+                functions,
+                outer_scopes,
+            )?;
             infer_aggregate(name, args_info, dialect)
         },
         BoundScalarExpr::WindowCall { name, args, .. } => {
-            let args_info = infer_args(args, input_columns, dialect, functions)?;
+            let args_info = infer_args(
+                args,
+                input_columns,
+                catalog,
+                dialect,
+                functions,
+                outer_scopes,
+            )?;
             infer_window(name, args_info, dialect)
         },
         BoundScalarExpr::Cast { expr, target_type } => {
-            let info = infer_scalar(expr, input_columns, dialect, functions)?;
+            let info = infer_scalar(
+                expr,
+                input_columns,
+                catalog,
+                dialect,
+                functions,
+                outer_scopes,
+            )?;
             Ok(ScalarInference {
                 data_type: target_type.clone(),
                 nullable: info.nullable,
@@ -92,14 +149,35 @@ pub(crate) fn infer_scalar(
             let mut nullable = false;
 
             for (condition, result) in when_clauses {
-                let _ = infer_scalar(condition, input_columns, dialect, functions)?;
-                let result_info = infer_scalar(result, input_columns, dialect, functions)?;
+                let _ = infer_scalar(
+                    condition,
+                    input_columns,
+                    catalog,
+                    dialect,
+                    functions,
+                    outer_scopes,
+                )?;
+                let result_info = infer_scalar(
+                    result,
+                    input_columns,
+                    catalog,
+                    dialect,
+                    functions,
+                    outer_scopes,
+                )?;
                 nullable |= result_info.nullable;
                 branch_types.push(result_info.data_type);
             }
 
             if let Some(else_expr) = else_expr {
-                let else_info = infer_scalar(else_expr, input_columns, dialect, functions)?;
+                let else_info = infer_scalar(
+                    else_expr,
+                    input_columns,
+                    catalog,
+                    dialect,
+                    functions,
+                    outer_scopes,
+                )?;
                 nullable |= else_info.nullable;
                 branch_types.push(else_info.data_type);
             } else {
@@ -115,10 +193,24 @@ pub(crate) fn infer_scalar(
             })
         },
         BoundScalarExpr::InList { expr, list, .. } => {
-            let expr_info = infer_scalar(expr, input_columns, dialect, functions)?;
+            let expr_info = infer_scalar(
+                expr,
+                input_columns,
+                catalog,
+                dialect,
+                functions,
+                outer_scopes,
+            )?;
             let mut nullable = expr_info.nullable;
             for item in list {
-                let item_info = infer_scalar(item, input_columns, dialect, functions)?;
+                let item_info = infer_scalar(
+                    item,
+                    input_columns,
+                    catalog,
+                    dialect,
+                    functions,
+                    outer_scopes,
+                )?;
                 nullable |= item_info.nullable;
             }
             Ok(ScalarInference {
@@ -126,29 +218,91 @@ pub(crate) fn infer_scalar(
                 nullable,
             })
         },
-        BoundScalarExpr::InSubquery { expr, .. } => {
-            let expr_info = infer_scalar(expr, input_columns, dialect, functions)?;
+        BoundScalarExpr::InSubquery { expr, subquery, .. } => {
+            let expr_info = infer_scalar(
+                expr,
+                input_columns,
+                catalog,
+                dialect,
+                functions,
+                outer_scopes,
+            )?;
+            let subquery_info = infer_subquery_single_column(
+                subquery,
+                input_columns,
+                outer_scopes,
+                catalog,
+                dialect,
+                functions,
+            )?;
             Ok(ScalarInference {
                 data_type: boolean_result_type(dialect),
-                nullable: expr_info.nullable,
+                nullable: expr_info.nullable || subquery_info.nullable,
             })
         },
-        BoundScalarExpr::Exists { .. } => Ok(ScalarInference {
-            data_type: boolean_result_type(dialect),
-            nullable: false,
-        }),
-        BoundScalarExpr::ScalarSubquery {
-            data_type,
-            nullable,
-        } => Ok(ScalarInference {
-            data_type: data_type.clone(),
-            nullable: *nullable,
-        }),
+        BoundScalarExpr::Exists { subquery, .. } => {
+            let mut subquery_outer_scopes = outer_scopes.to_vec();
+            subquery_outer_scopes.push(input_columns.to_vec());
+            let _ = infer_operator_with_outer_scopes(
+                subquery,
+                catalog,
+                dialect,
+                functions,
+                &subquery_outer_scopes,
+            )?;
+            Ok(ScalarInference {
+                data_type: boolean_result_type(dialect),
+                nullable: false,
+            })
+        },
+        BoundScalarExpr::ScalarSubquery(subquery) => infer_subquery_single_column(
+            subquery,
+            input_columns,
+            outer_scopes,
+            catalog,
+            dialect,
+            functions,
+        ),
         BoundScalarExpr::Placeholder(_) => Ok(ScalarInference {
             data_type: DataType::Custom("unknown".to_string()),
             nullable: false,
         }),
     }
+}
+
+fn infer_subquery_single_column(
+    subquery: &crate::algebra::expr::RelExpr,
+    input_columns: &[InferColumn],
+    outer_scopes: &[Vec<InferColumn>],
+    catalog: &Catalog,
+    dialect: Dialect,
+    functions: &FunctionRegistry,
+) -> Result<ScalarInference, Diagnostic> {
+    let mut subquery_outer_scopes = outer_scopes.to_vec();
+    subquery_outer_scopes.push(input_columns.to_vec());
+    let metadata = infer_operator_with_outer_scopes(
+        subquery,
+        catalog,
+        dialect,
+        functions,
+        &subquery_outer_scopes,
+    )?;
+    if metadata.columns.len() != 1 {
+        return Err(Diagnostic::new(
+            "I4105",
+            Phase::Infer,
+            format!(
+                "subquery expression expects exactly one column, got {}",
+                metadata.columns.len()
+            ),
+        ));
+    }
+
+    let column = &metadata.columns[0];
+    Ok(ScalarInference {
+        data_type: column.data_type.clone(),
+        nullable: column.nullable || !matches!(metadata.cardinality.min, MinRows::One),
+    })
 }
 
 fn validate_binary_op(
@@ -219,6 +373,37 @@ fn infer_slot(slot_id: u32, input_columns: &[InferColumn]) -> Result<ScalarInfer
             "I4101",
             Phase::Infer,
             format!("unknown slot reference: {slot_id}"),
+        ));
+    };
+
+    Ok(ScalarInference {
+        data_type: column.data_type.clone(),
+        nullable: column.nullable,
+    })
+}
+
+fn infer_correlated_slot(
+    depth: usize,
+    slot_id: u32,
+    outer_scopes: &[Vec<InferColumn>],
+) -> Result<ScalarInference, Diagnostic> {
+    if depth == 0 || depth > outer_scopes.len() {
+        return Err(Diagnostic::new(
+            "I4106",
+            Phase::Infer,
+            format!("invalid correlated reference depth {depth} for slot {slot_id}"),
+        ));
+    }
+
+    let scope_index = outer_scopes.len() - depth;
+    let Some(column) = outer_scopes[scope_index]
+        .iter()
+        .find(|column| column.slot_id.is_some_and(|value| value == slot_id))
+    else {
+        return Err(Diagnostic::new(
+            "I4107",
+            Phase::Infer,
+            format!("unknown correlated slot reference: slot {slot_id}, depth {depth}"),
         ));
     };
 
@@ -299,12 +484,21 @@ fn mysql_integer_literal_should_be_int(raw: &str) -> bool {
 fn infer_args(
     args: &[BoundScalarExpr],
     input_columns: &[InferColumn],
+    catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
+    outer_scopes: &[Vec<InferColumn>],
 ) -> Result<Vec<ScalarInference>, Diagnostic> {
     let mut result = Vec::with_capacity(args.len());
     for arg in args {
-        result.push(infer_scalar(arg, input_columns, dialect, functions)?);
+        result.push(infer_scalar(
+            arg,
+            input_columns,
+            catalog,
+            dialect,
+            functions,
+            outer_scopes,
+        )?);
     }
     Ok(result)
 }

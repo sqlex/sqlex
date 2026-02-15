@@ -1,95 +1,74 @@
-use sqlex_analyzer::extension::DataTypeExt;
 use sqlex_common::{dialect::Dialect, types::DataType};
-use sqlparser::ast::{
-    Expr, Function, FunctionArg, FunctionArgExpr, FunctionArguments, Select, SelectItem, SetExpr,
-    TableFactor,
-};
+use sqlparser::ast::{Expr, Select, TableFactor};
 
 use crate::{
-    algebra::{planner::Algebraizer, scalar::BoundLiteral},
+    algebra::{
+        expr::RelExpr,
+        planner::{Algebraizer, context::BuildContext},
+        scalar::BoundLiteral,
+    },
     catalog::{
         model::Catalog,
         normalize::{normalize_ident, normalize_object_name},
     },
+    diagnostics::{Diagnostic, Phase},
+    functions::registry::FunctionRegistry,
 };
 
 impl Algebraizer {
-    pub(crate) fn infer_scalar_subquery_result(
+    pub(crate) fn bind_subquery_relation(
         &self,
         query: &sqlparser::ast::Query,
         catalog: &Catalog,
-    ) -> (DataType, bool) {
-        let SetExpr::Select(select) = &*query.body else {
-            return (DataType::Custom("unknown".to_string()), true);
-        };
-        if select.projection.len() != 1 {
-            return (DataType::Custom("unknown".to_string()), true);
-        }
-
-        let item_expr = match &select.projection[0] {
-            SelectItem::UnnamedExpr(expr) => Some(expr),
-            SelectItem::ExprWithAlias { expr, .. } => Some(expr),
-            _ => None,
-        };
-        let Some(item_expr) = item_expr else {
-            return (DataType::Custom("unknown".to_string()), true);
+        functions: &FunctionRegistry,
+        context: &BuildContext,
+    ) -> Result<RelExpr, Diagnostic> {
+        let mut subquery_context = BuildContext {
+            relation_scopes: context.relation_scopes.clone(),
+            outer_relation_scopes: context.outer_relation_scopes.clone(),
+            next_relation_id: context.next_relation_id,
+            next_slot_id: context.next_slot_id,
+            ctes: context.ctes.clone(),
+            literal_assignment_mode: true,
         };
 
-        if let Expr::Function(function) = item_expr {
-            let function_name = normalize_object_name(&function.name, self.dialect);
-            let function_name = function_name.to_ascii_lowercase();
-            match function_name.as_str() {
-                "count" => {
-                    return (DataType::BigInt, false);
-                },
-                "max" | "min" => {
-                    if let Some(arg_expr) = first_function_expr_arg(function) {
-                        if let Some((data_type, _)) =
-                            self.resolve_scalar_subquery_expr_type(select, arg_expr, catalog)
-                        {
-                            return (data_type, true);
-                        }
-                    }
-                },
-                "sum" => {
-                    if let Some(arg_expr) = first_function_expr_arg(function) {
-                        if let Some((arg_type, _)) =
-                            self.resolve_scalar_subquery_expr_type(select, arg_expr, catalog)
-                        {
-                            let data_type = match self.dialect {
-                                Dialect::Postgres => {
-                                    if arg_type.is_integer() {
-                                        DataType::BigInt
-                                    } else {
-                                        arg_type
-                                    }
-                                },
-                                Dialect::MySQL | Dialect::SQLite => {
-                                    if arg_type.is_numeric() {
-                                        arg_type
-                                    } else {
-                                        DataType::Double
-                                    }
-                                },
-                            };
-                            return (data_type, true);
-                        }
-                    }
-                },
-                "avg" => {
-                    return (DataType::Decimal, true);
-                },
-                _ => {},
-            }
+        if let Some(with_clause) = &query.with {
+            self.register_ctes(with_clause, catalog, functions, &mut subquery_context)?;
         }
 
-        if let Some((data_type, _)) =
-            self.resolve_scalar_subquery_expr_type(select, item_expr, catalog)
-        {
-            return (data_type, true);
-        }
+        let relation =
+            self.build_set_expr(&query.body, catalog, functions, &mut subquery_context)?;
+        let relation = self.apply_top_level_order_by(
+            relation,
+            query,
+            catalog,
+            functions,
+            &mut subquery_context,
+        )?;
+        self.apply_top_level_limit_offset(relation, query)
+    }
 
-        (DataType::Custom("unknown".to_string()), true)
+    pub(crate) fn bind_single_column_subquery(
+        &self,
+        query: &sqlparser::ast::Query,
+        catalog: &Catalog,
+        functions: &FunctionRegistry,
+        context: &BuildContext,
+        usage: &str,
+    ) -> Result<RelExpr, Diagnostic> {
+        let relation = self.bind_subquery_relation(query, catalog, functions, context)?;
+        let schema = super::super::output_schema_of(&relation)?;
+        if schema.columns.len() != 1 {
+            return Err(Diagnostic::new(
+                "A3035",
+                Phase::Algebraize,
+                format!(
+                    "{usage} expects subquery to return exactly one column, got {}",
+                    schema.columns.len()
+                ),
+            ));
+        }
+        Ok(relation)
     }
 
     pub(crate) fn resolve_scalar_subquery_expr_type(
@@ -211,22 +190,6 @@ impl Algebraizer {
             .iter()
             .find(|column| column.name == normalized_column_name)?;
         Some((column.data_type.clone(), column.nullable))
-    }
-}
-
-fn first_function_expr_arg(function: &Function) -> Option<&Expr> {
-    let FunctionArguments::List(argument_list) = &function.args else {
-        return None;
-    };
-    let first = argument_list.args.first()?;
-    let arg_expr = match first {
-        FunctionArg::Named { arg, .. } => arg,
-        FunctionArg::ExprNamed { arg, .. } => arg,
-        FunctionArg::Unnamed(arg) => arg,
-    };
-    match arg_expr {
-        FunctionArgExpr::Expr(expr) => Some(expr),
-        FunctionArgExpr::Wildcard | FunctionArgExpr::QualifiedWildcard(_) => None,
     }
 }
 

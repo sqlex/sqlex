@@ -69,6 +69,7 @@ impl Algebraizer {
                     let cte_name = normalize_ident(&cte.alias.name, self.dialect);
                     let mut cte_context = BuildContext {
                         relation_scopes: Vec::new(),
+                        outer_relation_scopes: context.outer_relation_scopes.clone(),
                         next_relation_id: context.next_relation_id,
                         next_slot_id: context.next_slot_id,
                         ctes: context.ctes.clone(),
@@ -131,6 +132,7 @@ impl Algebraizer {
             }
             let mut cte_context = BuildContext {
                 relation_scopes: Vec::new(),
+                outer_relation_scopes: context.outer_relation_scopes.clone(),
                 next_relation_id: context.next_relation_id,
                 next_slot_id: context.next_slot_id,
                 ctes: context.ctes.clone(),

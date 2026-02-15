@@ -26,8 +26,8 @@ impl Algebraizer {
         match expr {
             Expr::Identifier(ident) => {
                 let normalized = crate::catalog::normalize::normalize_ident(ident, self.dialect);
-                let column = self.resolve_unqualified_column(&normalized, context)?;
-                Ok((BoundScalarExpr::SlotRef(column.slot_id), false))
+                let binding = self.resolve_unqualified_column(&normalized, context)?;
+                Ok((binding.into_scalar_expr(), false))
             },
             Expr::CompoundIdentifier(idents) => {
                 if idents.is_empty() {
@@ -46,8 +46,8 @@ impl Algebraizer {
                     .map(|ident| crate::catalog::normalize::normalize_ident(ident, self.dialect))
                     .collect::<Vec<_>>()
                     .join(".");
-                let column = self.resolve_qualified_column(&qualifier, &column_name, context)?;
-                Ok((BoundScalarExpr::SlotRef(column.slot_id), false))
+                let binding = self.resolve_qualified_column(&qualifier, &column_name, context)?;
+                Ok((binding.into_scalar_expr(), false))
             },
             Expr::Value(value) => Ok((
                 BoundScalarExpr::Literal(
@@ -226,27 +226,50 @@ impl Algebraizer {
                     has_aggregate,
                 ))
             },
-            Expr::InSubquery { expr, negated, .. } => {
+            Expr::InSubquery {
+                expr,
+                subquery,
+                negated,
+            } => {
                 let (bound_expr, has_aggregate) =
                     self.bind_expr(expr, catalog, functions, context)?;
+                let bound_subquery = self.bind_single_column_subquery(
+                    subquery,
+                    catalog,
+                    functions,
+                    context,
+                    "IN subquery",
+                )?;
                 Ok((
                     BoundScalarExpr::InSubquery {
                         expr: Box::new(bound_expr),
+                        subquery: Box::new(bound_subquery),
                         negated: *negated,
                     },
                     has_aggregate,
                 ))
             },
-            Expr::Exists { negated, .. } => {
-                Ok((BoundScalarExpr::Exists { negated: *negated }, false))
+            Expr::Exists { subquery, negated } => {
+                let bound_subquery =
+                    self.bind_subquery_relation(subquery, catalog, functions, context)?;
+                Ok((
+                    BoundScalarExpr::Exists {
+                        subquery: Box::new(bound_subquery),
+                        negated: *negated,
+                    },
+                    false,
+                ))
             },
             Expr::Subquery(query) => {
-                let (data_type, nullable) = self.infer_scalar_subquery_result(query, catalog);
+                let bound_subquery = self.bind_single_column_subquery(
+                    query,
+                    catalog,
+                    functions,
+                    context,
+                    "scalar subquery",
+                )?;
                 Ok((
-                    BoundScalarExpr::ScalarSubquery {
-                        data_type,
-                        nullable,
-                    },
+                    BoundScalarExpr::ScalarSubquery(Box::new(bound_subquery)),
                     false,
                 ))
             },

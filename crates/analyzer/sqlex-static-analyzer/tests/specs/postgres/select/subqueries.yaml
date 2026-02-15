@@ -49,3 +49,25 @@ queries:
     expected:
       - name: name
         nullability: false
+
+  - name: nested_correlated_scalar_subquery
+    sql: |
+      SELECT u.id,
+             (SELECT (SELECT COUNT(*) FROM orders o2 WHERE o2.user_id = u.id)) AS nested_order_count
+      FROM users u
+    expected:
+      - name: id
+        nullability: false
+      - name: nested_order_count
+        nullability: false
+
+  - name: correlated_scalar_passthrough
+    sql: |
+      SELECT u.id,
+             (SELECT u.id) AS echoed_id
+      FROM users u
+    expected:
+      - name: id
+        nullability: false
+      - name: echoed_id
+        nullability: false

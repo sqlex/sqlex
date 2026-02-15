@@ -17,6 +17,7 @@ pub(crate) struct CteBinding {
 #[derive(Debug)]
 pub(crate) struct BuildContext {
     pub(crate) relation_scopes: Vec<RelationScope>,
+    pub(crate) outer_relation_scopes: Vec<Vec<RelationScope>>,
     pub(crate) next_relation_id: u32,
     pub(crate) next_slot_id: u32,
     pub(crate) ctes: HashMap<String, CteBinding>,
@@ -27,6 +28,7 @@ impl BuildContext {
     pub(crate) fn new() -> Self {
         Self {
             relation_scopes: Vec::new(),
+            outer_relation_scopes: Vec::new(),
             next_relation_id: 1,
             next_slot_id: 1,
             ctes: HashMap::new(),

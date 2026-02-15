@@ -84,6 +84,7 @@ impl Algebraizer {
 
                 let mut subquery_context = BuildContext {
                     relation_scopes: context.relation_scopes.clone(),
+                    outer_relation_scopes: context.outer_relation_scopes.clone(),
                     next_relation_id: context.next_relation_id,
                     next_slot_id: context.next_slot_id,
                     ctes: context.ctes.clone(),

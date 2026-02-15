@@ -1,5 +1,7 @@
 use sqlex_common::types::DataType;
 
+use crate::algebra::expr::RelExpr;
+
 pub(crate) type SlotId = u32;
 pub(crate) type RelationId = u32;
 
@@ -134,14 +136,13 @@ pub(crate) enum BoundScalarExpr {
     },
     InSubquery {
         expr: Box<BoundScalarExpr>,
+        subquery: Box<RelExpr>,
         negated: bool,
     },
     Exists {
+        subquery: Box<RelExpr>,
         negated: bool,
     },
-    ScalarSubquery {
-        data_type: DataType,
-        nullable: bool,
-    },
+    ScalarSubquery(Box<RelExpr>),
     Placeholder(String),
 }

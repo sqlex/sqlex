@@ -27,6 +27,16 @@ pub(crate) fn infer_operator(
     dialect: Dialect,
     functions: &FunctionRegistry,
 ) -> Result<InferMetadata, Diagnostic> {
+    infer_operator_with_outer_scopes(expr, catalog, dialect, functions, &[])
+}
+
+pub(crate) fn infer_operator_with_outer_scopes(
+    expr: &RelExpr,
+    catalog: &Catalog,
+    dialect: Dialect,
+    functions: &FunctionRegistry,
+    outer_scopes: &[Vec<InferColumn>],
+) -> Result<InferMetadata, Diagnostic> {
     match expr {
         RelExpr::Scan(node) => infer_scan(node),
         RelExpr::Values(_) => Ok(InferMetadata {
@@ -38,8 +48,21 @@ pub(crate) fn infer_operator(
             keys: Vec::new(),
         }),
         RelExpr::Selection(node) => {
-            let mut child = infer_operator(&node.input, catalog, dialect, functions)?;
-            let _ = infer_scalar(&node.condition, &child.columns, dialect, functions)?;
+            let mut child = infer_operator_with_outer_scopes(
+                &node.input,
+                catalog,
+                dialect,
+                functions,
+                outer_scopes,
+            )?;
+            let _ = infer_scalar(
+                &node.condition,
+                &child.columns,
+                catalog,
+                dialect,
+                functions,
+                outer_scopes,
+            )?;
             if always_false_condition(&node.condition) {
                 child.cardinality = CardInterval {
                     min: MinRows::Zero,
@@ -52,15 +75,23 @@ pub(crate) fn infer_operator(
             }
             Ok(child)
         },
-        RelExpr::Aggregation(node) => infer_aggregation(node, catalog, dialect, functions),
-        RelExpr::Window(node) => infer_window(node, catalog, dialect, functions),
-        RelExpr::Projection(node) => infer_projection(node, catalog, dialect, functions),
-        RelExpr::Join(node) => infer_join(node, catalog, dialect, functions),
-        RelExpr::Distinct(node) => infer_operator(&node.input, catalog, dialect, functions),
-        RelExpr::Sort(node) => infer_sort(node, catalog, dialect, functions),
-        RelExpr::Limit(node) => infer_limit(node, catalog, dialect, functions),
-        RelExpr::Alias(node) => infer_alias(node, catalog, dialect, functions),
-        RelExpr::SetOperation(node) => infer_set_operation(node, catalog, dialect, functions),
+        RelExpr::Aggregation(node) => {
+            infer_aggregation(node, catalog, dialect, functions, outer_scopes)
+        },
+        RelExpr::Window(node) => infer_window(node, catalog, dialect, functions, outer_scopes),
+        RelExpr::Projection(node) => {
+            infer_projection(node, catalog, dialect, functions, outer_scopes)
+        },
+        RelExpr::Join(node) => infer_join(node, catalog, dialect, functions, outer_scopes),
+        RelExpr::Distinct(node) => {
+            infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)
+        },
+        RelExpr::Sort(node) => infer_sort(node, catalog, dialect, functions, outer_scopes),
+        RelExpr::Limit(node) => infer_limit(node, catalog, dialect, functions, outer_scopes),
+        RelExpr::Alias(node) => infer_alias(node, catalog, dialect, functions, outer_scopes),
+        RelExpr::SetOperation(node) => {
+            infer_set_operation(node, catalog, dialect, functions, outer_scopes)
+        },
         RelExpr::PlaceholderQuery => Err(Diagnostic::todo(
             Phase::Infer,
             "placeholder query inference",
@@ -116,13 +147,29 @@ fn infer_aggregation(
     catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
+    outer_scopes: &[Vec<InferColumn>],
 ) -> Result<InferMetadata, Diagnostic> {
-    let child = infer_operator(&node.input, catalog, dialect, functions)?;
+    let child =
+        infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
     for projection in &node.group_by {
-        let _ = infer_scalar(&projection.expr, &child.columns, dialect, functions)?;
+        let _ = infer_scalar(
+            &projection.expr,
+            &child.columns,
+            catalog,
+            dialect,
+            functions,
+            outer_scopes,
+        )?;
     }
     for projection in &node.aggregates {
-        let _ = infer_scalar(&projection.expr, &child.columns, dialect, functions)?;
+        let _ = infer_scalar(
+            &projection.expr,
+            &child.columns,
+            catalog,
+            dialect,
+            functions,
+            outer_scopes,
+        )?;
     }
 
     let columns = align_columns_to_schema(&child.columns, &node.schema);
@@ -147,10 +194,19 @@ fn infer_window(
     catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
+    outer_scopes: &[Vec<InferColumn>],
 ) -> Result<InferMetadata, Diagnostic> {
-    let child = infer_operator(&node.input, catalog, dialect, functions)?;
+    let child =
+        infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
     for projection in &node.window_exprs {
-        let _ = infer_scalar(&projection.expr, &child.columns, dialect, functions)?;
+        let _ = infer_scalar(
+            &projection.expr,
+            &child.columns,
+            catalog,
+            dialect,
+            functions,
+            outer_scopes,
+        )?;
     }
 
     Ok(InferMetadata {
@@ -165,12 +221,21 @@ fn infer_projection(
     catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
+    outer_scopes: &[Vec<InferColumn>],
 ) -> Result<InferMetadata, Diagnostic> {
-    let child = infer_operator(&node.input, catalog, dialect, functions)?;
+    let child =
+        infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
 
     let mut columns = Vec::with_capacity(node.columns.len());
     for (index, projection_column) in node.columns.iter().enumerate() {
-        let scalar = infer_scalar(&projection_column.expr, &child.columns, dialect, functions)?;
+        let scalar = infer_scalar(
+            &projection_column.expr,
+            &child.columns,
+            catalog,
+            dialect,
+            functions,
+            outer_scopes,
+        )?;
         let output_slot_id = node.schema.columns.get(index).map(|column| column.slot_id);
         let output_name = projection_column.alias.clone().ok_or_else(|| {
             Diagnostic::new(
@@ -201,9 +266,12 @@ fn infer_join(
     catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
+    outer_scopes: &[Vec<InferColumn>],
 ) -> Result<InferMetadata, Diagnostic> {
-    let left = infer_operator(&node.left, catalog, dialect, functions)?;
-    let right = infer_operator(&node.right, catalog, dialect, functions)?;
+    let left =
+        infer_operator_with_outer_scopes(&node.left, catalog, dialect, functions, outer_scopes)?;
+    let right =
+        infer_operator_with_outer_scopes(&node.right, catalog, dialect, functions, outer_scopes)?;
 
     let mut left_columns = left.columns;
     let mut right_columns = right.columns;
@@ -255,10 +323,19 @@ fn infer_sort(
     catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
+    outer_scopes: &[Vec<InferColumn>],
 ) -> Result<InferMetadata, Diagnostic> {
-    let child = infer_operator(&node.input, catalog, dialect, functions)?;
+    let child =
+        infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
     for key in &node.keys {
-        let _ = infer_scalar(&key.expr, &child.columns, dialect, functions)?;
+        let _ = infer_scalar(
+            &key.expr,
+            &child.columns,
+            catalog,
+            dialect,
+            functions,
+            outer_scopes,
+        )?;
     }
     Ok(InferMetadata {
         columns: align_columns_to_schema(&child.columns, &node.schema),
@@ -272,8 +349,10 @@ fn infer_alias(
     catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
+    outer_scopes: &[Vec<InferColumn>],
 ) -> Result<InferMetadata, Diagnostic> {
-    let child = infer_operator(&node.input, catalog, dialect, functions)?;
+    let child =
+        infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
     Ok(InferMetadata {
         columns: align_columns_to_schema(&child.columns, &node.schema),
         cardinality: child.cardinality,
@@ -286,8 +365,10 @@ fn infer_limit(
     catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
+    outer_scopes: &[Vec<InferColumn>],
 ) -> Result<InferMetadata, Diagnostic> {
-    let mut child = infer_operator(&node.input, catalog, dialect, functions)?;
+    let mut child =
+        infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
 
     if node.offset.is_some() {
         child.cardinality.min = MinRows::Zero;
@@ -307,9 +388,12 @@ fn infer_set_operation(
     catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
+    outer_scopes: &[Vec<InferColumn>],
 ) -> Result<InferMetadata, Diagnostic> {
-    let left = infer_operator(&node.left, catalog, dialect, functions)?;
-    let right = infer_operator(&node.right, catalog, dialect, functions)?;
+    let left =
+        infer_operator_with_outer_scopes(&node.left, catalog, dialect, functions, outer_scopes)?;
+    let right =
+        infer_operator_with_outer_scopes(&node.right, catalog, dialect, functions, outer_scopes)?;
     if left.columns.len() != right.columns.len() {
         return Err(Diagnostic::new(
             "I4202",
