@@ -28,7 +28,7 @@ struct JoinUsingPair {
 impl Algebraizer {
     pub(crate) fn build_join(
         &self,
-        left_expr: Relation,
+        left_relation: Relation,
         scopes: &mut Vec<RelationScope>,
         join: &Join,
         catalog: &Catalog,
@@ -39,11 +39,11 @@ impl Algebraizer {
             return Err(Diagnostic::new(
                 "A3053",
                 Phase::Algebraize,
-                "GLOBAL JOIN is not supported in this planner path",
+                "GLOBAL JOIN is not supported in this algebraizer path",
             ));
         }
 
-        let (right_expr, right_scope) =
+        let (right_relation, right_scope) =
             self.build_table_factor(&join.relation, catalog, functions, context)?;
         let (kind, on_expr) = self.join_kind_and_condition(&join.join_operator)?;
         let using_columns = self.extract_join_using_columns(&join.join_operator);
@@ -52,8 +52,8 @@ impl Algebraizer {
         join_scopes.push(right_scope.clone());
         context.relation_scopes = join_scopes.clone();
 
-        let left_schema = super::output_schema_of(&left_expr)?;
-        let right_schema = super::output_schema_of(&right_expr)?;
+        let left_schema = super::output_schema_of(&left_relation)?;
+        let right_schema = super::output_schema_of(&right_relation)?;
 
         let using_pairs = self.resolve_join_using_pairs(
             &using_columns,
@@ -118,7 +118,7 @@ impl Algebraizer {
                     "A3057",
                     Phase::Algebraize,
                     format!(
-                        "internal planner invariant violated: missing left USING slot {}",
+                        "internal algebraizer invariant violated: missing left USING slot {}",
                         pair.left_slot
                     ),
                 )
@@ -128,7 +128,7 @@ impl Algebraizer {
                     "A3057",
                     Phase::Algebraize,
                     format!(
-                        "internal planner invariant violated: missing right USING slot {}",
+                        "internal algebraizer invariant violated: missing right USING slot {}",
                         pair.right_slot
                     ),
                 )
@@ -162,16 +162,16 @@ impl Algebraizer {
             columns,
         };
 
-        let mut join_expr = Relation::Join(crate::algebraizer::model::relation::JoinNode {
-            left: Box::new(left_expr),
-            right: Box::new(right_expr),
+        let mut join_relation = Relation::Join(crate::algebraizer::model::relation::JoinNode {
+            left: Box::new(left_relation),
+            right: Box::new(right_relation),
             kind: effective_kind.clone(),
             schema: join_schema.clone(),
         });
 
         if let Some(condition) = bound_condition {
-            join_expr = Relation::Selection(SelectionNode {
-                input: Box::new(join_expr),
+            join_relation = Relation::Selection(SelectionNode {
+                input: Box::new(join_relation),
                 condition,
                 schema: join_schema.clone(),
             });
@@ -199,7 +199,7 @@ impl Algebraizer {
 
         *scopes = updated_scopes.clone();
         context.relation_scopes = updated_scopes;
-        Ok(join_expr)
+        Ok(join_relation)
     }
 
     fn join_kind_and_condition<'a>(
@@ -250,7 +250,7 @@ impl Algebraizer {
             JoinConstraint::Natural => Err(Diagnostic::new(
                 "A3056",
                 Phase::Algebraize,
-                "NATURAL JOIN is not supported in this planner path",
+                "NATURAL JOIN is not supported in this algebraizer path",
             )),
         }
     }
@@ -295,7 +295,7 @@ impl Algebraizer {
                     "A3057",
                     Phase::Algebraize,
                     format!(
-                        "internal planner invariant violated: left slot {} not found in schema",
+                        "internal algebraizer invariant violated: left slot {} not found in schema",
                         left_slot
                     ),
                 ));
@@ -305,7 +305,7 @@ impl Algebraizer {
                     "A3057",
                     Phase::Algebraize,
                     format!(
-                        "internal planner invariant violated: right slot {} not found in schema",
+                        "internal algebraizer invariant violated: right slot {} not found in schema",
                         right_slot
                     ),
                 ));

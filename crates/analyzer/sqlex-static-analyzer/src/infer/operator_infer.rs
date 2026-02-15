@@ -22,22 +22,22 @@ use crate::{
 };
 
 pub(crate) fn infer_operator(
-    expr: &Relation,
+    relation: &Relation,
     catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
 ) -> Result<InferMetadata, Diagnostic> {
-    infer_operator_with_outer_scopes(expr, catalog, dialect, functions, &[])
+    infer_operator_with_outer_scopes(relation, catalog, dialect, functions, &[])
 }
 
 pub(crate) fn infer_operator_with_outer_scopes(
-    expr: &Relation,
+    relation: &Relation,
     catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
     outer_scopes: &[Vec<InferColumn>],
 ) -> Result<InferMetadata, Diagnostic> {
-    match expr {
+    match relation {
         Relation::Scan(node) => infer_scan(node, catalog),
         Relation::Values(_) => Ok(InferMetadata {
             columns: Vec::new(),
@@ -1265,12 +1265,12 @@ mod tests {
             }],
         };
 
-        let scan_expr = Relation::Scan(ScanNode {
+        let scan_relation = Relation::Scan(ScanNode {
             table: "users".to_string(),
             schema: scan_schema(),
         });
-        let projection_expr = Relation::Projection(ProjectionNode {
-            input: Box::new(scan_expr),
+        let projection_relation = Relation::Projection(ProjectionNode {
+            input: Box::new(scan_relation),
             columns: vec![ProjectionColumn {
                 expr: Expression::SlotRef(1),
                 alias: Some("id".to_string()),
@@ -1278,8 +1278,8 @@ mod tests {
             }],
             schema: projection_schema.clone(),
         });
-        let expr = Relation::Selection(SelectionNode {
-            input: Box::new(projection_expr),
+        let relation = Relation::Selection(SelectionNode {
+            input: Box::new(projection_relation),
             condition: Expression::BinaryOp {
                 left: Box::new(Expression::SlotRef(10)),
                 op: BoundBinaryOp::Eq,
@@ -1293,7 +1293,7 @@ mod tests {
         });
 
         let functions = FunctionRegistry::new(Dialect::Postgres);
-        let metadata = infer_operator(&expr, &catalog, Dialect::Postgres, &functions)
+        let metadata = infer_operator(&relation, &catalog, Dialect::Postgres, &functions)
             .expect("inference should succeed");
 
         assert_eq!(
@@ -1307,7 +1307,7 @@ mod tests {
     fn selection_false_condition_is_exactly_zero() {
         let catalog = sample_catalog();
         let schema = scan_schema();
-        let expr = Relation::Selection(SelectionNode {
+        let relation = Relation::Selection(SelectionNode {
             input: Box::new(Relation::Scan(ScanNode {
                 table: "users".to_string(),
                 schema: schema.clone(),
@@ -1317,7 +1317,7 @@ mod tests {
         });
 
         let functions = FunctionRegistry::new(Dialect::Postgres);
-        let metadata = infer_operator(&expr, &catalog, Dialect::Postgres, &functions)
+        let metadata = infer_operator(&relation, &catalog, Dialect::Postgres, &functions)
             .expect("inference should succeed");
 
         assert_eq!(
@@ -1330,7 +1330,7 @@ mod tests {
     fn selection_contradictory_equalities_is_exactly_zero() {
         let catalog = sample_catalog();
         let schema = scan_schema();
-        let expr = Relation::Selection(SelectionNode {
+        let relation = Relation::Selection(SelectionNode {
             input: Box::new(Relation::Scan(ScanNode {
                 table: "users".to_string(),
                 schema: schema.clone(),
@@ -1360,7 +1360,7 @@ mod tests {
         });
 
         let functions = FunctionRegistry::new(Dialect::Postgres);
-        let metadata = infer_operator(&expr, &catalog, Dialect::Postgres, &functions)
+        let metadata = infer_operator(&relation, &catalog, Dialect::Postgres, &functions)
             .expect("inference should succeed");
 
         assert_eq!(
@@ -1373,7 +1373,7 @@ mod tests {
     fn selection_non_nullable_key_is_null_is_exactly_zero() {
         let catalog = sample_catalog();
         let schema = scan_schema();
-        let expr = Relation::Selection(SelectionNode {
+        let relation = Relation::Selection(SelectionNode {
             input: Box::new(Relation::Scan(ScanNode {
                 table: "users".to_string(),
                 schema: schema.clone(),
@@ -1386,7 +1386,7 @@ mod tests {
         });
 
         let functions = FunctionRegistry::new(Dialect::Postgres);
-        let metadata = infer_operator(&expr, &catalog, Dialect::Postgres, &functions)
+        let metadata = infer_operator(&relation, &catalog, Dialect::Postgres, &functions)
             .expect("inference should succeed");
 
         assert_eq!(
@@ -1480,14 +1480,14 @@ mod tests {
                 columns
             },
         };
-        let join_expr = Relation::Join(JoinNode {
+        let join_relation = Relation::Join(JoinNode {
             left: Box::new(limited_users),
             right: Box::new(orders_scan),
             kind: JoinKind::Inner,
             schema: join_schema.clone(),
         });
-        let expr = Relation::Selection(SelectionNode {
-            input: Box::new(join_expr),
+        let relation = Relation::Selection(SelectionNode {
+            input: Box::new(join_relation),
             condition: Expression::BinaryOp {
                 left: Box::new(Expression::SlotRef(1)),
                 op: BoundBinaryOp::Eq,
@@ -1497,7 +1497,7 @@ mod tests {
         });
 
         let functions = FunctionRegistry::new(Dialect::Postgres);
-        let metadata = infer_operator(&expr, &catalog, Dialect::Postgres, &functions)
+        let metadata = infer_operator(&relation, &catalog, Dialect::Postgres, &functions)
             .expect("inference should succeed");
 
         assert_eq!(

@@ -46,23 +46,16 @@ impl Algebraizer {
         }
 
         let from_item = &select.from[0];
-        let (mut relation_expr, left_scope) =
+        let (mut relation, left_scope) =
             self.build_table_factor(&from_item.relation, catalog, functions, context)?;
         let mut scopes = vec![left_scope];
         context.relation_scopes = scopes.clone();
 
         for join in &from_item.joins {
-            relation_expr = self.build_join(
-                relation_expr,
-                &mut scopes,
-                join,
-                catalog,
-                functions,
-                context,
-            )?;
+            relation = self.build_join(relation, &mut scopes, join, catalog, functions, context)?;
         }
 
         context.relation_scopes = scopes;
-        Ok(relation_expr)
+        Ok(relation)
     }
 }

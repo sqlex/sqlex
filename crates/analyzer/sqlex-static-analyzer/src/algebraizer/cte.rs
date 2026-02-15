@@ -77,12 +77,16 @@ impl Algebraizer {
                         named_windows: std::collections::HashMap::new(),
                         literal_assignment_mode: context.literal_assignment_mode,
                     };
-                    let cte_expr =
-                        self.build_set_expr(&cte.query.body, catalog, functions, &mut cte_context)?;
+                    let cte_relation = self.build_set_relation(
+                        &cte.query.body,
+                        catalog,
+                        functions,
+                        &mut cte_context,
+                    )?;
                     context.next_relation_id = cte_context.next_relation_id;
                     context.next_slot_id = cte_context.next_slot_id;
 
-                    let mut exposed_schema = super::output_schema_of(&cte_expr)?;
+                    let mut exposed_schema = super::output_schema_of(&cte_relation)?;
                     if !cte.alias.columns.is_empty() {
                         if cte.alias.columns.len() != exposed_schema.columns.len() {
                             return Err(Diagnostic::new(
@@ -107,7 +111,7 @@ impl Algebraizer {
                     context.ctes.insert(
                         cte_name.clone(),
                         CteBinding {
-                            expr: cte_expr,
+                            relation: cte_relation,
                             exposed_schema,
                         },
                     );
@@ -142,12 +146,12 @@ impl Algebraizer {
                 named_windows: std::collections::HashMap::new(),
                 literal_assignment_mode: context.literal_assignment_mode,
             };
-            let cte_expr =
-                self.build_set_expr(&cte.query.body, catalog, functions, &mut cte_context)?;
+            let cte_relation =
+                self.build_set_relation(&cte.query.body, catalog, functions, &mut cte_context)?;
             context.next_relation_id = cte_context.next_relation_id;
             context.next_slot_id = cte_context.next_slot_id;
 
-            let mut exposed_schema = super::output_schema_of(&cte_expr)?;
+            let mut exposed_schema = super::output_schema_of(&cte_relation)?;
             if !cte.alias.columns.is_empty() {
                 if cte.alias.columns.len() != exposed_schema.columns.len() {
                     return Err(Diagnostic::new(
@@ -172,7 +176,7 @@ impl Algebraizer {
             context.ctes.insert(
                 cte_name,
                 CteBinding {
-                    expr: cte_expr,
+                    relation: cte_relation,
                     exposed_schema,
                 },
             );
@@ -225,7 +229,7 @@ impl Algebraizer {
 
         let mut columns = Vec::with_capacity(seed_select.projection.len());
         for (index, item) in seed_select.projection.iter().enumerate() {
-            let (data_type, nullable) = projection_expr(item)
+            let (data_type, nullable) = projection_sql_expr(item)
                 .and_then(|expr| self.resolve_scalar_subquery_expr_type(seed_select, expr, catalog))
                 .unwrap_or((DataType::Custom("unknown".to_string()), true));
 
@@ -259,7 +263,7 @@ impl Algebraizer {
             columns,
         };
         Ok(CteBinding {
-            expr: Relation::Scan(ScanNode {
+            relation: Relation::Scan(ScanNode {
                 table: format!("__recursive_cte__{cte_name}"),
                 schema: schema.clone(),
             }),
@@ -268,8 +272,8 @@ impl Algebraizer {
     }
 }
 
-fn recursive_cte_seed_select(set_expr: &SetExpr) -> Option<&Select> {
-    match set_expr {
+fn recursive_cte_seed_select(sql_set_expr: &SetExpr) -> Option<&Select> {
+    match sql_set_expr {
         SetExpr::Select(select) => Some(select),
         SetExpr::SetOperation { left, .. } => recursive_cte_seed_select(left),
         SetExpr::Query(query) => recursive_cte_seed_select(&query.body),
@@ -277,8 +281,8 @@ fn recursive_cte_seed_select(set_expr: &SetExpr) -> Option<&Select> {
     }
 }
 
-fn recursive_cte_set_operation_projection_counts(set_expr: &SetExpr) -> Option<(usize, usize)> {
-    match set_expr {
+fn recursive_cte_set_operation_projection_counts(sql_set_expr: &SetExpr) -> Option<(usize, usize)> {
+    match sql_set_expr {
         SetExpr::SetOperation { left, right, .. } => Some((
             recursive_cte_projection_count(left)?,
             recursive_cte_projection_count(right)?,
@@ -288,8 +292,8 @@ fn recursive_cte_set_operation_projection_counts(set_expr: &SetExpr) -> Option<(
     }
 }
 
-fn recursive_cte_projection_count(set_expr: &SetExpr) -> Option<usize> {
-    match set_expr {
+fn recursive_cte_projection_count(sql_set_expr: &SetExpr) -> Option<usize> {
+    match sql_set_expr {
         SetExpr::Select(select) => Some(select.projection.len()),
         SetExpr::SetOperation { left, .. } => recursive_cte_projection_count(left),
         SetExpr::Query(query) => recursive_cte_projection_count(&query.body),
@@ -297,7 +301,7 @@ fn recursive_cte_projection_count(set_expr: &SetExpr) -> Option<usize> {
     }
 }
 
-fn projection_expr(item: &SelectItem) -> Option<&Expr> {
+fn projection_sql_expr(item: &SelectItem) -> Option<&Expr> {
     match item {
         SelectItem::UnnamedExpr(expr) => Some(expr),
         SelectItem::ExprWithAlias { expr, .. } => Some(expr),

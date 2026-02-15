@@ -29,9 +29,9 @@ impl Inferencer {
 
     pub(crate) fn infer(
         &self,
-        expr: &Relation,
+        relation: &Relation,
         catalog: &Catalog,
     ) -> Result<InferMetadata, Diagnostic> {
-        infer_operator(expr, catalog, self.dialect, &self.functions)
+        infer_operator(relation, catalog, self.dialect, &self.functions)
     }
 }

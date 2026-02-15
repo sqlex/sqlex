@@ -41,7 +41,7 @@ impl Algebraizer {
                         schema: cte_binding.exposed_schema.clone(),
                         hidden_unqualified_slots: HashSet::new(),
                     };
-                    return Ok((cte_binding.expr.clone(), scope));
+                    return Ok((cte_binding.relation.clone(), scope));
                 }
 
                 let Some(table) = catalog.table(&normalized_table_name) else {
@@ -59,19 +59,19 @@ impl Algebraizer {
                     schema: schema.clone(),
                     hidden_unqualified_slots: HashSet::new(),
                 };
-                let scan_expr = Relation::Scan(ScanNode {
+                let scan_relation = Relation::Scan(ScanNode {
                     table: normalized_table_name,
                     schema,
                 });
-                let relation_expr = if alias.is_some() {
+                let relation = if alias.is_some() {
                     Relation::Alias(AliasNode {
-                        input: Box::new(scan_expr),
+                        input: Box::new(scan_relation),
                         schema: scope.schema.clone(),
                     })
                 } else {
-                    scan_expr
+                    scan_relation
                 };
-                Ok((relation_expr, scope))
+                Ok((relation, scope))
             },
             TableFactor::Derived {
                 lateral,
@@ -95,8 +95,12 @@ impl Algebraizer {
                     named_windows: std::collections::HashMap::new(),
                     literal_assignment_mode: true,
                 };
-                let subquery_expr =
-                    self.build_set_expr(&subquery.body, catalog, functions, &mut subquery_context)?;
+                let subquery_relation = self.build_set_relation(
+                    &subquery.body,
+                    catalog,
+                    functions,
+                    &mut subquery_context,
+                )?;
                 context.next_relation_id = subquery_context.next_relation_id;
                 context.next_slot_id = subquery_context.next_slot_id;
 
@@ -110,7 +114,7 @@ impl Algebraizer {
                 self.validate_alias_ident(&alias.name)?;
                 let alias_name = normalize_ident(&alias.name, self.dialect);
 
-                let mut schema = super::output_schema_of(&subquery_expr)?;
+                let mut schema = super::output_schema_of(&subquery_relation)?;
                 if !alias.columns.is_empty() {
                     if alias.columns.len() != schema.columns.len() {
                         return Err(Diagnostic::new(
@@ -139,7 +143,7 @@ impl Algebraizer {
                 };
                 Ok((
                     Relation::Alias(AliasNode {
-                        input: Box::new(subquery_expr),
+                        input: Box::new(subquery_relation),
                         schema: scope.schema.clone(),
                     }),
                     scope,

@@ -26,13 +26,13 @@ impl Analyzer for StaticAnalyzer {
     async fn analyze(&self, sql: &str) -> Result<ResultSet> {
         let query_statement = parser::parse_query_statement(self.dialect, sql)
             .map_err(Diagnostic::into_analysis_error)?;
-        let planner = Algebraizer::new(self.dialect);
-        let relational_expr = planner
+        let algebraizer = Algebraizer::new(self.dialect);
+        let relation = algebraizer
             .build(&query_statement, &self.catalog, &self.functions)
             .map_err(Diagnostic::into_analysis_error)?;
         let inferencer = Inferencer::new(self.dialect, &self.functions);
         let metadata = inferencer
-            .infer(&relational_expr, &self.catalog)
+            .infer(&relation, &self.catalog)
             .map_err(Diagnostic::into_analysis_error)?;
 
         Ok(metadata.to_result_set())

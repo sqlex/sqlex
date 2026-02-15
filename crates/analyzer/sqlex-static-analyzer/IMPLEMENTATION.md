@@ -73,7 +73,6 @@ crates/analyzer/sqlex-static-analyzer/src/
   infer/
     mod.rs
     metadata.rs
-    engine.rs
     scalar_infer.rs
     operator_infer.rs
     cardinality.rs
@@ -766,7 +765,7 @@ Before each merge:
 3. Build function registry (common + dialect overrides).
 4. Build relational/scalar IR.
 5. Implement algebraizer phase.
-6. Implement inference engine and operator rules.
+6. Implement inferencer and operator rules.
 7. Wire analyzer methods and error mapping.
 8. Verify spec files only use canonical `Cardinality` values.
 9. Run full formatter/linter/spec suite.

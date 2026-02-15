@@ -58,27 +58,22 @@ impl Algebraizer {
         if let Some(with_clause) = &query.with {
             self.register_ctes(with_clause, catalog, functions, &mut context)?;
         }
-        let relational_expr = self.build_set_expr(&query.body, catalog, functions, &mut context)?;
-        let relational_expr = self.apply_top_level_order_by(
-            relational_expr,
-            query,
-            catalog,
-            functions,
-            &mut context,
-        )?;
-        self.apply_top_level_limit_offset(relational_expr, query)
+        let relation = self.build_set_relation(&query.body, catalog, functions, &mut context)?;
+        let relation =
+            self.apply_top_level_order_by(relation, query, catalog, functions, &mut context)?;
+        self.apply_top_level_limit_offset(relation, query)
     }
 
     fn apply_top_level_order_by(
         &self,
-        input_expr: Relation,
+        input_relation: Relation,
         query: &sqlparser::ast::Query,
         catalog: &Catalog,
         functions: &FunctionRegistry,
         context: &mut BuildContext,
     ) -> Result<Relation, Diagnostic> {
         let Some(order_by) = &query.order_by else {
-            return Ok(input_expr);
+            return Ok(input_relation);
         };
 
         if order_by.interpolate.is_some() {
@@ -89,7 +84,7 @@ impl Algebraizer {
             ));
         }
 
-        let input_schema = output_schema_of(&input_expr)?;
+        let input_schema = output_schema_of(&input_relation)?;
         let order_context = BuildContext {
             relation_scopes: vec![RelationScope {
                 visible_names: Vec::new(),
@@ -107,7 +102,7 @@ impl Algebraizer {
         let mut hidden_columns = Vec::new();
         let mut hidden_schema_columns = Vec::new();
         let mut hidden_expr_slots = HashMap::new();
-        let disallow_hidden = disallow_hidden_order_by(&input_expr);
+        let disallow_hidden = disallow_hidden_order_by(&input_relation);
         let mut sort_keys = Vec::new();
         for order_expr in &order_by.exprs {
             sort_keys.push(self.bind_top_level_order_key(
@@ -127,7 +122,7 @@ impl Algebraizer {
         if hidden_columns.is_empty() {
             let schema = input_schema.clone();
             return Ok(Relation::Sort(SortNode {
-                input: Box::new(input_expr),
+                input: Box::new(input_relation),
                 keys: sort_keys,
                 schema,
             }));
@@ -144,19 +139,19 @@ impl Algebraizer {
             columns: pre_projection_schema_columns,
         };
 
-        let pre_projection_expr = Relation::Projection(ProjectionNode {
-            input: Box::new(input_expr),
+        let pre_projection_relation = Relation::Projection(ProjectionNode {
+            input: Box::new(input_relation),
             columns: pre_projection_columns,
             schema: pre_projection_schema.clone(),
         });
-        let sorted_expr = Relation::Sort(SortNode {
-            input: Box::new(pre_projection_expr),
+        let sorted_relation = Relation::Sort(SortNode {
+            input: Box::new(pre_projection_relation),
             keys: sort_keys,
             schema: pre_projection_schema,
         });
 
         Ok(Relation::Projection(ProjectionNode {
-            input: Box::new(sorted_expr),
+            input: Box::new(sorted_relation),
             columns: project_all_slots(&input_schema.columns, Visibility::Visible),
             schema: input_schema,
         }))
@@ -281,7 +276,7 @@ impl Algebraizer {
 
     fn apply_top_level_limit_offset(
         &self,
-        input_expr: Relation,
+        input_relation: Relation,
         query: &sqlparser::ast::Query,
     ) -> Result<Relation, Diagnostic> {
         let limit = query
@@ -296,12 +291,12 @@ impl Algebraizer {
             .transpose()?;
 
         if limit.is_none() && offset.is_none() {
-            return Ok(input_expr);
+            return Ok(input_relation);
         }
 
-        let schema = output_schema_of(&input_expr)?;
+        let schema = output_schema_of(&input_relation)?;
         Ok(Relation::Limit(LimitNode {
-            input: Box::new(input_expr),
+            input: Box::new(input_relation),
             limit,
             offset,
             schema,
@@ -334,8 +329,8 @@ impl Algebraizer {
     }
 }
 
-fn output_schema_of(expr: &Relation) -> Result<OutputSchema, Diagnostic> {
-    match expr {
+fn output_schema_of(relation: &Relation) -> Result<OutputSchema, Diagnostic> {
+    match relation {
         Relation::Scan(node) => Ok(node.schema.clone()),
         Relation::Values(node) => Ok(node.schema.clone()),
         Relation::Selection(node) => Ok(node.schema.clone()),
@@ -362,8 +357,8 @@ fn project_all_slots(columns: &[BoundColumn], visibility: Visibility) -> Vec<Pro
         .collect()
 }
 
-fn disallow_hidden_order_by(expr: &Relation) -> bool {
-    match expr {
+fn disallow_hidden_order_by(relation: &Relation) -> bool {
+    match relation {
         Relation::Distinct(_) => true,
         Relation::SetOperation(node) => !node.all,
         _ => false,

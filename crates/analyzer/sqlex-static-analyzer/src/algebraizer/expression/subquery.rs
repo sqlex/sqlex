@@ -38,7 +38,7 @@ impl Algebraizer {
         }
 
         let relation =
-            self.build_set_expr(&query.body, catalog, functions, &mut subquery_context)?;
+            self.build_set_relation(&query.body, catalog, functions, &mut subquery_context)?;
         let relation = self.apply_top_level_order_by(
             relation,
             query,

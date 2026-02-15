@@ -44,7 +44,7 @@ impl Algebraizer {
             return Err(Diagnostic::new(
                 "A3051",
                 Phase::Algebraize,
-                "advanced SELECT clauses are not supported in this planner path",
+                "advanced SELECT clauses are not supported in this algebraizer path",
             ));
         }
 
@@ -65,7 +65,7 @@ impl Algebraizer {
             let mut bound_group_by = Vec::with_capacity(group_by_exprs.len());
 
             context.relation_scopes.clear();
-            let mut input_expr = self.build_from(select, catalog, functions, context)?;
+            let mut input_relation = self.build_from(select, catalog, functions, context)?;
             if let Some(selection) = &select.selection {
                 let (condition, where_has_aggregate) =
                     self.bind_expression(selection, catalog, functions, context)?;
@@ -83,9 +83,9 @@ impl Algebraizer {
                         "window expression is not allowed in WHERE",
                     ));
                 }
-                let schema = super::output_schema_of(&input_expr)?;
-                input_expr = Relation::Selection(SelectionNode {
-                    input: Box::new(input_expr),
+                let schema = super::output_schema_of(&input_relation)?;
+                input_relation = Relation::Selection(SelectionNode {
+                    input: Box::new(input_relation),
                     condition,
                     schema,
                 });
@@ -135,7 +135,7 @@ impl Algebraizer {
                 bound_having = Some((condition, having_has_aggregate));
             }
 
-            let input_schema = super::output_schema_of(&input_expr)?;
+            let input_schema = super::output_schema_of(&input_relation)?;
             let mut projected_columns = Vec::new();
             let mut projection_schema_columns = Vec::new();
             let mut has_non_aggregate_projection = false;
@@ -316,11 +316,11 @@ impl Algebraizer {
                 }
             }
 
-            let mut relational_expr = input_expr;
+            let mut relation = input_relation;
             if has_aggregate || group_by_count > 0 {
-                let schema = super::output_schema_of(&relational_expr)?;
-                relational_expr = Relation::Aggregation(AggregationNode {
-                    input: Box::new(relational_expr),
+                let schema = super::output_schema_of(&relation)?;
+                relation = Relation::Aggregation(AggregationNode {
+                    input: Box::new(relation),
                     group_by: bound_group_by,
                     aggregates: aggregate_exprs,
                     schema,
@@ -328,25 +328,25 @@ impl Algebraizer {
             }
 
             if let Some((condition, _)) = bound_having {
-                let schema = super::output_schema_of(&relational_expr)?;
-                relational_expr = Relation::Selection(SelectionNode {
-                    input: Box::new(relational_expr),
+                let schema = super::output_schema_of(&relation)?;
+                relation = Relation::Selection(SelectionNode {
+                    input: Box::new(relation),
                     condition,
                     schema,
                 });
             }
 
             if has_window {
-                let schema = super::output_schema_of(&relational_expr)?;
-                relational_expr = Relation::Window(WindowNode {
-                    input: Box::new(relational_expr),
+                let schema = super::output_schema_of(&relation)?;
+                relation = Relation::Window(WindowNode {
+                    input: Box::new(relation),
                     window_exprs,
                     schema,
                 });
             }
 
-            relational_expr = Relation::Projection(ProjectionNode {
-                input: Box::new(relational_expr),
+            relation = Relation::Projection(ProjectionNode {
+                input: Box::new(relation),
                 columns: projected_columns,
                 schema: OutputSchema {
                     relation_id: context.allocate_relation_id(),
@@ -355,15 +355,14 @@ impl Algebraizer {
             });
 
             if select.distinct.is_some() {
-                let schema = super::output_schema_of(&relational_expr)?;
-                relational_expr =
-                    Relation::Distinct(crate::algebraizer::model::relation::DistinctNode {
-                        input: Box::new(relational_expr),
-                        schema,
-                    });
+                let schema = super::output_schema_of(&relation)?;
+                relation = Relation::Distinct(crate::algebraizer::model::relation::DistinctNode {
+                    input: Box::new(relation),
+                    schema,
+                });
             }
 
-            Ok(relational_expr)
+            Ok(relation)
         })();
 
         context.relation_scopes = previous_scope_level;
@@ -384,7 +383,7 @@ impl Algebraizer {
             _ => Err(Diagnostic::new(
                 "A3052",
                 Phase::Algebraize,
-                "GROUP BY form is not supported in this planner path",
+                "GROUP BY form is not supported in this algebraizer path",
             )),
         }
     }

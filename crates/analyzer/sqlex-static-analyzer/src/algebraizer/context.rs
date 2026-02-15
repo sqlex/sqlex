@@ -13,7 +13,7 @@ pub(crate) struct RelationScope {
 
 #[derive(Debug, Clone)]
 pub(crate) struct CteBinding {
-    pub(crate) expr: Relation,
+    pub(crate) relation: Relation,
     pub(crate) exposed_schema: OutputSchema,
 }
 

@@ -15,14 +15,14 @@ use crate::{
 };
 
 impl Algebraizer {
-    pub(crate) fn build_set_expr(
+    pub(crate) fn build_set_relation(
         &self,
-        set_expr: &SetExpr,
+        sql_set_expr: &SetExpr,
         catalog: &Catalog,
         functions: &FunctionRegistry,
         context: &mut BuildContext,
     ) -> Result<Relation, Diagnostic> {
-        match set_expr {
+        match sql_set_expr {
             SetExpr::Select(select) => self.build_select(select, catalog, functions, context),
             SetExpr::Query(query) => {
                 let mut nested_context = BuildContext {
@@ -40,7 +40,7 @@ impl Algebraizer {
                 }
 
                 let relation =
-                    self.build_set_expr(&query.body, catalog, functions, &mut nested_context)?;
+                    self.build_set_relation(&query.body, catalog, functions, &mut nested_context)?;
                 let relation = self.apply_top_level_order_by(
                     relation,
                     query,
@@ -60,11 +60,11 @@ impl Algebraizer {
                 set_quantifier,
                 right,
             } => {
-                let left_expr = self.build_set_expr(left, catalog, functions, context)?;
-                let right_expr = self.build_set_expr(right, catalog, functions, context)?;
+                let left_relation = self.build_set_relation(left, catalog, functions, context)?;
+                let right_relation = self.build_set_relation(right, catalog, functions, context)?;
 
-                let left_schema = super::output_schema_of(&left_expr)?;
-                let right_schema = super::output_schema_of(&right_expr)?;
+                let left_schema = super::output_schema_of(&left_relation)?;
+                let right_schema = super::output_schema_of(&right_relation)?;
                 if left_schema.columns.len() != right_schema.columns.len() {
                     return Err(Diagnostic::new(
                         "A3019",
@@ -108,8 +108,8 @@ impl Algebraizer {
 
                 Ok(Relation::SetOperation(
                     crate::algebraizer::model::relation::SetOpNode {
-                        left: Box::new(left_expr),
-                        right: Box::new(right_expr),
+                        left: Box::new(left_relation),
+                        right: Box::new(right_relation),
                         op: set_op,
                         all,
                         schema: OutputSchema {
@@ -122,7 +122,7 @@ impl Algebraizer {
             _ => Err(Diagnostic::new(
                 "A3065",
                 Phase::Algebraize,
-                format!("unsupported set expression in this iteration: {set_expr}"),
+                format!("unsupported set expression in this iteration: {sql_set_expr}"),
             )),
         }
     }
