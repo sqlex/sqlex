@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use sqlex_analyzer::extension::DataTypeExt;
 use sqlex_common::{dialect::Dialect, types::DataType};
@@ -16,7 +16,7 @@ use crate::{
     functions::registry::FunctionRegistry,
     infer::{
         cardinality::{CardInterval, MaxRows, MinRows},
-        metadata::{ColumnOrigin, InferColumn, InferMetadata},
+        metadata::{ColumnOrigin, InferColumn, InferMetadata, ResolvedKey},
         scalar_infer::infer_scalar,
     },
 };
@@ -38,13 +38,10 @@ pub(crate) fn infer_operator_with_outer_scopes(
     outer_scopes: &[Vec<InferColumn>],
 ) -> Result<InferMetadata, Diagnostic> {
     match expr {
-        RelExpr::Scan(node) => infer_scan(node),
+        RelExpr::Scan(node) => infer_scan(node, catalog),
         RelExpr::Values(_) => Ok(InferMetadata {
             columns: Vec::new(),
-            cardinality: CardInterval {
-                min: MinRows::One,
-                max: MaxRows::One,
-            },
+            cardinality: CardInterval::exactly_one(),
             keys: Vec::new(),
         }),
         RelExpr::Selection(node) => {
@@ -64,14 +61,10 @@ pub(crate) fn infer_operator_with_outer_scopes(
                 outer_scopes,
             )?;
             if always_false_condition(&node.condition) {
-                child.cardinality = CardInterval {
-                    min: MinRows::Zero,
-                    max: MaxRows::One,
-                };
+                child.cardinality = CardInterval::at_most_one();
             }
-            if selection_is_at_most_one(&node.condition, &child.columns, catalog) {
-                child.cardinality.max = MaxRows::One;
-                child.cardinality.min = MinRows::Zero;
+            if selection_is_at_most_one(&node.condition, &child.keys, &child.columns) {
+                child.cardinality = child.cardinality.constrain_at_most_one();
             }
             Ok(child)
         },
@@ -83,9 +76,7 @@ pub(crate) fn infer_operator_with_outer_scopes(
             infer_projection(node, catalog, dialect, functions, outer_scopes)
         },
         RelExpr::Join(node) => infer_join(node, catalog, dialect, functions, outer_scopes),
-        RelExpr::Distinct(node) => {
-            infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)
-        },
+        RelExpr::Distinct(node) => infer_distinct(node, catalog, dialect, functions, outer_scopes),
         RelExpr::Sort(node) => infer_sort(node, catalog, dialect, functions, outer_scopes),
         RelExpr::Limit(node) => infer_limit(node, catalog, dialect, functions, outer_scopes),
         RelExpr::Alias(node) => infer_alias(node, catalog, dialect, functions, outer_scopes),
@@ -99,7 +90,10 @@ pub(crate) fn infer_operator_with_outer_scopes(
     }
 }
 
-fn infer_scan(node: &crate::algebra::expr::ScanNode) -> Result<InferMetadata, Diagnostic> {
+fn infer_scan(
+    node: &crate::algebra::expr::ScanNode,
+    catalog: &Catalog,
+) -> Result<InferMetadata, Diagnostic> {
     let _ = &node.table;
     let mut columns = Vec::with_capacity(node.schema.columns.len());
 
@@ -125,20 +119,16 @@ fn infer_scan(node: &crate::algebra::expr::ScanNode) -> Result<InferMetadata, Di
         });
     }
 
+    let keys = resolve_scan_keys(node, catalog);
+
     Ok(InferMetadata {
         columns,
         cardinality: if node.table.starts_with("__recursive_cte__") {
-            CardInterval {
-                min: MinRows::One,
-                max: MaxRows::Many,
-            }
+            CardInterval::one_or_more()
         } else {
-            CardInterval {
-                min: MinRows::Zero,
-                max: MaxRows::Many,
-            }
+            CardInterval::zero_or_more()
         },
-        keys: Vec::new(),
+        keys,
     })
 }
 
@@ -174,10 +164,7 @@ fn infer_aggregation(
 
     let columns = align_columns_to_schema(&child.columns, &node.schema);
     let cardinality = if node.group_by.is_empty() && !node.aggregates.is_empty() {
-        CardInterval {
-            min: MinRows::One,
-            max: MaxRows::One,
-        }
+        CardInterval::exactly_one()
     } else {
         child.cardinality
     };
@@ -212,7 +199,7 @@ fn infer_window(
     Ok(InferMetadata {
         columns: align_columns_to_schema(&child.columns, &node.schema),
         cardinality: child.cardinality,
-        keys: Vec::new(),
+        keys: child.keys,
     })
 }
 
@@ -227,6 +214,7 @@ fn infer_projection(
         infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
 
     let mut columns = Vec::with_capacity(node.columns.len());
+    let mut slot_mapping = HashMap::new();
     for (index, projection_column) in node.columns.iter().enumerate() {
         let scalar = infer_scalar(
             &projection_column.expr,
@@ -244,6 +232,13 @@ fn infer_projection(
                 "projection column alias was not assigned during planning",
             )
         })?;
+        if let (
+            crate::algebra::scalar::BoundScalarExpr::SlotRef(input_slot_id),
+            Some(output_slot_id),
+        ) = (&projection_column.expr, output_slot_id)
+        {
+            slot_mapping.insert(*input_slot_id, output_slot_id);
+        }
 
         columns.push(InferColumn {
             slot_id: output_slot_id,
@@ -257,7 +252,7 @@ fn infer_projection(
     Ok(InferMetadata {
         columns,
         cardinality: child.cardinality,
-        keys: Vec::new(),
+        keys: child.remap_keys(&slot_mapping),
     })
 }
 
@@ -339,20 +334,35 @@ fn infer_join(
     }
 
     let cardinality = match node.kind {
-        JoinKind::Left | JoinKind::Right | JoinKind::Full | JoinKind::Inner => CardInterval {
-            min: MinRows::Zero,
-            max: MaxRows::Many,
+        JoinKind::Left | JoinKind::Right | JoinKind::Full | JoinKind::Inner => {
+            CardInterval::zero_or_more()
         },
-        JoinKind::Cross => CardInterval {
-            min: MinRows::Zero,
-            max: MaxRows::Many,
-        },
+        JoinKind::Cross => CardInterval::zero_or_more(),
     };
 
     Ok(InferMetadata {
         columns,
         cardinality,
         keys: Vec::new(),
+    })
+}
+
+fn infer_distinct(
+    node: &crate::algebra::expr::DistinctNode,
+    catalog: &Catalog,
+    dialect: Dialect,
+    functions: &FunctionRegistry,
+    outer_scopes: &[Vec<InferColumn>],
+) -> Result<InferMetadata, Diagnostic> {
+    let mut child =
+        infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
+    let output_columns = align_columns_to_schema(&child.columns, &node.schema);
+    child.keys = slots_key(output_columns.iter().filter_map(|column| column.slot_id));
+
+    Ok(InferMetadata {
+        columns: output_columns,
+        cardinality: child.cardinality,
+        keys: child.keys,
     })
 }
 
@@ -378,7 +388,7 @@ fn infer_sort(
     Ok(InferMetadata {
         columns: align_columns_to_schema(&child.columns, &node.schema),
         cardinality: child.cardinality,
-        keys: Vec::new(),
+        keys: child.keys,
     })
 }
 
@@ -394,7 +404,7 @@ fn infer_alias(
     Ok(InferMetadata {
         columns: align_columns_to_schema(&child.columns, &node.schema),
         cardinality: child.cardinality,
-        keys: Vec::new(),
+        keys: child.keys,
     })
 }
 
@@ -409,13 +419,10 @@ fn infer_limit(
         infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
 
     if node.offset.is_some() {
-        child.cardinality.min = MinRows::Zero;
+        child.cardinality = child.cardinality.drop_lower_bound();
     }
     if node.limit.is_some_and(|value| value <= 1) {
-        child.cardinality = CardInterval {
-            min: MinRows::Zero,
-            max: MaxRows::One,
-        };
+        child.cardinality = child.cardinality.constrain_at_most_one();
     }
 
     Ok(child)
@@ -478,7 +485,7 @@ fn infer_set_operation(
         node.all,
         left.cardinality,
         right.cardinality,
-    );
+    )?;
 
     Ok(InferMetadata {
         columns,
@@ -492,33 +499,34 @@ fn infer_set_operation_cardinality(
     all: bool,
     left: CardInterval,
     right: CardInterval,
-) -> CardInterval {
+) -> Result<CardInterval, Diagnostic> {
     match op {
         SetOp::Union => {
-            let min = if matches!(left.min, MinRows::One) || matches!(right.min, MinRows::One) {
+            let min = if matches!(left.min(), MinRows::One) || matches!(right.min(), MinRows::One) {
                 MinRows::One
             } else {
                 MinRows::Zero
             };
-            let max = match (left.max, right.max) {
+            let max = match (left.max(), right.max()) {
                 (MaxRows::Zero, MaxRows::Zero) => MaxRows::Zero,
                 _ => MaxRows::Many,
             };
             if all {
-                CardInterval { min, max }
+                CardInterval::try_new(min, max, "infer_set_operation_cardinality::union_all")
             } else {
-                CardInterval { min, max }
+                CardInterval::try_new(min, max, "infer_set_operation_cardinality::union")
             }
         },
-        SetOp::Intersect => CardInterval {
-            min: if matches!(left.min, MinRows::One) && matches!(right.min, MinRows::One) {
+        SetOp::Intersect => CardInterval::try_new(
+            if matches!(left.min(), MinRows::One) && matches!(right.min(), MinRows::One) {
                 MinRows::One
             } else {
                 MinRows::Zero
             },
-            max: min_max_rows(left.max, right.max),
-        },
-        SetOp::Except => left,
+            min_max_rows(left.max(), right.max()),
+            "infer_set_operation_cardinality::intersect",
+        ),
+        SetOp::Except => Ok(left),
     }
 }
 
@@ -528,6 +536,62 @@ fn min_max_rows(left: MaxRows, right: MaxRows) -> MaxRows {
         (MaxRows::One, MaxRows::One) => MaxRows::One,
         _ => MaxRows::Many,
     }
+}
+
+fn resolve_scan_keys(node: &crate::algebra::expr::ScanNode, catalog: &Catalog) -> Vec<ResolvedKey> {
+    let Some(table) = catalog.table(&node.table) else {
+        return Vec::new();
+    };
+
+    let slot_by_column: HashMap<String, u32> = node
+        .schema
+        .columns
+        .iter()
+        .filter_map(|column| match &column.origin {
+            BoundColumnOrigin::Base {
+                table,
+                column: name,
+            } if table == &node.table => Some((name.clone(), column.slot_id)),
+            _ => None,
+        })
+        .collect();
+
+    let mut unique = HashSet::new();
+    let mut keys = Vec::new();
+    if let Some(primary_key) = &table.primary_key {
+        if let Some(key) = key_from_column_names(&primary_key.columns, &slot_by_column) {
+            let identity = key.slot_ids.clone();
+            if unique.insert(identity) {
+                keys.push(key);
+            }
+        }
+    }
+    for unique_key in &table.unique_keys {
+        if let Some(key) = key_from_column_names(&unique_key.columns, &slot_by_column) {
+            let identity = key.slot_ids.clone();
+            if unique.insert(identity) {
+                keys.push(key);
+            }
+        }
+    }
+    keys
+}
+
+fn key_from_column_names(
+    column_names: &[String],
+    slot_by_column: &HashMap<String, u32>,
+) -> Option<ResolvedKey> {
+    let mut slots = Vec::with_capacity(column_names.len());
+    for column_name in column_names {
+        let slot_id = slot_by_column.get(column_name)?;
+        slots.push(*slot_id);
+    }
+    ResolvedKey::from_slots(slots)
+}
+
+fn slots_key(slots: impl IntoIterator<Item = u32>) -> Vec<ResolvedKey> {
+    let slots: Vec<u32> = slots.into_iter().collect();
+    ResolvedKey::from_slots(slots).map_or_else(Vec::new, |key| vec![key])
 }
 
 fn align_columns_to_schema(
@@ -631,55 +695,17 @@ enum SingleValueConstraint {
 
 fn selection_is_at_most_one(
     condition: &crate::algebra::scalar::BoundScalarExpr,
+    input_keys: &[ResolvedKey],
     input_columns: &[InferColumn],
-    catalog: &Catalog,
 ) -> bool {
     let mut constraints = HashMap::<u32, SingleValueConstraint>::new();
     if !collect_single_value_constraints(condition, &mut constraints) {
         return false;
     }
 
-    let mut table_constraints: HashMap<String, HashMap<String, SingleValueConstraint>> =
-        HashMap::new();
-    for (slot_id, constraint) in constraints {
-        let Some(column) = input_columns
-            .iter()
-            .find(|column| column.slot_id.is_some_and(|value| value == slot_id))
-        else {
-            continue;
-        };
-        let ColumnOrigin::Base {
-            table,
-            column: column_name,
-        } = &column.origin
-        else {
-            continue;
-        };
-        table_constraints
-            .entry(table.clone())
-            .or_default()
-            .insert(column_name.clone(), constraint);
-    }
-
-    for (table_name, constrained_columns) in table_constraints {
-        let Some(table) = catalog.table(&table_name) else {
-            continue;
-        };
-        if key_satisfied(
-            table,
-            table.primary_key.as_ref().map(|key| key.columns.as_slice()),
-            &constrained_columns,
-        ) {
-            return true;
-        }
-        for key in &table.unique_keys {
-            if key_satisfied(table, Some(key.columns.as_slice()), &constrained_columns) {
-                return true;
-            }
-        }
-    }
-
-    false
+    input_keys
+        .iter()
+        .any(|key| key_satisfied(key, &constraints, input_columns))
 }
 
 fn collect_single_value_constraints(
@@ -767,28 +793,24 @@ fn set_constraint(
 }
 
 fn key_satisfied(
-    table: &crate::catalog::model::TableSchema,
-    key_columns: Option<&[String]>,
-    constrained_columns: &HashMap<String, SingleValueConstraint>,
+    key: &ResolvedKey,
+    constraints: &HashMap<u32, SingleValueConstraint>,
+    input_columns: &[InferColumn],
 ) -> bool {
-    let Some(key_columns) = key_columns else {
-        return false;
-    };
-    if key_columns.is_empty() {
+    if key.slot_ids.is_empty() {
         return false;
     }
 
-    for column_name in key_columns {
-        let Some(constraint) = constrained_columns.get(column_name) else {
+    for slot_id in &key.slot_ids {
+        let Some(constraint) = constraints.get(slot_id) else {
             return false;
         };
         if *constraint == SingleValueConstraint::EqLike {
             continue;
         }
-        let Some(column) = table
-            .columns
+        let Some(column) = input_columns
             .iter()
-            .find(|column| &column.name == column_name)
+            .find(|column| column.slot_id.is_some_and(|value| value == *slot_id))
         else {
             return false;
         };
@@ -798,4 +820,136 @@ fn key_satisfied(
     }
 
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use sqlex_common::{dialect::Dialect, types::Cardinality};
+
+    use crate::{
+        algebra::{
+            expr::{ProjectionNode, RelExpr, ScanNode, SelectionNode},
+            scalar::{
+                BoundBinaryOp, BoundColumn, BoundLiteral, BoundScalarExpr, ColumnOrigin,
+                OutputSchema, ProjectionColumn, Visibility,
+            },
+        },
+        catalog::model::{Catalog, ColumnSchema, KeyConstraint, TableSchema},
+        functions::registry::FunctionRegistry,
+        infer::operator_infer::infer_operator,
+    };
+
+    #[test]
+    fn selection_uses_propagated_keys_after_projection() {
+        let catalog = sample_catalog();
+        let projection_schema = OutputSchema {
+            relation_id: 2,
+            columns: vec![BoundColumn {
+                slot_id: 10,
+                name: "id".to_string(),
+                table_alias: None,
+                data_type: None,
+                nullable: false,
+                origin: ColumnOrigin::Derived,
+            }],
+        };
+
+        let scan_expr = RelExpr::Scan(ScanNode {
+            table: "users".to_string(),
+            schema: scan_schema(),
+        });
+        let projection_expr = RelExpr::Projection(ProjectionNode {
+            input: Box::new(scan_expr),
+            columns: vec![ProjectionColumn {
+                expr: BoundScalarExpr::SlotRef(1),
+                alias: Some("id".to_string()),
+                visibility: Visibility::Visible,
+            }],
+            schema: projection_schema.clone(),
+            is_aggregate: false,
+            group_by_count: 0,
+        });
+        let expr = RelExpr::Selection(SelectionNode {
+            input: Box::new(projection_expr),
+            condition: BoundScalarExpr::BinaryOp {
+                left: Box::new(BoundScalarExpr::SlotRef(10)),
+                op: BoundBinaryOp::Eq,
+                right: Box::new(BoundScalarExpr::Literal(BoundLiteral::Int {
+                    value: 7,
+                    raw: "7".to_string(),
+                    assignment: false,
+                })),
+            },
+            schema: projection_schema,
+        });
+
+        let functions = FunctionRegistry::new(Dialect::Postgres);
+        let metadata = infer_operator(&expr, &catalog, Dialect::Postgres, &functions)
+            .expect("inference should succeed");
+
+        assert_eq!(
+            metadata.cardinality.to_cardinality(),
+            Cardinality::AtMostOne
+        );
+        assert_eq!(metadata.keys.len(), 1);
+    }
+
+    fn sample_catalog() -> Catalog {
+        Catalog {
+            tables: vec![TableSchema {
+                name: "users".to_string(),
+                original_name: "users".to_string(),
+                columns: vec![
+                    ColumnSchema {
+                        name: "id".to_string(),
+                        original_name: "id".to_string(),
+                        data_type: sqlex_common::types::DataType::Int,
+                        nullable: false,
+                    },
+                    ColumnSchema {
+                        name: "name".to_string(),
+                        original_name: "name".to_string(),
+                        data_type: sqlex_common::types::DataType::Text,
+                        nullable: false,
+                    },
+                ],
+                primary_key: Some(KeyConstraint {
+                    name: None,
+                    columns: vec!["id".to_string()],
+                }),
+                unique_keys: Vec::new(),
+                foreign_keys: Vec::new(),
+            }],
+        }
+    }
+
+    fn scan_schema() -> OutputSchema {
+        OutputSchema {
+            relation_id: 1,
+            columns: vec![
+                BoundColumn {
+                    slot_id: 1,
+                    name: "id".to_string(),
+                    table_alias: Some("users".to_string()),
+                    data_type: Some(sqlex_common::types::DataType::Int),
+                    nullable: false,
+                    origin: ColumnOrigin::Base {
+                        table: "users".to_string(),
+                        column: "id".to_string(),
+                    },
+                },
+                BoundColumn {
+                    slot_id: 2,
+                    name: "name".to_string(),
+                    table_alias: Some("users".to_string()),
+                    data_type: Some(sqlex_common::types::DataType::Text),
+                    nullable: false,
+                    origin: ColumnOrigin::Base {
+                        table: "users".to_string(),
+                        column: "name".to_string(),
+                    },
+                },
+            ],
+        }
+    }
 }

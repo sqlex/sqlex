@@ -303,7 +303,7 @@ fn infer_subquery_single_column(
     let column = &metadata.columns[0];
     Ok(ScalarInference {
         data_type: column.data_type.clone(),
-        nullable: column.nullable || !matches!(metadata.cardinality.min, MinRows::One),
+        nullable: column.nullable || !matches!(metadata.cardinality.min(), MinRows::One),
     })
 }
 
