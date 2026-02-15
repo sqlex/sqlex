@@ -128,10 +128,10 @@ queries:
       - name: age
         nullability: true
 
-  # Primary key IS NULL should return AtMostOne (empty result)
+  # Primary key IS NULL should return ExactlyZero
   - name: pk_is_null
     sql: SELECT * FROM users WHERE id IS NULL
-    cardinality: AtMostOne
+    cardinality: ExactlyZero
     expected:
       - name: id
         nullability: false
@@ -156,6 +156,20 @@ queries:
       - name: age
         nullability: true
 
+  # Contradictory primary-key equalities should return ExactlyZero
+  - name: contradictory_pk_equalities
+    sql: SELECT * FROM users WHERE id = 1 AND id = 2
+    cardinality: ExactlyZero
+    expected:
+      - name: id
+        nullability: false
+      - name: email
+        nullability: true
+      - name: name
+        nullability: false
+      - name: age
+        nullability: true
+
   # Primary key with OR condition should return ZeroOrMore
   - name: pk_with_or_condition
     sql: SELECT * FROM users WHERE id = 1 OR name = 'John'
@@ -169,4 +183,3 @@ queries:
         nullability: false
       - name: age
         nullability: true
-

@@ -33,3 +33,9 @@ queries:
     expected:
       - name: v
         nullability: false
+
+  - name: in_subquery_consumes_subquery_nullability
+    sql: SELECT a IN (SELECT b FROM data) AS in_sub FROM data
+    expected:
+      - name: in_sub
+        nullability: true

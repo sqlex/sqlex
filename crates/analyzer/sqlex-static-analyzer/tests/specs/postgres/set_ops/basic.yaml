@@ -48,3 +48,14 @@ queries:
     expected:
       - name: id
         nullability: false
+
+  - name: except_inherits_left_nullability
+    sql: |
+      SELECT id, value FROM table_b
+      EXCEPT
+      SELECT id, value FROM table_a
+    expected:
+      - name: id
+        nullability: false
+      - name: value
+        nullability: false

@@ -14,10 +14,10 @@ migrations:
     )
 
 queries:
-  # WHERE FALSE should return AtMostOne
+  # WHERE FALSE should return ExactlyZero
   - name: where_false
     sql: SELECT * FROM users WHERE FALSE
-    cardinality: AtMostOne
+    cardinality: ExactlyZero
     expected:
       - name: id
         nullability: false
@@ -26,10 +26,10 @@ queries:
       - name: email
         nullability: true
 
-  # WHERE 1=0 should return AtMostOne
+  # WHERE 1=0 should return ExactlyZero
   - name: where_constant_false
     sql: SELECT * FROM users WHERE 1 = 0
-    cardinality: AtMostOne
+    cardinality: ExactlyZero
     expected:
       - name: id
         nullability: false
@@ -66,10 +66,10 @@ queries:
       - name: total_sum
         nullability: true
 
-  # LIMIT 0 should return AtMostOne
+  # LIMIT 0 should return ExactlyZero
   - name: limit_zero
     sql: SELECT * FROM users LIMIT 0
-    cardinality: AtMostOne
+    cardinality: ExactlyZero
     expected:
       - name: id
         nullability: false
@@ -110,18 +110,38 @@ queries:
       - name: num
         nullability: false
 
-  # INTERSECT should take minimum
+  # INTERSECT lower bound is conservative zero
   - name: intersect_single_rows
     sql: SELECT 1 as num INTERSECT SELECT 1
-    cardinality: ExactlyOne
+    cardinality: AtMostOne
     expected:
       - name: num
         nullability: false
 
-  # EXCEPT should take left cardinality
+  # EXCEPT lower bound is conservative zero when right may be non-empty
   - name: except_single_rows
     sql: SELECT 1 as num EXCEPT SELECT 2
-    cardinality: ExactlyOne
+    cardinality: AtMostOne
     expected:
       - name: num
+        nullability: false
+
+  # LIMIT 1 with OFFSET should remain AtMostOne
+  - name: limit_one_with_offset
+    sql: SELECT * FROM users LIMIT 1 OFFSET 1
+    cardinality: AtMostOne
+    expected:
+      - name: id
+        nullability: false
+      - name: name
+        nullability: false
+      - name: email
+        nullability: true
+
+  # OFFSET on singleton input should be ExactlyZero
+  - name: offset_singleton_is_zero
+    sql: SELECT 1 as one LIMIT 10 OFFSET 1
+    cardinality: ExactlyZero
+    expected:
+      - name: one
         nullability: false

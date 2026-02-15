@@ -22,6 +22,13 @@ pub(crate) struct CardInterval {
 }
 
 impl CardInterval {
+    pub(crate) const fn exactly_zero() -> Self {
+        Self {
+            min: MinRows::Zero,
+            max: MaxRows::Zero,
+        }
+    }
+
     pub(crate) fn try_new(
         min: MinRows,
         max: MaxRows,
