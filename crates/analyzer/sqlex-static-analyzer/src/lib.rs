@@ -3,36 +3,31 @@
 //! A static SQL analyzer that infers result set types and nullability
 //! without requiring a database connection.
 
-use async_trait::async_trait;
-use sqlex_analyzer::{Analyzer, Result};
-use sqlex_common::{
-    dialect::Dialect,
-    types::{ResultSet, Table},
-};
+use sqlex_common::dialect::Dialect;
 
-/// Static SQL analyzer implementation
+mod algebra;
+mod analyzer;
+mod catalog;
+mod diagnostics;
+mod functions;
+mod infer;
+mod parser;
+
+/// Static SQL analyzer implementation.
+#[derive(Debug)]
 pub struct StaticAnalyzer {
-    _dialect: Dialect,
+    pub(crate) dialect: Dialect,
+    pub(crate) catalog: catalog::model::Catalog,
+    pub(crate) functions: functions::registry::FunctionRegistry,
 }
 
 impl StaticAnalyzer {
-    /// Create a new static analyzer with the given dialect
+    /// Creates a new static analyzer with the given dialect.
     pub fn new(dialect: Dialect) -> Self {
-        Self { _dialect: dialect }
-    }
-}
-
-#[async_trait]
-impl Analyzer for StaticAnalyzer {
-    async fn execute(&mut self, _sql: &str) -> Result<()> {
-        todo!()
-    }
-
-    async fn analyze(&self, _sql: &str) -> Result<ResultSet> {
-        todo!()
-    }
-
-    async fn get_all_tables(&self) -> Result<Vec<Table>> {
-        todo!()
+        Self {
+            dialect,
+            catalog: catalog::model::Catalog::new(),
+            functions: functions::registry::FunctionRegistry::new(dialect),
+        }
     }
 }
