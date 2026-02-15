@@ -80,9 +80,10 @@ impl Algebraizer {
                 alias,
             } => {
                 if *lateral {
-                    return Err(Diagnostic::todo(
+                    return Err(Diagnostic::new(
+                        "A3062",
                         Phase::Algebraize,
-                        "LATERAL derived table planning",
+                        "LATERAL derived tables are not supported in this iteration",
                     ));
                 }
 
@@ -101,9 +102,10 @@ impl Algebraizer {
                 context.next_slot_id = subquery_context.next_slot_id;
 
                 let Some(alias) = alias.as_ref() else {
-                    return Err(Diagnostic::todo(
+                    return Err(Diagnostic::new(
+                        "A3063",
                         Phase::Algebraize,
-                        "derived table without alias planning",
+                        "derived table in FROM requires an alias in this iteration",
                     ));
                 };
                 self.validate_alias_ident(&alias.name)?;
@@ -145,9 +147,10 @@ impl Algebraizer {
                     scope,
                 ))
             },
-            _ => Err(Diagnostic::todo(
+            _ => Err(Diagnostic::new(
+                "A3064",
                 Phase::Algebraize,
-                "derived table and function table factors",
+                format!("unsupported table factor in this iteration: {relation}"),
             )),
         }
     }

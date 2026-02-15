@@ -38,9 +38,10 @@ impl Algebraizer {
         }
 
         if select.from.len() != 1 {
-            return Err(Diagnostic::todo(
+            return Err(Diagnostic::new(
+                "A3071",
                 Phase::Algebraize,
-                "multi-table FROM planning",
+                "multiple FROM items are not supported in this iteration",
             ));
         }
 

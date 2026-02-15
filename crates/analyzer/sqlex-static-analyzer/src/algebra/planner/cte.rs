@@ -46,9 +46,10 @@ impl Algebraizer {
         if matches!(self.dialect, sqlex_common::dialect::Dialect::SQLite) {
             for cte in &with_clause.cte_tables {
                 if cte.from.is_some() {
-                    return Err(Diagnostic::todo(
+                    return Err(Diagnostic::new(
+                        "A3066",
                         Phase::Algebraize,
-                        "CTE SEARCH/CYCLE clause planning",
+                        "CTE SEARCH/CYCLE clauses are not supported in this iteration",
                     ));
                 }
 
@@ -117,9 +118,10 @@ impl Algebraizer {
 
         for cte in &with_clause.cte_tables {
             if cte.from.is_some() {
-                return Err(Diagnostic::todo(
+                return Err(Diagnostic::new(
+                    "A3066",
                     Phase::Algebraize,
-                    "CTE SEARCH/CYCLE clause planning",
+                    "CTE SEARCH/CYCLE clauses are not supported in this iteration",
                 ));
             }
 
@@ -201,9 +203,10 @@ impl Algebraizer {
         }
 
         let Some(seed_select) = recursive_cte_seed_select(&cte.query.body) else {
-            return Err(Diagnostic::todo(
+            return Err(Diagnostic::new(
+                "A3067",
                 Phase::Algebraize,
-                "recursive CTE seed extraction",
+                "recursive CTE seed term must be SELECT-compatible in this iteration",
             ));
         };
 

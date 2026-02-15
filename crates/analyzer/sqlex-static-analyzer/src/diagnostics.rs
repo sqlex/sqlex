@@ -38,14 +38,6 @@ impl Diagnostic {
         }
     }
 
-    pub(crate) fn todo(phase: Phase, feature: &'static str) -> Self {
-        Self::new(
-            "TODO",
-            phase,
-            format!("{feature} is not implemented in this iteration"),
-        )
-    }
-
     pub(crate) fn render(&self) -> String {
         format!("[{}:{}] {}", self.phase, self.code, self.message)
     }

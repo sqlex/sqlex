@@ -112,9 +112,10 @@ impl Algebraizer {
                     },
                 }))
             },
-            _ => Err(Diagnostic::todo(
+            _ => Err(Diagnostic::new(
+                "A3065",
                 Phase::Algebraize,
-                "set operation and values planning",
+                format!("unsupported set expression in this iteration: {set_expr}"),
             )),
         }
     }

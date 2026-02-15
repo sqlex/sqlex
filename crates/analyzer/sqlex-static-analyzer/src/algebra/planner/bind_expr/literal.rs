@@ -54,9 +54,10 @@ impl Algebraizer {
             },
             Value::Placeholder(value) => BoundLiteral::Placeholder(value.clone()),
             _ => {
-                return Err(Diagnostic::todo(
+                return Err(Diagnostic::new(
+                    "A3073",
                     Phase::Algebraize,
-                    "this literal kind binding",
+                    format!("unsupported literal in this iteration: {value}"),
                 ));
             },
         };

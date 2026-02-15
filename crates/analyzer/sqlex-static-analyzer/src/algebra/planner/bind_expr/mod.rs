@@ -63,9 +63,10 @@ impl Algebraizer {
                     sqlparser::ast::UnaryOperator::Minus => BoundUnaryOp::Neg,
                     sqlparser::ast::UnaryOperator::Not => BoundUnaryOp::Not,
                     _ => {
-                        return Err(Diagnostic::todo(
+                        return Err(Diagnostic::new(
+                            "A3068",
                             Phase::Algebraize,
-                            "this unary operator binding",
+                            format!("unsupported unary operator in this iteration: {op}"),
                         ));
                     },
                 };
@@ -275,9 +276,10 @@ impl Algebraizer {
                     false,
                 ))
             },
-            _ => Err(Diagnostic::todo(
+            _ => Err(Diagnostic::new(
+                "A3070",
                 Phase::Algebraize,
-                "this scalar expression binding",
+                format!("unsupported scalar expression in this iteration: {expr}"),
             )),
         }
     }
@@ -298,9 +300,10 @@ fn map_binary_operator(operator: &BinaryOperator) -> Result<BoundBinaryOp, Diagn
         BinaryOperator::And => BoundBinaryOp::And,
         BinaryOperator::Or => BoundBinaryOp::Or,
         _ => {
-            return Err(Diagnostic::todo(
+            return Err(Diagnostic::new(
+                "A3069",
                 Phase::Algebraize,
-                "this binary operator binding",
+                format!("unsupported binary operator in this iteration: {operator}"),
             ));
         },
     };
