@@ -20,12 +20,6 @@ impl Catalog {
         self.tables.iter().find(|table| table.name == table_name)
     }
 
-    pub(crate) fn table_mut(&mut self, table_name: &str) -> Option<&mut TableSchema> {
-        self.tables
-            .iter_mut()
-            .find(|table| table.name == table_name)
-    }
-
     pub(crate) fn add_table(&mut self, table: TableSchema) -> Result<(), String> {
         if self.table(&table.name).is_some() {
             return Err(format!("table '{}' already exists", table.original_name));
@@ -85,6 +79,7 @@ impl TableSchema {
 #[derive(Debug, Clone)]
 pub(crate) struct ColumnSchema {
     pub(crate) name: String,
+    #[allow(dead_code)]
     pub(crate) original_name: String,
     pub(crate) data_type: DataType,
     pub(crate) nullable: bool,
@@ -92,12 +87,14 @@ pub(crate) struct ColumnSchema {
 
 #[derive(Debug, Clone)]
 pub(crate) struct KeyConstraint {
+    #[allow(dead_code)]
     pub(crate) name: Option<String>,
     pub(crate) columns: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct ForeignKeyConstraint {
+    #[allow(dead_code)]
     pub(crate) name: Option<String>,
     pub(crate) columns: Vec<String>,
     pub(crate) ref_table: String,

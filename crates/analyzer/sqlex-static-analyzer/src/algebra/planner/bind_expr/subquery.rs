@@ -137,7 +137,7 @@ impl Algebraizer {
                         },
                         false,
                     )),
-                    BoundLiteral::Placeholder(_) => {
+                    BoundLiteral::Placeholder => {
                         Some((DataType::Custom("unknown".to_string()), false))
                     },
                 }

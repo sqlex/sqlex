@@ -144,8 +144,6 @@ impl Algebraizer {
             input: Box::new(input_expr),
             columns: pre_projection_columns,
             schema: pre_projection_schema.clone(),
-            is_aggregate: false,
-            group_by_count: 0,
         });
         let sorted_expr = RelExpr::Sort(SortNode {
             input: Box::new(pre_projection_expr),
@@ -157,8 +155,6 @@ impl Algebraizer {
             input: Box::new(sorted_expr),
             columns: project_all_slots(&input_schema.columns, Visibility::Visible),
             schema: input_schema,
-            is_aggregate: false,
-            group_by_count: 0,
         }))
     }
 
@@ -348,11 +344,6 @@ fn output_schema_of(expr: &RelExpr) -> Result<OutputSchema, Diagnostic> {
         RelExpr::Alias(node) => Ok(node.schema.clone()),
         RelExpr::Join(node) => Ok(node.schema.clone()),
         RelExpr::SetOperation(node) => Ok(node.schema.clone()),
-        RelExpr::PlaceholderQuery => Err(Diagnostic::new(
-            "A3034",
-            Phase::Algebraize,
-            "schema extraction for placeholder query is not supported",
-        )),
     }
 }
 

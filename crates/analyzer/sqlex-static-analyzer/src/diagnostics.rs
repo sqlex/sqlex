@@ -42,11 +42,11 @@ impl Diagnostic {
         format!("[{}:{}] {}", self.phase, self.code, self.message)
     }
 
-    pub(crate) fn to_execution_error(self) -> AnalyzerError {
+    pub(crate) fn into_execution_error(self) -> AnalyzerError {
         AnalyzerError::ExecutionError(self.render())
     }
 
-    pub(crate) fn to_analysis_error(self) -> AnalyzerError {
+    pub(crate) fn into_analysis_error(self) -> AnalyzerError {
         AnalyzerError::AnalysisError(self.render())
     }
 }

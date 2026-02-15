@@ -39,8 +39,6 @@ pub(crate) struct ProjectionNode {
     pub(crate) input: Box<RelExpr>,
     pub(crate) columns: Vec<ProjectionColumn>,
     pub(crate) schema: OutputSchema,
-    pub(crate) is_aggregate: bool,
-    pub(crate) group_by_count: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -82,7 +80,6 @@ pub(crate) struct LimitNode {
 #[derive(Debug, Clone)]
 pub(crate) struct AliasNode {
     pub(crate) input: Box<RelExpr>,
-    pub(crate) alias: String,
     pub(crate) schema: OutputSchema,
 }
 
@@ -117,5 +114,4 @@ pub(crate) enum RelExpr {
     Alias(AliasNode),
     Join(JoinNode),
     SetOperation(SetOpNode),
-    PlaceholderQuery,
 }

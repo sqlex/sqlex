@@ -350,8 +350,6 @@ impl Algebraizer {
                     relation_id: context.allocate_relation_id(),
                     columns: projection_schema_columns,
                 },
-                is_aggregate: false,
-                group_by_count,
             });
 
             if select.distinct.is_some() {
@@ -540,7 +538,7 @@ fn contains_window_call(expr: &BoundScalarExpr) -> bool {
         | BoundScalarExpr::Literal(_)
         | BoundScalarExpr::Exists { .. }
         | BoundScalarExpr::ScalarSubquery(_)
-        | BoundScalarExpr::Placeholder(_) => false,
+        | BoundScalarExpr::Placeholder => false,
     }
 }
 
@@ -612,7 +610,7 @@ fn collect_slot_refs(expr: &BoundScalarExpr, slot_ids: &mut HashSet<u32>) {
         | BoundScalarExpr::Literal(_)
         | BoundScalarExpr::Exists { .. }
         | BoundScalarExpr::ScalarSubquery(_)
-        | BoundScalarExpr::Placeholder(_) => {},
+        | BoundScalarExpr::Placeholder => {},
     }
 }
 
@@ -627,7 +625,7 @@ fn contains_ungrouped_slot_outside_aggregate(
         | BoundScalarExpr::Literal(_)
         | BoundScalarExpr::Exists { .. }
         | BoundScalarExpr::ScalarSubquery(_)
-        | BoundScalarExpr::Placeholder(_) => false,
+        | BoundScalarExpr::Placeholder => false,
         BoundScalarExpr::BinaryOp { left, right, .. } => {
             contains_ungrouped_slot_outside_aggregate(left, grouped_slots, in_aggregate)
                 || contains_ungrouped_slot_outside_aggregate(right, grouped_slots, in_aggregate)

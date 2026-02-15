@@ -102,7 +102,12 @@ pub(crate) fn infer_scalar(
             )?;
             Ok(infer_function(name, args_info, dialect, functions))
         },
-        BoundScalarExpr::AggregateCall { name, args, .. } => {
+        BoundScalarExpr::AggregateCall {
+            name,
+            args,
+            distinct,
+        } => {
+            let _ = distinct;
             let args_info = infer_args(
                 args,
                 input_columns,
@@ -220,7 +225,12 @@ pub(crate) fn infer_scalar(
                 nullable,
             })
         },
-        BoundScalarExpr::InSubquery { expr, subquery, .. } => {
+        BoundScalarExpr::InSubquery {
+            expr,
+            subquery,
+            negated,
+        } => {
+            let _ = negated;
             let expr_info = infer_scalar(
                 expr,
                 input_columns,
@@ -242,7 +252,8 @@ pub(crate) fn infer_scalar(
                 nullable: expr_info.nullable || subquery_info.nullable,
             })
         },
-        BoundScalarExpr::Exists { subquery, .. } => {
+        BoundScalarExpr::Exists { subquery, negated } => {
+            let _ = negated;
             let mut subquery_outer_scopes = outer_scopes.to_vec();
             subquery_outer_scopes.push(input_columns.to_vec());
             let _ = infer_operator_with_outer_scopes(
@@ -265,7 +276,7 @@ pub(crate) fn infer_scalar(
             dialect,
             functions,
         ),
-        BoundScalarExpr::Placeholder(_) => Ok(ScalarInference {
+        BoundScalarExpr::Placeholder => Ok(ScalarInference {
             data_type: DataType::Custom("unknown".to_string()),
             nullable: false,
         }),
@@ -471,7 +482,7 @@ fn infer_literal(literal: &BoundLiteral, dialect: Dialect) -> ScalarInference {
                 nullable: false,
             }
         },
-        BoundLiteral::Placeholder(_) => ScalarInference {
+        BoundLiteral::Placeholder => ScalarInference {
             data_type: DataType::Custom("unknown".to_string()),
             nullable: false,
         },

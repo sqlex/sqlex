@@ -60,10 +60,15 @@ crates/analyzer/sqlex-static-analyzer/src/
     mod.rs
     expr.rs
     scalar.rs
-    binder.rs
-    cte.rs
-    order_by.rs
     planner.rs
+    planner/
+      bind_expr/*
+      context.rs
+      cte.rs
+      from_*.rs
+      join.rs
+      select.rs
+      set_ops.rs
   infer/
     mod.rs
     metadata.rs
@@ -226,7 +231,7 @@ pub enum BoundScalarExpr {
 
 Design requirements:
 
-1. Name resolution is completed in binder only.
+1. Name resolution is completed in algebraize planning (`planner/*`) only.
 2. Infer phase consumes `SlotId`-bound expressions and `OutputSchema`, and performs no name lookup.
 3. Diagnostics remain tied to original SQL text, while semantics are carried by slot identity.
 
@@ -380,16 +385,16 @@ Mirror behavior used by `sqlex-database-analyzer` mapping to reduce divergence.
 
 ## 9. Algebraize Specification (`analyze` phase 2)
 
-## 9.1 Binder Context
+## 9.1 Planner Build Context
 
-`BinderContext` holds:
+`BuildContext` holds:
 
-1. catalog reference
-2. dialect
-3. visible relations in current scope
-4. CTE registry for current query block
-5. aggregate/window usage tracking
-6. diagnostics sink
+1. visible relations in current scope
+2. outer relation scopes for correlated subqueries
+3. CTE bindings for current query block
+4. named window definitions for current query block
+5. relation/slot id allocators
+6. literal-assignment mode for dialect-specific typing behavior
 
 Scope is stack-based:
 
@@ -690,7 +695,7 @@ Add focused unit tests for:
 1. identifier normalization per dialect.
 2. DDL mutator operations.
 3. function registry arity/type checks.
-4. order-by binder behavior (ordinal/alias/hidden columns).
+4. order-by planning behavior (ordinal/alias/hidden columns).
 5. cardinality combinators and selection refinement.
 6. join guaranteed-match logic.
 
@@ -759,7 +764,7 @@ Before each merge:
 2. Build catalog model and DDL mutator.
 3. Build function registry (common + dialect overrides).
 4. Build relational/scalar IR.
-5. Implement binder + algebraizer.
+5. Implement planner-based algebraizer.
 6. Implement inference engine and operator rules.
 7. Wire analyzer methods and error mapping.
 8. Verify spec files only use canonical `Cardinality` values.

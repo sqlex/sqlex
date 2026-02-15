@@ -62,11 +62,9 @@ impl Algebraizer {
                     table: normalized_table_name,
                     schema,
                 });
-                let relation_expr = if let Some(alias) = alias.as_ref() {
-                    let alias_name = normalize_ident(&alias.name, self.dialect);
+                let relation_expr = if alias.is_some() {
                     RelExpr::Alias(AliasNode {
                         input: Box::new(scan_expr),
-                        alias: alias_name,
                         schema: scope.schema.clone(),
                     })
                 } else {
@@ -141,7 +139,6 @@ impl Algebraizer {
                 Ok((
                     RelExpr::Alias(AliasNode {
                         input: Box::new(subquery_expr),
-                        alias: alias_name,
                         schema: scope.schema.clone(),
                     }),
                     scope,

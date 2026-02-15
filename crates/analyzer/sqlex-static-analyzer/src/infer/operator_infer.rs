@@ -62,11 +62,6 @@ pub(crate) fn infer_operator_with_outer_scopes(
         RelExpr::SetOperation(node) => {
             infer_set_operation(node, catalog, dialect, functions, outer_scopes)
         },
-        RelExpr::PlaceholderQuery => Err(Diagnostic::new(
-            "A3072",
-            Phase::Infer,
-            "placeholder query inference is not supported in this iteration",
-        )),
     }
 }
 
@@ -1265,8 +1260,6 @@ mod tests {
                 visibility: Visibility::Visible,
             }],
             schema: projection_schema.clone(),
-            is_aggregate: false,
-            group_by_count: 0,
         });
         let expr = RelExpr::Selection(SelectionNode {
             input: Box::new(projection_expr),
@@ -1442,22 +1435,6 @@ mod tests {
             .to_cardinality(),
             Cardinality::AtMostOne
         );
-    }
-
-    #[test]
-    fn placeholder_query_returns_stable_diagnostic() {
-        let catalog = sample_catalog();
-        let functions = FunctionRegistry::new(Dialect::Postgres);
-
-        let error = infer_operator(
-            &RelExpr::PlaceholderQuery,
-            &catalog,
-            Dialect::Postgres,
-            &functions,
-        )
-        .expect_err("placeholder query should return unsupported diagnostic");
-
-        assert_eq!(error.code, "A3072");
     }
 
     #[test]

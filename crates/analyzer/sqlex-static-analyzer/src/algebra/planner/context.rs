@@ -52,11 +52,4 @@ impl BuildContext {
         self.next_slot_id += 1;
         slot_id
     }
-
-    pub(crate) fn current_columns(&self) -> Vec<crate::algebra::scalar::BoundColumn> {
-        self.relation_scopes
-            .iter()
-            .flat_map(|scope| scope.schema.columns.iter().cloned())
-            .collect()
-    }
 }

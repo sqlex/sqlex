@@ -266,14 +266,8 @@ impl Algebraizer {
 
         match arg_expr {
             FunctionArgExpr::Expr(expr) => self.bind_expr(expr, catalog, functions, context),
-            FunctionArgExpr::Wildcard => Ok((BoundScalarExpr::Placeholder("*".to_string()), false)),
-            FunctionArgExpr::QualifiedWildcard(prefix) => Ok((
-                BoundScalarExpr::Placeholder(format!(
-                    "{}.*",
-                    normalize_object_name(prefix, self.dialect)
-                )),
-                false,
-            )),
+            FunctionArgExpr::Wildcard => Ok((BoundScalarExpr::Placeholder, false)),
+            FunctionArgExpr::QualifiedWildcard(_) => Ok((BoundScalarExpr::Placeholder, false)),
         }
     }
 
@@ -460,7 +454,7 @@ impl Algebraizer {
                 Dialect::MySQL => DataType::Varchar,
                 Dialect::Postgres | Dialect::SQLite => DataType::Text,
             }),
-            BoundLiteral::Placeholder(_) => None,
+            BoundLiteral::Placeholder => None,
         }
     }
 }

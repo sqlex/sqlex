@@ -52,7 +52,7 @@ impl Algebraizer {
                     }
                 }
             },
-            Value::Placeholder(value) => BoundLiteral::Placeholder(value.clone()),
+            Value::Placeholder(_) => BoundLiteral::Placeholder,
             _ => {
                 return Err(Diagnostic::new(
                     "A3073",

@@ -15,6 +15,7 @@ pub(crate) enum ColumnOrigin {
 pub(crate) struct BoundColumn {
     pub(crate) slot_id: SlotId,
     pub(crate) name: String,
+    #[allow(dead_code)]
     pub(crate) table_alias: Option<String>,
     pub(crate) data_type: Option<DataType>,
     pub(crate) nullable: bool,
@@ -23,6 +24,7 @@ pub(crate) struct BoundColumn {
 
 #[derive(Debug, Clone)]
 pub(crate) struct OutputSchema {
+    #[allow(dead_code)]
     pub(crate) relation_id: RelationId,
     pub(crate) columns: Vec<BoundColumn>,
 }
@@ -37,13 +39,16 @@ pub(crate) enum Visibility {
 pub(crate) struct ProjectionColumn {
     pub(crate) expr: BoundScalarExpr,
     pub(crate) alias: Option<String>,
+    #[allow(dead_code)]
     pub(crate) visibility: Visibility,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct SortKey {
     pub(crate) expr: BoundScalarExpr,
+    #[allow(dead_code)]
     pub(crate) asc: bool,
+    #[allow(dead_code)]
     pub(crate) nulls_first: Option<bool>,
 }
 
@@ -58,7 +63,7 @@ pub(crate) enum BoundLiteral {
     },
     Float(f64),
     String(String),
-    Placeholder(String),
+    Placeholder,
 }
 
 #[derive(Debug, Clone)]
@@ -144,5 +149,5 @@ pub(crate) enum BoundScalarExpr {
         negated: bool,
     },
     ScalarSubquery(Box<RelExpr>),
-    Placeholder(String),
+    Placeholder,
 }
