@@ -1,0 +1,10 @@
+dialects:
+  - postgres
+  - mysql
+  - sqlite
+setup:
+  - CREATE TABLE users (id INT PRIMARY KEY, name TEXT)
+  - CREATE TABLE orders (id INT PRIMARY KEY, user_id INT NOT NULL, amount INT, note TEXT, FOREIGN KEY (user_id) REFERENCES users(id))
+cases:
+  - name: qualified_scope_reference
+    sql: SELECT u.id FROM users AS u WHERE u.id = 1

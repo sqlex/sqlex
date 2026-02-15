@@ -8,8 +8,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    name: Build and Test
+  quick-pr-gate:
+    name: Quick PR Gate
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
@@ -33,10 +34,56 @@ jobs:
           ${{ runner.os }}-cargo-
 
     - name: Check formatting
-      run: cargo fmt -- --check
+      run: cargo fmt --all -- --check
+
+    - name: Run static analyzer unit tests
+      run: cargo test -p sqlex-static-analyzer --lib
+
+    - name: Run unsupported diagnostics tests
+      run: cargo test -p sqlex-static-analyzer --test unsupported_diagnostics
+
+    - name: Run contract specs tests
+      run: cargo test -p sqlex-static-analyzer --test contract_specs_runner
+
+    - name: Run fast specs slice
+      run: cargo test -p sqlex-static-analyzer --test specs_runner -- --specs postgres/errors
+
+  full-regression:
+    name: Full Regression Gate
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy, rustfmt
+
+    - name: Cache Cargo registry and index
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    - name: Check formatting
+      run: cargo fmt --all -- --check
 
     - name: Lint with Clippy
       run: cargo clippy --all-targets --all-features -- -D warnings
 
-    - name: Run tests
-      run: cargo test
+    - name: Run unsupported diagnostics tests
+      run: cargo test -p sqlex-static-analyzer --test unsupported_diagnostics
+
+    - name: Run contract specs tests
+      run: cargo test -p sqlex-static-analyzer --test contract_specs_runner
+
+    - name: Run full static analyzer specs
+      run: cargo test -p sqlex-static-analyzer --test specs_runner

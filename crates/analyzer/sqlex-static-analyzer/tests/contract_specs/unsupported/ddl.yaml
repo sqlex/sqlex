@@ -1,0 +1,28 @@
+dialects:
+  - postgres
+  - mysql
+  - sqlite
+cases:
+  - name: create_table_as_select_not_supported
+    mode: execute
+    sql: CREATE TABLE t AS SELECT 1
+    expected_codes:
+      postgres: C2002
+      mysql: C2002
+      sqlite: C2002
+  - name: alter_table_rename_not_supported
+    mode: execute
+    setup:
+      - CREATE TABLE t (id INT PRIMARY KEY)
+    sql: ALTER TABLE t RENAME TO t2
+    expected_codes:
+      postgres: C2009
+      mysql: C2009
+      sqlite: C2009
+  - name: drop_non_table_not_supported
+    mode: execute
+    sql: DROP VIEW v1
+    expected_codes:
+      postgres: C2010
+      mysql: C2010
+      sqlite: C2010

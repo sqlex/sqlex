@@ -1,0 +1,10 @@
+dialects:
+  - postgres
+  - mysql
+  - sqlite
+setup:
+  - CREATE TABLE users (id INT PRIMARY KEY, name TEXT)
+  - CREATE TABLE orders (id INT PRIMARY KEY, user_id INT NOT NULL, amount INT, note TEXT, FOREIGN KEY (user_id) REFERENCES users(id))
+cases:
+  - name: top_level_order_by
+    sql: SELECT id FROM users ORDER BY id DESC

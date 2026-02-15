@@ -1,0 +1,10 @@
+dialects:
+  - sqlite
+cases:
+  - name: sqlite_add_constraint_not_supported
+    mode: execute
+    setup:
+      - CREATE TABLE t (id INTEGER PRIMARY KEY)
+    sql: ALTER TABLE t ADD CONSTRAINT uq_t UNIQUE (id)
+    expected_codes:
+      sqlite: C2026
