@@ -2,11 +2,12 @@ use sqlex_analyzer::extension::DataTypeExt;
 use sqlex_common::{dialect::Dialect, types::DataType};
 
 use crate::{
-    algebra::scalar::{BoundBinaryOp, BoundLiteral, BoundScalarExpr, BoundUnaryOp},
-    catalog::model::Catalog,
+    algebraizer::model::expression::{BoundBinaryOp, BoundLiteral, BoundUnaryOp, Expression},
+    catalog::Catalog,
     diagnostics::{Diagnostic, Phase},
-    functions::registry::{
-        FunctionNullabilityRule, FunctionRegistry, FunctionReturnTypeRule, FunctionSignature,
+    functions::{
+        FunctionRegistry,
+        model::{FunctionNullabilityRule, FunctionReturnTypeRule, FunctionSignature},
     },
     infer::{
         cardinality::MinRows, metadata::InferColumn,
@@ -21,7 +22,7 @@ pub(crate) struct ScalarInference {
 }
 
 pub(crate) fn infer_scalar(
-    expr: &BoundScalarExpr,
+    expr: &Expression,
     input_columns: &[InferColumn],
     catalog: &Catalog,
     dialect: Dialect,
@@ -29,12 +30,12 @@ pub(crate) fn infer_scalar(
     outer_scopes: &[Vec<InferColumn>],
 ) -> Result<ScalarInference, Diagnostic> {
     match expr {
-        BoundScalarExpr::SlotRef(slot_id) => infer_slot(*slot_id, input_columns),
-        BoundScalarExpr::CorrelatedRef { depth, slot_id } => {
+        Expression::SlotRef(slot_id) => infer_slot(*slot_id, input_columns),
+        Expression::CorrelatedRef { depth, slot_id } => {
             infer_correlated_slot(*depth, *slot_id, outer_scopes)
         },
-        BoundScalarExpr::Literal(literal) => Ok(infer_literal(literal, dialect)),
-        BoundScalarExpr::BinaryOp { left, op, right } => {
+        Expression::Literal(literal) => Ok(infer_literal(literal, dialect)),
+        Expression::BinaryOp { left, op, right } => {
             let left_info = infer_scalar(
                 left,
                 input_columns,
@@ -73,7 +74,7 @@ pub(crate) fn infer_scalar(
                 nullable: left_info.nullable || right_info.nullable,
             })
         },
-        BoundScalarExpr::UnaryOp { op, expr } => {
+        Expression::UnaryOp { op, expr } => {
             let info = infer_scalar(
                 expr,
                 input_columns,
@@ -91,7 +92,7 @@ pub(crate) fn infer_scalar(
                 nullable: info.nullable,
             })
         },
-        BoundScalarExpr::Function { name, args } => {
+        Expression::Function { name, args } => {
             let args_info = infer_args(
                 args,
                 input_columns,
@@ -102,7 +103,7 @@ pub(crate) fn infer_scalar(
             )?;
             Ok(infer_function(name, args_info, dialect, functions))
         },
-        BoundScalarExpr::AggregateCall {
+        Expression::AggregateCall {
             name,
             args,
             distinct,
@@ -118,7 +119,7 @@ pub(crate) fn infer_scalar(
             )?;
             infer_aggregate(name, args_info, dialect, functions)
         },
-        BoundScalarExpr::WindowCall { name, args, .. } => {
+        Expression::WindowCall { name, args, .. } => {
             let args_info = infer_args(
                 args,
                 input_columns,
@@ -129,7 +130,7 @@ pub(crate) fn infer_scalar(
             )?;
             infer_window(name, args_info, dialect, functions)
         },
-        BoundScalarExpr::Cast { expr, target_type } => {
+        Expression::Cast { expr, target_type } => {
             let info = infer_scalar(
                 expr,
                 input_columns,
@@ -143,11 +144,11 @@ pub(crate) fn infer_scalar(
                 nullable: info.nullable,
             })
         },
-        BoundScalarExpr::IsNull { .. } => Ok(ScalarInference {
+        Expression::IsNull { .. } => Ok(ScalarInference {
             data_type: boolean_result_type(dialect),
             nullable: false,
         }),
-        BoundScalarExpr::Case {
+        Expression::Case {
             when_clauses,
             else_expr,
             ..
@@ -199,7 +200,7 @@ pub(crate) fn infer_scalar(
                 nullable,
             })
         },
-        BoundScalarExpr::InList { expr, list, .. } => {
+        Expression::InList { expr, list, .. } => {
             let expr_info = infer_scalar(
                 expr,
                 input_columns,
@@ -225,7 +226,7 @@ pub(crate) fn infer_scalar(
                 nullable,
             })
         },
-        BoundScalarExpr::InSubquery {
+        Expression::InSubquery {
             expr,
             subquery,
             negated,
@@ -252,7 +253,7 @@ pub(crate) fn infer_scalar(
                 nullable: expr_info.nullable || subquery_info.nullable,
             })
         },
-        BoundScalarExpr::Exists { subquery, negated } => {
+        Expression::Exists { subquery, negated } => {
             let _ = negated;
             let mut subquery_outer_scopes = outer_scopes.to_vec();
             subquery_outer_scopes.push(input_columns.to_vec());
@@ -268,7 +269,7 @@ pub(crate) fn infer_scalar(
                 nullable: false,
             })
         },
-        BoundScalarExpr::ScalarSubquery(subquery) => infer_subquery_single_column(
+        Expression::ScalarSubquery(subquery) => infer_subquery_single_column(
             subquery,
             input_columns,
             outer_scopes,
@@ -276,7 +277,7 @@ pub(crate) fn infer_scalar(
             dialect,
             functions,
         ),
-        BoundScalarExpr::Placeholder => Ok(ScalarInference {
+        Expression::Placeholder => Ok(ScalarInference {
             data_type: DataType::Custom("unknown".to_string()),
             nullable: false,
         }),
@@ -284,7 +285,7 @@ pub(crate) fn infer_scalar(
 }
 
 fn infer_subquery_single_column(
-    subquery: &crate::algebra::expr::RelExpr,
+    subquery: &crate::algebraizer::model::relation::Relation,
     input_columns: &[InferColumn],
     outer_scopes: &[Vec<InferColumn>],
     catalog: &Catalog,
@@ -495,7 +496,7 @@ fn mysql_integer_literal_should_be_int(raw: &str) -> bool {
 }
 
 fn infer_args(
-    args: &[BoundScalarExpr],
+    args: &[Expression],
     input_columns: &[InferColumn],
     catalog: &Catalog,
     dialect: Dialect,

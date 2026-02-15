@@ -4,17 +4,17 @@ use sqlex_common::types::DataType;
 use sqlparser::ast::{Expr, Select, SelectItem, SetExpr};
 
 use crate::{
-    algebra::{
-        expr::{RelExpr, ScanNode},
-        planner::{
-            Algebraizer,
-            context::{BuildContext, CteBinding},
+    algebraizer::{
+        Algebraizer,
+        context::{BuildContext, CteBinding},
+        model::{
+            relation::{Relation, ScanNode},
+            schema::{BoundColumn, ColumnOrigin, OutputSchema},
         },
-        scalar::{BoundColumn, ColumnOrigin, OutputSchema},
     },
-    catalog::{model::Catalog, normalize::normalize_ident},
+    catalog::{Catalog, normalize::normalize_ident},
     diagnostics::{Diagnostic, Phase},
-    functions::registry::FunctionRegistry,
+    functions::FunctionRegistry,
 };
 
 impl Algebraizer {
@@ -259,7 +259,7 @@ impl Algebraizer {
             columns,
         };
         Ok(CteBinding {
-            expr: RelExpr::Scan(ScanNode {
+            expr: Relation::Scan(ScanNode {
                 table: format!("__recursive_cte__{cte_name}"),
                 schema: schema.clone(),
             }),

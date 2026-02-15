@@ -5,19 +5,21 @@ use sqlparser::ast::{
 };
 
 use crate::{
-    algebra::{
-        expr::{AggregationNode, ProjectionNode, RelExpr, SelectionNode, WindowNode},
-        planner::{Algebraizer, context::BuildContext},
-        scalar::{
-            BoundColumn, BoundScalarExpr, ColumnOrigin, OutputSchema, ProjectionColumn, Visibility,
+    algebraizer::{
+        Algebraizer,
+        context::BuildContext,
+        model::{
+            expression::Expression,
+            relation::{AggregationNode, ProjectionNode, Relation, SelectionNode, WindowNode},
+            schema::{BoundColumn, ColumnOrigin, OutputSchema, ProjectionColumn, Visibility},
         },
     },
     catalog::{
-        model::Catalog,
+        Catalog,
         normalize::{normalize_ident, normalize_object_name},
     },
     diagnostics::{Diagnostic, Phase},
-    functions::registry::FunctionRegistry,
+    functions::FunctionRegistry,
 };
 
 impl Algebraizer {
@@ -27,7 +29,7 @@ impl Algebraizer {
         catalog: &Catalog,
         functions: &FunctionRegistry,
         context: &mut BuildContext,
-    ) -> Result<RelExpr, Diagnostic> {
+    ) -> Result<Relation, Diagnostic> {
         if select.into.is_some()
             || !select.lateral_views.is_empty()
             || select.prewhere.is_some()
@@ -66,7 +68,7 @@ impl Algebraizer {
             let mut input_expr = self.build_from(select, catalog, functions, context)?;
             if let Some(selection) = &select.selection {
                 let (condition, where_has_aggregate) =
-                    self.bind_expr(selection, catalog, functions, context)?;
+                    self.bind_expression(selection, catalog, functions, context)?;
                 if where_has_aggregate {
                     return Err(Diagnostic::new(
                         "A3041",
@@ -82,7 +84,7 @@ impl Algebraizer {
                     ));
                 }
                 let schema = super::output_schema_of(&input_expr)?;
-                input_expr = RelExpr::Selection(SelectionNode {
+                input_expr = Relation::Selection(SelectionNode {
                     input: Box::new(input_expr),
                     condition,
                     schema,
@@ -91,7 +93,7 @@ impl Algebraizer {
 
             for group_expr in group_by_exprs {
                 let (bound_group_expr, has_aggregate) =
-                    self.bind_expr(group_expr, catalog, functions, context)?;
+                    self.bind_expression(group_expr, catalog, functions, context)?;
                 if has_aggregate {
                     return Err(Diagnostic::new(
                         "A3016",
@@ -114,7 +116,7 @@ impl Algebraizer {
             let mut bound_having = None;
             if let Some(having_expr) = &select.having {
                 let (condition, having_has_aggregate) =
-                    self.bind_expr(having_expr, catalog, functions, context)?;
+                    self.bind_expression(having_expr, catalog, functions, context)?;
                 if contains_window_call(&condition) {
                     return Err(Diagnostic::new(
                         "A3043",
@@ -144,7 +146,7 @@ impl Algebraizer {
                     SelectItem::Wildcard(_) => {
                         has_non_aggregate_projection = true;
                         for column in &input_schema.columns {
-                            let bound_expr = BoundScalarExpr::SlotRef(column.slot_id);
+                            let bound_expr = Expression::SlotRef(column.slot_id);
                             projected_columns.push(ProjectionColumn {
                                 expr: bound_expr.clone(),
                                 alias: Some(column.name.clone()),
@@ -179,7 +181,7 @@ impl Algebraizer {
                         let scoped_columns = scope.schema.columns.clone();
 
                         for column in &scoped_columns {
-                            let bound_expr = BoundScalarExpr::SlotRef(column.slot_id);
+                            let bound_expr = Expression::SlotRef(column.slot_id);
                             projected_columns.push(ProjectionColumn {
                                 expr: bound_expr.clone(),
                                 alias: Some(column.name.clone()),
@@ -199,7 +201,7 @@ impl Algebraizer {
                     SelectItem::ExprWithAlias { expr, alias } => {
                         self.validate_alias_ident(alias)?;
                         let (bound_expr, expr_has_aggregate) =
-                            self.bind_expr(expr, catalog, functions, context)?;
+                            self.bind_expression(expr, catalog, functions, context)?;
                         let expr_has_window = contains_window_call(&bound_expr);
                         has_aggregate |= expr_has_aggregate;
                         has_window |= expr_has_window;
@@ -238,7 +240,7 @@ impl Algebraizer {
                     },
                     SelectItem::UnnamedExpr(expr) => {
                         let (bound_expr, expr_has_aggregate) =
-                            self.bind_expr(expr, catalog, functions, context)?;
+                            self.bind_expression(expr, catalog, functions, context)?;
                         let expr_has_window = contains_window_call(&bound_expr);
                         has_aggregate |= expr_has_aggregate;
                         has_window |= expr_has_window;
@@ -317,7 +319,7 @@ impl Algebraizer {
             let mut relational_expr = input_expr;
             if has_aggregate || group_by_count > 0 {
                 let schema = super::output_schema_of(&relational_expr)?;
-                relational_expr = RelExpr::Aggregation(AggregationNode {
+                relational_expr = Relation::Aggregation(AggregationNode {
                     input: Box::new(relational_expr),
                     group_by: bound_group_by,
                     aggregates: aggregate_exprs,
@@ -327,7 +329,7 @@ impl Algebraizer {
 
             if let Some((condition, _)) = bound_having {
                 let schema = super::output_schema_of(&relational_expr)?;
-                relational_expr = RelExpr::Selection(SelectionNode {
+                relational_expr = Relation::Selection(SelectionNode {
                     input: Box::new(relational_expr),
                     condition,
                     schema,
@@ -336,14 +338,14 @@ impl Algebraizer {
 
             if has_window {
                 let schema = super::output_schema_of(&relational_expr)?;
-                relational_expr = RelExpr::Window(WindowNode {
+                relational_expr = Relation::Window(WindowNode {
                     input: Box::new(relational_expr),
                     window_exprs,
                     schema,
                 });
             }
 
-            relational_expr = RelExpr::Projection(ProjectionNode {
+            relational_expr = Relation::Projection(ProjectionNode {
                 input: Box::new(relational_expr),
                 columns: projected_columns,
                 schema: OutputSchema {
@@ -354,10 +356,11 @@ impl Algebraizer {
 
             if select.distinct.is_some() {
                 let schema = super::output_schema_of(&relational_expr)?;
-                relational_expr = RelExpr::Distinct(crate::algebra::expr::DistinctNode {
-                    input: Box::new(relational_expr),
-                    schema,
-                });
+                relational_expr =
+                    Relation::Distinct(crate::algebraizer::model::relation::DistinctNode {
+                        input: Box::new(relational_expr),
+                        schema,
+                    });
             }
 
             Ok(relational_expr)
@@ -502,20 +505,20 @@ impl Algebraizer {
     }
 }
 
-fn contains_window_call(expr: &BoundScalarExpr) -> bool {
+fn contains_window_call(expr: &Expression) -> bool {
     match expr {
-        BoundScalarExpr::WindowCall { .. } => true,
-        BoundScalarExpr::BinaryOp { left, right, .. } => {
+        Expression::WindowCall { .. } => true,
+        Expression::BinaryOp { left, right, .. } => {
             contains_window_call(left) || contains_window_call(right)
         },
-        BoundScalarExpr::UnaryOp { expr, .. } => contains_window_call(expr),
-        BoundScalarExpr::Function { args, .. } | BoundScalarExpr::AggregateCall { args, .. } => {
+        Expression::UnaryOp { expr, .. } => contains_window_call(expr),
+        Expression::Function { args, .. } | Expression::AggregateCall { args, .. } => {
             args.iter().any(contains_window_call)
         },
-        BoundScalarExpr::Cast { expr, .. }
-        | BoundScalarExpr::IsNull { expr, .. }
-        | BoundScalarExpr::InSubquery { expr, .. } => contains_window_call(expr),
-        BoundScalarExpr::Case {
+        Expression::Cast { expr, .. }
+        | Expression::IsNull { expr, .. }
+        | Expression::InSubquery { expr, .. } => contains_window_call(expr),
+        Expression::Case {
             operand,
             when_clauses,
             else_expr,
@@ -530,15 +533,15 @@ fn contains_window_call(expr: &BoundScalarExpr) -> bool {
                     .as_ref()
                     .is_some_and(|value| contains_window_call(value))
         },
-        BoundScalarExpr::InList { expr, list, .. } => {
+        Expression::InList { expr, list, .. } => {
             contains_window_call(expr) || list.iter().any(contains_window_call)
         },
-        BoundScalarExpr::SlotRef(_)
-        | BoundScalarExpr::CorrelatedRef { .. }
-        | BoundScalarExpr::Literal(_)
-        | BoundScalarExpr::Exists { .. }
-        | BoundScalarExpr::ScalarSubquery(_)
-        | BoundScalarExpr::Placeholder => false,
+        Expression::SlotRef(_)
+        | Expression::CorrelatedRef { .. }
+        | Expression::Literal(_)
+        | Expression::Exists { .. }
+        | Expression::ScalarSubquery(_)
+        | Expression::Placeholder => false,
     }
 }
 
@@ -550,25 +553,25 @@ fn grouped_slot_ids(group_by: &[ProjectionColumn]) -> HashSet<u32> {
     grouped_slots
 }
 
-fn collect_slot_refs(expr: &BoundScalarExpr, slot_ids: &mut HashSet<u32>) {
+fn collect_slot_refs(expr: &Expression, slot_ids: &mut HashSet<u32>) {
     match expr {
-        BoundScalarExpr::SlotRef(slot_id) => {
+        Expression::SlotRef(slot_id) => {
             let _ = slot_ids.insert(*slot_id);
         },
-        BoundScalarExpr::BinaryOp { left, right, .. } => {
+        Expression::BinaryOp { left, right, .. } => {
             collect_slot_refs(left, slot_ids);
             collect_slot_refs(right, slot_ids);
         },
-        BoundScalarExpr::UnaryOp { expr, .. }
-        | BoundScalarExpr::Cast { expr, .. }
-        | BoundScalarExpr::IsNull { expr, .. }
-        | BoundScalarExpr::InSubquery { expr, .. } => collect_slot_refs(expr, slot_ids),
-        BoundScalarExpr::Function { args, .. } | BoundScalarExpr::AggregateCall { args, .. } => {
+        Expression::UnaryOp { expr, .. }
+        | Expression::Cast { expr, .. }
+        | Expression::IsNull { expr, .. }
+        | Expression::InSubquery { expr, .. } => collect_slot_refs(expr, slot_ids),
+        Expression::Function { args, .. } | Expression::AggregateCall { args, .. } => {
             for arg in args {
                 collect_slot_refs(arg, slot_ids);
             }
         },
-        BoundScalarExpr::WindowCall {
+        Expression::WindowCall {
             args,
             order_by,
             partition_by,
@@ -584,7 +587,7 @@ fn collect_slot_refs(expr: &BoundScalarExpr, slot_ids: &mut HashSet<u32>) {
                 collect_slot_refs(&key.expr, slot_ids);
             }
         },
-        BoundScalarExpr::Case {
+        Expression::Case {
             operand,
             when_clauses,
             else_expr,
@@ -600,47 +603,47 @@ fn collect_slot_refs(expr: &BoundScalarExpr, slot_ids: &mut HashSet<u32>) {
                 collect_slot_refs(else_expr, slot_ids);
             }
         },
-        BoundScalarExpr::InList { expr, list, .. } => {
+        Expression::InList { expr, list, .. } => {
             collect_slot_refs(expr, slot_ids);
             for item in list {
                 collect_slot_refs(item, slot_ids);
             }
         },
-        BoundScalarExpr::CorrelatedRef { .. }
-        | BoundScalarExpr::Literal(_)
-        | BoundScalarExpr::Exists { .. }
-        | BoundScalarExpr::ScalarSubquery(_)
-        | BoundScalarExpr::Placeholder => {},
+        Expression::CorrelatedRef { .. }
+        | Expression::Literal(_)
+        | Expression::Exists { .. }
+        | Expression::ScalarSubquery(_)
+        | Expression::Placeholder => {},
     }
 }
 
 fn contains_ungrouped_slot_outside_aggregate(
-    expr: &BoundScalarExpr,
+    expr: &Expression,
     grouped_slots: &HashSet<u32>,
     in_aggregate: bool,
 ) -> bool {
     match expr {
-        BoundScalarExpr::SlotRef(slot_id) => !in_aggregate && !grouped_slots.contains(slot_id),
-        BoundScalarExpr::CorrelatedRef { .. }
-        | BoundScalarExpr::Literal(_)
-        | BoundScalarExpr::Exists { .. }
-        | BoundScalarExpr::ScalarSubquery(_)
-        | BoundScalarExpr::Placeholder => false,
-        BoundScalarExpr::BinaryOp { left, right, .. } => {
+        Expression::SlotRef(slot_id) => !in_aggregate && !grouped_slots.contains(slot_id),
+        Expression::CorrelatedRef { .. }
+        | Expression::Literal(_)
+        | Expression::Exists { .. }
+        | Expression::ScalarSubquery(_)
+        | Expression::Placeholder => false,
+        Expression::BinaryOp { left, right, .. } => {
             contains_ungrouped_slot_outside_aggregate(left, grouped_slots, in_aggregate)
                 || contains_ungrouped_slot_outside_aggregate(right, grouped_slots, in_aggregate)
         },
-        BoundScalarExpr::UnaryOp { expr, .. }
-        | BoundScalarExpr::Cast { expr, .. }
-        | BoundScalarExpr::IsNull { expr, .. }
-        | BoundScalarExpr::InSubquery { expr, .. } => {
+        Expression::UnaryOp { expr, .. }
+        | Expression::Cast { expr, .. }
+        | Expression::IsNull { expr, .. }
+        | Expression::InSubquery { expr, .. } => {
             contains_ungrouped_slot_outside_aggregate(expr, grouped_slots, in_aggregate)
         },
-        BoundScalarExpr::Function { args, .. } => args
+        Expression::Function { args, .. } => args
             .iter()
             .any(|arg| contains_ungrouped_slot_outside_aggregate(arg, grouped_slots, in_aggregate)),
-        BoundScalarExpr::AggregateCall { .. } => false,
-        BoundScalarExpr::WindowCall {
+        Expression::AggregateCall { .. } => false,
+        Expression::WindowCall {
             args,
             partition_by,
             order_by,
@@ -654,7 +657,7 @@ fn contains_ungrouped_slot_outside_aggregate(
                 contains_ungrouped_slot_outside_aggregate(&key.expr, grouped_slots, in_aggregate)
             })
         },
-        BoundScalarExpr::Case {
+        Expression::Case {
             operand,
             when_clauses,
             else_expr,
@@ -672,7 +675,7 @@ fn contains_ungrouped_slot_outside_aggregate(
                 contains_ungrouped_slot_outside_aggregate(value, grouped_slots, in_aggregate)
             })
         },
-        BoundScalarExpr::InList { expr, list, .. } => {
+        Expression::InList { expr, list, .. } => {
             contains_ungrouped_slot_outside_aggregate(expr, grouped_slots, in_aggregate)
                 || list.iter().any(|item| {
                     contains_ungrouped_slot_outside_aggregate(item, grouped_slots, in_aggregate)

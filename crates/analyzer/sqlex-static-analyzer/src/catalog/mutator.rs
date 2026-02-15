@@ -6,8 +6,8 @@ use sqlparser::ast::{
 
 use crate::{
     catalog::{
-        ddl_type_map,
-        model::{Catalog, ColumnSchema, ForeignKeyConstraint, KeyConstraint, TableSchema},
+        Catalog, ddl_type_map,
+        model::{ColumnSchema, ForeignKeyConstraint, KeyConstraint, TableSchema},
         normalize::{normalize_ident, normalize_object_name, original_object_name},
     },
     diagnostics::{Diagnostic, Phase},

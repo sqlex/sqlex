@@ -5,7 +5,7 @@
 
 use sqlex_common::dialect::Dialect;
 
-mod algebra;
+mod algebraizer;
 mod analyzer;
 mod catalog;
 mod diagnostics;
@@ -17,8 +17,8 @@ mod parser;
 #[derive(Debug)]
 pub struct StaticAnalyzer {
     pub(crate) dialect: Dialect,
-    pub(crate) catalog: catalog::model::Catalog,
-    pub(crate) functions: functions::registry::FunctionRegistry,
+    pub(crate) catalog: catalog::Catalog,
+    pub(crate) functions: functions::FunctionRegistry,
 }
 
 impl StaticAnalyzer {
@@ -26,8 +26,8 @@ impl StaticAnalyzer {
     pub fn new(dialect: Dialect) -> Self {
         Self {
             dialect,
-            catalog: catalog::model::Catalog::new(),
-            functions: functions::registry::FunctionRegistry::new(dialect),
+            catalog: catalog::Catalog::new(),
+            functions: functions::FunctionRegistry::new(dialect),
         }
     }
 }

@@ -6,17 +6,22 @@ use sqlparser::ast::{
 };
 
 use crate::{
-    algebra::{
-        planner::{Algebraizer, context::BuildContext},
-        scalar::{BoundLiteral, BoundScalarExpr, SortKey},
+    algebraizer::{
+        Algebraizer,
+        context::BuildContext,
+        model::{
+            expression::{BoundLiteral, Expression},
+            schema::SortKey,
+        },
     },
     catalog::{
-        model::Catalog,
+        Catalog,
         normalize::{normalize_ident, normalize_object_name},
     },
     diagnostics::{Diagnostic, Phase},
-    functions::registry::{
-        FunctionArgType, FunctionCoercionProfile, FunctionRegistry, FunctionSignature,
+    functions::{
+        FunctionRegistry,
+        model::{FunctionArgType, FunctionCoercionProfile, FunctionSignature},
     },
 };
 
@@ -33,7 +38,7 @@ impl Algebraizer {
         catalog: &Catalog,
         functions: &FunctionRegistry,
         context: &BuildContext,
-    ) -> Result<(BoundScalarExpr, bool), Diagnostic> {
+    ) -> Result<(Expression, bool), Diagnostic> {
         let function_name = normalize_object_name(&function.name, self.dialect);
         let function_name_lower = function_name.to_ascii_lowercase();
 
@@ -50,7 +55,7 @@ impl Algebraizer {
                     context,
                     "function subquery argument",
                 )?;
-                bound_args.push(BoundScalarExpr::ScalarSubquery(Box::new(bound_subquery)));
+                bound_args.push(Expression::ScalarSubquery(Box::new(bound_subquery)));
             },
             FunctionArguments::List(argument_list) => {
                 for arg in &argument_list.args {
@@ -107,7 +112,7 @@ impl Algebraizer {
             };
 
             return Ok((
-                BoundScalarExpr::WindowCall {
+                Expression::WindowCall {
                     name: function_name,
                     args: bound_args,
                     partition_by,
@@ -119,7 +124,7 @@ impl Algebraizer {
 
         if matches!(bind_kind, FunctionBindKind::Aggregate) {
             return Ok((
-                BoundScalarExpr::AggregateCall {
+                Expression::AggregateCall {
                     name: function_name,
                     args: bound_args,
                     distinct,
@@ -129,7 +134,7 @@ impl Algebraizer {
         }
 
         Ok((
-            BoundScalarExpr::Function {
+            Expression::Function {
                 name: function_name,
                 args: bound_args,
             },
@@ -184,12 +189,12 @@ impl Algebraizer {
         catalog: &Catalog,
         functions: &FunctionRegistry,
         context: &BuildContext,
-    ) -> Result<(Vec<BoundScalarExpr>, Vec<SortKey>), Diagnostic> {
+    ) -> Result<(Vec<Expression>, Vec<SortKey>), Diagnostic> {
         let resolved_spec = self.resolve_window_spec_for_over(spec, context)?;
 
         let mut partition_by = Vec::new();
         for expr in &resolved_spec.partition_by {
-            let (bound_expr, _) = self.bind_expr(expr, catalog, functions, context)?;
+            let (bound_expr, _) = self.bind_expression(expr, catalog, functions, context)?;
             partition_by.push(bound_expr);
         }
 
@@ -202,7 +207,8 @@ impl Algebraizer {
                     "ORDER BY WITH FILL is not supported in this iteration",
                 ));
             }
-            let (bound_expr, _) = self.bind_expr(&order_expr.expr, catalog, functions, context)?;
+            let (bound_expr, _) =
+                self.bind_expression(&order_expr.expr, catalog, functions, context)?;
             order_by.push(SortKey {
                 expr: bound_expr,
                 asc: order_expr.asc.unwrap_or(true),
@@ -257,7 +263,7 @@ impl Algebraizer {
         catalog: &Catalog,
         functions: &FunctionRegistry,
         context: &BuildContext,
-    ) -> Result<(BoundScalarExpr, bool), Diagnostic> {
+    ) -> Result<(Expression, bool), Diagnostic> {
         let arg_expr = match arg {
             FunctionArg::Named { arg, .. } => arg,
             FunctionArg::ExprNamed { arg, .. } => arg,
@@ -265,9 +271,9 @@ impl Algebraizer {
         };
 
         match arg_expr {
-            FunctionArgExpr::Expr(expr) => self.bind_expr(expr, catalog, functions, context),
-            FunctionArgExpr::Wildcard => Ok((BoundScalarExpr::Placeholder, false)),
-            FunctionArgExpr::QualifiedWildcard(_) => Ok((BoundScalarExpr::Placeholder, false)),
+            FunctionArgExpr::Expr(expr) => self.bind_expression(expr, catalog, functions, context),
+            FunctionArgExpr::Wildcard => Ok((Expression::Placeholder, false)),
+            FunctionArgExpr::QualifiedWildcard(_) => Ok((Expression::Placeholder, false)),
         }
     }
 
@@ -310,7 +316,7 @@ impl Algebraizer {
     pub(crate) fn validate_function_argument_types(
         &self,
         function_name_lower: &str,
-        bound_args: &[BoundScalarExpr],
+        bound_args: &[Expression],
         context: &BuildContext,
         signature: Option<&FunctionSignature>,
     ) -> Result<(), Diagnostic> {
@@ -364,8 +370,9 @@ impl Algebraizer {
         catalog: &Catalog,
         functions: &FunctionRegistry,
         context: &BuildContext,
-    ) -> Result<(BoundScalarExpr, bool), Diagnostic> {
-        let (bound_expr, has_aggregate) = self.bind_expr(expr, catalog, functions, context)?;
+    ) -> Result<(Expression, bool), Diagnostic> {
+        let (bound_expr, has_aggregate) =
+            self.bind_expression(expr, catalog, functions, context)?;
         let bound_args = match field {
             CeilFloorKind::DateTimeField(DateTimeField::NoDateTime) => vec![bound_expr],
             CeilFloorKind::DateTimeField(_) | CeilFloorKind::Scale(_) => {
@@ -382,7 +389,7 @@ impl Algebraizer {
         self.validate_function_argument_types(function_name, &bound_args, context, signature)?;
 
         Ok((
-            BoundScalarExpr::Function {
+            Expression::Function {
                 name: function_name.to_string(),
                 args: bound_args,
             },
@@ -418,19 +425,19 @@ impl Algebraizer {
 
     fn bound_expr_static_type(
         &self,
-        expr: Option<&BoundScalarExpr>,
+        expr: Option<&Expression>,
         context: &BuildContext,
     ) -> Option<DataType> {
         let expr = expr?;
         match expr {
-            BoundScalarExpr::SlotRef(slot_id) => context
+            Expression::SlotRef(slot_id) => context
                 .relation_scopes
                 .iter()
                 .flat_map(|scope| scope.schema.columns.iter())
                 .find(|column| column.slot_id == *slot_id)
                 .and_then(|column| column.data_type.clone()),
-            BoundScalarExpr::Literal(literal) => self.bound_literal_static_type(literal),
-            BoundScalarExpr::Cast { target_type, .. } => Some(target_type.clone()),
+            Expression::Literal(literal) => self.bound_literal_static_type(literal),
+            Expression::Cast { target_type, .. } => Some(target_type.clone()),
             _ => None,
         }
     }

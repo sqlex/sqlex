@@ -3,28 +3,32 @@ use std::collections::{HashMap, HashSet};
 use sqlex_common::dialect::Dialect;
 use sqlparser::ast::{Expr, OrderByExpr, Statement, UnaryOperator, Value};
 
-mod bind_expr;
+use crate::{
+    algebraizer::{
+        context::{BuildContext, RelationScope},
+        model::{
+            expression::Expression,
+            relation::{LimitNode, ProjectionNode, Relation, SortNode},
+            schema::{
+                BoundColumn, ColumnOrigin, OutputSchema, ProjectionColumn, SortKey, Visibility,
+            },
+        },
+    },
+    catalog::Catalog,
+    diagnostics::{Diagnostic, Phase},
+    functions::FunctionRegistry,
+};
+
+pub(crate) mod model;
+
 mod context;
 mod cte;
+mod expression;
 mod from_join;
 mod from_table_factor;
 mod join;
 mod select;
 mod set_ops;
-
-use crate::{
-    algebra::{
-        expr::{LimitNode, ProjectionNode, RelExpr, SortNode},
-        planner::context::{BuildContext, RelationScope},
-        scalar::{
-            BoundColumn, BoundScalarExpr, ColumnOrigin, OutputSchema, ProjectionColumn, SortKey,
-            Visibility,
-        },
-    },
-    catalog::model::Catalog,
-    diagnostics::{Diagnostic, Phase},
-    functions::registry::FunctionRegistry,
-};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Algebraizer {
@@ -41,7 +45,7 @@ impl Algebraizer {
         statement: &Statement,
         catalog: &Catalog,
         functions: &FunctionRegistry,
-    ) -> Result<RelExpr, Diagnostic> {
+    ) -> Result<Relation, Diagnostic> {
         let Statement::Query(query) = statement else {
             return Err(Diagnostic::new(
                 "A3001",
@@ -67,12 +71,12 @@ impl Algebraizer {
 
     fn apply_top_level_order_by(
         &self,
-        input_expr: RelExpr,
+        input_expr: Relation,
         query: &sqlparser::ast::Query,
         catalog: &Catalog,
         functions: &FunctionRegistry,
         context: &mut BuildContext,
-    ) -> Result<RelExpr, Diagnostic> {
+    ) -> Result<Relation, Diagnostic> {
         let Some(order_by) = &query.order_by else {
             return Ok(input_expr);
         };
@@ -122,7 +126,7 @@ impl Algebraizer {
 
         if hidden_columns.is_empty() {
             let schema = input_schema.clone();
-            return Ok(RelExpr::Sort(SortNode {
+            return Ok(Relation::Sort(SortNode {
                 input: Box::new(input_expr),
                 keys: sort_keys,
                 schema,
@@ -140,18 +144,18 @@ impl Algebraizer {
             columns: pre_projection_schema_columns,
         };
 
-        let pre_projection_expr = RelExpr::Projection(ProjectionNode {
+        let pre_projection_expr = Relation::Projection(ProjectionNode {
             input: Box::new(input_expr),
             columns: pre_projection_columns,
             schema: pre_projection_schema.clone(),
         });
-        let sorted_expr = RelExpr::Sort(SortNode {
+        let sorted_expr = Relation::Sort(SortNode {
             input: Box::new(pre_projection_expr),
             keys: sort_keys,
             schema: pre_projection_schema,
         });
 
-        Ok(RelExpr::Projection(ProjectionNode {
+        Ok(Relation::Projection(ProjectionNode {
             input: Box::new(sorted_expr),
             columns: project_all_slots(&input_schema.columns, Visibility::Visible),
             schema: input_schema,
@@ -194,15 +198,15 @@ impl Algebraizer {
                     ),
                 ));
             };
-            BoundScalarExpr::SlotRef(column.slot_id)
+            Expression::SlotRef(column.slot_id)
         } else {
             let (bound_expr, _) =
-                self.bind_expr(&order_expr.expr, catalog, functions, order_context)?;
+                self.bind_expression(&order_expr.expr, catalog, functions, order_context)?;
             bound_expr
         };
 
         let key_expr = match bound_expr {
-            BoundScalarExpr::SlotRef(slot_id) => BoundScalarExpr::SlotRef(slot_id),
+            Expression::SlotRef(slot_id) => Expression::SlotRef(slot_id),
             other => {
                 if disallow_hidden {
                     return Err(Diagnostic::new(
@@ -215,7 +219,7 @@ impl Algebraizer {
                 let fingerprint = bound_expr_key(&other);
                 if let Some(existing_slot_id) = hidden_expr_slots.get(&fingerprint) {
                     return Ok(SortKey {
-                        expr: BoundScalarExpr::SlotRef(*existing_slot_id),
+                        expr: Expression::SlotRef(*existing_slot_id),
                         asc,
                         nulls_first,
                     });
@@ -237,7 +241,7 @@ impl Algebraizer {
                     origin: ColumnOrigin::Derived,
                 });
                 hidden_expr_slots.insert(fingerprint, hidden_slot_id);
-                BoundScalarExpr::SlotRef(hidden_slot_id)
+                Expression::SlotRef(hidden_slot_id)
             },
         };
 
@@ -277,9 +281,9 @@ impl Algebraizer {
 
     fn apply_top_level_limit_offset(
         &self,
-        input_expr: RelExpr,
+        input_expr: Relation,
         query: &sqlparser::ast::Query,
-    ) -> Result<RelExpr, Diagnostic> {
+    ) -> Result<Relation, Diagnostic> {
         let limit = query
             .limit
             .as_ref()
@@ -296,7 +300,7 @@ impl Algebraizer {
         }
 
         let schema = output_schema_of(&input_expr)?;
-        Ok(RelExpr::Limit(LimitNode {
+        Ok(Relation::Limit(LimitNode {
             input: Box::new(input_expr),
             limit,
             offset,
@@ -330,20 +334,20 @@ impl Algebraizer {
     }
 }
 
-fn output_schema_of(expr: &RelExpr) -> Result<OutputSchema, Diagnostic> {
+fn output_schema_of(expr: &Relation) -> Result<OutputSchema, Diagnostic> {
     match expr {
-        RelExpr::Scan(node) => Ok(node.schema.clone()),
-        RelExpr::Values(node) => Ok(node.schema.clone()),
-        RelExpr::Selection(node) => Ok(node.schema.clone()),
-        RelExpr::Projection(node) => Ok(node.schema.clone()),
-        RelExpr::Aggregation(node) => Ok(node.schema.clone()),
-        RelExpr::Window(node) => Ok(node.schema.clone()),
-        RelExpr::Distinct(node) => Ok(node.schema.clone()),
-        RelExpr::Sort(node) => Ok(node.schema.clone()),
-        RelExpr::Limit(node) => Ok(node.schema.clone()),
-        RelExpr::Alias(node) => Ok(node.schema.clone()),
-        RelExpr::Join(node) => Ok(node.schema.clone()),
-        RelExpr::SetOperation(node) => Ok(node.schema.clone()),
+        Relation::Scan(node) => Ok(node.schema.clone()),
+        Relation::Values(node) => Ok(node.schema.clone()),
+        Relation::Selection(node) => Ok(node.schema.clone()),
+        Relation::Projection(node) => Ok(node.schema.clone()),
+        Relation::Aggregation(node) => Ok(node.schema.clone()),
+        Relation::Window(node) => Ok(node.schema.clone()),
+        Relation::Distinct(node) => Ok(node.schema.clone()),
+        Relation::Sort(node) => Ok(node.schema.clone()),
+        Relation::Limit(node) => Ok(node.schema.clone()),
+        Relation::Alias(node) => Ok(node.schema.clone()),
+        Relation::Join(node) => Ok(node.schema.clone()),
+        Relation::SetOperation(node) => Ok(node.schema.clone()),
     }
 }
 
@@ -351,21 +355,21 @@ fn project_all_slots(columns: &[BoundColumn], visibility: Visibility) -> Vec<Pro
     columns
         .iter()
         .map(|column| ProjectionColumn {
-            expr: BoundScalarExpr::SlotRef(column.slot_id),
+            expr: Expression::SlotRef(column.slot_id),
             alias: Some(column.name.clone()),
             visibility: visibility.clone(),
         })
         .collect()
 }
 
-fn disallow_hidden_order_by(expr: &RelExpr) -> bool {
+fn disallow_hidden_order_by(expr: &Relation) -> bool {
     match expr {
-        RelExpr::Distinct(_) => true,
-        RelExpr::SetOperation(node) => !node.all,
+        Relation::Distinct(_) => true,
+        Relation::SetOperation(node) => !node.all,
         _ => false,
     }
 }
 
-fn bound_expr_key(expr: &BoundScalarExpr) -> String {
+fn bound_expr_key(expr: &Expression) -> String {
     format!("{expr:?}")
 }

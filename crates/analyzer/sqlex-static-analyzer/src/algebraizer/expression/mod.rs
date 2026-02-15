@@ -1,13 +1,14 @@
 use sqlparser::ast::{BinaryOperator, Expr};
 
 use crate::{
-    algebra::{
-        planner::{Algebraizer, context::BuildContext},
-        scalar::{BoundBinaryOp, BoundScalarExpr, BoundUnaryOp},
+    algebraizer::{
+        Algebraizer,
+        context::BuildContext,
+        model::expression::{BoundBinaryOp, BoundUnaryOp, Expression},
     },
-    catalog::model::Catalog,
+    catalog::Catalog,
     diagnostics::{Diagnostic, Phase},
-    functions::registry::FunctionRegistry,
+    functions::FunctionRegistry,
 };
 
 mod column;
@@ -16,13 +17,13 @@ mod literal;
 mod subquery;
 
 impl Algebraizer {
-    pub(crate) fn bind_expr(
+    pub(crate) fn bind_expression(
         &self,
         expr: &Expr,
         catalog: &Catalog,
         functions: &FunctionRegistry,
         context: &BuildContext,
-    ) -> Result<(BoundScalarExpr, bool), Diagnostic> {
+    ) -> Result<(Expression, bool), Diagnostic> {
         match expr {
             Expr::Identifier(ident) => {
                 let normalized = crate::catalog::normalize::normalize_ident(ident, self.dialect);
@@ -50,14 +51,13 @@ impl Algebraizer {
                 Ok((binding.into_scalar_expr(), false))
             },
             Expr::Value(value) => Ok((
-                BoundScalarExpr::Literal(
-                    self.bind_literal(value, context.literal_assignment_mode)?,
-                ),
+                Expression::Literal(self.bind_literal(value, context.literal_assignment_mode)?),
                 false,
             )),
-            Expr::Nested(inner) => self.bind_expr(inner, catalog, functions, context),
+            Expr::Nested(inner) => self.bind_expression(inner, catalog, functions, context),
             Expr::UnaryOp { op, expr } => {
-                let (inner, has_aggregate) = self.bind_expr(expr, catalog, functions, context)?;
+                let (inner, has_aggregate) =
+                    self.bind_expression(expr, catalog, functions, context)?;
                 let op = match op {
                     sqlparser::ast::UnaryOperator::Plus => BoundUnaryOp::Pos,
                     sqlparser::ast::UnaryOperator::Minus => BoundUnaryOp::Neg,
@@ -71,7 +71,7 @@ impl Algebraizer {
                     },
                 };
                 Ok((
-                    BoundScalarExpr::UnaryOp {
+                    Expression::UnaryOp {
                         op,
                         expr: Box::new(inner),
                     },
@@ -80,12 +80,12 @@ impl Algebraizer {
             },
             Expr::BinaryOp { left, op, right } => {
                 let (left_expr, left_has_aggregate) =
-                    self.bind_expr(left, catalog, functions, context)?;
+                    self.bind_expression(left, catalog, functions, context)?;
                 let (right_expr, right_has_aggregate) =
-                    self.bind_expr(right, catalog, functions, context)?;
+                    self.bind_expression(right, catalog, functions, context)?;
                 let op = map_binary_operator(op)?;
                 Ok((
-                    BoundScalarExpr::BinaryOp {
+                    Expression::BinaryOp {
                         left: Box::new(left_expr),
                         op,
                         right: Box::new(right_expr),
@@ -96,11 +96,12 @@ impl Algebraizer {
             Expr::Cast {
                 expr, data_type, ..
             } => {
-                let (inner, has_aggregate) = self.bind_expr(expr, catalog, functions, context)?;
+                let (inner, has_aggregate) =
+                    self.bind_expression(expr, catalog, functions, context)?;
                 let target_type =
                     crate::catalog::ddl_type_map::map_sql_data_type(self.dialect, data_type);
                 Ok((
-                    BoundScalarExpr::Cast {
+                    Expression::Cast {
                         expr: Box::new(inner),
                         target_type,
                     },
@@ -127,13 +128,13 @@ impl Algebraizer {
                     ));
                 }
                 let (bound_expr, has_aggregate) =
-                    self.bind_expr(expr, catalog, functions, context)?;
+                    self.bind_expression(expr, catalog, functions, context)?;
                 let bound_args = vec![bound_expr];
                 let signature = functions.resolve_scalar("trim");
                 self.validate_function_arity("trim", bound_args.len(), signature)?;
                 self.validate_function_argument_types("trim", &bound_args, context, signature)?;
                 Ok((
-                    BoundScalarExpr::Function {
+                    Expression::Function {
                         name: "trim".to_string(),
                         args: bound_args,
                     },
@@ -142,9 +143,10 @@ impl Algebraizer {
             },
             Expr::Function(function) => self.bind_function(function, catalog, functions, context),
             Expr::IsNull(inner) => {
-                let (bound, has_aggregate) = self.bind_expr(inner, catalog, functions, context)?;
+                let (bound, has_aggregate) =
+                    self.bind_expression(inner, catalog, functions, context)?;
                 Ok((
-                    BoundScalarExpr::IsNull {
+                    Expression::IsNull {
                         expr: Box::new(bound),
                         negated: false,
                     },
@@ -152,9 +154,10 @@ impl Algebraizer {
                 ))
             },
             Expr::IsNotNull(inner) => {
-                let (bound, has_aggregate) = self.bind_expr(inner, catalog, functions, context)?;
+                let (bound, has_aggregate) =
+                    self.bind_expression(inner, catalog, functions, context)?;
                 Ok((
-                    BoundScalarExpr::IsNull {
+                    Expression::IsNull {
                         expr: Box::new(bound),
                         negated: true,
                     },
@@ -172,16 +175,16 @@ impl Algebraizer {
 
                 for (condition, result) in conditions.iter().zip(results.iter()) {
                     let (bound_condition, condition_has_aggregate) =
-                        self.bind_expr(condition, catalog, functions, context)?;
+                        self.bind_expression(condition, catalog, functions, context)?;
                     let (bound_result, result_has_aggregate) =
-                        self.bind_expr(result, catalog, functions, context)?;
+                        self.bind_expression(result, catalog, functions, context)?;
                     has_aggregate |= condition_has_aggregate || result_has_aggregate;
                     when_clauses.push((bound_condition, bound_result));
                 }
 
                 let bound_operand = if let Some(operand) = operand {
                     let (bound, operand_has_aggregate) =
-                        self.bind_expr(operand, catalog, functions, context)?;
+                        self.bind_expression(operand, catalog, functions, context)?;
                     has_aggregate |= operand_has_aggregate;
                     Some(Box::new(bound))
                 } else {
@@ -190,7 +193,7 @@ impl Algebraizer {
 
                 let bound_else = if let Some(else_expr) = else_result {
                     let (bound, else_has_aggregate) =
-                        self.bind_expr(else_expr, catalog, functions, context)?;
+                        self.bind_expression(else_expr, catalog, functions, context)?;
                     has_aggregate |= else_has_aggregate;
                     Some(Box::new(bound))
                 } else {
@@ -198,7 +201,7 @@ impl Algebraizer {
                 };
 
                 Ok((
-                    BoundScalarExpr::Case {
+                    Expression::Case {
                         operand: bound_operand,
                         when_clauses,
                         else_expr: bound_else,
@@ -212,16 +215,16 @@ impl Algebraizer {
                 negated,
             } => {
                 let (bound_expr, mut has_aggregate) =
-                    self.bind_expr(expr, catalog, functions, context)?;
+                    self.bind_expression(expr, catalog, functions, context)?;
                 let mut bound_list = Vec::with_capacity(list.len());
                 for item in list {
                     let (bound_item, item_has_aggregate) =
-                        self.bind_expr(item, catalog, functions, context)?;
+                        self.bind_expression(item, catalog, functions, context)?;
                     has_aggregate |= item_has_aggregate;
                     bound_list.push(bound_item);
                 }
                 Ok((
-                    BoundScalarExpr::InList {
+                    Expression::InList {
                         expr: Box::new(bound_expr),
                         list: bound_list,
                         negated: *negated,
@@ -235,7 +238,7 @@ impl Algebraizer {
                 negated,
             } => {
                 let (bound_expr, has_aggregate) =
-                    self.bind_expr(expr, catalog, functions, context)?;
+                    self.bind_expression(expr, catalog, functions, context)?;
                 let bound_subquery = self.bind_single_column_subquery(
                     subquery,
                     catalog,
@@ -244,7 +247,7 @@ impl Algebraizer {
                     "IN subquery",
                 )?;
                 Ok((
-                    BoundScalarExpr::InSubquery {
+                    Expression::InSubquery {
                         expr: Box::new(bound_expr),
                         subquery: Box::new(bound_subquery),
                         negated: *negated,
@@ -256,7 +259,7 @@ impl Algebraizer {
                 let bound_subquery =
                     self.bind_subquery_relation(subquery, catalog, functions, context)?;
                 Ok((
-                    BoundScalarExpr::Exists {
+                    Expression::Exists {
                         subquery: Box::new(bound_subquery),
                         negated: *negated,
                     },
@@ -271,10 +274,7 @@ impl Algebraizer {
                     context,
                     "scalar subquery",
                 )?;
-                Ok((
-                    BoundScalarExpr::ScalarSubquery(Box::new(bound_subquery)),
-                    false,
-                ))
+                Ok((Expression::ScalarSubquery(Box::new(bound_subquery)), false))
             },
             _ => Err(Diagnostic::new(
                 "A3070",

@@ -1,6 +1,6 @@
-use crate::functions::registry::{
-    FunctionCategory, FunctionNullabilityRule, FunctionRegistry, FunctionReturnTypeRule,
-    FunctionSignature,
+use crate::functions::{
+    FunctionRegistry,
+    model::{FunctionCategory, FunctionNullabilityRule, FunctionReturnTypeRule, FunctionSignature},
 };
 
 pub(crate) fn register_mysql_functions(registry: &mut FunctionRegistry) {

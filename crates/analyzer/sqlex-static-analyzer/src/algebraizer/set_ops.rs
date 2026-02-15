@@ -1,14 +1,17 @@
 use sqlparser::ast::{SetExpr, SetOperator, SetQuantifier};
 
 use crate::{
-    algebra::{
-        expr::RelExpr,
-        planner::{Algebraizer, context::BuildContext},
-        scalar::{BoundColumn, ColumnOrigin, OutputSchema},
+    algebraizer::{
+        Algebraizer,
+        context::BuildContext,
+        model::{
+            relation::Relation,
+            schema::{BoundColumn, ColumnOrigin, OutputSchema},
+        },
     },
-    catalog::model::Catalog,
+    catalog::Catalog,
     diagnostics::{Diagnostic, Phase},
-    functions::registry::FunctionRegistry,
+    functions::FunctionRegistry,
 };
 
 impl Algebraizer {
@@ -18,7 +21,7 @@ impl Algebraizer {
         catalog: &Catalog,
         functions: &FunctionRegistry,
         context: &mut BuildContext,
-    ) -> Result<RelExpr, Diagnostic> {
+    ) -> Result<Relation, Diagnostic> {
         match set_expr {
             SetExpr::Select(select) => self.build_select(select, catalog, functions, context),
             SetExpr::Query(query) => {
@@ -75,9 +78,11 @@ impl Algebraizer {
                 }
 
                 let set_op = match op {
-                    SetOperator::Union => crate::algebra::expr::SetOp::Union,
-                    SetOperator::Intersect => crate::algebra::expr::SetOp::Intersect,
-                    SetOperator::Except | SetOperator::Minus => crate::algebra::expr::SetOp::Except,
+                    SetOperator::Union => crate::algebraizer::model::relation::SetOp::Union,
+                    SetOperator::Intersect => crate::algebraizer::model::relation::SetOp::Intersect,
+                    SetOperator::Except | SetOperator::Minus => {
+                        crate::algebraizer::model::relation::SetOp::Except
+                    },
                 };
                 let all = matches!(
                     set_quantifier,
@@ -101,16 +106,18 @@ impl Algebraizer {
                     });
                 }
 
-                Ok(RelExpr::SetOperation(crate::algebra::expr::SetOpNode {
-                    left: Box::new(left_expr),
-                    right: Box::new(right_expr),
-                    op: set_op,
-                    all,
-                    schema: OutputSchema {
-                        relation_id: context.allocate_relation_id(),
-                        columns,
+                Ok(Relation::SetOperation(
+                    crate::algebraizer::model::relation::SetOpNode {
+                        left: Box::new(left_expr),
+                        right: Box::new(right_expr),
+                        op: set_op,
+                        all,
+                        schema: OutputSchema {
+                            relation_id: context.allocate_relation_id(),
+                            columns,
+                        },
                     },
-                }))
+                ))
             },
             _ => Err(Diagnostic::new(
                 "A3065",

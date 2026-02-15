@@ -1,6 +1,9 @@
-use crate::functions::registry::{
-    FunctionArgTypeRule, FunctionCategory, FunctionCoercionProfile, FunctionNullabilityRule,
-    FunctionRegistry, FunctionReturnTypeRule, FunctionSignature,
+use crate::functions::{
+    FunctionRegistry,
+    model::{
+        FunctionArgTypeRule, FunctionCategory, FunctionCoercionProfile, FunctionNullabilityRule,
+        FunctionReturnTypeRule, FunctionSignature,
+    },
 };
 
 pub(crate) fn register_sqlite_functions(registry: &mut FunctionRegistry) {

@@ -1,5 +1,6 @@
-use crate::functions::registry::{
-    FunctionArgTypeRule, FunctionCategory, FunctionCoercionProfile, FunctionRegistry,
+use crate::functions::{
+    FunctionRegistry,
+    model::{FunctionArgTypeRule, FunctionCategory, FunctionCoercionProfile},
 };
 
 pub(crate) fn register_postgres_functions(registry: &mut FunctionRegistry) {

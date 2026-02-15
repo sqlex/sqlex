@@ -4,20 +4,18 @@ use sqlex_common::dialect::Dialect;
 use sqlparser::ast::{Expr, Join, JoinConstraint, JoinOperator};
 
 use crate::{
-    algebra::{
-        expr::{JoinKind, RelExpr, SelectionNode},
-        planner::{
-            Algebraizer,
-            context::{BuildContext, RelationScope},
+    algebraizer::{
+        Algebraizer,
+        context::{BuildContext, RelationScope},
+        model::{
+            expression::{BoundBinaryOp, Expression},
+            relation::{JoinKind, Relation, SelectionNode},
+            schema::{BoundColumn, ColumnOrigin, OutputSchema},
         },
-        scalar::{BoundBinaryOp, BoundColumn, BoundScalarExpr, ColumnOrigin, OutputSchema},
     },
-    catalog::{
-        model::{Catalog, TableSchema},
-        normalize::normalize_object_name,
-    },
+    catalog::{Catalog, model::TableSchema, normalize::normalize_object_name},
     diagnostics::{Diagnostic, Phase},
-    functions::registry::FunctionRegistry,
+    functions::FunctionRegistry,
 };
 
 #[derive(Debug, Clone)]
@@ -30,13 +28,13 @@ struct JoinUsingPair {
 impl Algebraizer {
     pub(crate) fn build_join(
         &self,
-        left_expr: RelExpr,
+        left_expr: Relation,
         scopes: &mut Vec<RelationScope>,
         join: &Join,
         catalog: &Catalog,
         functions: &FunctionRegistry,
         context: &mut BuildContext,
-    ) -> Result<RelExpr, Diagnostic> {
+    ) -> Result<Relation, Diagnostic> {
         if join.global {
             return Err(Diagnostic::new(
                 "A3053",
@@ -68,7 +66,7 @@ impl Algebraizer {
         let mut effective_kind = kind.clone();
         let mut bound_condition = None;
         if let Some(on_expr) = on_expr {
-            let (condition, _) = self.bind_expr(on_expr, catalog, functions, context)?;
+            let (condition, _) = self.bind_expression(on_expr, catalog, functions, context)?;
             if self.outer_join_is_effectively_inner(
                 kind.clone(),
                 &condition,
@@ -164,7 +162,7 @@ impl Algebraizer {
             columns,
         };
 
-        let mut join_expr = RelExpr::Join(crate::algebra::expr::JoinNode {
+        let mut join_expr = Relation::Join(crate::algebraizer::model::relation::JoinNode {
             left: Box::new(left_expr),
             right: Box::new(right_expr),
             kind: effective_kind.clone(),
@@ -172,7 +170,7 @@ impl Algebraizer {
         });
 
         if let Some(condition) = bound_condition {
-            join_expr = RelExpr::Selection(SelectionNode {
+            join_expr = Relation::Selection(SelectionNode {
                 input: Box::new(join_expr),
                 condition,
                 schema: join_schema.clone(),
@@ -325,17 +323,17 @@ impl Algebraizer {
     fn build_join_using_condition(
         &self,
         using_pairs: &[JoinUsingPair],
-    ) -> Result<BoundScalarExpr, Diagnostic> {
+    ) -> Result<Expression, Diagnostic> {
         let mut condition = None;
         for pair in using_pairs {
-            let equality = BoundScalarExpr::BinaryOp {
-                left: Box::new(BoundScalarExpr::SlotRef(pair.left_slot)),
+            let equality = Expression::BinaryOp {
+                left: Box::new(Expression::SlotRef(pair.left_slot)),
                 op: BoundBinaryOp::Eq,
-                right: Box::new(BoundScalarExpr::SlotRef(pair.right_slot)),
+                right: Box::new(Expression::SlotRef(pair.right_slot)),
             };
 
             condition = Some(match condition {
-                Some(existing) => BoundScalarExpr::BinaryOp {
+                Some(existing) => Expression::BinaryOp {
                     left: Box::new(existing),
                     op: BoundBinaryOp::And,
                     right: Box::new(equality),
@@ -389,7 +387,7 @@ impl Algebraizer {
     fn outer_join_is_effectively_inner(
         &self,
         kind: JoinKind,
-        condition: &BoundScalarExpr,
+        condition: &Expression,
         left_schema: &OutputSchema,
         right_schema: &OutputSchema,
         catalog: &Catalog,
@@ -413,7 +411,7 @@ impl Algebraizer {
 
     fn guaranteed_match_from_preserved_side(
         &self,
-        condition: &BoundScalarExpr,
+        condition: &Expression,
         preserved_columns: &[BoundColumn],
         other_columns: &[BoundColumn],
         catalog: &Catalog,
@@ -606,9 +604,9 @@ fn find_column_by_slot(schema: &OutputSchema, slot_id: u32) -> Option<&BoundColu
         .find(|column| column.slot_id == slot_id)
 }
 
-fn collect_pure_equijoin_slot_pairs(expr: &BoundScalarExpr, output: &mut Vec<(u32, u32)>) -> bool {
+fn collect_pure_equijoin_slot_pairs(expr: &Expression, output: &mut Vec<(u32, u32)>) -> bool {
     match expr {
-        BoundScalarExpr::BinaryOp {
+        Expression::BinaryOp {
             left,
             op: BoundBinaryOp::And,
             right,
@@ -616,12 +614,12 @@ fn collect_pure_equijoin_slot_pairs(expr: &BoundScalarExpr, output: &mut Vec<(u3
             collect_pure_equijoin_slot_pairs(left, output)
                 && collect_pure_equijoin_slot_pairs(right, output)
         },
-        BoundScalarExpr::BinaryOp {
+        Expression::BinaryOp {
             left,
             op: BoundBinaryOp::Eq,
             right,
         } => {
-            if let (BoundScalarExpr::SlotRef(left_slot), BoundScalarExpr::SlotRef(right_slot)) =
+            if let (Expression::SlotRef(left_slot), Expression::SlotRef(right_slot)) =
                 (&**left, &**right)
             {
                 output.push((*left_slot, *right_slot));

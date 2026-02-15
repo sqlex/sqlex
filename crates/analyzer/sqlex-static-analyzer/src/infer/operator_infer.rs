@@ -4,16 +4,16 @@ use sqlex_analyzer::extension::DataTypeExt;
 use sqlex_common::{dialect::Dialect, types::DataType};
 
 use crate::{
-    algebra::{
-        expr::{
-            AggregationNode, AliasNode, JoinKind, JoinNode, LimitNode, ProjectionNode, RelExpr,
+    algebraizer::model::{
+        relation::{
+            AggregationNode, AliasNode, JoinKind, JoinNode, LimitNode, ProjectionNode, Relation,
             SetOp, SetOpNode, SortNode, WindowNode,
         },
-        scalar::{ColumnOrigin as BoundColumnOrigin, OutputSchema},
+        schema::{ColumnOrigin as BoundColumnOrigin, OutputSchema},
     },
-    catalog::model::Catalog,
+    catalog::Catalog,
     diagnostics::{Diagnostic, Phase},
-    functions::registry::FunctionRegistry,
+    functions::FunctionRegistry,
     infer::{
         cardinality::{CardInterval, MaxRows, MinRows},
         metadata::{ColumnOrigin, InferColumn, InferMetadata, ResolvedKey},
@@ -22,7 +22,7 @@ use crate::{
 };
 
 pub(crate) fn infer_operator(
-    expr: &RelExpr,
+    expr: &Relation,
     catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
@@ -31,42 +31,42 @@ pub(crate) fn infer_operator(
 }
 
 pub(crate) fn infer_operator_with_outer_scopes(
-    expr: &RelExpr,
+    expr: &Relation,
     catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
     outer_scopes: &[Vec<InferColumn>],
 ) -> Result<InferMetadata, Diagnostic> {
     match expr {
-        RelExpr::Scan(node) => infer_scan(node, catalog),
-        RelExpr::Values(_) => Ok(InferMetadata {
+        Relation::Scan(node) => infer_scan(node, catalog),
+        Relation::Values(_) => Ok(InferMetadata {
             columns: Vec::new(),
             cardinality: CardInterval::exactly_one(),
             keys: Vec::new(),
         }),
-        RelExpr::Selection(node) => {
+        Relation::Selection(node) => {
             infer_selection(node, catalog, dialect, functions, outer_scopes)
         },
-        RelExpr::Aggregation(node) => {
+        Relation::Aggregation(node) => {
             infer_aggregation(node, catalog, dialect, functions, outer_scopes)
         },
-        RelExpr::Window(node) => infer_window(node, catalog, dialect, functions, outer_scopes),
-        RelExpr::Projection(node) => {
+        Relation::Window(node) => infer_window(node, catalog, dialect, functions, outer_scopes),
+        Relation::Projection(node) => {
             infer_projection(node, catalog, dialect, functions, outer_scopes)
         },
-        RelExpr::Join(node) => infer_join(node, catalog, dialect, functions, outer_scopes),
-        RelExpr::Distinct(node) => infer_distinct(node, catalog, dialect, functions, outer_scopes),
-        RelExpr::Sort(node) => infer_sort(node, catalog, dialect, functions, outer_scopes),
-        RelExpr::Limit(node) => infer_limit(node, catalog, dialect, functions, outer_scopes),
-        RelExpr::Alias(node) => infer_alias(node, catalog, dialect, functions, outer_scopes),
-        RelExpr::SetOperation(node) => {
+        Relation::Join(node) => infer_join(node, catalog, dialect, functions, outer_scopes),
+        Relation::Distinct(node) => infer_distinct(node, catalog, dialect, functions, outer_scopes),
+        Relation::Sort(node) => infer_sort(node, catalog, dialect, functions, outer_scopes),
+        Relation::Limit(node) => infer_limit(node, catalog, dialect, functions, outer_scopes),
+        Relation::Alias(node) => infer_alias(node, catalog, dialect, functions, outer_scopes),
+        Relation::SetOperation(node) => {
             infer_set_operation(node, catalog, dialect, functions, outer_scopes)
         },
     }
 }
 
 fn infer_scan(
-    node: &crate::algebra::expr::ScanNode,
+    node: &crate::algebraizer::model::relation::ScanNode,
     catalog: &Catalog,
 ) -> Result<InferMetadata, Diagnostic> {
     let _ = &node.table;
@@ -108,7 +108,7 @@ fn infer_scan(
 }
 
 fn infer_selection(
-    node: &crate::algebra::expr::SelectionNode,
+    node: &crate::algebraizer::model::relation::SelectionNode,
     catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
@@ -131,7 +131,7 @@ fn infer_selection(
         return Ok(child);
     }
 
-    if let RelExpr::Join(join_node) = node.input.as_ref() {
+    if let Relation::Join(join_node) = node.input.as_ref() {
         child.cardinality = refine_join_cardinality_from_selection(
             child.cardinality,
             join_node,
@@ -251,7 +251,7 @@ fn infer_projection(
             )
         })?;
         if let (
-            crate::algebra::scalar::BoundScalarExpr::SlotRef(input_slot_id),
+            crate::algebraizer::model::expression::Expression::SlotRef(input_slot_id),
             Some(output_slot_id),
         ) = (&projection_column.expr, output_slot_id)
         {
@@ -365,7 +365,7 @@ fn infer_join(
 }
 
 fn infer_distinct(
-    node: &crate::algebra::expr::DistinctNode,
+    node: &crate::algebraizer::model::relation::DistinctNode,
     catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
@@ -539,7 +539,10 @@ fn infer_set_operation_cardinality(
     }
 }
 
-fn resolve_scan_keys(node: &crate::algebra::expr::ScanNode, catalog: &Catalog) -> Vec<ResolvedKey> {
+fn resolve_scan_keys(
+    node: &crate::algebraizer::model::relation::ScanNode,
+    catalog: &Catalog,
+) -> Vec<ResolvedKey> {
     let Some(table) = catalog.table(&node.table) else {
         return Vec::new();
     };
@@ -712,7 +715,7 @@ fn set_operation_output_nullable(op: SetOp, left: bool, right: bool) -> bool {
 }
 
 fn condition_implies_empty_result(
-    condition: &crate::algebra::scalar::BoundScalarExpr,
+    condition: &crate::algebraizer::model::expression::Expression,
     input_keys: &[ResolvedKey],
     input_columns: &[InferColumn],
 ) -> bool {
@@ -721,22 +724,26 @@ fn condition_implies_empty_result(
         || has_full_key_is_null_on_proven_non_nullable_key(condition, input_keys, input_columns)
 }
 
-fn has_contradictory_equalities(condition: &crate::algebra::scalar::BoundScalarExpr) -> bool {
-    let mut equalities: HashMap<u32, crate::algebra::scalar::BoundLiteral> = HashMap::new();
+fn has_contradictory_equalities(
+    condition: &crate::algebraizer::model::expression::Expression,
+) -> bool {
+    let mut equalities: HashMap<u32, crate::algebraizer::model::expression::BoundLiteral> =
+        HashMap::new();
     collect_contradictory_equalities(condition, &mut equalities)
 }
 
 fn collect_contradictory_equalities(
-    expr: &crate::algebra::scalar::BoundScalarExpr,
-    equalities: &mut HashMap<u32, crate::algebra::scalar::BoundLiteral>,
+    expr: &crate::algebraizer::model::expression::Expression,
+    equalities: &mut HashMap<u32, crate::algebraizer::model::expression::BoundLiteral>,
 ) -> bool {
     match expr {
-        crate::algebra::scalar::BoundScalarExpr::BinaryOp { left, op, right } => match op {
-            crate::algebra::scalar::BoundBinaryOp::And => {
+        crate::algebraizer::model::expression::Expression::BinaryOp { left, op, right } => match op
+        {
+            crate::algebraizer::model::expression::BoundBinaryOp::And => {
                 collect_contradictory_equalities(left, equalities)
                     || collect_contradictory_equalities(right, equalities)
             },
-            crate::algebra::scalar::BoundBinaryOp::Eq => {
+            crate::algebraizer::model::expression::BoundBinaryOp::Eq => {
                 equality_constraint_conflicts(left, right, equalities)
                     || equality_constraint_conflicts(right, left, equalities)
             },
@@ -747,11 +754,11 @@ fn collect_contradictory_equalities(
 }
 
 fn equality_constraint_conflicts(
-    left: &crate::algebra::scalar::BoundScalarExpr,
-    right: &crate::algebra::scalar::BoundScalarExpr,
-    equalities: &mut HashMap<u32, crate::algebra::scalar::BoundLiteral>,
+    left: &crate::algebraizer::model::expression::Expression,
+    right: &crate::algebraizer::model::expression::Expression,
+    equalities: &mut HashMap<u32, crate::algebraizer::model::expression::BoundLiteral>,
 ) -> bool {
-    let crate::algebra::scalar::BoundScalarExpr::SlotRef(slot_id) = left else {
+    let crate::algebraizer::model::expression::Expression::SlotRef(slot_id) = left else {
         return false;
     };
     let Some(literal) = extract_comparable_literal(right) else {
@@ -767,11 +774,11 @@ fn equality_constraint_conflicts(
 }
 
 fn extract_comparable_literal(
-    expr: &crate::algebra::scalar::BoundScalarExpr,
-) -> Option<&crate::algebra::scalar::BoundLiteral> {
+    expr: &crate::algebraizer::model::expression::Expression,
+) -> Option<&crate::algebraizer::model::expression::BoundLiteral> {
     match expr {
-        crate::algebra::scalar::BoundScalarExpr::Literal(literal) => Some(literal),
-        crate::algebra::scalar::BoundScalarExpr::Cast { expr, .. } => {
+        crate::algebraizer::model::expression::Expression::Literal(literal) => Some(literal),
+        crate::algebraizer::model::expression::Expression::Cast { expr, .. } => {
             extract_comparable_literal(expr)
         },
         _ => None,
@@ -779,7 +786,7 @@ fn extract_comparable_literal(
 }
 
 fn has_full_key_is_null_on_proven_non_nullable_key(
-    condition: &crate::algebra::scalar::BoundScalarExpr,
+    condition: &crate::algebraizer::model::expression::Expression,
     input_keys: &[ResolvedKey],
     input_columns: &[InferColumn],
 ) -> bool {
@@ -809,7 +816,7 @@ fn column_is_non_nullable(columns: &[InferColumn], slot_id: u32) -> bool {
 fn refine_join_cardinality_from_selection(
     current: CardInterval,
     join_node: &JoinNode,
-    condition: &crate::algebra::scalar::BoundScalarExpr,
+    condition: &crate::algebraizer::model::expression::Expression,
     catalog: &Catalog,
     dialect: Dialect,
     functions: &FunctionRegistry,
@@ -867,7 +874,7 @@ fn refine_join_cardinality_from_selection(
 }
 
 fn extract_join_equijoin_pairs(
-    condition: &crate::algebra::scalar::BoundScalarExpr,
+    condition: &crate::algebraizer::model::expression::Expression,
     left_columns: &[InferColumn],
     right_columns: &[InferColumn],
 ) -> Option<Vec<(u32, u32)>> {
@@ -896,21 +903,22 @@ fn extract_join_equijoin_pairs(
 }
 
 fn collect_join_equijoin_pairs(
-    expr: &crate::algebra::scalar::BoundScalarExpr,
+    expr: &crate::algebraizer::model::expression::Expression,
     left_slots: &HashSet<u32>,
     right_slots: &HashSet<u32>,
     pairs: &mut HashSet<(u32, u32)>,
 ) -> bool {
     match expr {
-        crate::algebra::scalar::BoundScalarExpr::BinaryOp { left, op, right } => match op {
-            crate::algebra::scalar::BoundBinaryOp::And => {
+        crate::algebraizer::model::expression::Expression::BinaryOp { left, op, right } => match op
+        {
+            crate::algebraizer::model::expression::BoundBinaryOp::And => {
                 collect_join_equijoin_pairs(left, left_slots, right_slots, pairs)
                     && collect_join_equijoin_pairs(right, left_slots, right_slots, pairs)
             },
-            crate::algebra::scalar::BoundBinaryOp::Eq => {
+            crate::algebraizer::model::expression::BoundBinaryOp::Eq => {
                 let (
-                    crate::algebra::scalar::BoundScalarExpr::SlotRef(left_slot),
-                    crate::algebra::scalar::BoundScalarExpr::SlotRef(right_slot),
+                    crate::algebraizer::model::expression::Expression::SlotRef(left_slot),
+                    crate::algebraizer::model::expression::Expression::SlotRef(right_slot),
                 ) = (left.as_ref(), right.as_ref())
                 else {
                     return false;
@@ -1001,16 +1009,17 @@ fn lower_and(left: MinRows, right: MinRows) -> MinRows {
     }
 }
 
-fn always_false_condition(condition: &crate::algebra::scalar::BoundScalarExpr) -> bool {
+fn always_false_condition(condition: &crate::algebraizer::model::expression::Expression) -> bool {
     match condition {
-        crate::algebra::scalar::BoundScalarExpr::Literal(
-            crate::algebra::scalar::BoundLiteral::Bool(value),
+        crate::algebraizer::model::expression::Expression::Literal(
+            crate::algebraizer::model::expression::BoundLiteral::Bool(value),
         ) => !*value,
-        crate::algebra::scalar::BoundScalarExpr::BinaryOp { left, op, right } => match op {
-            crate::algebra::scalar::BoundBinaryOp::Eq => {
+        crate::algebraizer::model::expression::Expression::BinaryOp { left, op, right } => match op
+        {
+            crate::algebraizer::model::expression::BoundBinaryOp::Eq => {
                 literal_comparison_false(left, right, true)
             },
-            crate::algebra::scalar::BoundBinaryOp::NotEq => {
+            crate::algebraizer::model::expression::BoundBinaryOp::NotEq => {
                 literal_comparison_false(left, right, false)
             },
             _ => false,
@@ -1020,14 +1029,14 @@ fn always_false_condition(condition: &crate::algebra::scalar::BoundScalarExpr) -
 }
 
 fn literal_comparison_false(
-    left: &crate::algebra::scalar::BoundScalarExpr,
-    right: &crate::algebra::scalar::BoundScalarExpr,
+    left: &crate::algebraizer::model::expression::Expression,
+    right: &crate::algebraizer::model::expression::Expression,
     is_eq: bool,
 ) -> bool {
-    let crate::algebra::scalar::BoundScalarExpr::Literal(left_literal) = left else {
+    let crate::algebraizer::model::expression::Expression::Literal(left_literal) = left else {
         return false;
     };
-    let crate::algebra::scalar::BoundScalarExpr::Literal(right_literal) = right else {
+    let crate::algebraizer::model::expression::Expression::Literal(right_literal) = right else {
         return false;
     };
     let Some(literals_equal) = literal_equal(left_literal, right_literal) else {
@@ -1041,33 +1050,33 @@ fn literal_comparison_false(
 }
 
 fn literal_equal(
-    left: &crate::algebra::scalar::BoundLiteral,
-    right: &crate::algebra::scalar::BoundLiteral,
+    left: &crate::algebraizer::model::expression::BoundLiteral,
+    right: &crate::algebraizer::model::expression::BoundLiteral,
 ) -> Option<bool> {
     match (left, right) {
         (
-            crate::algebra::scalar::BoundLiteral::Null,
-            crate::algebra::scalar::BoundLiteral::Null,
+            crate::algebraizer::model::expression::BoundLiteral::Null,
+            crate::algebraizer::model::expression::BoundLiteral::Null,
         ) => Some(true),
         (
-            crate::algebra::scalar::BoundLiteral::Bool(left_value),
-            crate::algebra::scalar::BoundLiteral::Bool(right_value),
+            crate::algebraizer::model::expression::BoundLiteral::Bool(left_value),
+            crate::algebraizer::model::expression::BoundLiteral::Bool(right_value),
         ) => Some(left_value == right_value),
         (
-            crate::algebra::scalar::BoundLiteral::Int {
+            crate::algebraizer::model::expression::BoundLiteral::Int {
                 value: left_value, ..
             },
-            crate::algebra::scalar::BoundLiteral::Int {
+            crate::algebraizer::model::expression::BoundLiteral::Int {
                 value: right_value, ..
             },
         ) => Some(left_value == right_value),
         (
-            crate::algebra::scalar::BoundLiteral::Float(left_value),
-            crate::algebra::scalar::BoundLiteral::Float(right_value),
+            crate::algebraizer::model::expression::BoundLiteral::Float(left_value),
+            crate::algebraizer::model::expression::BoundLiteral::Float(right_value),
         ) => Some(left_value.to_bits() == right_value.to_bits()),
         (
-            crate::algebra::scalar::BoundLiteral::String(left_value),
-            crate::algebra::scalar::BoundLiteral::String(right_value),
+            crate::algebraizer::model::expression::BoundLiteral::String(left_value),
+            crate::algebraizer::model::expression::BoundLiteral::String(right_value),
         ) => Some(left_value == right_value),
         _ => None,
     }
@@ -1080,7 +1089,7 @@ enum SingleValueConstraint {
 }
 
 fn selection_is_at_most_one(
-    condition: &crate::algebra::scalar::BoundScalarExpr,
+    condition: &crate::algebraizer::model::expression::Expression,
     input_keys: &[ResolvedKey],
     input_columns: &[InferColumn],
 ) -> bool {
@@ -1095,17 +1104,18 @@ fn selection_is_at_most_one(
 }
 
 fn collect_single_value_constraints(
-    expr: &crate::algebra::scalar::BoundScalarExpr,
+    expr: &crate::algebraizer::model::expression::Expression,
     constraints: &mut HashMap<u32, SingleValueConstraint>,
 ) -> bool {
     match expr {
-        crate::algebra::scalar::BoundScalarExpr::BinaryOp { left, op, right } => match op {
-            crate::algebra::scalar::BoundBinaryOp::And => {
+        crate::algebraizer::model::expression::Expression::BinaryOp { left, op, right } => match op
+        {
+            crate::algebraizer::model::expression::BoundBinaryOp::And => {
                 collect_single_value_constraints(left, constraints)
                     && collect_single_value_constraints(right, constraints)
             },
-            crate::algebra::scalar::BoundBinaryOp::Or => false,
-            crate::algebra::scalar::BoundBinaryOp::Eq => {
+            crate::algebraizer::model::expression::BoundBinaryOp::Or => false,
+            crate::algebraizer::model::expression::BoundBinaryOp::Eq => {
                 if let Some(slot_id) = slot_id_equals_single_value(left, right) {
                     set_constraint(constraints, slot_id, SingleValueConstraint::EqLike);
                 } else if let Some(slot_id) = slot_id_equals_single_value(right, left) {
@@ -1115,21 +1125,25 @@ fn collect_single_value_constraints(
             },
             _ => true,
         },
-        crate::algebra::scalar::BoundScalarExpr::InList {
+        crate::algebraizer::model::expression::Expression::InList {
             expr,
             list,
             negated,
         } => {
             if !*negated && list.len() == 1 {
-                if let crate::algebra::scalar::BoundScalarExpr::SlotRef(slot_id) = expr.as_ref() {
+                if let crate::algebraizer::model::expression::Expression::SlotRef(slot_id) =
+                    expr.as_ref()
+                {
                     set_constraint(constraints, *slot_id, SingleValueConstraint::EqLike);
                 }
             }
             true
         },
-        crate::algebra::scalar::BoundScalarExpr::IsNull { expr, negated } => {
+        crate::algebraizer::model::expression::Expression::IsNull { expr, negated } => {
             if !*negated {
-                if let crate::algebra::scalar::BoundScalarExpr::SlotRef(slot_id) = expr.as_ref() {
+                if let crate::algebraizer::model::expression::Expression::SlotRef(slot_id) =
+                    expr.as_ref()
+                {
                     set_constraint(constraints, *slot_id, SingleValueConstraint::IsNull);
                 }
             }
@@ -1140,10 +1154,10 @@ fn collect_single_value_constraints(
 }
 
 fn slot_id_equals_single_value(
-    left: &crate::algebra::scalar::BoundScalarExpr,
-    right: &crate::algebra::scalar::BoundScalarExpr,
+    left: &crate::algebraizer::model::expression::Expression,
+    right: &crate::algebraizer::model::expression::Expression,
 ) -> Option<u32> {
-    let crate::algebra::scalar::BoundScalarExpr::SlotRef(slot_id) = left else {
+    let crate::algebraizer::model::expression::Expression::SlotRef(slot_id) = left else {
         return None;
     };
     if is_single_value_expr(right) {
@@ -1153,10 +1167,12 @@ fn slot_id_equals_single_value(
     }
 }
 
-fn is_single_value_expr(expr: &crate::algebra::scalar::BoundScalarExpr) -> bool {
+fn is_single_value_expr(expr: &crate::algebraizer::model::expression::Expression) -> bool {
     match expr {
-        crate::algebra::scalar::BoundScalarExpr::Literal(_) => true,
-        crate::algebra::scalar::BoundScalarExpr::Cast { expr, .. } => is_single_value_expr(expr),
+        crate::algebraizer::model::expression::Expression::Literal(_) => true,
+        crate::algebraizer::model::expression::Expression::Cast { expr, .. } => {
+            is_single_value_expr(expr)
+        },
         _ => false,
     }
 }
@@ -1213,18 +1229,19 @@ mod tests {
     use sqlex_common::{dialect::Dialect, types::Cardinality};
 
     use crate::{
-        algebra::{
-            expr::{
-                JoinKind, JoinNode, LimitNode, ProjectionNode, RelExpr, ScanNode, SelectionNode,
+        algebraizer::model::{
+            expression::{BoundBinaryOp, BoundLiteral, Expression},
+            relation::{
+                JoinKind, JoinNode, LimitNode, ProjectionNode, Relation, ScanNode, SelectionNode,
                 SetOp,
             },
-            scalar::{
-                BoundBinaryOp, BoundColumn, BoundLiteral, BoundScalarExpr, ColumnOrigin,
-                OutputSchema, ProjectionColumn, Visibility,
-            },
+            schema::{BoundColumn, ColumnOrigin, OutputSchema, ProjectionColumn, Visibility},
         },
-        catalog::model::{Catalog, ColumnSchema, KeyConstraint, TableSchema},
-        functions::registry::FunctionRegistry,
+        catalog::{
+            Catalog,
+            model::{ColumnSchema, KeyConstraint, TableSchema},
+        },
+        functions::FunctionRegistry,
         infer::{
             cardinality::CardInterval,
             operator_infer::{
@@ -1248,25 +1265,25 @@ mod tests {
             }],
         };
 
-        let scan_expr = RelExpr::Scan(ScanNode {
+        let scan_expr = Relation::Scan(ScanNode {
             table: "users".to_string(),
             schema: scan_schema(),
         });
-        let projection_expr = RelExpr::Projection(ProjectionNode {
+        let projection_expr = Relation::Projection(ProjectionNode {
             input: Box::new(scan_expr),
             columns: vec![ProjectionColumn {
-                expr: BoundScalarExpr::SlotRef(1),
+                expr: Expression::SlotRef(1),
                 alias: Some("id".to_string()),
                 visibility: Visibility::Visible,
             }],
             schema: projection_schema.clone(),
         });
-        let expr = RelExpr::Selection(SelectionNode {
+        let expr = Relation::Selection(SelectionNode {
             input: Box::new(projection_expr),
-            condition: BoundScalarExpr::BinaryOp {
-                left: Box::new(BoundScalarExpr::SlotRef(10)),
+            condition: Expression::BinaryOp {
+                left: Box::new(Expression::SlotRef(10)),
                 op: BoundBinaryOp::Eq,
-                right: Box::new(BoundScalarExpr::Literal(BoundLiteral::Int {
+                right: Box::new(Expression::Literal(BoundLiteral::Int {
                     value: 7,
                     raw: "7".to_string(),
                     assignment: false,
@@ -1290,12 +1307,12 @@ mod tests {
     fn selection_false_condition_is_exactly_zero() {
         let catalog = sample_catalog();
         let schema = scan_schema();
-        let expr = RelExpr::Selection(SelectionNode {
-            input: Box::new(RelExpr::Scan(ScanNode {
+        let expr = Relation::Selection(SelectionNode {
+            input: Box::new(Relation::Scan(ScanNode {
                 table: "users".to_string(),
                 schema: schema.clone(),
             })),
-            condition: BoundScalarExpr::Literal(BoundLiteral::Bool(false)),
+            condition: Expression::Literal(BoundLiteral::Bool(false)),
             schema,
         });
 
@@ -1313,26 +1330,26 @@ mod tests {
     fn selection_contradictory_equalities_is_exactly_zero() {
         let catalog = sample_catalog();
         let schema = scan_schema();
-        let expr = RelExpr::Selection(SelectionNode {
-            input: Box::new(RelExpr::Scan(ScanNode {
+        let expr = Relation::Selection(SelectionNode {
+            input: Box::new(Relation::Scan(ScanNode {
                 table: "users".to_string(),
                 schema: schema.clone(),
             })),
-            condition: BoundScalarExpr::BinaryOp {
-                left: Box::new(BoundScalarExpr::BinaryOp {
-                    left: Box::new(BoundScalarExpr::SlotRef(1)),
+            condition: Expression::BinaryOp {
+                left: Box::new(Expression::BinaryOp {
+                    left: Box::new(Expression::SlotRef(1)),
                     op: BoundBinaryOp::Eq,
-                    right: Box::new(BoundScalarExpr::Literal(BoundLiteral::Int {
+                    right: Box::new(Expression::Literal(BoundLiteral::Int {
                         value: 1,
                         raw: "1".to_string(),
                         assignment: false,
                     })),
                 }),
                 op: BoundBinaryOp::And,
-                right: Box::new(BoundScalarExpr::BinaryOp {
-                    left: Box::new(BoundScalarExpr::SlotRef(1)),
+                right: Box::new(Expression::BinaryOp {
+                    left: Box::new(Expression::SlotRef(1)),
                     op: BoundBinaryOp::Eq,
-                    right: Box::new(BoundScalarExpr::Literal(BoundLiteral::Int {
+                    right: Box::new(Expression::Literal(BoundLiteral::Int {
                         value: 2,
                         raw: "2".to_string(),
                         assignment: false,
@@ -1356,13 +1373,13 @@ mod tests {
     fn selection_non_nullable_key_is_null_is_exactly_zero() {
         let catalog = sample_catalog();
         let schema = scan_schema();
-        let expr = RelExpr::Selection(SelectionNode {
-            input: Box::new(RelExpr::Scan(ScanNode {
+        let expr = Relation::Selection(SelectionNode {
+            input: Box::new(Relation::Scan(ScanNode {
                 table: "users".to_string(),
                 schema: schema.clone(),
             })),
-            condition: BoundScalarExpr::IsNull {
-                expr: Box::new(BoundScalarExpr::SlotRef(1)),
+            condition: Expression::IsNull {
+                expr: Box::new(Expression::SlotRef(1)),
                 negated: false,
             },
             schema,
@@ -1440,17 +1457,17 @@ mod tests {
     #[test]
     fn selection_over_join_uses_companion_refinement() {
         let catalog = sample_catalog();
-        let users_scan = RelExpr::Scan(ScanNode {
+        let users_scan = Relation::Scan(ScanNode {
             table: "users".to_string(),
             schema: scan_schema(),
         });
-        let limited_users = RelExpr::Limit(LimitNode {
+        let limited_users = Relation::Limit(LimitNode {
             input: Box::new(users_scan),
             limit: Some(1),
             offset: None,
             schema: scan_schema(),
         });
-        let orders_scan = RelExpr::Scan(ScanNode {
+        let orders_scan = Relation::Scan(ScanNode {
             table: "orders".to_string(),
             schema: orders_scan_schema(),
         });
@@ -1463,18 +1480,18 @@ mod tests {
                 columns
             },
         };
-        let join_expr = RelExpr::Join(JoinNode {
+        let join_expr = Relation::Join(JoinNode {
             left: Box::new(limited_users),
             right: Box::new(orders_scan),
             kind: JoinKind::Inner,
             schema: join_schema.clone(),
         });
-        let expr = RelExpr::Selection(SelectionNode {
+        let expr = Relation::Selection(SelectionNode {
             input: Box::new(join_expr),
-            condition: BoundScalarExpr::BinaryOp {
-                left: Box::new(BoundScalarExpr::SlotRef(1)),
+            condition: Expression::BinaryOp {
+                left: Box::new(Expression::SlotRef(1)),
                 op: BoundBinaryOp::Eq,
-                right: Box::new(BoundScalarExpr::SlotRef(3)),
+                right: Box::new(Expression::SlotRef(3)),
             },
             schema: join_schema,
         });

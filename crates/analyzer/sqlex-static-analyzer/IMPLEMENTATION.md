@@ -56,19 +56,20 @@ crates/analyzer/sqlex-static-analyzer/src/
     normalize.rs
     mutator.rs
     ddl_type_map.rs
-  algebra/
+  algebraizer/
     mod.rs
-    expr.rs
-    scalar.rs
-    planner.rs
-    planner/
-      bind_expr/*
-      context.rs
-      cte.rs
-      from_*.rs
-      join.rs
-      select.rs
-      set_ops.rs
+    model/
+      mod.rs
+      relation.rs
+      expression.rs
+      schema.rs
+    context.rs
+    cte.rs
+    expression/*
+    from_*.rs
+    join.rs
+    select.rs
+    set_ops.rs
   infer/
     mod.rs
     metadata.rs
@@ -78,7 +79,7 @@ crates/analyzer/sqlex-static-analyzer/src/
     cardinality.rs
   functions/
     mod.rs
-    registry.rs
+    model.rs
     common.rs
     postgres.rs
     mysql.rs
@@ -144,7 +145,7 @@ Catalog rules:
 Use the relational operators from `DESIGN.md` with concrete structs:
 
 ```rust
-pub enum RelExpr {
+pub enum Relation {
     Scan(ScanNode),
     Values(ValuesNode),
     Selection(SelectionNode),
@@ -222,7 +223,7 @@ pub struct OutputSchema {
     pub columns: Vec<BoundColumn>,
 }
 
-pub enum BoundScalarExpr {
+pub enum Expression {
     SlotRef(SlotId),
     CorrelatedRef { depth: usize, slot_id: SlotId },
     // ...
@@ -231,7 +232,7 @@ pub enum BoundScalarExpr {
 
 Design requirements:
 
-1. Name resolution is completed in algebraize planning (`planner/*`) only.
+1. Name resolution is completed in algebraize modules (`algebraizer/*`) only.
 2. Infer phase consumes `SlotId`-bound expressions and `OutputSchema`, and performs no name lookup.
 3. Diagnostics remain tied to original SQL text, while semantics are carried by slot identity.
 
@@ -299,8 +300,8 @@ Pipeline:
 Pipeline:
 
 1. Parse SQL (single query statement expected for `analyze`).
-2. Algebraize AST + catalog into `RelExpr`.
-3. Infer metadata from `RelExpr`.
+2. Algebraize AST + catalog into `Relation`.
+3. Infer metadata from `Relation`.
 4. Convert inferred columns/cardinality to `ResultSet`.
 
 ## 6.4 `get_all_tables(&self)`
@@ -435,11 +436,11 @@ Binding should convert AST `ColumnRef` to bound scalar references:
    - qualified (`t.col`): locate relation by alias/name, then locate column in that relation output schema.
    - unqualified (`col`): scan all visible relations in current scope.
 2. resolution result:
-   - exactly one match -> bind to `BoundScalarExpr::SlotRef(slot_id)`.
+   - exactly one match -> bind to `Expression::SlotRef(slot_id)`.
    - zero matches -> continue searching outer scopes for correlated binding.
    - multiple matches -> emit ambiguous-column diagnostic.
 3. correlated binding:
-   - if found in outer scope at depth `d`, bind to `BoundScalarExpr::CorrelatedRef { depth: d, slot_id }`.
+   - if found in outer scope at depth `d`, bind to `Expression::CorrelatedRef { depth: d, slot_id }`.
    - if not found in any outer scope, emit unknown-column diagnostic.
 
 Implementation note:
@@ -764,7 +765,7 @@ Before each merge:
 2. Build catalog model and DDL mutator.
 3. Build function registry (common + dialect overrides).
 4. Build relational/scalar IR.
-5. Implement planner-based algebraizer.
+5. Implement algebraizer phase.
 6. Implement inference engine and operator rules.
 7. Wire analyzer methods and error mapping.
 8. Verify spec files only use canonical `Cardinality` values.

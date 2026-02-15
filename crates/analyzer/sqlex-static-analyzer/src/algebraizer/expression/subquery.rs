@@ -2,17 +2,17 @@ use sqlex_common::{dialect::Dialect, types::DataType};
 use sqlparser::ast::{Expr, Select, TableFactor};
 
 use crate::{
-    algebra::{
-        expr::RelExpr,
-        planner::{Algebraizer, context::BuildContext},
-        scalar::BoundLiteral,
+    algebraizer::{
+        Algebraizer,
+        context::BuildContext,
+        model::{expression::BoundLiteral, relation::Relation},
     },
     catalog::{
-        model::Catalog,
+        Catalog,
         normalize::{normalize_ident, normalize_object_name},
     },
     diagnostics::{Diagnostic, Phase},
-    functions::registry::FunctionRegistry,
+    functions::FunctionRegistry,
 };
 
 impl Algebraizer {
@@ -22,7 +22,7 @@ impl Algebraizer {
         catalog: &Catalog,
         functions: &FunctionRegistry,
         context: &BuildContext,
-    ) -> Result<RelExpr, Diagnostic> {
+    ) -> Result<Relation, Diagnostic> {
         let mut subquery_context = BuildContext {
             relation_scopes: context.relation_scopes.clone(),
             outer_relation_scopes: context.outer_relation_scopes.clone(),
@@ -56,7 +56,7 @@ impl Algebraizer {
         functions: &FunctionRegistry,
         context: &BuildContext,
         usage: &str,
-    ) -> Result<RelExpr, Diagnostic> {
+    ) -> Result<Relation, Diagnostic> {
         let relation = self.bind_subquery_relation(query, catalog, functions, context)?;
         let schema = super::super::output_schema_of(&relation)?;
         if schema.columns.len() != 1 {
@@ -112,7 +112,7 @@ impl Algebraizer {
                             Dialect::Postgres => DataType::Int,
                             Dialect::MySQL => {
                                 if assignment
-                                    && crate::algebra::planner::bind_expr::literal::mysql_integer_literal_should_be_int(&raw)
+                                    && crate::algebraizer::expression::literal::mysql_integer_literal_should_be_int(&raw)
                                 {
                                     DataType::Int
                                 } else {

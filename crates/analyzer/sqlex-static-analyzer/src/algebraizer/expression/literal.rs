@@ -1,7 +1,7 @@
 use sqlparser::ast::Value;
 
 use crate::{
-    algebra::{planner::Algebraizer, scalar::BoundLiteral},
+    algebraizer::{Algebraizer, model::expression::BoundLiteral},
     diagnostics::{Diagnostic, Phase},
 };
 

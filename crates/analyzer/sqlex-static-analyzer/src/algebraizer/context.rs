@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use sqlparser::ast::WindowSpec;
 
-use crate::algebra::{expr::RelExpr, scalar::OutputSchema};
+use crate::algebraizer::model::{relation::Relation, schema::OutputSchema};
 
 #[derive(Debug, Clone)]
 pub(crate) struct RelationScope {
@@ -13,7 +13,7 @@ pub(crate) struct RelationScope {
 
 #[derive(Debug, Clone)]
 pub(crate) struct CteBinding {
-    pub(crate) expr: RelExpr,
+    pub(crate) expr: Relation,
     pub(crate) exposed_schema: OutputSchema,
 }
 

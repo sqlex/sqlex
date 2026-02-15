@@ -3,8 +3,8 @@ use sqlex_analyzer::{Analyzer, Result};
 use sqlex_common::types::{ResultSet, Table};
 
 use crate::{
-    StaticAnalyzer, algebra::planner::Algebraizer, catalog::mutator::CatalogMutator,
-    diagnostics::Diagnostic, infer::engine::InferEngine, parser,
+    StaticAnalyzer, algebraizer::Algebraizer, catalog::mutator::CatalogMutator,
+    diagnostics::Diagnostic, infer::Inferencer, parser,
 };
 
 #[async_trait]
@@ -30,8 +30,8 @@ impl Analyzer for StaticAnalyzer {
         let relational_expr = planner
             .build(&query_statement, &self.catalog, &self.functions)
             .map_err(Diagnostic::into_analysis_error)?;
-        let infer_engine = InferEngine::new(self.dialect, &self.functions);
-        let metadata = infer_engine
+        let inferencer = Inferencer::new(self.dialect, &self.functions);
+        let metadata = inferencer
             .infer(&relational_expr, &self.catalog)
             .map_err(Diagnostic::into_analysis_error)?;
 

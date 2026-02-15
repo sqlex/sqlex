@@ -3,20 +3,21 @@ use std::collections::HashSet;
 use sqlparser::ast::TableFactor;
 
 use crate::{
-    algebra::{
-        expr::{AliasNode, RelExpr, ScanNode},
-        planner::{
-            Algebraizer,
-            context::{BuildContext, RelationScope},
+    algebraizer::{
+        Algebraizer,
+        context::{BuildContext, RelationScope},
+        model::{
+            relation::{AliasNode, Relation, ScanNode},
+            schema::{BoundColumn, ColumnOrigin, OutputSchema},
         },
-        scalar::{BoundColumn, ColumnOrigin, OutputSchema},
     },
     catalog::{
-        model::{Catalog, TableSchema},
+        Catalog,
+        model::TableSchema,
         normalize::{normalize_ident, normalize_object_name},
     },
     diagnostics::{Diagnostic, Phase},
-    functions::registry::FunctionRegistry,
+    functions::FunctionRegistry,
 };
 
 impl Algebraizer {
@@ -26,7 +27,7 @@ impl Algebraizer {
         catalog: &Catalog,
         functions: &FunctionRegistry,
         context: &mut BuildContext,
-    ) -> Result<(RelExpr, RelationScope), Diagnostic> {
+    ) -> Result<(Relation, RelationScope), Diagnostic> {
         match relation {
             TableFactor::Table { name, alias, .. } => {
                 if let Some(alias) = alias {
@@ -58,12 +59,12 @@ impl Algebraizer {
                     schema: schema.clone(),
                     hidden_unqualified_slots: HashSet::new(),
                 };
-                let scan_expr = RelExpr::Scan(ScanNode {
+                let scan_expr = Relation::Scan(ScanNode {
                     table: normalized_table_name,
                     schema,
                 });
                 let relation_expr = if alias.is_some() {
-                    RelExpr::Alias(AliasNode {
+                    Relation::Alias(AliasNode {
                         input: Box::new(scan_expr),
                         schema: scope.schema.clone(),
                     })
@@ -137,7 +138,7 @@ impl Algebraizer {
                     hidden_unqualified_slots: HashSet::new(),
                 };
                 Ok((
-                    RelExpr::Alias(AliasNode {
+                    Relation::Alias(AliasNode {
                         input: Box::new(subquery_expr),
                         schema: scope.schema.clone(),
                     }),

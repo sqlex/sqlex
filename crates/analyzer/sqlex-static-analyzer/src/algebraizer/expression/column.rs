@@ -2,12 +2,10 @@ use sqlex_common::dialect::Dialect;
 use sqlparser::ast::{Expr, Value};
 
 use crate::{
-    algebra::{
-        planner::{
-            Algebraizer,
-            context::{BuildContext, RelationScope},
-        },
-        scalar::BoundScalarExpr,
+    algebraizer::{
+        Algebraizer,
+        context::{BuildContext, RelationScope},
+        model::expression::Expression,
     },
     catalog::normalize::{normalize_ident, normalize_object_name},
     diagnostics::{Diagnostic, Phase},
@@ -20,12 +18,10 @@ pub(crate) enum ResolvedColumnBinding {
 }
 
 impl ResolvedColumnBinding {
-    pub(crate) fn into_scalar_expr(self) -> BoundScalarExpr {
+    pub(crate) fn into_scalar_expr(self) -> Expression {
         match self {
-            Self::Local { slot_id } => BoundScalarExpr::SlotRef(slot_id),
-            Self::Correlated { depth, slot_id } => {
-                BoundScalarExpr::CorrelatedRef { depth, slot_id }
-            },
+            Self::Local { slot_id } => Expression::SlotRef(slot_id),
+            Self::Correlated { depth, slot_id } => Expression::CorrelatedRef { depth, slot_id },
         }
     }
 }
@@ -247,12 +243,13 @@ mod tests {
 
     use sqlex_common::dialect::Dialect;
 
-    use crate::algebra::{
-        planner::{
-            Algebraizer,
-            context::{BuildContext, RelationScope},
+    use crate::algebraizer::{
+        Algebraizer,
+        context::{BuildContext, RelationScope},
+        model::{
+            expression::Expression,
+            schema::{BoundColumn, ColumnOrigin, OutputSchema},
         },
-        scalar::{BoundColumn, BoundScalarExpr, ColumnOrigin, OutputSchema},
     };
 
     fn make_scope(relation_id: u32, visible_name: &str, columns: &[(u32, &str)]) -> RelationScope {
@@ -286,10 +283,7 @@ mod tests {
         let binding = algebraizer
             .resolve_unqualified_column("id", &context)
             .expect("binding should succeed");
-        assert!(matches!(
-            binding.into_scalar_expr(),
-            BoundScalarExpr::SlotRef(1)
-        ));
+        assert!(matches!(binding.into_scalar_expr(), Expression::SlotRef(1)));
     }
 
     #[test]
@@ -307,7 +301,7 @@ mod tests {
             .expect("binding should succeed");
         assert!(matches!(
             binding.into_scalar_expr(),
-            BoundScalarExpr::CorrelatedRef {
+            Expression::CorrelatedRef {
                 depth: 1,
                 slot_id: 30
             }
@@ -329,7 +323,7 @@ mod tests {
             .expect("binding should succeed");
         assert!(matches!(
             binding.into_scalar_expr(),
-            BoundScalarExpr::CorrelatedRef {
+            Expression::CorrelatedRef {
                 depth: 1,
                 slot_id: 30
             }

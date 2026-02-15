@@ -3,17 +3,17 @@ use std::collections::HashSet;
 use sqlparser::ast::Select;
 
 use crate::{
-    algebra::{
-        expr::{RelExpr, ValuesNode},
-        planner::{
-            Algebraizer,
-            context::{BuildContext, RelationScope},
+    algebraizer::{
+        Algebraizer,
+        context::{BuildContext, RelationScope},
+        model::{
+            relation::{Relation, ValuesNode},
+            schema::OutputSchema,
         },
-        scalar::OutputSchema,
     },
-    catalog::model::Catalog,
+    catalog::Catalog,
     diagnostics::{Diagnostic, Phase},
-    functions::registry::FunctionRegistry,
+    functions::FunctionRegistry,
 };
 
 impl Algebraizer {
@@ -23,7 +23,7 @@ impl Algebraizer {
         catalog: &Catalog,
         functions: &FunctionRegistry,
         context: &mut BuildContext,
-    ) -> Result<RelExpr, Diagnostic> {
+    ) -> Result<Relation, Diagnostic> {
         if select.from.is_empty() {
             let schema = OutputSchema {
                 relation_id: context.allocate_relation_id(),
@@ -34,7 +34,7 @@ impl Algebraizer {
                 schema: schema.clone(),
                 hidden_unqualified_slots: HashSet::new(),
             }];
-            return Ok(RelExpr::Values(ValuesNode { schema }));
+            return Ok(Relation::Values(ValuesNode { schema }));
         }
 
         if select.from.len() != 1 {
