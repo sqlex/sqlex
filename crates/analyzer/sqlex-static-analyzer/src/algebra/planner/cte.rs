@@ -73,6 +73,7 @@ impl Algebraizer {
                         next_relation_id: context.next_relation_id,
                         next_slot_id: context.next_slot_id,
                         ctes: context.ctes.clone(),
+                        named_windows: std::collections::HashMap::new(),
                         literal_assignment_mode: context.literal_assignment_mode,
                     };
                     let cte_expr =
@@ -136,6 +137,7 @@ impl Algebraizer {
                 next_relation_id: context.next_relation_id,
                 next_slot_id: context.next_slot_id,
                 ctes: context.ctes.clone(),
+                named_windows: std::collections::HashMap::new(),
                 literal_assignment_mode: context.literal_assignment_mode,
             };
             let cte_expr =

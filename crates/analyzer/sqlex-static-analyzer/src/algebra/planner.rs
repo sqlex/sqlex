@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use sqlex_common::dialect::Dialect;
 use sqlparser::ast::{Expr, OrderByExpr, Statement, UnaryOperator, Value};
 
@@ -93,11 +95,14 @@ impl Algebraizer {
             next_relation_id: context.next_relation_id,
             next_slot_id: context.next_slot_id,
             ctes: context.ctes.clone(),
+            named_windows: context.named_windows.clone(),
             literal_assignment_mode: false,
         };
 
         let mut hidden_columns = Vec::new();
         let mut hidden_schema_columns = Vec::new();
+        let mut hidden_expr_slots = HashMap::new();
+        let disallow_hidden = disallow_hidden_order_by(&input_expr);
         let mut sort_keys = Vec::new();
         for order_expr in &order_by.exprs {
             sort_keys.push(self.bind_top_level_order_key(
@@ -108,6 +113,8 @@ impl Algebraizer {
                 &order_context,
                 &mut hidden_columns,
                 &mut hidden_schema_columns,
+                &mut hidden_expr_slots,
+                disallow_hidden,
                 context,
             )?);
         }
@@ -164,6 +171,8 @@ impl Algebraizer {
         order_context: &BuildContext,
         hidden_columns: &mut Vec<ProjectionColumn>,
         hidden_schema_columns: &mut Vec<BoundColumn>,
+        hidden_expr_slots: &mut HashMap<String, u32>,
+        disallow_hidden: bool,
         context: &mut BuildContext,
     ) -> Result<SortKey, Diagnostic> {
         if order_expr.with_fill.is_some() {
@@ -198,6 +207,23 @@ impl Algebraizer {
         let key_expr = match bound_expr {
             BoundScalarExpr::SlotRef(slot_id) => BoundScalarExpr::SlotRef(slot_id),
             other => {
+                if disallow_hidden {
+                    return Err(Diagnostic::new(
+                        "A3049",
+                        Phase::Algebraize,
+                        "ORDER BY expression must appear in SELECT list when DISTINCT semantics are active",
+                    ));
+                }
+
+                let fingerprint = bound_expr_key(&other);
+                if let Some(existing_slot_id) = hidden_expr_slots.get(&fingerprint) {
+                    return Ok(SortKey {
+                        expr: BoundScalarExpr::SlotRef(*existing_slot_id),
+                        asc,
+                        nulls_first,
+                    });
+                }
+
                 let hidden_slot_id = context.allocate_slot_id();
                 let hidden_name = format!("__ord${hidden_slot_id}");
                 hidden_columns.push(ProjectionColumn {
@@ -213,6 +239,7 @@ impl Algebraizer {
                     nullable: true,
                     origin: ColumnOrigin::Derived,
                 });
+                hidden_expr_slots.insert(fingerprint, hidden_slot_id);
                 BoundScalarExpr::SlotRef(hidden_slot_id)
             },
         };
@@ -297,14 +324,11 @@ impl Algebraizer {
                 op: UnaryOperator::Plus,
                 expr,
             } => self.parse_non_negative_integer_expr(expr, clause_name),
-            _ => {
-                let message = if clause_name == "LIMIT" {
-                    "non-literal LIMIT planning"
-                } else {
-                    "non-literal OFFSET planning"
-                };
-                Err(Diagnostic::todo(Phase::Algebraize, message))
-            },
+            _ => Err(Diagnostic::new(
+                "A3050",
+                Phase::Algebraize,
+                format!("{clause_name} expects a non-negative integer literal"),
+            )),
         }
     }
 }
@@ -340,4 +364,16 @@ fn project_all_slots(columns: &[BoundColumn], visibility: Visibility) -> Vec<Pro
             visibility: visibility.clone(),
         })
         .collect()
+}
+
+fn disallow_hidden_order_by(expr: &RelExpr) -> bool {
+    match expr {
+        RelExpr::Distinct(_) => true,
+        RelExpr::SetOperation(node) => !node.all,
+        _ => false,
+    }
+}
+
+fn bound_expr_key(expr: &BoundScalarExpr) -> String {
+    format!("{expr:?}")
 }

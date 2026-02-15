@@ -26,6 +26,15 @@ queries:
   - name: join_using_missing_column
     sql: SELECT * FROM users u1 JOIN users u2 USING (missing_col)
 
+  - name: aggregate_in_where
+    sql: SELECT id FROM users WHERE COUNT(*) > 0
+
+  - name: window_in_where
+    sql: SELECT id FROM users WHERE ROW_NUMBER() OVER (ORDER BY id) > 0
+
+  - name: window_in_having
+    sql: SELECT id, COUNT(*) FROM users GROUP BY id HAVING ROW_NUMBER() OVER (ORDER BY id) > 0
+
   - name: reserved_alias
     sql: SELECT id, RANK() OVER (ORDER BY age) AS rank FROM users
 

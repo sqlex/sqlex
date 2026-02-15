@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use sqlparser::ast::WindowSpec;
+
 use crate::algebra::{expr::RelExpr, scalar::OutputSchema};
 
 #[derive(Debug, Clone)]
@@ -21,6 +23,7 @@ pub(crate) struct BuildContext {
     pub(crate) next_relation_id: u32,
     pub(crate) next_slot_id: u32,
     pub(crate) ctes: HashMap<String, CteBinding>,
+    pub(crate) named_windows: HashMap<String, WindowSpec>,
     pub(crate) literal_assignment_mode: bool,
 }
 
@@ -32,6 +35,7 @@ impl BuildContext {
             next_relation_id: 1,
             next_slot_id: 1,
             ctes: HashMap::new(),
+            named_windows: HashMap::new(),
             literal_assignment_mode: false,
         }
     }

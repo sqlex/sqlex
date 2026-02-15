@@ -2,15 +2,18 @@ use sqlex_analyzer::extension::DataTypeExt;
 use sqlex_common::{dialect::Dialect, types::DataType};
 use sqlparser::ast::{
     CeilFloorKind, DateTimeField, Function, FunctionArg, FunctionArgExpr, FunctionArguments,
-    WindowType,
+    WindowSpec, WindowType,
 };
 
 use crate::{
     algebra::{
         planner::{Algebraizer, context::BuildContext},
-        scalar::{BoundLiteral, BoundScalarExpr},
+        scalar::{BoundLiteral, BoundScalarExpr, SortKey},
     },
-    catalog::{model::Catalog, normalize::normalize_object_name},
+    catalog::{
+        model::Catalog,
+        normalize::{normalize_ident, normalize_object_name},
+    },
     diagnostics::{Diagnostic, Phase},
     functions::registry::{FunctionCategory, FunctionRegistry},
 };
@@ -59,18 +62,18 @@ impl Algebraizer {
         if function.over.is_some() {
             let (partition_by, order_by) = match &function.over {
                 Some(WindowType::WindowSpec(spec)) => {
-                    let mut partition_by = Vec::new();
-                    for expr in &spec.partition_by {
-                        let (bound_expr, _) = self.bind_expr(expr, catalog, functions, context)?;
-                        partition_by.push(bound_expr);
-                    }
-                    (partition_by, Vec::new())
+                    self.bind_window_spec(spec, catalog, functions, context)?
                 },
-                Some(WindowType::NamedWindow(_)) => {
-                    return Err(Diagnostic::todo(
-                        Phase::Algebraize,
-                        "named window reference binding",
-                    ));
+                Some(WindowType::NamedWindow(window_name)) => {
+                    let normalized_name = normalize_ident(window_name, self.dialect);
+                    let Some(spec) = context.named_windows.get(&normalized_name) else {
+                        return Err(Diagnostic::new(
+                            "A3048",
+                            Phase::Algebraize,
+                            format!("unknown WINDOW definition: {normalized_name}"),
+                        ));
+                    };
+                    self.bind_window_spec(spec, catalog, functions, context)?
                 },
                 None => (Vec::new(), Vec::new()),
             };
@@ -108,6 +111,79 @@ impl Algebraizer {
             },
             has_aggregate_in_args,
         ))
+    }
+
+    fn bind_window_spec(
+        &self,
+        spec: &WindowSpec,
+        catalog: &Catalog,
+        functions: &FunctionRegistry,
+        context: &BuildContext,
+    ) -> Result<(Vec<BoundScalarExpr>, Vec<SortKey>), Diagnostic> {
+        let resolved_spec = self.resolve_window_spec_for_over(spec, context)?;
+
+        let mut partition_by = Vec::new();
+        for expr in &resolved_spec.partition_by {
+            let (bound_expr, _) = self.bind_expr(expr, catalog, functions, context)?;
+            partition_by.push(bound_expr);
+        }
+
+        let mut order_by = Vec::new();
+        for order_expr in &resolved_spec.order_by {
+            if order_expr.with_fill.is_some() {
+                return Err(Diagnostic::new(
+                    "A3031",
+                    Phase::Algebraize,
+                    "ORDER BY WITH FILL is not supported in this iteration",
+                ));
+            }
+            let (bound_expr, _) = self.bind_expr(&order_expr.expr, catalog, functions, context)?;
+            order_by.push(SortKey {
+                expr: bound_expr,
+                asc: order_expr.asc.unwrap_or(true),
+                nulls_first: order_expr.nulls_first,
+            });
+        }
+
+        Ok((partition_by, order_by))
+    }
+
+    fn resolve_window_spec_for_over(
+        &self,
+        spec: &WindowSpec,
+        context: &BuildContext,
+    ) -> Result<WindowSpec, Diagnostic> {
+        let mut resolved_spec = if let Some(base_name) = &spec.window_name {
+            let normalized_base = normalize_ident(base_name, self.dialect);
+            let Some(base_spec) = context.named_windows.get(&normalized_base) else {
+                return Err(Diagnostic::new(
+                    "A3048",
+                    Phase::Algebraize,
+                    format!("unknown WINDOW definition: {normalized_base}"),
+                ));
+            };
+            base_spec.clone()
+        } else {
+            WindowSpec {
+                window_name: None,
+                partition_by: Vec::new(),
+                order_by: Vec::new(),
+                window_frame: None,
+            }
+        };
+
+        if !spec.partition_by.is_empty() {
+            resolved_spec.partition_by = spec.partition_by.clone();
+        }
+        if !spec.order_by.is_empty() {
+            resolved_spec.order_by = spec.order_by.clone();
+        }
+        if spec.window_frame.is_some() {
+            resolved_spec.window_frame = spec.window_frame.clone();
+        }
+        resolved_spec.window_name = None;
+
+        Ok(resolved_spec)
     }
 
     fn bind_function_arg(

@@ -22,17 +22,34 @@ impl Algebraizer {
         match set_expr {
             SetExpr::Select(select) => self.build_select(select, catalog, functions, context),
             SetExpr::Query(query) => {
-                if query.with.is_some()
-                    || query.order_by.is_some()
-                    || query.limit.is_some()
-                    || query.offset.is_some()
-                {
-                    return Err(Diagnostic::todo(
-                        Phase::Algebraize,
-                        "nested query ORDER/LIMIT/WITH planning",
-                    ));
+                let mut nested_context = BuildContext {
+                    relation_scopes: context.relation_scopes.clone(),
+                    outer_relation_scopes: context.outer_relation_scopes.clone(),
+                    next_relation_id: context.next_relation_id,
+                    next_slot_id: context.next_slot_id,
+                    ctes: context.ctes.clone(),
+                    named_windows: std::collections::HashMap::new(),
+                    literal_assignment_mode: context.literal_assignment_mode,
+                };
+
+                if let Some(with_clause) = &query.with {
+                    self.register_ctes(with_clause, catalog, functions, &mut nested_context)?;
                 }
-                self.build_set_expr(&query.body, catalog, functions, context)
+
+                let relation =
+                    self.build_set_expr(&query.body, catalog, functions, &mut nested_context)?;
+                let relation = self.apply_top_level_order_by(
+                    relation,
+                    query,
+                    catalog,
+                    functions,
+                    &mut nested_context,
+                )?;
+                let relation = self.apply_top_level_limit_offset(relation, query)?;
+
+                context.next_relation_id = nested_context.next_relation_id;
+                context.next_slot_id = nested_context.next_slot_id;
+                Ok(relation)
             },
             SetExpr::SetOperation {
                 left,
