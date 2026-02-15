@@ -1,4 +1,7 @@
-use crate::functions::registry::{FunctionCategory, FunctionRegistry};
+use crate::functions::registry::{
+    FunctionCategory, FunctionNullabilityRule, FunctionRegistry, FunctionReturnTypeRule,
+    FunctionSignature,
+};
 
 pub(crate) fn register_common_functions(registry: &mut FunctionRegistry) {
     for name in [
@@ -10,24 +13,161 @@ pub(crate) fn register_common_functions(registry: &mut FunctionRegistry) {
         "length",
         "char_length",
     ] {
-        registry.register(name, FunctionCategory::Scalar, 1, Some(1));
+        let return_type_rule = if matches!(name, "length" | "char_length") {
+            FunctionReturnTypeRule::LengthInteger
+        } else {
+            FunctionReturnTypeRule::TextLikeOrDefaultText
+        };
+        registry.register(
+            name,
+            FunctionSignature::new(
+                FunctionCategory::Scalar,
+                1,
+                Some(1),
+                return_type_rule,
+                FunctionNullabilityRule::AnyArg,
+            ),
+        );
     }
-    registry.register("substr", FunctionCategory::Scalar, 2, Some(3));
+    registry.register(
+        "substr",
+        FunctionSignature::new(
+            FunctionCategory::Scalar,
+            2,
+            Some(3),
+            FunctionReturnTypeRule::TextLikeOrDefaultText,
+            FunctionNullabilityRule::AnyArg,
+        ),
+    );
 
-    registry.register("coalesce", FunctionCategory::Scalar, 1, None);
-    registry.register("nullif", FunctionCategory::Scalar, 2, Some(2));
+    registry.register(
+        "coalesce",
+        FunctionSignature::new(
+            FunctionCategory::Scalar,
+            1,
+            None,
+            FunctionReturnTypeRule::CoalesceCommonType,
+            FunctionNullabilityRule::AllArgs,
+        ),
+    );
+    registry.register(
+        "nullif",
+        FunctionSignature::new(
+            FunctionCategory::Scalar,
+            2,
+            Some(2),
+            FunctionReturnTypeRule::NullIfFirstArg,
+            FunctionNullabilityRule::Always,
+        ),
+    );
     for name in ["abs", "ceil", "floor", "sqrt", "exp", "ln", "log10", "sign"] {
-        registry.register(name, FunctionCategory::Scalar, 1, Some(1));
+        registry.register(
+            name,
+            FunctionSignature::new(
+                FunctionCategory::Scalar,
+                1,
+                Some(1),
+                FunctionReturnTypeRule::NumericUnary,
+                FunctionNullabilityRule::AnyArg,
+            ),
+        );
     }
-    registry.register("round", FunctionCategory::Scalar, 1, Some(2));
-    registry.register("power", FunctionCategory::Scalar, 2, Some(2));
-    registry.register("mod", FunctionCategory::Scalar, 2, Some(2));
+    registry.register(
+        "round",
+        FunctionSignature::new(
+            FunctionCategory::Scalar,
+            1,
+            Some(2),
+            FunctionReturnTypeRule::NumericUnary,
+            FunctionNullabilityRule::AnyArg,
+        ),
+    );
+    registry.register(
+        "power",
+        FunctionSignature::new(
+            FunctionCategory::Scalar,
+            2,
+            Some(2),
+            FunctionReturnTypeRule::NumericBinaryCommon,
+            FunctionNullabilityRule::AnyArg,
+        ),
+    );
+    registry.register(
+        "mod",
+        FunctionSignature::new(
+            FunctionCategory::Scalar,
+            2,
+            Some(2),
+            FunctionReturnTypeRule::NumericBinaryCommon,
+            FunctionNullabilityRule::AnyArg,
+        ),
+    );
 
-    for name in ["count", "sum", "avg", "min", "max"] {
-        registry.register(name, FunctionCategory::Aggregate, 1, Some(1));
+    registry.register(
+        "count",
+        FunctionSignature::new(
+            FunctionCategory::Aggregate,
+            1,
+            Some(1),
+            FunctionReturnTypeRule::Count,
+            FunctionNullabilityRule::Never,
+        ),
+    );
+    registry.register(
+        "sum",
+        FunctionSignature::new(
+            FunctionCategory::Aggregate,
+            1,
+            Some(1),
+            FunctionReturnTypeRule::Sum,
+            FunctionNullabilityRule::Always,
+        ),
+    );
+    registry.register(
+        "avg",
+        FunctionSignature::new(
+            FunctionCategory::Aggregate,
+            1,
+            Some(1),
+            FunctionReturnTypeRule::Avg,
+            FunctionNullabilityRule::Always,
+        ),
+    );
+    for name in ["min", "max"] {
+        registry.register(
+            name,
+            FunctionSignature::new(
+                FunctionCategory::Aggregate,
+                1,
+                Some(1),
+                FunctionReturnTypeRule::MinMax,
+                FunctionNullabilityRule::Always,
+            ),
+        );
     }
 
-    for name in ["row_number", "rank", "dense_rank", "lead", "lag"] {
-        registry.register(name, FunctionCategory::Window, 0, None);
+    for name in ["row_number", "rank", "dense_rank"] {
+        registry.register(
+            name,
+            FunctionSignature::new(
+                FunctionCategory::Window,
+                0,
+                Some(0),
+                FunctionReturnTypeRule::Ranking,
+                FunctionNullabilityRule::Never,
+            ),
+        );
+    }
+    for name in ["lead", "lag"] {
+        registry.register(
+            name,
+            FunctionSignature::new(
+                FunctionCategory::Window,
+                1,
+                Some(3),
+                FunctionReturnTypeRule::LeadLag,
+                FunctionNullabilityRule::Always,
+            ),
+        );
     }
 }

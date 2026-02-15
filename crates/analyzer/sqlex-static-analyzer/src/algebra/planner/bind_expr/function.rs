@@ -15,8 +15,16 @@ use crate::{
         normalize::{normalize_ident, normalize_object_name},
     },
     diagnostics::{Diagnostic, Phase},
-    functions::registry::{FunctionCategory, FunctionRegistry},
+    functions::registry::{
+        FunctionArgType, FunctionCoercionProfile, FunctionRegistry, FunctionSignature,
+    },
 };
+
+enum FunctionBindKind {
+    Scalar,
+    Aggregate,
+    Window,
+}
 
 impl Algebraizer {
     pub(crate) fn bind_function(
@@ -34,11 +42,15 @@ impl Algebraizer {
 
         match &function.args {
             FunctionArguments::None => {},
-            FunctionArguments::Subquery(_) => {
-                return Err(Diagnostic::todo(
-                    Phase::Algebraize,
-                    "function subquery argument binding",
-                ));
+            FunctionArguments::Subquery(query) => {
+                let bound_subquery = self.bind_single_column_subquery(
+                    query,
+                    catalog,
+                    functions,
+                    context,
+                    "function subquery argument",
+                )?;
+                bound_args.push(BoundScalarExpr::ScalarSubquery(Box::new(bound_subquery)));
             },
             FunctionArguments::List(argument_list) => {
                 for arg in &argument_list.args {
@@ -50,8 +62,18 @@ impl Algebraizer {
             },
         }
 
-        self.validate_function_arity(&function_name_lower, bound_args.len(), functions)?;
-        self.validate_function_argument_types(&function_name_lower, &bound_args, context)?;
+        let (bind_kind, signature) = self.resolve_function_call_signature(
+            &function_name_lower,
+            function.over.is_some(),
+            functions,
+        )?;
+        self.validate_function_arity(&function_name_lower, bound_args.len(), signature)?;
+        self.validate_function_argument_types(
+            &function_name_lower,
+            &bound_args,
+            context,
+            signature,
+        )?;
 
         let distinct = matches!(
             &function.args,
@@ -59,7 +81,7 @@ impl Algebraizer {
                 if list.duplicate_treatment.is_some_and(|value| matches!(value, sqlparser::ast::DuplicateTreatment::Distinct))
         );
 
-        if function.over.is_some() {
+        if matches!(bind_kind, FunctionBindKind::Window) {
             let (partition_by, order_by) = match &function.over {
                 Some(WindowType::WindowSpec(spec)) => {
                     self.bind_window_spec(spec, catalog, functions, context)?
@@ -75,7 +97,13 @@ impl Algebraizer {
                     };
                     self.bind_window_spec(spec, catalog, functions, context)?
                 },
-                None => (Vec::new(), Vec::new()),
+                None => {
+                    return Err(Diagnostic::new(
+                        "A3059",
+                        Phase::Algebraize,
+                        format!("window function '{function_name_lower}' requires OVER clause"),
+                    ));
+                },
             };
 
             return Ok((
@@ -89,11 +117,7 @@ impl Algebraizer {
             ));
         }
 
-        let is_aggregate = functions
-            .resolve(&function_name_lower)
-            .is_some_and(|signature| signature.category == FunctionCategory::Aggregate);
-
-        if is_aggregate {
+        if matches!(bind_kind, FunctionBindKind::Aggregate) {
             return Ok((
                 BoundScalarExpr::AggregateCall {
                     name: function_name,
@@ -111,6 +135,47 @@ impl Algebraizer {
             },
             has_aggregate_in_args,
         ))
+    }
+
+    fn resolve_function_call_signature<'a>(
+        &self,
+        function_name_lower: &str,
+        has_over: bool,
+        functions: &'a FunctionRegistry,
+    ) -> Result<(FunctionBindKind, Option<&'a FunctionSignature>), Diagnostic> {
+        let scalar_signature = functions.resolve_scalar(function_name_lower);
+        let aggregate_signature = functions.resolve_aggregate(function_name_lower);
+        let window_signature = functions.resolve_window(function_name_lower);
+
+        if has_over {
+            if let Some(signature) = window_signature.or(aggregate_signature) {
+                return Ok((FunctionBindKind::Window, Some(signature)));
+            }
+            if scalar_signature.is_some() {
+                return Err(Diagnostic::new(
+                    "A3058",
+                    Phase::Algebraize,
+                    format!("function '{function_name_lower}' does not support OVER clause"),
+                ));
+            }
+            return Ok((FunctionBindKind::Window, None));
+        }
+
+        if let Some(signature) = aggregate_signature {
+            return Ok((FunctionBindKind::Aggregate, Some(signature)));
+        }
+        if let Some(signature) = scalar_signature {
+            return Ok((FunctionBindKind::Scalar, Some(signature)));
+        }
+        if window_signature.is_some() {
+            return Err(Diagnostic::new(
+                "A3059",
+                Phase::Algebraize,
+                format!("window function '{function_name_lower}' requires OVER clause"),
+            ));
+        }
+
+        Ok((FunctionBindKind::Scalar, None))
     }
 
     fn bind_window_spec(
@@ -216,9 +281,9 @@ impl Algebraizer {
         &self,
         function_name_lower: &str,
         arity: usize,
-        functions: &FunctionRegistry,
+        signature: Option<&FunctionSignature>,
     ) -> Result<(), Diagnostic> {
-        let Some(signature) = functions.resolve(function_name_lower) else {
+        let Some(signature) = signature else {
             return Ok(());
         };
 
@@ -253,32 +318,45 @@ impl Algebraizer {
         function_name_lower: &str,
         bound_args: &[BoundScalarExpr],
         context: &BuildContext,
+        signature: Option<&FunctionSignature>,
     ) -> Result<(), Diagnostic> {
-        if matches!(self.dialect, Dialect::SQLite) {
-            if matches!(function_name_lower, "ceil" | "floor") {
-                self.require_postgres_numeric_arg(function_name_lower, bound_args, context, 0)?;
+        let Some(signature) = signature else {
+            return Ok(());
+        };
+        if matches!(
+            signature.coercion_profile,
+            FunctionCoercionProfile::Permissive
+        ) {
+            return Ok(());
+        }
+
+        for rule in &signature.arg_type_rules {
+            let Some(arg_type) = self.bound_expr_static_type(bound_args.get(rule.index), context)
+            else {
+                continue;
+            };
+            let matches_rule = match rule.expected {
+                FunctionArgType::TextLike => arg_type.is_text_like(),
+                FunctionArgType::Numeric => arg_type.is_numeric(),
+            };
+            if matches_rule {
+                continue;
             }
-            return Ok(());
-        }
 
-        if !matches!(self.dialect, Dialect::Postgres) {
-            return Ok(());
-        }
-
-        match function_name_lower {
-            "upper" | "lower" | "trim" | "ltrim" | "rtrim" | "length" | "char_length"
-            | "substr" => {
-                self.require_postgres_text_arg(function_name_lower, bound_args, context, 0)?;
-            },
-            "abs" | "ceil" | "floor" | "round" | "sqrt" | "exp" | "ln" | "log10" | "sign"
-            | "sum" | "avg" => {
-                self.require_postgres_numeric_arg(function_name_lower, bound_args, context, 0)?;
-            },
-            "power" | "mod" => {
-                self.require_postgres_numeric_arg(function_name_lower, bound_args, context, 0)?;
-                self.require_postgres_numeric_arg(function_name_lower, bound_args, context, 1)?;
-            },
-            _ => {},
+            let (code, requirement_label) = match rule.expected {
+                FunctionArgType::TextLike => ("A3022", "text"),
+                FunctionArgType::Numeric => ("A3023", "numeric"),
+            };
+            return Err(Diagnostic::new(
+                code,
+                Phase::Algebraize,
+                format!(
+                    "function '{}' expects {} argument at position {}",
+                    function_name_lower,
+                    requirement_label,
+                    rule.index + 1
+                ),
+            ));
         }
 
         Ok(())
@@ -297,15 +375,17 @@ impl Algebraizer {
         let bound_args = match field {
             CeilFloorKind::DateTimeField(DateTimeField::NoDateTime) => vec![bound_expr],
             CeilFloorKind::DateTimeField(_) | CeilFloorKind::Scale(_) => {
-                return Err(Diagnostic::todo(
+                return Err(Diagnostic::new(
+                    "A3060",
                     Phase::Algebraize,
-                    "CEIL/FLOOR modifiers binding",
+                    "CEIL/FLOOR modifiers are not supported in this iteration",
                 ));
             },
         };
 
-        self.validate_function_arity(function_name, bound_args.len(), functions)?;
-        self.validate_function_argument_types(function_name, &bound_args, context)?;
+        let signature = functions.resolve_scalar(function_name);
+        self.validate_function_arity(function_name, bound_args.len(), signature)?;
+        self.validate_function_argument_types(function_name, &bound_args, context, signature)?;
 
         Ok((
             BoundScalarExpr::Function {
@@ -340,56 +420,6 @@ impl Algebraizer {
         }
 
         Ok(())
-    }
-
-    fn require_postgres_text_arg(
-        &self,
-        function_name_lower: &str,
-        bound_args: &[BoundScalarExpr],
-        context: &BuildContext,
-        index: usize,
-    ) -> Result<(), Diagnostic> {
-        let Some(arg_type) = self.bound_expr_static_type(bound_args.get(index), context) else {
-            return Ok(());
-        };
-        if arg_type.is_text_like() {
-            return Ok(());
-        }
-
-        Err(Diagnostic::new(
-            "A3022",
-            Phase::Algebraize,
-            format!(
-                "function '{}' expects text argument at position {}",
-                function_name_lower,
-                index + 1
-            ),
-        ))
-    }
-
-    fn require_postgres_numeric_arg(
-        &self,
-        function_name_lower: &str,
-        bound_args: &[BoundScalarExpr],
-        context: &BuildContext,
-        index: usize,
-    ) -> Result<(), Diagnostic> {
-        let Some(arg_type) = self.bound_expr_static_type(bound_args.get(index), context) else {
-            return Ok(());
-        };
-        if arg_type.is_numeric() {
-            return Ok(());
-        }
-
-        Err(Diagnostic::new(
-            "A3023",
-            Phase::Algebraize,
-            format!(
-                "function '{}' expects numeric argument at position {}",
-                function_name_lower,
-                index + 1
-            ),
-        ))
     }
 
     fn bound_expr_static_type(

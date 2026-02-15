@@ -1,0 +1,13 @@
+dialect: sqlite
+migrations:
+  - |
+    CREATE TABLE users (
+      id INT NOT NULL,
+      name TEXT NOT NULL
+    )
+queries:
+  - name: window_function_without_over
+    sql: SELECT ROW_NUMBER() FROM users
+
+  - name: scalar_function_with_over
+    sql: SELECT UPPER(name) OVER () FROM users

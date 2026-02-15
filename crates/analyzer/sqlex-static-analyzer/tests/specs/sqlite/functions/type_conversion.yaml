@@ -50,3 +50,10 @@ queries:
     expected:
       - name: ROUND(name)
         nullability: false
+
+  - name: ifnull_nullable_to_non_nullable
+    sql: SELECT IFNULL(amount, 0) AS normalized FROM test_table
+    cardinality: ZeroOrMore
+    expected:
+      - name: normalized
+        nullability: false

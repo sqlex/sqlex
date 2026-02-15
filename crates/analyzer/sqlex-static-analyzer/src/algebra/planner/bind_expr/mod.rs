@@ -119,16 +119,18 @@ impl Algebraizer {
                 trim_characters,
             } => {
                 if trim_where.is_some() || trim_what.is_some() || trim_characters.is_some() {
-                    return Err(Diagnostic::todo(
+                    return Err(Diagnostic::new(
+                        "A3061",
                         Phase::Algebraize,
-                        "TRIM modifiers binding",
+                        "TRIM modifiers are not supported in this iteration",
                     ));
                 }
                 let (bound_expr, has_aggregate) =
                     self.bind_expr(expr, catalog, functions, context)?;
                 let bound_args = vec![bound_expr];
-                self.validate_function_arity("trim", bound_args.len(), functions)?;
-                self.validate_function_argument_types("trim", &bound_args, context)?;
+                let signature = functions.resolve_scalar("trim");
+                self.validate_function_arity("trim", bound_args.len(), signature)?;
+                self.validate_function_argument_types("trim", &bound_args, context, signature)?;
                 Ok((
                     BoundScalarExpr::Function {
                         name: "trim".to_string(),
