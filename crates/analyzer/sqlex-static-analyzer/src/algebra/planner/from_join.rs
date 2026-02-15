@@ -1,0 +1,64 @@
+use sqlparser::ast::Select;
+
+use crate::{
+    algebra::{
+        expr::{RelExpr, ValuesNode},
+        planner::{
+            Algebraizer,
+            context::{BuildContext, RelationScope},
+        },
+        scalar::OutputSchema,
+    },
+    catalog::model::Catalog,
+    diagnostics::{Diagnostic, Phase},
+    functions::registry::FunctionRegistry,
+};
+
+impl Algebraizer {
+    pub(crate) fn build_from(
+        &self,
+        select: &Select,
+        catalog: &Catalog,
+        functions: &FunctionRegistry,
+        context: &mut BuildContext,
+    ) -> Result<RelExpr, Diagnostic> {
+        if select.from.is_empty() {
+            let schema = OutputSchema {
+                relation_id: context.allocate_relation_id(),
+                columns: Vec::new(),
+            };
+            context.relation_scopes = vec![RelationScope {
+                visible_names: vec![],
+                schema: schema.clone(),
+            }];
+            return Ok(RelExpr::Values(ValuesNode { schema }));
+        }
+
+        if select.from.len() != 1 {
+            return Err(Diagnostic::todo(
+                Phase::Algebraize,
+                "multi-table FROM planning",
+            ));
+        }
+
+        let from_item = &select.from[0];
+        let (mut relation_expr, left_scope) =
+            self.build_table_factor(&from_item.relation, catalog, functions, context)?;
+        let mut scopes = vec![left_scope];
+        context.relation_scopes = scopes.clone();
+
+        for join in &from_item.joins {
+            relation_expr = self.build_join(
+                relation_expr,
+                &mut scopes,
+                join,
+                catalog,
+                functions,
+                context,
+            )?;
+        }
+
+        context.relation_scopes = scopes;
+        Ok(relation_expr)
+    }
+}
