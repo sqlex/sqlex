@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl Algebraizer<'_> {
-    pub(crate) fn bind_literal(
+    pub(crate) fn build_literal_expression(
         &self,
         value: &Value,
         literal_assignment_mode: bool,

@@ -19,7 +19,7 @@ use crate::{
 };
 
 impl Algebraizer<'_> {
-    pub(crate) fn build_table_factor(
+    pub(crate) fn build_table_factor_relation(
         &mut self,
         relation: &TableFactor,
     ) -> Result<(Relation, RelationBinding), Diagnostic> {

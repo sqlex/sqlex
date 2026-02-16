@@ -25,7 +25,7 @@ struct JoinUsingPair {
 }
 
 impl Algebraizer<'_> {
-    pub(crate) fn build_join(
+    pub(crate) fn build_join_relation(
         &mut self,
         left_relation: Relation,
         scopes: &mut Vec<RelationBinding>,
@@ -39,7 +39,7 @@ impl Algebraizer<'_> {
             ));
         }
 
-        let (right_relation, right_scope) = self.build_table_factor(&join.relation)?;
+        let (right_relation, right_scope) = self.build_table_factor_relation(&join.relation)?;
         let (kind, on_expr) = self.join_kind_and_condition(&join.join_operator)?;
         let using_columns = self.extract_join_using_columns(&join.join_operator);
 
@@ -61,7 +61,7 @@ impl Algebraizer<'_> {
         let mut effective_kind = kind.clone();
         let mut bound_condition = None;
         if let Some(on_expr) = on_expr {
-            let (condition, _) = self.bind_expression(on_expr)?;
+            let (condition, _) = self.build_expression(on_expr)?;
             if self.outer_join_is_effectively_inner(
                 kind.clone(),
                 &condition,

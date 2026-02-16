@@ -11,19 +11,19 @@ use crate::{
 };
 
 impl Algebraizer<'_> {
-    pub(crate) fn bind_subquery_relation(
+    pub(crate) fn build_subquery_relation(
         &mut self,
         query: &sqlparser::ast::Query,
     ) -> Result<Relation, Diagnostic> {
         self.build_query_relation(query, true)
     }
 
-    pub(crate) fn bind_single_column_subquery(
+    pub(crate) fn build_single_column_subquery_relation(
         &mut self,
         query: &sqlparser::ast::Query,
         usage: &str,
     ) -> Result<Relation, Diagnostic> {
-        let relation = self.bind_subquery_relation(query)?;
+        let relation = self.build_subquery_relation(query)?;
         let schema = relation.output_schema();
         if schema.columns.len() != 1 {
             return Err(Diagnostic::new(
@@ -60,7 +60,7 @@ impl Algebraizer<'_> {
                 self.resolve_subquery_column(select, Some(&qualifier), &column_name)
             },
             Expr::Value(value) => {
-                let bound_literal = self.bind_literal(value, false).ok()?;
+                let bound_literal = self.build_literal_expression(value, false).ok()?;
                 match bound_literal {
                     BoundLiteral::Null => Some((DataType::Custom("null".to_string()), true)),
                     BoundLiteral::Bool(_) => Some((

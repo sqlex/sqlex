@@ -73,7 +73,7 @@ impl Algebraizer<'_> {
             let disallow_hidden = disallow_hidden_order_by(&input_relation);
             let mut sort_keys = Vec::new();
             for order_expr in &order_by.exprs {
-                sort_keys.push(self.bind_query_order_key(
+                sort_keys.push(self.build_query_order_key_expression(
                     order_expr,
                     &input_schema,
                     &mut hidden_columns,
@@ -125,7 +125,7 @@ impl Algebraizer<'_> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn bind_query_order_key(
+    fn build_query_order_key_expression(
         &mut self,
         order_expr: &OrderByExpr,
         input_schema: &OutputSchema,
@@ -159,7 +159,7 @@ impl Algebraizer<'_> {
                 };
                 Expression::SlotRef(column.slot_id)
             } else {
-                let (bound_expr, _) = self.bind_expression(&order_expr.expr)?;
+                let (bound_expr, _) = self.build_expression(&order_expr.expr)?;
                 bound_expr
             };
 

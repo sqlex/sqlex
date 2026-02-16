@@ -15,7 +15,7 @@ use crate::{
 };
 
 impl Algebraizer<'_> {
-    pub(crate) fn build_from(&mut self, select: &Select) -> Result<Relation, Diagnostic> {
+    pub(crate) fn build_from_relation(&mut self, select: &Select) -> Result<Relation, Diagnostic> {
         if select.from.is_empty() {
             let schema = OutputSchema {
                 relation_id: self.allocate_relation_id(),
@@ -38,12 +38,12 @@ impl Algebraizer<'_> {
         }
 
         let from_item = &select.from[0];
-        let (mut relation, left_scope) = self.build_table_factor(&from_item.relation)?;
+        let (mut relation, left_scope) = self.build_table_factor_relation(&from_item.relation)?;
         let mut scopes = vec![left_scope];
         self.set_current_relation_bindings(scopes.clone());
 
         for join in &from_item.joins {
-            relation = self.build_join(relation, &mut scopes, join)?;
+            relation = self.build_join_relation(relation, &mut scopes, join)?;
         }
 
         self.set_current_relation_bindings(scopes);

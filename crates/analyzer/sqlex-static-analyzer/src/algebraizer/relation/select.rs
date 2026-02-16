@@ -18,7 +18,10 @@ use crate::{
 };
 
 impl Algebraizer<'_> {
-    pub(crate) fn build_select(&mut self, select: &Select) -> Result<Relation, Diagnostic> {
+    pub(crate) fn build_select_relation(
+        &mut self,
+        select: &Select,
+    ) -> Result<Relation, Diagnostic> {
         if select.into.is_some()
             || !select.lateral_views.is_empty()
             || select.prewhere.is_some()
@@ -47,9 +50,9 @@ impl Algebraizer<'_> {
             let mut bound_group_by = Vec::with_capacity(group_by_exprs.len());
 
             self.set_current_relation_bindings(Vec::new());
-            let mut input_relation = self.build_from(select)?;
+            let mut input_relation = self.build_from_relation(select)?;
             if let Some(selection) = &select.selection {
-                let (condition, where_has_aggregate) = self.bind_expression(selection)?;
+                let (condition, where_has_aggregate) = self.build_expression(selection)?;
                 if where_has_aggregate {
                     return Err(Diagnostic::new(
                         "A3041",
@@ -73,7 +76,7 @@ impl Algebraizer<'_> {
             }
 
             for group_expr in group_by_exprs {
-                let (bound_group_expr, has_aggregate) = self.bind_expression(group_expr)?;
+                let (bound_group_expr, has_aggregate) = self.build_expression(group_expr)?;
                 if has_aggregate {
                     return Err(Diagnostic::new(
                         "A3016",
@@ -95,7 +98,7 @@ impl Algebraizer<'_> {
             let mut window_exprs = Vec::new();
             let mut bound_having = None;
             if let Some(having_expr) = &select.having {
-                let (condition, having_has_aggregate) = self.bind_expression(having_expr)?;
+                let (condition, having_has_aggregate) = self.build_expression(having_expr)?;
                 if contains_window_call(&condition) {
                     return Err(Diagnostic::new(
                         "A3043",
@@ -179,7 +182,7 @@ impl Algebraizer<'_> {
                     },
                     SelectItem::ExprWithAlias { expr, alias } => {
                         self.validate_alias_ident(alias)?;
-                        let (bound_expr, expr_has_aggregate) = self.bind_expression(expr)?;
+                        let (bound_expr, expr_has_aggregate) = self.build_expression(expr)?;
                         let expr_has_window = contains_window_call(&bound_expr);
                         has_aggregate |= expr_has_aggregate;
                         has_window |= expr_has_window;
@@ -217,7 +220,7 @@ impl Algebraizer<'_> {
                         projection_checks.push((output_name, bound_expr, expr_has_aggregate));
                     },
                     SelectItem::UnnamedExpr(expr) => {
-                        let (bound_expr, expr_has_aggregate) = self.bind_expression(expr)?;
+                        let (bound_expr, expr_has_aggregate) = self.build_expression(expr)?;
                         let expr_has_window = contains_window_call(&bound_expr);
                         has_aggregate |= expr_has_aggregate;
                         has_window |= expr_has_window;
