@@ -1,4 +1,5 @@
-dialect: postgres
+dialects:
+- postgres
 migrations:
   - |
     CREATE TABLE users (
@@ -12,6 +13,7 @@ queries:
   # Test literal expressions without aliases
   - name: literals_without_alias
     sql: SELECT 1, 'hello', 3.14, TRUE FROM users
+    cardinality: ZeroOrMore
     expected:
       - name: "?column?"
         nullability: false
@@ -25,6 +27,7 @@ queries:
   # Test arithmetic expressions without aliases
   - name: arithmetic_without_alias
     sql: SELECT age + 1, age * 2, age - 1 FROM users
+    cardinality: ZeroOrMore
     expected:
       - name: "?column?"
         nullability: true
@@ -50,6 +53,7 @@ queries:
   # Test string functions without aliases
   - name: string_functions_without_alias
     sql: SELECT LENGTH(name), UPPER(name), LOWER(email) FROM users
+    cardinality: ZeroOrMore
     expected:
       - name: "length"
         nullability: false
@@ -61,6 +65,7 @@ queries:
   # Test mixed columns and expressions
   - name: mixed_columns_and_expressions
     sql: SELECT id, age + 1, name FROM users
+    cardinality: ZeroOrMore
     expected:
       - name: id
         nullability: false
@@ -72,6 +77,7 @@ queries:
   # Test COALESCE without alias
   - name: coalesce_without_alias
     sql: SELECT COALESCE(email, 'N/A'), COALESCE(age, 0) FROM users
+    cardinality: ZeroOrMore
     expected:
       - name: "coalesce"
         nullability: false
@@ -81,6 +87,7 @@ queries:
   # Test CASE expression without alias
   - name: case_without_alias
     sql: SELECT CASE WHEN age > 18 THEN 'adult' ELSE 'minor' END FROM users
+    cardinality: ZeroOrMore
     expected:
       - name: "case"
         nullability: false

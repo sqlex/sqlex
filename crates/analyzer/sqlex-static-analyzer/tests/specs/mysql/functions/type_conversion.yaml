@@ -1,4 +1,5 @@
-dialect: mysql
+dialects:
+- mysql
 migrations:
   - |
     CREATE TABLE test_table (
@@ -7,43 +8,7 @@ migrations:
       amount DECIMAL
     )
 queries:
-  # String functions with non-text arguments - MySQL auto-converts
-  - name: upper_on_numeric
-    sql: SELECT UPPER(id) FROM test_table
-    cardinality: ZeroOrMore
-    expected:
-      - name: UPPER(id)
-        nullability: false
-
-  - name: lower_on_numeric
-    sql: SELECT LOWER(amount) FROM test_table
-    cardinality: ZeroOrMore
-    expected:
-      - name: LOWER(amount)
-        nullability: true
-
-  - name: trim_on_numeric
-    sql: SELECT TRIM(id) FROM test_table
-    cardinality: ZeroOrMore
-    expected:
-      - name: TRIM(id)
-        nullability: false
-
-  - name: length_on_numeric
-    sql: SELECT LENGTH(id) FROM test_table
-    cardinality: ZeroOrMore
-    expected:
-      - name: LENGTH(id)
-        nullability: false
-
-  # Numeric functions with non-numeric arguments - MySQL auto-converts
-  - name: abs_on_text
-    sql: SELECT ABS(name) FROM test_table
-    cardinality: ZeroOrMore
-    expected:
-      - name: ABS(name)
-        nullability: false
-
+  # MySQL-specific success cases.
   - name: ceil_on_text
     sql: SELECT CEIL(name) FROM test_table
     cardinality: ZeroOrMore
@@ -56,18 +21,4 @@ queries:
     cardinality: ZeroOrMore
     expected:
       - name: FLOOR(name)
-        nullability: false
-
-  - name: round_on_text
-    sql: SELECT ROUND(name) FROM test_table
-    cardinality: ZeroOrMore
-    expected:
-      - name: ROUND(name)
-        nullability: false
-
-  - name: ifnull_nullable_to_non_nullable
-    sql: SELECT IFNULL(amount, 0) AS normalized FROM test_table
-    cardinality: ZeroOrMore
-    expected:
-      - name: normalized
         nullability: false

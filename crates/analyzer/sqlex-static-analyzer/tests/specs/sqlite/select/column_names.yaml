@@ -1,4 +1,5 @@
-dialect: sqlite
+dialects:
+- sqlite
 migrations:
   - |
     CREATE TABLE users (
@@ -9,78 +10,18 @@ migrations:
       score DOUBLE PRECISION
     )
 queries:
-  # Test literal expressions without aliases
-  - name: literals_without_alias
-    sql: SELECT 1, 'hello', 3.14, TRUE FROM users
+  # Test string literal expression without aliases
+  - name: string_literal_without_alias
+    sql: SELECT 'hello' FROM users
+    cardinality: ZeroOrMore
     expected:
-      - name: "1"
-        nullability: false
       - name: "'hello'"
         nullability: false
-      - name: "3.14"
-        nullability: false
-      - name: "TRUE"
-        nullability: false
 
-  # Test arithmetic expressions without aliases
-  - name: arithmetic_without_alias
-    sql: SELECT age + 1, age * 2, age - 1 FROM users
-    expected:
-      - name: "age + 1"
-        nullability: true
-      - name: "age * 2"
-        nullability: true
-      - name: "age - 1"
-        nullability: true
-
-  # Test aggregate functions without aliases
-  - name: aggregates_without_alias
-    sql: SELECT COUNT(*), MAX(age), MIN(age), SUM(age) FROM users
+  # Test SUM without alias
+  - name: sum_without_alias
+    sql: SELECT SUM(age) FROM users
     cardinality: ExactlyOne
     expected:
-      - name: "COUNT(*)"
-        nullability: false
-      - name: "MAX(age)"
-        nullability: true
-      - name: "MIN(age)"
-        nullability: true
       - name: "SUM(age)"
         nullability: true
-
-  # Test string functions without aliases
-  - name: string_functions_without_alias
-    sql: SELECT LENGTH(name), UPPER(name), LOWER(email) FROM users
-    expected:
-      - name: "LENGTH(name)"
-        nullability: false
-      - name: "UPPER(name)"
-        nullability: false
-      - name: "LOWER(email)"
-        nullability: true
-
-  # Test mixed columns and expressions
-  - name: mixed_columns_and_expressions
-    sql: SELECT id, age + 1, name FROM users
-    expected:
-      - name: id
-        nullability: false
-      - name: "age + 1"
-        nullability: true
-      - name: name
-        nullability: false
-
-  # Test COALESCE without alias
-  - name: coalesce_without_alias
-    sql: SELECT COALESCE(email, 'N/A'), COALESCE(age, 0) FROM users
-    expected:
-      - name: "COALESCE(email, 'N/A')"
-        nullability: false
-      - name: "COALESCE(age, 0)"
-        nullability: false
-
-  # Test CASE expression without alias
-  - name: case_without_alias
-    sql: SELECT CASE WHEN age > 18 THEN 'adult' ELSE 'minor' END FROM users
-    expected:
-      - name: "CASE WHEN age > 18 THEN 'adult' ELSE 'minor' END"
-        nullability: false

@@ -1,0 +1,29 @@
+dialects:
+- postgres
+- sqlite
+migrations:
+- |
+  CREATE TABLE users (
+    id INT NOT NULL,
+    name TEXT NOT NULL,
+    PRIMARY KEY (id)
+  )
+- |
+  CREATE TABLE orders (
+    id INT NOT NULL,
+    user_id INT,
+    amount DECIMAL NOT NULL,
+    PRIMARY KEY (id)
+  )
+queries:
+- name: full_join
+  sql: |
+    SELECT u.id, o.id
+    FROM users u
+    FULL JOIN orders o ON u.id = o.user_id
+  cardinality: ZeroOrMore
+  expected:
+  - name: id
+    nullability: true
+  - name: id
+    nullability: true

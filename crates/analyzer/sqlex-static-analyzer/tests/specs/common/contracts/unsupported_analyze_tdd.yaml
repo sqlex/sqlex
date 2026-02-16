@@ -1,0 +1,23 @@
+migrations:
+  - CREATE TABLE t1 (id INT PRIMARY KEY)
+  - CREATE TABLE t2 (id INT PRIMARY KEY)
+queries:
+  - name: multi_from_items
+    sql: SELECT * FROM t1, t2
+    expected_error_code: A3071
+    tdd_reason: "Static analyzer currently rejects multi-from items before full parity work is complete."
+
+  - name: top_level_values_set_expr
+    sql: VALUES (1)
+    expected_error_code: A3065
+    tdd_reason: "VALUES set expression parity is tracked as future support."
+
+  - name: unsupported_binary_operator
+    sql: SELECT 1 || 2
+    expected_error_code: A3069
+    tdd_reason: "Binary operator support is not finalized for all dialects."
+
+  - name: unsupported_literal_kind
+    sql: SELECT X'AB'
+    expected_error_code: A3073
+    tdd_reason: "Hex literal handling is tracked for future implementation."

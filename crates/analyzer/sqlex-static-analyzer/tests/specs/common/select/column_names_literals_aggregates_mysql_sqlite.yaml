@@ -1,0 +1,36 @@
+dialects:
+- mysql
+- sqlite
+migrations:
+  - |
+    CREATE TABLE users (
+      id INT NOT NULL,
+      name TEXT NOT NULL,
+      email TEXT,
+      age INT,
+      score DOUBLE PRECISION
+    )
+queries:
+  # Test numeric/bool literal expressions without aliases
+  - name: literals_numeric_bool_without_alias
+    sql: SELECT 1, 3.14, TRUE FROM users
+    cardinality: ZeroOrMore
+    expected:
+      - name: "1"
+        nullability: false
+      - name: "3.14"
+        nullability: false
+      - name: "TRUE"
+        nullability: false
+
+  # Test core aggregate function names without aliases
+  - name: aggregates_core_without_alias
+    sql: SELECT COUNT(*), MAX(age), MIN(age) FROM users
+    cardinality: ExactlyOne
+    expected:
+      - name: "COUNT(*)"
+        nullability: false
+      - name: "MAX(age)"
+        nullability: true
+      - name: "MIN(age)"
+        nullability: true

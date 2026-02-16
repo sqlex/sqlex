@@ -1,36 +1,12 @@
-dialect: postgres
+dialects:
+- postgres
 migrations:
-  - |
-    CREATE TABLE users (
-      id INT NOT NULL,
-      name TEXT NOT NULL,
-      age INT
-    )
+- |
+  CREATE TABLE users (
+    id INT NOT NULL,
+    name TEXT NOT NULL,
+    age INT
+  )
 queries:
-  - name: ambiguous_column
-    sql: |
-      SELECT id FROM users u1 JOIN users u2 ON u1.id = u2.id
-   
-  - name: invalid_function_args
-    sql: SELECT SUBSTR(1, 2, 3) FROM users
-
-  - name: invalid_group_by
-    sql: SELECT name, COUNT(*) FROM users
-
-  - name: table_name_hidden_by_alias
-    sql: SELECT users.id FROM users AS u
-
-  - name: missing_column_in_where
-    sql: SELECT id FROM users WHERE missing_col = 1
-
-  - name: join_using_missing_column
-    sql: SELECT * FROM users u1 JOIN users u2 USING (missing_col)
-
-  - name: aggregate_in_where
-    sql: SELECT id FROM users WHERE COUNT(*) > 0
-
-  - name: window_in_where
-    sql: SELECT id FROM users WHERE ROW_NUMBER() OVER (ORDER BY id) > 0
-
-  - name: window_in_having
-    sql: SELECT id, COUNT(*) FROM users GROUP BY id HAVING ROW_NUMBER() OVER (ORDER BY id) > 0
+- name: invalid_function_args
+  sql: SELECT SUBSTR(1, 2, 3) FROM users

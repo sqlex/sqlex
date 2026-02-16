@@ -1,0 +1,19 @@
+dialects:
+- mysql
+- sqlite
+migrations:
+- |
+  CREATE TABLE sales (
+    id INT NOT NULL,
+    region TEXT NOT NULL,
+    amount DECIMAL
+  )
+queries:
+- name: sum_on_text_column
+  sql: |
+    SELECT SUM(region)
+    FROM sales
+  cardinality: ExactlyOne
+  expected:
+  - name: SUM(region)
+    nullability: true

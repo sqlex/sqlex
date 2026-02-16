@@ -1,0 +1,54 @@
+migrations:
+- |
+  CREATE TABLE users (
+    id INT NOT NULL,
+    name TEXT NOT NULL,
+    PRIMARY KEY (id)
+  )
+- |
+  CREATE TABLE orders (
+    id INT NOT NULL,
+    user_id INT,
+    amount DECIMAL NOT NULL,
+    PRIMARY KEY (id)
+  )
+queries:
+- name: inner_join
+  sql: |
+    SELECT u.id, u.name, o.amount
+    FROM users u
+    INNER JOIN orders o ON u.id = o.user_id
+  cardinality: ZeroOrMore
+  expected:
+  - name: id
+    nullability: false
+  - name: name
+    nullability: false
+  - name: amount
+    nullability: false
+- name: left_join
+  sql: |
+    SELECT u.id, o.id, o.amount
+    FROM users u
+    LEFT JOIN orders o ON u.id = o.user_id
+  cardinality: ZeroOrMore
+  expected:
+  - name: id
+    nullability: false
+  - name: id
+    nullability: true
+  - name: amount
+    nullability: true
+- name: right_join
+  sql: |
+    SELECT u.id, u.name, o.amount
+    FROM users u
+    RIGHT JOIN orders o ON u.id = o.user_id
+  cardinality: ZeroOrMore
+  expected:
+  - name: id
+    nullability: true
+  - name: name
+    nullability: true
+  - name: amount
+    nullability: false

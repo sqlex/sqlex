@@ -1,0 +1,10 @@
+migrations:
+- |
+  CREATE TABLE users (
+    id INT NOT NULL,
+    name TEXT NOT NULL,
+    age INT
+  )
+queries:
+- name: invalid_function_args_coalesce
+  sql: SELECT COALESCE() FROM users

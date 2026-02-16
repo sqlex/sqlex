@@ -1,4 +1,5 @@
-dialect: postgres
+dialects:
+- postgres
 migrations: []
 queries:
   - name: unquoted_cte_name_is_folded_to_lowercase

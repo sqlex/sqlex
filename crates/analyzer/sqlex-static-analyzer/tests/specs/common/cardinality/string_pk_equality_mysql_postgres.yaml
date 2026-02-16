@@ -1,0 +1,21 @@
+dialects:
+- mysql
+- postgres
+migrations:
+- |
+  CREATE TABLE products (
+    sku VARCHAR(50) PRIMARY KEY,
+    name TEXT NOT NULL,
+    price DECIMAL
+  )
+queries:
+- name: string_pk_equality
+  sql: SELECT * FROM products WHERE sku = 'ABC123'
+  cardinality: AtMostOne
+  expected:
+  - name: sku
+    nullability: false
+  - name: name
+    nullability: false
+  - name: price
+    nullability: true

@@ -1,59 +1,17 @@
-dialect: sqlite
+dialects:
+- sqlite
 migrations:
-  - |
-    CREATE TABLE users (
-      id INTEGER PRIMARY KEY,
-      name TEXT
-    )
-  - |
-    CREATE TABLE posts (
-      id INTEGER,
-      title TEXT NOT NULL,
-      PRIMARY KEY (id)
-    )
-  - |
-    CREATE TABLE tags (
-      name TEXT PRIMARY KEY,
-      description TEXT
-    )
-  - |
-    CREATE TABLE comments (
-      post_id INTEGER,
-      user_id INTEGER,
-      content TEXT,
-      PRIMARY KEY (post_id, user_id)
-    )
+- |-
+  CREATE TABLE tags (
+    name TEXT PRIMARY KEY,
+    description TEXT
+  )
 queries:
-  - name: integer_pk_inline
-    sql: SELECT id, name FROM users
-    expected:
-      - name: id
-        nullability: false
-      - name: name
-        nullability: true
-
-  - name: integer_pk_table_constraint
-    sql: SELECT id, title FROM posts
-    expected:
-      - name: id
-        nullability: false
-      - name: title
-        nullability: false
-
-  - name: text_pk
-    sql: SELECT name, description FROM tags
-    expected:
-      - name: name
-        nullability: true
-      - name: description
-        nullability: true
-
-  - name: composite_integer_pk
-    sql: SELECT post_id, user_id, content FROM comments
-    expected:
-      - name: post_id
-        nullability: false
-      - name: user_id
-        nullability: false
-      - name: content
-        nullability: true
+- name: text_pk
+  sql: SELECT name, description FROM tags
+  cardinality: ZeroOrMore
+  expected:
+  - name: name
+    nullability: true
+  - name: description
+    nullability: true

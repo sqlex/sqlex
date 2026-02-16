@@ -1,0 +1,146 @@
+migrations:
+- |
+  CREATE TABLE users (
+    id INT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT
+  )
+- |
+  CREATE TABLE orders (
+    id INT PRIMARY KEY,
+    user_id INT NOT NULL,
+    total DECIMAL
+  )
+queries:
+- name: where_false
+  sql: SELECT * FROM users WHERE FALSE
+  cardinality: ExactlyZero
+  expected:
+  - name: id
+    nullability: false
+  - name: name
+    nullability: false
+  - name: email
+    nullability: true
+- name: where_constant_false
+  sql: SELECT * FROM users WHERE 1 = 0
+  cardinality: ExactlyZero
+  expected:
+  - name: id
+    nullability: false
+  - name: name
+    nullability: false
+  - name: email
+    nullability: true
+- name: group_by
+  sql: SELECT user_id, SUM(total) as total_sum FROM orders GROUP BY user_id
+  cardinality: ZeroOrMore
+  expected:
+  - name: user_id
+    nullability: false
+  - name: total_sum
+    nullability: true
+- name: distinct
+  sql: SELECT DISTINCT name FROM users
+  cardinality: ZeroOrMore
+  expected:
+  - name: name
+    nullability: false
+- name: aggregate_no_group_by
+  sql: SELECT COUNT(*) as cnt, SUM(total) as total_sum FROM orders
+  cardinality: ExactlyOne
+  expected:
+  - name: cnt
+    nullability: false
+  - name: total_sum
+    nullability: true
+- name: limit_zero
+  sql: SELECT * FROM users LIMIT 0
+  cardinality: ExactlyZero
+  expected:
+  - name: id
+    nullability: false
+  - name: name
+    nullability: false
+  - name: email
+    nullability: true
+- name: limit_one
+  sql: SELECT * FROM users LIMIT 1
+  cardinality: AtMostOne
+  expected:
+  - name: id
+    nullability: false
+  - name: name
+    nullability: false
+  - name: email
+    nullability: true
+- name: no_from_clause
+  sql: SELECT 1 as one, 2 as two, 3 as three
+  cardinality: ExactlyOne
+  expected:
+  - name: one
+    nullability: false
+  - name: two
+    nullability: false
+  - name: three
+    nullability: false
+- name: union_single_rows
+  sql: SELECT 1 as num UNION SELECT 2
+  cardinality: OneOrMore
+  expected:
+  - name: num
+    nullability: false
+- name: intersect_single_rows
+  sql: SELECT 1 as num INTERSECT SELECT 1
+  cardinality: AtMostOne
+  expected:
+  - name: num
+    nullability: false
+- name: except_single_rows
+  sql: SELECT 1 as num EXCEPT SELECT 2
+  cardinality: AtMostOne
+  expected:
+  - name: num
+    nullability: false
+- name: limit_one_with_offset
+  sql: SELECT * FROM users LIMIT 1 OFFSET 1
+  cardinality: AtMostOne
+  expected:
+  - name: id
+    nullability: false
+  - name: name
+    nullability: false
+  - name: email
+    nullability: true
+- name: offset_singleton_is_zero
+  sql: SELECT 1 as one LIMIT 10 OFFSET 1
+  cardinality: ExactlyZero
+  expected:
+  - name: one
+    nullability: false
+- name: derived_table_top_level_limit_one
+  sql: |
+    SELECT d.id
+    FROM (
+      SELECT id
+      FROM users
+      ORDER BY id
+      LIMIT 1
+    ) d
+  cardinality: AtMostOne
+  expected:
+  - name: id
+    nullability: false
+- name: cte_top_level_limit_one
+  sql: |
+    WITH limited_users AS (
+      SELECT id
+      FROM users
+      ORDER BY id
+      LIMIT 1
+    )
+    SELECT id FROM limited_users
+  cardinality: AtMostOne
+  expected:
+  - name: id
+    nullability: false

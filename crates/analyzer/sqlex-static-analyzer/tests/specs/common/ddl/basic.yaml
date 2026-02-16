@@ -1,0 +1,24 @@
+migrations:
+  - |
+    CREATE TABLE users (
+      id INT NOT NULL,
+      name TEXT,
+      email TEXT,
+      PRIMARY KEY (id)
+    )
+  - |
+    CREATE TABLE orders (
+      id INT NOT NULL,
+      user_id INT NOT NULL,
+      amount DECIMAL,
+      PRIMARY KEY (id)
+    )
+  - |
+    ALTER TABLE orders ADD COLUMN status TEXT
+  - |
+    ALTER TABLE orders DROP COLUMN amount
+  - |
+    ALTER TABLE orders ADD CONSTRAINT orders_user_fk FOREIGN KEY (user_id) REFERENCES users(id)
+  - |
+    DROP TABLE users
+queries: []

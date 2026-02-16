@@ -1,4 +1,5 @@
-dialect: mysql
+dialects:
+- mysql
 queries:
   - name: qualified_wildcard_literal_derived_table
     cardinality: ExactlyOne

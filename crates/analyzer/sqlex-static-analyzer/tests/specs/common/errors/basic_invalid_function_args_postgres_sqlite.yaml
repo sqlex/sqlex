@@ -1,0 +1,13 @@
+dialects:
+- postgres
+- sqlite
+migrations:
+- |
+  CREATE TABLE users (
+    id INT NOT NULL,
+    name TEXT NOT NULL,
+    age INT
+  )
+queries:
+- name: invalid_function_args
+  sql: SELECT LENGTH(1, 2) FROM users

@@ -1,0 +1,46 @@
+migrations:
+- |
+  CREATE TABLE sales (
+    id INT NOT NULL,
+    region TEXT NOT NULL,
+    amount DECIMAL NOT NULL
+  )
+queries:
+- name: row_number
+  sql: SELECT id, ROW_NUMBER() OVER (ORDER BY id) AS rn FROM sales
+  cardinality: ZeroOrMore
+  expected:
+  - name: id
+    nullability: false
+  - name: rn
+    nullability: false
+- name: rank
+  sql: SELECT id, RANK() OVER (ORDER BY amount) AS rnk FROM sales
+  cardinality: ZeroOrMore
+  expected:
+  - name: id
+    nullability: false
+  - name: rnk
+    nullability: false
+- name: dense_rank
+  sql: SELECT id, DENSE_RANK() OVER (ORDER BY amount) AS drnk FROM sales
+  cardinality: ZeroOrMore
+  expected:
+  - name: id
+    nullability: false
+  - name: drnk
+    nullability: false
+- name: lead_lag
+  sql: |
+    SELECT id,
+      LEAD(amount) OVER (ORDER BY id) AS lead_val,
+      LAG(amount) OVER (ORDER BY id) AS lag_val
+    FROM sales
+  cardinality: ZeroOrMore
+  expected:
+  - name: id
+    nullability: false
+  - name: lead_val
+    nullability: true
+  - name: lag_val
+    nullability: true

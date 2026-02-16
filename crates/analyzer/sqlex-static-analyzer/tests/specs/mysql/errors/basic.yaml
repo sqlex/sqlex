@@ -1,26 +1,15 @@
-dialect: mysql
+dialects:
+- mysql
 migrations:
-  - |
-    CREATE TABLE users (
-      id INT NOT NULL,
-      name TEXT NOT NULL,
-      age INT
-    )
+- |
+  CREATE TABLE users (
+    id INT NOT NULL,
+    name TEXT NOT NULL,
+    age INT
+  )
 queries:
-  - name: missing_table
-    sql: SELECT id FROM missing_table
-
-  - name: missing_column
-    sql: SELECT missing_col FROM users
-
-  - name: invalid_function_args
-    sql: SELECT COALESCE() FROM users
-
-  - name: unsupported_full_join
-    sql: |
-      SELECT u1.id, u2.id
-      FROM users u1
-      FULL JOIN users u2 ON u1.id = u2.id
-
-  - name: syntax_error
-    sql: SELECT FROM users
+- name: unsupported_full_join
+  sql: |
+    SELECT u1.id, u2.id
+    FROM users u1
+    FULL JOIN users u2 ON u1.id = u2.id

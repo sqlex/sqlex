@@ -1,4 +1,5 @@
-dialect: Postgres
+dialects:
+- postgres
 migrations:
   - |
     create table department
@@ -16,6 +17,7 @@ migrations:
 queries:
   - name: get_all_user
     sql: select * from "user"
+    cardinality: ZeroOrMore
     expected:
       - name: id
         nullability: false

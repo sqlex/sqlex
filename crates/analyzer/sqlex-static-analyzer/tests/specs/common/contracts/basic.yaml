@@ -1,0 +1,70 @@
+migrations:
+  - CREATE TABLE users (id INT PRIMARY KEY, name TEXT)
+  - CREATE TABLE orders (id INT PRIMARY KEY, user_id INT NOT NULL, amount INT, note TEXT, FOREIGN KEY (user_id) REFERENCES users(id))
+queries:
+  - name: primary_key_single_value_filter
+    sql: SELECT id FROM users WHERE id = 1
+    cardinality: AtMostOne
+    expected:
+      - name: id
+        nullability: false
+
+  - name: exists_correlated_subquery
+    sql: SELECT u.id FROM users AS u WHERE EXISTS (SELECT 1 FROM orders AS o WHERE o.user_id = u.id)
+    cardinality: ZeroOrMore
+    expected:
+      - name: id
+        nullability: false
+
+  - name: coalesce_function_projection
+    sql: SELECT COALESCE(name, 'anonymous') AS normalized_name FROM users
+    cardinality: ZeroOrMore
+    expected:
+      - name: normalized_name
+        nullability: false
+
+  - name: group_by_non_aggregate_projection
+    sql: SELECT user_id FROM orders GROUP BY user_id
+    cardinality: ZeroOrMore
+    expected:
+      - name: user_id
+        nullability: false
+
+  - name: inner_join_equijoin
+    sql: SELECT u.id, o.user_id FROM users AS u INNER JOIN orders AS o ON o.user_id = u.id
+    cardinality: ZeroOrMore
+    expected:
+      - name: id
+        nullability: false
+      - name: user_id
+        nullability: false
+
+  - name: outer_join_makes_right_side_nullable
+    sql: SELECT u.id, o.id AS order_id FROM users AS u LEFT JOIN orders AS o ON o.user_id = u.id
+    cardinality: ZeroOrMore
+    expected:
+      - name: id
+        nullability: false
+      - name: order_id
+        nullability: true
+
+  - name: top_level_order_by
+    sql: SELECT id FROM users ORDER BY id DESC
+    cardinality: ZeroOrMore
+    expected:
+      - name: id
+        nullability: false
+
+  - name: qualified_scope_reference
+    sql: SELECT u.id FROM users AS u WHERE u.id = 1
+    cardinality: AtMostOne
+    expected:
+      - name: id
+        nullability: false
+
+  - name: union_projection_shape
+    sql: SELECT id FROM users UNION SELECT user_id AS id FROM orders
+    cardinality: ZeroOrMore
+    expected:
+      - name: id
+        nullability: false

@@ -1,7 +1,7 @@
 use std::{
+    collections::HashSet,
     env,
     path::{Path, PathBuf},
-    process,
 };
 
 use serde::Deserialize;
@@ -15,8 +15,9 @@ use sqlex_static_analyzer::StaticAnalyzer;
 use tokio::fs as tokio_fs;
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct YamlTestSuite {
-    dialect: Dialect,
+    dialects: Option<Vec<Dialect>>,
     #[serde(default)]
     migrations: Vec<String>,
     queries: Vec<YamlQuery>,
@@ -26,10 +27,11 @@ struct YamlTestSuite {
 struct YamlQuery {
     name: String,
     sql: String,
-    #[serde(default)]
-    cardinality: Cardinality,
+    cardinality: Option<Cardinality>,
     #[serde(default)]
     expected: Vec<YamlOutputColumn>,
+    expected_error_code: Option<String>,
+    tdd_reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -40,16 +42,25 @@ struct YamlOutputColumn {
 
 const SPECS_DIR: &str = "tests/specs";
 
-#[tokio::main]
-async fn main() {
-    if let Err(err) = run().await {
-        eprintln!("{}", err);
-        process::exit(1);
+#[derive(Debug, Default)]
+struct RunStats {
+    total_files: usize,
+    matched_files: usize,
+    dialect_runs: usize,
+    query_cases: usize,
+    skipped_tdd_cases: usize,
+}
+
+#[tokio::test]
+async fn specs_runner() {
+    if let Err(error) = run().await {
+        panic!("{}", error);
     }
 }
 
 async fn run() -> Result<(), String> {
-    let filter = parse_args()?;
+    let filter = parse_filter_from_env();
+    let run_tdd = should_run_tdd();
     let specs_dir = Path::new(SPECS_DIR);
     let specs_meta = tokio_fs::metadata(specs_dir).await;
     let is_dir = match specs_meta {
@@ -68,7 +79,11 @@ async fn run() -> Result<(), String> {
         a_rel.cmp(&b_rel)
     });
 
-    let total_files = files.len();
+    let mut stats = RunStats {
+        total_files: files.len(),
+        ..RunStats::default()
+    };
+
     let mut matched_files = Vec::new();
     for path in files {
         let rel_path = path.strip_prefix(specs_dir).unwrap_or(&path);
@@ -77,9 +92,15 @@ async fn run() -> Result<(), String> {
         }
     }
 
+    stats.matched_files = matched_files.len();
+
     if let Some(filter_value) = filter.as_deref() {
         println!("Specs filter: {}", filter_value);
-        println!("Matched {}/{} spec files", matched_files.len(), total_files);
+        println!(
+            "Matched {}/{} spec files",
+            matched_files.len(),
+            stats.total_files
+        );
         if matched_files.is_empty() {
             return Err(format!("No spec files matched filter '{}'.", filter_value));
         }
@@ -92,8 +113,17 @@ async fn run() -> Result<(), String> {
             .display()
             .to_string();
         println!("Running tests from: {}", display_path);
-        run_test_file(&path, specs_dir).await;
+        run_test_file(&path, specs_dir, run_tdd, &mut stats).await?;
     }
+
+    println!(
+        "Specs summary: files={}/{}, dialect_runs={}, query_cases={}, skipped_tdd={}",
+        stats.matched_files,
+        stats.total_files,
+        stats.dialect_runs,
+        stats.query_cases,
+        stats.skipped_tdd_cases
+    );
 
     Ok(())
 }
@@ -117,58 +147,19 @@ async fn collect_yaml_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
-fn parse_args() -> Result<Option<String>, String> {
-    let mut args = env::args().skip(1);
-    let mut filter: Option<String> = None;
-
-    while let Some(arg) = args.next() {
-        if arg == "-h" || arg == "--help" {
-            print_usage();
-            process::exit(0);
-        }
-
-        if arg == "--specs" {
-            let value = args
-                .next()
-                .ok_or_else(|| "Missing value for --specs".to_string())?;
-            if filter.is_some() {
-                return Err("Duplicate --specs argument".to_string());
-            }
-            filter = Some(value);
-            continue;
-        }
-
-        if let Some(value) = arg.strip_prefix("--specs=") {
-            if value.is_empty() {
-                return Err("Missing value for --specs".to_string());
-            }
-            if filter.is_some() {
-                return Err("Duplicate --specs argument".to_string());
-            }
-            filter = Some(value.to_string());
-            continue;
-        }
-
-        return Err(format!("Unknown argument: {}", arg));
+fn parse_filter_from_env() -> Option<String> {
+    let raw = env::var("SQLEX_SPECS_FILTER").ok()?;
+    let normalized = normalize_filter(&raw);
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized)
     }
-
-    let normalized = filter.map(|value| normalize_filter(&value));
-    let normalized = match normalized {
-        Some(value) if value.is_empty() => None,
-        other => other,
-    };
-    Ok(normalized)
 }
 
-fn print_usage() {
-    println!("Usage:");
-    println!("  cargo test -p sqlex-static-analyzer --test specs_runner");
-    println!("  cargo test -p sqlex-static-analyzer --test specs_runner -- --specs <path-prefix>");
-    println!();
-    println!("Examples:");
-    println!("  --specs mysql/agg");
-    println!("  --specs mysql/agg/basic");
-    println!("  --specs tests/specs/mysql");
+fn should_run_tdd() -> bool {
+    let raw = env::var("SQLEX_RUN_TDD").unwrap_or_else(|_| "0".to_string());
+    matches!(raw.trim(), "1" | "true" | "TRUE" | "True")
 }
 
 fn normalize_filter(raw: &str) -> String {
@@ -245,7 +236,113 @@ fn sqlite_types_compatible(static_type: &DataType, db_type: &DataType) -> bool {
     )
 }
 
-async fn run_test_file(path: &Path, specs_dir: &Path) {
+fn all_dialects() -> [Dialect; 3] {
+    [Dialect::MySQL, Dialect::Postgres, Dialect::SQLite]
+}
+
+fn extract_error_code(error: &impl std::fmt::Display) -> Option<String> {
+    let rendered = error.to_string();
+    let bracket_start = rendered.find('[')?;
+    let payload = &rendered[(bracket_start + 1)..];
+    let bracket_end_relative = payload.find(']')?;
+    let payload = &payload[..bracket_end_relative];
+    payload.split(':').nth(1).map(ToString::to_string)
+}
+
+fn validate_suite(suite: &YamlTestSuite, display_path: &str) -> Result<(), String> {
+    if let Some(dialects) = suite.dialects.as_ref() {
+        if dialects.is_empty() {
+            return Err(format!(
+                "Suite {} has an empty dialects list.",
+                display_path
+            ));
+        }
+
+        let mut seen = HashSet::with_capacity(dialects.len());
+        for dialect in dialects {
+            if !seen.insert(*dialect) {
+                return Err(format!(
+                    "Suite {} has duplicated dialect '{}' in dialects.",
+                    display_path, dialect
+                ));
+            }
+        }
+    }
+
+    let mut names = HashSet::with_capacity(suite.queries.len());
+    for query in &suite.queries {
+        if query.name.trim().is_empty() {
+            return Err(format!("Suite {} has an empty query name.", display_path));
+        }
+        if !names.insert(query.name.as_str()) {
+            return Err(format!(
+                "Suite {} has duplicated query name '{}'.",
+                display_path, query.name
+            ));
+        }
+        if query.sql.trim().is_empty() {
+            return Err(format!(
+                "Suite {} query '{}' has empty SQL.",
+                display_path, query.name
+            ));
+        }
+        if let Some(reason) = query.tdd_reason.as_deref() {
+            if reason.trim().is_empty() {
+                return Err(format!(
+                    "Suite {} query '{}' has an empty tdd_reason.",
+                    display_path, query.name
+                ));
+            }
+        }
+        if let Some(error_code) = query.expected_error_code.as_deref() {
+            if error_code.trim().is_empty() {
+                return Err(format!(
+                    "Suite {} query '{}' has an empty expected_error_code.",
+                    display_path, query.name
+                ));
+            }
+        }
+        if query.expected_error_code.is_some() && !query.expected.is_empty() {
+            return Err(format!(
+                "Suite {} query '{}' cannot define both expected and expected_error_code.",
+                display_path, query.name
+            ));
+        }
+        for expected_col in &query.expected {
+            if expected_col.name.trim().is_empty() {
+                return Err(format!(
+                    "Suite {} query '{}' has an expected column with empty name.",
+                    display_path, query.name
+                ));
+            }
+        }
+
+        if query.expected_error_code.is_none()
+            && !query.expected.is_empty()
+            && query.cardinality.is_none()
+        {
+            return Err(format!(
+                "Suite {} query '{}' must set cardinality for success assertions.",
+                display_path, query.name
+            ));
+        }
+        if query.expected_error_code.is_some() && query.cardinality.is_some() {
+            return Err(format!(
+                "Suite {} query '{}' cannot define cardinality with expected_error_code.",
+                display_path, query.name
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+async fn run_test_file(
+    path: &Path,
+    specs_dir: &Path,
+    run_tdd: bool,
+    stats: &mut RunStats,
+) -> Result<(), String> {
     let display_path = path
         .strip_prefix(specs_dir)
         .unwrap_or(path)
@@ -256,56 +353,115 @@ async fn run_test_file(path: &Path, specs_dir: &Path) {
         .expect("Failed to read file");
     let suite: YamlTestSuite = serde_yaml::from_str(&content)
         .unwrap_or_else(|e| panic!("Failed to parse YAML file {}: {}", display_path, e));
+    validate_suite(&suite, &display_path)?;
 
-    let mut static_analyzer = StaticAnalyzer::new(suite.dialect);
-    let mut db_analyzer = new_database_analyzer(suite.dialect)
-        .await
-        .unwrap_or_else(|e| {
-            panic!(
-                "Failed to create database analyzer for {}: {}",
-                display_path, e
-            )
-        });
+    let dialects = suite
+        .dialects
+        .clone()
+        .unwrap_or_else(|| all_dialects().to_vec());
 
-    // Apply migrations
-    for sql in suite.migrations {
-        let sql = sql.trim();
-        if !sql.is_empty() {
-            let static_result = static_analyzer.execute(sql).await;
-            let db_result = db_analyzer.execute(sql).await;
-
-            match (db_result, static_result) {
-                (Ok(_), Ok(_)) => {},
-                (Err(db_err), Err(static_err)) => {
-                    println!("  Migration result: db=ERROR, static=ERROR (match)");
-                    println!("    SQL: {}", sql);
-                    println!("    DB error: {}", db_err);
-                    println!("    Static error: {}", static_err);
-                },
-                (Err(db_err), Ok(_)) => {
-                    println!("  Migration result: db=ERROR, static=OK (mismatch)");
-                    println!("    SQL: {}", sql);
-                    println!("    DB error: {}", db_err);
-                    println!("    Static error: <none>");
-                    panic!(
-                        "Migration in {} failed on database analyzer, but static analyzer succeeded.",
-                        display_path
-                    );
-                },
-                (Ok(_), Err(static_err)) => {
-                    println!("  Migration result: db=OK, static=ERROR (mismatch)");
-                    println!("    SQL: {}", sql);
-                    println!("    DB error: <none>");
-                    println!("    Static error: {}", static_err);
-                    panic!(
-                        "Migration in {} succeeded on database analyzer, but static analyzer failed.",
-                        display_path
-                    );
-                },
-            }
-        }
+    for dialect in dialects {
+        stats.dialect_runs += 1;
+        run_test_file_for_dialect(dialect, &suite, &display_path, run_tdd, stats).await;
     }
 
+    Ok(())
+}
+
+async fn run_test_file_for_dialect(
+    dialect: Dialect,
+    suite: &YamlTestSuite,
+    display_path: &str,
+    run_tdd: bool,
+    stats: &mut RunStats,
+) {
+    println!("  Dialect: {}", dialect);
+
+    let mut static_analyzer = StaticAnalyzer::new(dialect);
+    let mut db_analyzer = new_database_analyzer(dialect).await.unwrap_or_else(|e| {
+        panic!(
+            "Failed to create database analyzer for {}: {}",
+            display_path, e
+        )
+    });
+
+    for sql in &suite.migrations {
+        let sql = sql.trim();
+        if sql.is_empty() {
+            continue;
+        }
+
+        let static_result = static_analyzer.execute(sql).await;
+        let db_result = db_analyzer.execute(sql).await;
+        assert_same_status_for_migration(display_path, sql, db_result, static_result);
+    }
+
+    verify_schema_equivalence(display_path, &mut db_analyzer, &mut static_analyzer).await;
+
+    for query in &suite.queries {
+        stats.query_cases += 1;
+        if let Some(reason) = query.tdd_reason.as_deref() {
+            if !run_tdd {
+                stats.skipped_tdd_cases += 1;
+                println!("  Skipped (TDD): {} ({})", query.name, reason);
+                continue;
+            }
+        }
+
+        println!("  Running test: {}", query.name);
+        run_analyze_query_case(
+            display_path,
+            dialect,
+            query,
+            &mut db_analyzer,
+            &static_analyzer,
+        )
+        .await;
+    }
+}
+
+fn assert_same_status_for_migration(
+    display_path: &str,
+    sql: &str,
+    db_result: sqlex_analyzer::Result<()>,
+    static_result: sqlex_analyzer::Result<()>,
+) {
+    match (db_result, static_result) {
+        (Ok(_), Ok(_)) => {},
+        (Err(db_err), Err(static_err)) => {
+            println!("  Migration result: db=ERROR, static=ERROR (match)");
+            println!("    SQL: {}", sql);
+            println!("    DB error: {}", db_err);
+            println!("    Static error: {}", static_err);
+        },
+        (Err(db_err), Ok(_)) => {
+            println!("  Migration result: db=ERROR, static=OK (mismatch)");
+            println!("    SQL: {}", sql);
+            println!("    DB error: {}", db_err);
+            println!("    Static error: <none>");
+            panic!(
+                "Migration in {} failed on database analyzer, but static analyzer succeeded.",
+                display_path
+            );
+        },
+        (Ok(_), Err(static_err)) => {
+            println!("  Migration result: db=OK, static=ERROR (mismatch)");
+            println!("    SQL: {}", sql);
+            println!("    DB error: <none>");
+            println!("    Static error: {}", static_err);
+            panic!(
+                "Migration in {} succeeded on database analyzer, but static analyzer failed.",
+                display_path
+            );
+        },
+    }
+}
+
+async fn verify_schema_equivalence(
+    display_path: &str,
+    db_analyzer: &mut Box<dyn Analyzer>,
+    static_analyzer: &mut StaticAnalyzer,
+) {
     let mut static_tables = static_analyzer.get_all_tables().await.unwrap_or_else(|e| {
         panic!(
             "Failed to get tables for schema validation in {}: {}",
@@ -392,107 +548,180 @@ async fn run_test_file(path: &Path, specs_dir: &Path) {
             );
         }
     }
+}
 
-    // Run queries
-    for test in suite.queries {
-        println!("  Running test: {}", test.name);
-        let db_result = db_analyzer.analyze(&test.sql).await;
-        let static_result = static_analyzer.analyze(&test.sql).await;
+async fn run_analyze_query_case(
+    display_path: &str,
+    dialect: Dialect,
+    query: &YamlQuery,
+    db_analyzer: &mut Box<dyn Analyzer>,
+    static_analyzer: &StaticAnalyzer,
+) {
+    let db_result = db_analyzer.analyze(&query.sql).await;
+    let static_result = static_analyzer.analyze(&query.sql).await;
 
+    if let Some(expected_error_code) = query.expected_error_code.as_deref() {
+        match (db_result, static_result) {
+            (Err(db_err), Err(static_err)) => {
+                let observed_code = extract_error_code(&static_err).unwrap_or_else(|| {
+                    panic!(
+                        "Test '{}' in {} on {}: failed to extract static error code from '{}'",
+                        query.name, display_path, dialect, static_err
+                    )
+                });
+                assert_eq!(
+                    observed_code, expected_error_code,
+                    "Test '{}' in {} on {}: expected static error code {}, got {}",
+                    query.name, display_path, dialect, expected_error_code, observed_code
+                );
+                println!("  Result: db=ERROR, static=ERROR (code={})", observed_code);
+                println!("    DB error: {}", db_err);
+                println!("    Static error: {}", static_err);
+            },
+            (Err(db_err), Ok(_)) => {
+                panic!(
+                    "Test '{}' in {} on {} expected error code {}, but static analyzer succeeded while db failed: {}",
+                    query.name, display_path, dialect, expected_error_code, db_err
+                );
+            },
+            (Ok(_), Err(static_err)) => {
+                panic!(
+                    "Test '{}' in {} on {} expected error code {}, but database analyzer succeeded while static failed: {}",
+                    query.name, display_path, dialect, expected_error_code, static_err
+                );
+            },
+            (Ok(_), Ok(_)) => {
+                panic!(
+                    "Test '{}' in {} on {} expected error code {}, but both analyzers succeeded.",
+                    query.name, display_path, dialect, expected_error_code
+                );
+            },
+        }
+        return;
+    }
+
+    if query.expected.is_empty() {
         match (db_result, static_result) {
             (Err(db_err), Err(static_err)) => {
                 println!("  Result: db=ERROR, static=ERROR (match)");
                 println!("    DB error: {}", db_err);
                 println!("    Static error: {}", static_err);
             },
+            (Ok(_), Ok(_)) => {
+                println!("  Result: db=OK, static=OK (status-only check)");
+            },
             (Err(db_err), Ok(_)) => {
-                println!("  Result: db=ERROR, static=OK (mismatch)");
-                println!("    DB error: {}", db_err);
-                println!("    Static error: <none>");
                 panic!(
-                    "Test '{}' in {}: Database analyzer failed, but static analyzer succeeded",
-                    test.name, display_path
+                    "Test '{}' in {} on {}: database analyzer failed, but static analyzer succeeded ({})",
+                    query.name, display_path, dialect, db_err
                 );
             },
             (Ok(_), Err(static_err)) => {
-                println!("  Result: db=OK, static=ERROR (mismatch)");
-                println!("    DB error: <none>");
-                println!("    Static error: {}", static_err);
                 panic!(
-                    "Test '{}' in {}: Database analyzer succeeded, but static analyzer failed",
-                    test.name, display_path
+                    "Test '{}' in {} on {}: database analyzer succeeded, but static analyzer failed ({})",
+                    query.name, display_path, dialect, static_err
                 );
-            },
-            (Ok(db_result), Ok(static_result)) => {
-                let db_columns = db_result.columns;
-                let static_columns = static_result.columns;
-
-                // Verify cardinality
-                assert_eq!(
-                    static_result.cardinality, test.cardinality,
-                    "Test '{}' in {}: Cardinality mismatch (Expected: {:?}, Actual: {:?})",
-                    test.name, display_path, test.cardinality, static_result.cardinality
-                );
-
-                assert_eq!(
-                    static_columns.len(),
-                    db_columns.len(),
-                    "Test '{}' in {}: output column count mismatch. Expected {}, got {}",
-                    test.name,
-                    display_path,
-                    db_columns.len(),
-                    static_columns.len()
-                );
-
-                assert_eq!(
-                    test.expected.len(),
-                    db_columns.len(),
-                    "Test '{}' in {}: expected nullability count mismatch. Expected {}, got {}",
-                    test.name,
-                    display_path,
-                    db_columns.len(),
-                    test.expected.len()
-                );
-
-                for i in 0..db_columns.len() {
-                    let db_col = &db_columns[i];
-                    let static_col = &static_columns[i];
-                    let expected_col = &test.expected[i];
-
-                    assert_eq!(
-                        static_col.name, db_col.name,
-                        "Test '{}' in {}: Column {} name mismatch (Expected: {}, Actual: {})",
-                        test.name, display_path, i, db_col.name, static_col.name
-                    );
-                    assert_eq!(
-                        expected_col.name, db_col.name,
-                        "Test '{}' in {}: Expected column {} name mismatch (Expected: {}, Actual: {})",
-                        test.name, display_path, i, db_col.name, expected_col.name
-                    );
-                    // Type checking: SQLite uses sqlite_types_compatible for special handling
-                    let types_match = if suite.dialect == Dialect::SQLite {
-                        sqlite_types_compatible(&static_col.data_type, &db_col.data_type)
-                    } else {
-                        static_col.data_type == db_col.data_type
-                    };
-
-                    assert!(
-                        types_match,
-                        "Test '{}' in {}: Column {} type mismatch (Expected: {:?}, Actual: {:?})",
-                        test.name, display_path, i, db_col.data_type, static_col.data_type
-                    );
-                    assert_eq!(
-                        static_col.nullability,
-                        expected_col.nullability,
-                        "Test '{}' in {}: Column {} nullability mismatch (Expected: {}, Actual: {})",
-                        test.name,
-                        display_path,
-                        i,
-                        expected_col.nullability,
-                        static_col.nullability
-                    );
-                }
             },
         }
+        return;
+    }
+
+    let expected_cardinality = query.cardinality.unwrap_or_else(|| {
+        panic!(
+            "Test '{}' in {} on {}: missing cardinality for success assertion.",
+            query.name, display_path, dialect
+        )
+    });
+
+    match (db_result, static_result) {
+        (Err(db_err), Err(static_err)) => {
+            panic!(
+                "Test '{}' in {} on {} expected success assertion, but both analyzers failed. db='{}', static='{}'",
+                query.name, display_path, dialect, db_err, static_err
+            );
+        },
+        (Err(db_err), Ok(_)) => {
+            panic!(
+                "Test '{}' in {} on {} expected success assertion, but database analyzer failed: {}",
+                query.name, display_path, dialect, db_err
+            );
+        },
+        (Ok(_), Err(static_err)) => {
+            panic!(
+                "Test '{}' in {} on {} expected success assertion, but static analyzer failed: {}",
+                query.name, display_path, dialect, static_err
+            );
+        },
+        (Ok(db_result), Ok(static_result)) => {
+            let db_columns = db_result.columns;
+            let static_columns = static_result.columns;
+
+            assert_eq!(
+                static_result.cardinality, expected_cardinality,
+                "Test '{}' in {} on {}: Cardinality mismatch (Expected: {:?}, Actual: {:?})",
+                query.name, display_path, dialect, expected_cardinality, static_result.cardinality
+            );
+
+            assert_eq!(
+                static_columns.len(),
+                db_columns.len(),
+                "Test '{}' in {} on {}: output column count mismatch. Expected {}, got {}",
+                query.name,
+                display_path,
+                dialect,
+                db_columns.len(),
+                static_columns.len()
+            );
+
+            assert_eq!(
+                query.expected.len(),
+                db_columns.len(),
+                "Test '{}' in {} on {}: expected nullability count mismatch. Expected {}, got {}",
+                query.name,
+                display_path,
+                dialect,
+                db_columns.len(),
+                query.expected.len()
+            );
+
+            for i in 0..db_columns.len() {
+                let db_col = &db_columns[i];
+                let static_col = &static_columns[i];
+                let expected_col = &query.expected[i];
+
+                assert_eq!(
+                    static_col.name, db_col.name,
+                    "Test '{}' in {} on {}: Column {} name mismatch (Expected: {}, Actual: {})",
+                    query.name, display_path, dialect, i, db_col.name, static_col.name
+                );
+                assert_eq!(
+                    expected_col.name, db_col.name,
+                    "Test '{}' in {} on {}: Expected column {} name mismatch (Expected: {}, Actual: {})",
+                    query.name, display_path, dialect, i, db_col.name, expected_col.name
+                );
+                let types_match = if dialect == Dialect::SQLite {
+                    sqlite_types_compatible(&static_col.data_type, &db_col.data_type)
+                } else {
+                    static_col.data_type == db_col.data_type
+                };
+
+                assert!(
+                    types_match,
+                    "Test '{}' in {} on {}: Column {} type mismatch (Expected: {:?}, Actual: {:?})",
+                    query.name, display_path, dialect, i, db_col.data_type, static_col.data_type
+                );
+                assert_eq!(
+                    static_col.nullability,
+                    expected_col.nullability,
+                    "Test '{}' in {} on {}: Column {} nullability mismatch (Expected: {}, Actual: {})",
+                    query.name,
+                    display_path,
+                    dialect,
+                    i,
+                    expected_col.nullability,
+                    static_col.nullability
+                );
+            }
+        },
     }
 }

@@ -1,4 +1,5 @@
-dialect: postgres
+dialects:
+- postgres
 migrations:
   - |
     CREATE TABLE test_table (
@@ -32,12 +33,6 @@ queries:
   # Numeric functions with non-numeric arguments
   - name: abs_on_text
     sql: SELECT ABS(name) FROM test_table
-
-  - name: ceil_on_text
-    sql: SELECT CEIL(name) FROM test_table
-
-  - name: floor_on_text
-    sql: SELECT FLOOR(name) FROM test_table
 
   - name: round_on_text
     sql: SELECT ROUND(name) FROM test_table
@@ -77,4 +72,3 @@ queries:
 
   - name: avg_window_on_text
     sql: SELECT AVG(name) OVER () FROM test_table
-

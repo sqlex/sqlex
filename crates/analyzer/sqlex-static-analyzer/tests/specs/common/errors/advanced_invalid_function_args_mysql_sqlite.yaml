@@ -1,0 +1,13 @@
+dialects:
+- mysql
+- sqlite
+migrations:
+- |
+  CREATE TABLE users (
+    id INT NOT NULL,
+    name TEXT NOT NULL,
+    age INT
+  )
+queries:
+- name: invalid_function_args
+  sql: SELECT SUBSTR(1, 2, 3, 4) FROM users

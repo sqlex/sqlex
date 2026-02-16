@@ -1,0 +1,16 @@
+dialects:
+- postgres
+- sqlite
+migrations:
+  - |
+    CREATE TABLE test_table (
+      id INT NOT NULL,
+      name TEXT NOT NULL,
+      amount DECIMAL
+    )
+queries:
+  - name: ceil_on_text
+    sql: SELECT CEIL(name) FROM test_table
+
+  - name: floor_on_text
+    sql: SELECT FLOOR(name) FROM test_table

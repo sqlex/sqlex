@@ -1,4 +1,5 @@
-dialect: postgres
+dialects:
+- postgres
 migrations: []
 queries:
   - name: quoted_cte_not_found_when_referenced_unquoted
