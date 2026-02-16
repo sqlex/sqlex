@@ -23,21 +23,7 @@ impl Algebraizer {
         functions: &FunctionRegistry,
         context: &mut BuildContext,
     ) -> Result<Relation, Diagnostic> {
-        context.push_query_scope(true);
-        context.push_cte_scope();
-        let result = (|| {
-            if let Some(with_clause) = &query.with {
-                self.register_ctes(with_clause, catalog, functions, context)?;
-            }
-
-            let relation = self.build_set_relation(&query.body, catalog, functions, context)?;
-            let relation =
-                self.apply_top_level_order_by(relation, query, catalog, functions, context)?;
-            self.apply_top_level_limit_offset(relation, query)
-        })();
-        context.pop_cte_scope();
-        context.pop_query_scope();
-        result
+        self.build_query_relation(query, catalog, functions, context, true)
     }
 
     pub(crate) fn bind_single_column_subquery(

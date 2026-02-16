@@ -72,11 +72,14 @@ impl Algebraizer {
             for _ in 0..with_clause.cte_tables.len() {
                 for cte in &with_clause.cte_tables {
                     let cte_name = normalize_ident(&cte.alias.name, self.dialect);
-                    context.push_query_scope(context.literal_assignment_mode());
-                    let cte_relation_result =
-                        self.build_set_relation(&cte.query.body, catalog, functions, context);
-                    context.pop_query_scope();
-                    let cte_relation = cte_relation_result?;
+                    let literal_assignment_mode = context.literal_assignment_mode();
+                    let cte_relation = self.build_query_relation(
+                        cte.query.as_ref(),
+                        catalog,
+                        functions,
+                        context,
+                        literal_assignment_mode,
+                    )?;
 
                     let mut exposed_schema = super::output_schema_of(&cte_relation)?;
                     if !cte.alias.columns.is_empty() {
@@ -129,11 +132,14 @@ impl Algebraizer {
                     format!("duplicate CTE name: {cte_name}"),
                 ));
             }
-            context.push_query_scope(context.literal_assignment_mode());
-            let cte_relation_result =
-                self.build_set_relation(&cte.query.body, catalog, functions, context);
-            context.pop_query_scope();
-            let cte_relation = cte_relation_result?;
+            let literal_assignment_mode = context.literal_assignment_mode();
+            let cte_relation = self.build_query_relation(
+                cte.query.as_ref(),
+                catalog,
+                functions,
+                context,
+                literal_assignment_mode,
+            )?;
 
             let mut exposed_schema = super::output_schema_of(&cte_relation)?;
             if !cte.alias.columns.is_empty() {

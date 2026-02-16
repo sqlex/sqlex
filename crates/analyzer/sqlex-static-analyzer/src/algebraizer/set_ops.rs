@@ -25,22 +25,14 @@ impl Algebraizer {
         match sql_set_expr {
             SetExpr::Select(select) => self.build_select(select, catalog, functions, context),
             SetExpr::Query(query) => {
-                context.push_query_scope(context.literal_assignment_mode());
-                context.push_cte_scope();
-                let result = (|| {
-                    if let Some(with_clause) = &query.with {
-                        self.register_ctes(with_clause, catalog, functions, context)?;
-                    }
-
-                    let relation =
-                        self.build_set_relation(&query.body, catalog, functions, context)?;
-                    let relation = self
-                        .apply_top_level_order_by(relation, query, catalog, functions, context)?;
-                    self.apply_top_level_limit_offset(relation, query)
-                })();
-                context.pop_cte_scope();
-                context.pop_query_scope();
-                result
+                let literal_assignment_mode = context.literal_assignment_mode();
+                self.build_query_relation(
+                    query,
+                    catalog,
+                    functions,
+                    context,
+                    literal_assignment_mode,
+                )
             },
             SetExpr::SetOperation {
                 left,

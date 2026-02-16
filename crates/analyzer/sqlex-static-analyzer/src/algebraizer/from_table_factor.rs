@@ -86,11 +86,8 @@ impl Algebraizer {
                     ));
                 }
 
-                context.push_query_scope(true);
-                let subquery_relation_result =
-                    self.build_set_relation(&subquery.body, catalog, functions, context);
-                context.pop_query_scope();
-                let subquery_relation = subquery_relation_result?;
+                let subquery_relation =
+                    self.build_query_relation(subquery, catalog, functions, context, true)?;
 
                 let Some(alias) = alias.as_ref() else {
                     return Err(Diagnostic::new(

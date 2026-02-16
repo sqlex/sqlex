@@ -145,3 +145,33 @@ queries:
     expected:
       - name: one
         nullability: false
+
+  # LIMIT in derived table should constrain outer cardinality
+  - name: derived_table_top_level_limit_one
+    sql: |
+      SELECT d.id
+      FROM (
+        SELECT id
+        FROM users
+        ORDER BY id
+        LIMIT 1
+      ) d
+    cardinality: AtMostOne
+    expected:
+      - name: id
+        nullability: false
+
+  # LIMIT in CTE body should constrain CTE scan cardinality
+  - name: cte_top_level_limit_one
+    sql: |
+      WITH limited_users AS (
+        SELECT id
+        FROM users
+        ORDER BY id
+        LIMIT 1
+      )
+      SELECT id FROM limited_users
+    cardinality: AtMostOne
+    expected:
+      - name: id
+        nullability: false
