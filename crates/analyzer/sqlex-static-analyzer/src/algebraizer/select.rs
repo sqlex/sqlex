@@ -7,29 +7,18 @@ use sqlparser::ast::{
 use crate::{
     algebraizer::{
         Algebraizer,
-        context::BuildContext,
         model::{
             expression::Expression,
             relation::{AggregationNode, ProjectionNode, Relation, SelectionNode, WindowNode},
             schema::{BoundColumn, ColumnOrigin, OutputSchema, ProjectionColumn, Visibility},
         },
     },
-    catalog::{
-        Catalog,
-        normalize::{normalize_ident, normalize_object_name},
-    },
+    catalog::normalize::{normalize_ident, normalize_object_name},
     diagnostics::{Diagnostic, Phase},
-    functions::FunctionRegistry,
 };
 
-impl Algebraizer {
-    pub(crate) fn build_select(
-        &self,
-        select: &Select,
-        catalog: &Catalog,
-        functions: &FunctionRegistry,
-        context: &mut BuildContext,
-    ) -> Result<Relation, Diagnostic> {
+impl Algebraizer<'_> {
+    pub(crate) fn build_select(&mut self, select: &Select) -> Result<Relation, Diagnostic> {
         if select.into.is_some()
             || !select.lateral_views.is_empty()
             || select.prewhere.is_some()
@@ -48,20 +37,19 @@ impl Algebraizer {
             ));
         }
 
-        let previous_scope_level = context.current_relation_bindings().to_vec();
-        let previous_named_windows = context.take_current_named_windows();
+        let previous_scope_level = self.current_relation_bindings().to_vec();
+        let previous_named_windows = self.take_current_named_windows();
 
         let build_result = (|| {
-            self.register_named_windows(&select.named_window, context)?;
+            self.register_named_windows(&select.named_window)?;
 
             let group_by_exprs = self.group_by_expressions(&select.group_by)?;
             let mut bound_group_by = Vec::with_capacity(group_by_exprs.len());
 
-            context.set_current_relation_bindings(Vec::new());
-            let mut input_relation = self.build_from(select, catalog, functions, context)?;
+            self.set_current_relation_bindings(Vec::new());
+            let mut input_relation = self.build_from(select)?;
             if let Some(selection) = &select.selection {
-                let (condition, where_has_aggregate) =
-                    self.bind_expression(selection, catalog, functions, context)?;
+                let (condition, where_has_aggregate) = self.bind_expression(selection)?;
                 if where_has_aggregate {
                     return Err(Diagnostic::new(
                         "A3041",
@@ -85,8 +73,7 @@ impl Algebraizer {
             }
 
             for group_expr in group_by_exprs {
-                let (bound_group_expr, has_aggregate) =
-                    self.bind_expression(group_expr, catalog, functions, context)?;
+                let (bound_group_expr, has_aggregate) = self.bind_expression(group_expr)?;
                 if has_aggregate {
                     return Err(Diagnostic::new(
                         "A3016",
@@ -108,8 +95,7 @@ impl Algebraizer {
             let mut window_exprs = Vec::new();
             let mut bound_having = None;
             if let Some(having_expr) = &select.having {
-                let (condition, having_has_aggregate) =
-                    self.bind_expression(having_expr, catalog, functions, context)?;
+                let (condition, having_has_aggregate) = self.bind_expression(having_expr)?;
                 if contains_window_call(&condition) {
                     return Err(Diagnostic::new(
                         "A3043",
@@ -146,7 +132,7 @@ impl Algebraizer {
                                 visibility: Visibility::Visible,
                             });
                             projection_schema_columns.push(BoundColumn {
-                                slot_id: context.allocate_slot_id(),
+                                slot_id: self.allocate_slot_id(),
                                 name: column.name.clone(),
                                 table_alias: None,
                                 data_type: None,
@@ -159,14 +145,12 @@ impl Algebraizer {
                     SelectItem::QualifiedWildcard(qualifier, _) => {
                         has_non_aggregate_projection = true;
                         let qualifier_name = normalize_object_name(qualifier, self.dialect);
-                        let Some(scope) =
-                            context.current_relation_bindings().iter().find(|scope| {
-                                scope
-                                    .qualifier_names
-                                    .iter()
-                                    .any(|name| name == &qualifier_name)
-                            })
-                        else {
+                        let Some(scope) = self.current_relation_bindings().iter().find(|scope| {
+                            scope
+                                .qualifier_names
+                                .iter()
+                                .any(|name| name == &qualifier_name)
+                        }) else {
                             return Err(Diagnostic::new(
                                 "A3002",
                                 Phase::Algebraize,
@@ -183,7 +167,7 @@ impl Algebraizer {
                                 visibility: Visibility::Visible,
                             });
                             projection_schema_columns.push(BoundColumn {
-                                slot_id: context.allocate_slot_id(),
+                                slot_id: self.allocate_slot_id(),
                                 name: column.name.clone(),
                                 table_alias: None,
                                 data_type: None,
@@ -195,8 +179,7 @@ impl Algebraizer {
                     },
                     SelectItem::ExprWithAlias { expr, alias } => {
                         self.validate_alias_ident(alias)?;
-                        let (bound_expr, expr_has_aggregate) =
-                            self.bind_expression(expr, catalog, functions, context)?;
+                        let (bound_expr, expr_has_aggregate) = self.bind_expression(expr)?;
                         let expr_has_window = contains_window_call(&bound_expr);
                         has_aggregate |= expr_has_aggregate;
                         has_window |= expr_has_window;
@@ -224,7 +207,7 @@ impl Algebraizer {
                             visibility: Visibility::Visible,
                         });
                         projection_schema_columns.push(BoundColumn {
-                            slot_id: context.allocate_slot_id(),
+                            slot_id: self.allocate_slot_id(),
                             name: output_name.clone(),
                             table_alias: None,
                             data_type: None,
@@ -234,8 +217,7 @@ impl Algebraizer {
                         projection_checks.push((output_name, bound_expr, expr_has_aggregate));
                     },
                     SelectItem::UnnamedExpr(expr) => {
-                        let (bound_expr, expr_has_aggregate) =
-                            self.bind_expression(expr, catalog, functions, context)?;
+                        let (bound_expr, expr_has_aggregate) = self.bind_expression(expr)?;
                         let expr_has_window = contains_window_call(&bound_expr);
                         has_aggregate |= expr_has_aggregate;
                         has_window |= expr_has_window;
@@ -263,7 +245,7 @@ impl Algebraizer {
                             visibility: Visibility::Visible,
                         });
                         projection_schema_columns.push(BoundColumn {
-                            slot_id: context.allocate_slot_id(),
+                            slot_id: self.allocate_slot_id(),
                             name: output_name.clone(),
                             table_alias: None,
                             data_type: None,
@@ -344,7 +326,7 @@ impl Algebraizer {
                 input: Box::new(relation),
                 columns: projected_columns,
                 schema: OutputSchema {
-                    relation_id: context.allocate_relation_id(),
+                    relation_id: self.allocate_relation_id(),
                     columns: projection_schema_columns,
                 },
             });
@@ -360,8 +342,8 @@ impl Algebraizer {
             Ok(relation)
         })();
 
-        context.set_current_relation_bindings(previous_scope_level);
-        context.set_current_named_windows(previous_named_windows);
+        self.set_current_relation_bindings(previous_scope_level);
+        self.set_current_named_windows(previous_named_windows);
 
         build_result
     }
@@ -381,9 +363,8 @@ impl Algebraizer {
     }
 
     fn register_named_windows(
-        &self,
+        &mut self,
         definitions: &[NamedWindowDefinition],
-        context: &mut BuildContext,
     ) -> Result<(), Diagnostic> {
         if definitions.is_empty() {
             return Ok(());
@@ -416,7 +397,7 @@ impl Algebraizer {
             resolved.insert(name.clone(), spec);
         }
 
-        context.set_current_named_windows(resolved);
+        self.set_current_named_windows(resolved);
         Ok(())
     }
 

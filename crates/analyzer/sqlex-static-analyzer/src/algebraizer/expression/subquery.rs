@@ -4,37 +4,26 @@ use sqlparser::ast::{Expr, Select, TableFactor};
 use crate::{
     algebraizer::{
         Algebraizer,
-        context::BuildContext,
         model::{expression::BoundLiteral, relation::Relation},
     },
-    catalog::{
-        Catalog,
-        normalize::{normalize_ident, normalize_object_name},
-    },
+    catalog::normalize::{normalize_ident, normalize_object_name},
     diagnostics::{Diagnostic, Phase},
-    functions::FunctionRegistry,
 };
 
-impl Algebraizer {
+impl Algebraizer<'_> {
     pub(crate) fn bind_subquery_relation(
-        &self,
+        &mut self,
         query: &sqlparser::ast::Query,
-        catalog: &Catalog,
-        functions: &FunctionRegistry,
-        context: &mut BuildContext,
     ) -> Result<Relation, Diagnostic> {
-        self.build_query_relation(query, catalog, functions, context, true)
+        self.build_query_relation(query, true)
     }
 
     pub(crate) fn bind_single_column_subquery(
-        &self,
+        &mut self,
         query: &sqlparser::ast::Query,
-        catalog: &Catalog,
-        functions: &FunctionRegistry,
-        context: &mut BuildContext,
         usage: &str,
     ) -> Result<Relation, Diagnostic> {
-        let relation = self.bind_subquery_relation(query, catalog, functions, context)?;
+        let relation = self.bind_subquery_relation(query)?;
         let schema = super::super::output_schema_of(&relation)?;
         if schema.columns.len() != 1 {
             return Err(Diagnostic::new(
@@ -53,11 +42,10 @@ impl Algebraizer {
         &self,
         select: &Select,
         expr: &Expr,
-        catalog: &Catalog,
     ) -> Option<(DataType, bool)> {
         match expr {
             Expr::Identifier(identifier) => {
-                self.resolve_subquery_column(select, None, &identifier.value, catalog)
+                self.resolve_subquery_column(select, None, &identifier.value)
             },
             Expr::CompoundIdentifier(idents) => {
                 if idents.len() < 2 {
@@ -69,7 +57,7 @@ impl Algebraizer {
                     .collect::<Vec<_>>()
                     .join(".");
                 let column_name = normalize_ident(idents.last()?, self.dialect);
-                self.resolve_subquery_column(select, Some(&qualifier), &column_name, catalog)
+                self.resolve_subquery_column(select, Some(&qualifier), &column_name)
             },
             Expr::Value(value) => {
                 let bound_literal = self.bind_literal(value, false).ok()?;
@@ -128,7 +116,6 @@ impl Algebraizer {
         select: &Select,
         qualifier: Option<&str>,
         column_name: &str,
-        catalog: &Catalog,
     ) -> Option<(DataType, bool)> {
         if select.from.len() != 1 {
             return None;
@@ -144,7 +131,7 @@ impl Algebraizer {
         };
 
         let normalized_table_name = normalize_object_name(name, self.dialect);
-        let table = catalog.table(&normalized_table_name)?;
+        let table = self.catalog.table(&normalized_table_name)?;
 
         if let Some(qualifier) = qualifier {
             let mut qualifier_names = vec![normalized_table_name.clone()];

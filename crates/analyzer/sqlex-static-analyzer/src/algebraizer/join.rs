@@ -6,16 +6,15 @@ use sqlparser::ast::{Expr, Join, JoinConstraint, JoinOperator};
 use crate::{
     algebraizer::{
         Algebraizer,
-        context::{BuildContext, RelationBinding},
         model::{
             expression::{BoundBinaryOp, Expression},
             relation::{JoinKind, Relation, SelectionNode},
             schema::{BoundColumn, ColumnOrigin, OutputSchema},
         },
+        scope::RelationBinding,
     },
-    catalog::{Catalog, model::TableSchema, normalize::normalize_object_name},
+    catalog::{model::TableSchema, normalize::normalize_object_name},
     diagnostics::{Diagnostic, Phase},
-    functions::FunctionRegistry,
 };
 
 #[derive(Debug, Clone)]
@@ -25,15 +24,12 @@ struct JoinUsingPair {
     right_slot: u32,
 }
 
-impl Algebraizer {
+impl Algebraizer<'_> {
     pub(crate) fn build_join(
-        &self,
+        &mut self,
         left_relation: Relation,
         scopes: &mut Vec<RelationBinding>,
         join: &Join,
-        catalog: &Catalog,
-        functions: &FunctionRegistry,
-        context: &mut BuildContext,
     ) -> Result<Relation, Diagnostic> {
         if join.global {
             return Err(Diagnostic::new(
@@ -43,14 +39,13 @@ impl Algebraizer {
             ));
         }
 
-        let (right_relation, right_scope) =
-            self.build_table_factor(&join.relation, catalog, functions, context)?;
+        let (right_relation, right_scope) = self.build_table_factor(&join.relation)?;
         let (kind, on_expr) = self.join_kind_and_condition(&join.join_operator)?;
         let using_columns = self.extract_join_using_columns(&join.join_operator);
 
         let mut join_scopes = scopes.clone();
         join_scopes.push(right_scope.clone());
-        context.set_current_relation_bindings(join_scopes.clone());
+        self.set_current_relation_bindings(join_scopes.clone());
 
         let left_schema = super::output_schema_of(&left_relation)?;
         let right_schema = super::output_schema_of(&right_relation)?;
@@ -66,13 +61,12 @@ impl Algebraizer {
         let mut effective_kind = kind.clone();
         let mut bound_condition = None;
         if let Some(on_expr) = on_expr {
-            let (condition, _) = self.bind_expression(on_expr, catalog, functions, context)?;
+            let (condition, _) = self.bind_expression(on_expr)?;
             if self.outer_join_is_effectively_inner(
                 kind.clone(),
                 &condition,
                 &left_schema,
                 &right_schema,
-                catalog,
             ) {
                 effective_kind = JoinKind::Inner;
             }
@@ -84,7 +78,6 @@ impl Algebraizer {
                 &condition,
                 &left_schema,
                 &right_schema,
-                catalog,
             ) {
                 effective_kind = JoinKind::Inner;
             }
@@ -135,7 +128,7 @@ impl Algebraizer {
             })?;
 
             merged_columns.push(BoundColumn {
-                slot_id: context.allocate_slot_id(),
+                slot_id: self.allocate_slot_id(),
                 name: pair.column_name.clone(),
                 table_alias: None,
                 data_type: left_column
@@ -158,7 +151,7 @@ impl Algebraizer {
         columns.extend(right_columns);
         columns.extend(merged_columns.clone());
         let join_schema = OutputSchema {
-            relation_id: context.allocate_relation_id(),
+            relation_id: self.allocate_relation_id(),
             columns,
         };
 
@@ -190,7 +183,7 @@ impl Algebraizer {
             updated_scopes.push(RelationBinding {
                 qualifier_names: Vec::new(),
                 schema: OutputSchema {
-                    relation_id: context.allocate_relation_id(),
+                    relation_id: self.allocate_relation_id(),
                     columns: merged_columns,
                 },
                 hidden_unqualified_slot_ids: HashSet::new(),
@@ -198,7 +191,7 @@ impl Algebraizer {
         }
 
         *scopes = updated_scopes.clone();
-        context.set_current_relation_bindings(updated_scopes);
+        self.set_current_relation_bindings(updated_scopes);
         Ok(join_relation)
     }
 
@@ -389,20 +382,17 @@ impl Algebraizer {
         condition: &Expression,
         left_schema: &OutputSchema,
         right_schema: &OutputSchema,
-        catalog: &Catalog,
     ) -> bool {
         match kind {
             JoinKind::Left => self.guaranteed_match_from_preserved_side(
                 condition,
                 &left_schema.columns,
                 &right_schema.columns,
-                catalog,
             ),
             JoinKind::Right => self.guaranteed_match_from_preserved_side(
                 condition,
                 &right_schema.columns,
                 &left_schema.columns,
-                catalog,
             ),
             JoinKind::Inner | JoinKind::Cross | JoinKind::Full => false,
         }
@@ -413,19 +403,13 @@ impl Algebraizer {
         condition: &Expression,
         preserved_columns: &[BoundColumn],
         other_columns: &[BoundColumn],
-        catalog: &Catalog,
     ) -> bool {
         let mut slot_pairs = Vec::new();
         if !collect_pure_equijoin_slot_pairs(condition, &mut slot_pairs) || slot_pairs.is_empty() {
             return false;
         }
 
-        self.slot_pairs_cover_full_fk_to_unique(
-            preserved_columns,
-            other_columns,
-            &slot_pairs,
-            catalog,
-        )
+        self.slot_pairs_cover_full_fk_to_unique(preserved_columns, other_columns, &slot_pairs)
     }
 
     fn slot_pairs_cover_full_fk_to_unique(
@@ -433,7 +417,6 @@ impl Algebraizer {
         preserved_columns: &[BoundColumn],
         other_columns: &[BoundColumn],
         slot_pairs: &[(u32, u32)],
-        catalog: &Catalog,
     ) -> bool {
         let preserved_slot_map: HashMap<u32, &BoundColumn> = preserved_columns
             .iter()
@@ -509,10 +492,10 @@ impl Algebraizer {
             return false;
         };
 
-        let Some(preserved_table_schema) = catalog.table(&preserved_table_name) else {
+        let Some(preserved_table_schema) = self.catalog.table(&preserved_table_name) else {
             return false;
         };
-        let Some(other_table_schema) = catalog.table(&other_table_name) else {
+        let Some(other_table_schema) = self.catalog.table(&other_table_name) else {
             return false;
         };
 

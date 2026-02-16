@@ -5,28 +5,23 @@ use sqlparser::ast::TableFactor;
 use crate::{
     algebraizer::{
         Algebraizer,
-        context::{BuildContext, RelationBinding},
         model::{
             relation::{AliasNode, Relation, ScanNode},
             schema::{BoundColumn, ColumnOrigin, OutputSchema},
         },
+        scope::RelationBinding,
     },
     catalog::{
-        Catalog,
         model::TableSchema,
         normalize::{normalize_ident, normalize_object_name},
     },
     diagnostics::{Diagnostic, Phase},
-    functions::FunctionRegistry,
 };
 
-impl Algebraizer {
+impl Algebraizer<'_> {
     pub(crate) fn build_table_factor(
-        &self,
+        &mut self,
         relation: &TableFactor,
-        catalog: &Catalog,
-        functions: &FunctionRegistry,
-        context: &mut BuildContext,
     ) -> Result<(Relation, RelationBinding), Diagnostic> {
         match relation {
             TableFactor::Table { name, alias, .. } => {
@@ -34,7 +29,7 @@ impl Algebraizer {
                     self.validate_alias_ident(&alias.name)?;
                 }
                 let normalized_table_name = normalize_object_name(name, self.dialect);
-                if let Some(cte_binding) = context.resolve_cte(&normalized_table_name) {
+                if let Some(cte_binding) = self.resolve_cte(&normalized_table_name) {
                     let scope = RelationBinding {
                         qualifier_names: self
                             .qualifier_names_for_relation(&normalized_table_name, alias.as_ref()),
@@ -44,7 +39,7 @@ impl Algebraizer {
                     return Ok((cte_binding.relation.clone(), scope));
                 }
 
-                let Some(table) = catalog.table(&normalized_table_name) else {
+                let Some(table) = self.catalog.table(&normalized_table_name) else {
                     return Err(Diagnostic::new(
                         "A3003",
                         Phase::Algebraize,
@@ -53,7 +48,7 @@ impl Algebraizer {
                 };
 
                 let (schema, qualifier_names) =
-                    self.build_table_scope(table, &normalized_table_name, alias.as_ref(), context);
+                    self.build_table_scope(table, &normalized_table_name, alias.as_ref());
                 let scope = RelationBinding {
                     qualifier_names,
                     schema: schema.clone(),
@@ -86,8 +81,7 @@ impl Algebraizer {
                     ));
                 }
 
-                let subquery_relation =
-                    self.build_query_relation(subquery, catalog, functions, context, true)?;
+                let subquery_relation = self.build_query_relation(subquery, true)?;
 
                 let Some(alias) = alias.as_ref() else {
                     return Err(Diagnostic::new(
@@ -162,15 +156,14 @@ impl Algebraizer {
     }
 
     fn build_table_scope(
-        &self,
+        &mut self,
         table: &TableSchema,
         normalized_table_name: &str,
         alias: Option<&sqlparser::ast::TableAlias>,
-        context: &mut BuildContext,
     ) -> (OutputSchema, Vec<String>) {
         let mut columns = Vec::with_capacity(table.columns.len());
         for column in &table.columns {
-            let slot_id = context.allocate_slot_id();
+            let slot_id = self.allocate_slot_id();
             columns.push(BoundColumn {
                 slot_id,
                 name: column.name.clone(),
@@ -196,7 +189,7 @@ impl Algebraizer {
 
         (
             OutputSchema {
-                relation_id: context.allocate_relation_id(),
+                relation_id: self.allocate_relation_id(),
                 columns,
             },
             qualifier_names,

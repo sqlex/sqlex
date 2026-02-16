@@ -63,7 +63,7 @@ crates/analyzer/sqlex-static-analyzer/src/
       relation.rs
       expression.rs
       schema.rs
-    context.rs
+    scope.rs
     cte.rs
     expression/*
     from_*.rs
@@ -385,9 +385,9 @@ Mirror behavior used by `sqlex-database-analyzer` mapping to reduce divergence.
 
 ## 9. Algebraize Specification (`analyze` phase 2)
 
-## 9.1 Planner Build Context
+## 9.1 Planner Scope State
 
-`BuildContext` holds:
+`Algebraizer` keeps an internal scope state that holds:
 
 1. visible relations in current scope
 2. outer relation scopes for correlated subqueries

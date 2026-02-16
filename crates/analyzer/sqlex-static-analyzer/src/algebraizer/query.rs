@@ -5,7 +5,6 @@ use sqlparser::ast::{Expr, OrderByExpr, Query, UnaryOperator, Value};
 use crate::{
     algebraizer::{
         Algebraizer,
-        context::{BuildContext, RelationBinding},
         model::{
             expression::Expression,
             relation::{LimitNode, ProjectionNode, Relation, SortNode},
@@ -13,45 +12,37 @@ use crate::{
                 BoundColumn, ColumnOrigin, OutputSchema, ProjectionColumn, SortKey, Visibility,
             },
         },
+        scope::RelationBinding,
     },
-    catalog::Catalog,
     diagnostics::{Diagnostic, Phase},
-    functions::FunctionRegistry,
 };
 
-impl Algebraizer {
+impl Algebraizer<'_> {
     pub(crate) fn build_query_relation(
-        &self,
+        &mut self,
         query: &Query,
-        catalog: &Catalog,
-        functions: &FunctionRegistry,
-        context: &mut BuildContext,
         literal_assignment_mode: bool,
     ) -> Result<Relation, Diagnostic> {
-        context.push_query_scope(literal_assignment_mode);
-        context.push_cte_scope();
+        self.push_query_scope(literal_assignment_mode);
+        self.push_cte_scope();
         let result = (|| {
             if let Some(with_clause) = &query.with {
-                self.register_ctes(with_clause, catalog, functions, context)?;
+                self.register_ctes(with_clause)?;
             }
 
-            let relation = self.build_set_relation(&query.body, catalog, functions, context)?;
-            let relation =
-                self.apply_query_order_by(relation, query, catalog, functions, context)?;
+            let relation = self.build_set_relation(&query.body)?;
+            let relation = self.apply_query_order_by(relation, query)?;
             self.apply_query_limit_offset(relation, query)
         })();
-        context.pop_cte_scope();
-        context.pop_query_scope();
+        self.pop_cte_scope();
+        self.pop_query_scope();
         result
     }
 
     pub(crate) fn apply_query_order_by(
-        &self,
+        &mut self,
         input_relation: Relation,
         query: &Query,
-        catalog: &Catalog,
-        functions: &FunctionRegistry,
-        context: &mut BuildContext,
     ) -> Result<Relation, Diagnostic> {
         let Some(order_by) = &query.order_by else {
             return Ok(input_relation);
@@ -66,10 +57,10 @@ impl Algebraizer {
         }
 
         let input_schema = super::output_schema_of(&input_relation)?;
-        let inherited_named_windows = context.current_named_windows().clone();
-        context.push_query_scope(false);
-        context.set_current_named_windows(inherited_named_windows);
-        context.set_current_relation_bindings(vec![RelationBinding {
+        let inherited_named_windows = self.current_named_windows().clone();
+        self.push_query_scope(false);
+        self.set_current_named_windows(inherited_named_windows);
+        self.set_current_relation_bindings(vec![RelationBinding {
             qualifier_names: Vec::new(),
             schema: input_schema.clone(),
             hidden_unqualified_slot_ids: HashSet::new(),
@@ -85,13 +76,10 @@ impl Algebraizer {
                 sort_keys.push(self.bind_query_order_key(
                     order_expr,
                     &input_schema,
-                    catalog,
-                    functions,
                     &mut hidden_columns,
                     &mut hidden_schema_columns,
                     &mut hidden_expr_slots,
                     disallow_hidden,
-                    context,
                 )?);
             }
 
@@ -111,7 +99,7 @@ impl Algebraizer {
             let mut pre_projection_schema_columns = input_schema.columns.clone();
             pre_projection_schema_columns.extend(hidden_schema_columns);
             let pre_projection_schema = OutputSchema {
-                relation_id: context.allocate_relation_id(),
+                relation_id: self.allocate_relation_id(),
                 columns: pre_projection_schema_columns,
             };
 
@@ -132,22 +120,19 @@ impl Algebraizer {
                 schema: input_schema,
             }))
         })();
-        context.pop_query_scope();
+        self.pop_query_scope();
         result
     }
 
     #[allow(clippy::too_many_arguments)]
     fn bind_query_order_key(
-        &self,
+        &mut self,
         order_expr: &OrderByExpr,
         input_schema: &OutputSchema,
-        catalog: &Catalog,
-        functions: &FunctionRegistry,
         hidden_columns: &mut Vec<ProjectionColumn>,
         hidden_schema_columns: &mut Vec<BoundColumn>,
         hidden_expr_slots: &mut HashMap<String, u32>,
         disallow_hidden: bool,
-        context: &mut BuildContext,
     ) -> Result<SortKey, Diagnostic> {
         if order_expr.with_fill.is_some() {
             return Err(Diagnostic::new(
@@ -174,8 +159,7 @@ impl Algebraizer {
                 };
                 Expression::SlotRef(column.slot_id)
             } else {
-                let (bound_expr, _) =
-                    self.bind_expression(&order_expr.expr, catalog, functions, context)?;
+                let (bound_expr, _) = self.bind_expression(&order_expr.expr)?;
                 bound_expr
             };
 
@@ -199,7 +183,7 @@ impl Algebraizer {
                     });
                 }
 
-                let hidden_slot_id = context.allocate_slot_id();
+                let hidden_slot_id = self.allocate_slot_id();
                 let hidden_name = format!("__ord${hidden_slot_id}");
                 hidden_columns.push(ProjectionColumn {
                     expr: other,

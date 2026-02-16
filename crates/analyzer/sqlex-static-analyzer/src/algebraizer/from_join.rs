@@ -5,31 +5,23 @@ use sqlparser::ast::Select;
 use crate::{
     algebraizer::{
         Algebraizer,
-        context::{BuildContext, RelationBinding},
         model::{
             relation::{Relation, ValuesNode},
             schema::OutputSchema,
         },
+        scope::RelationBinding,
     },
-    catalog::Catalog,
     diagnostics::{Diagnostic, Phase},
-    functions::FunctionRegistry,
 };
 
-impl Algebraizer {
-    pub(crate) fn build_from(
-        &self,
-        select: &Select,
-        catalog: &Catalog,
-        functions: &FunctionRegistry,
-        context: &mut BuildContext,
-    ) -> Result<Relation, Diagnostic> {
+impl Algebraizer<'_> {
+    pub(crate) fn build_from(&mut self, select: &Select) -> Result<Relation, Diagnostic> {
         if select.from.is_empty() {
             let schema = OutputSchema {
-                relation_id: context.allocate_relation_id(),
+                relation_id: self.allocate_relation_id(),
                 columns: Vec::new(),
             };
-            context.set_current_relation_bindings(vec![RelationBinding {
+            self.set_current_relation_bindings(vec![RelationBinding {
                 qualifier_names: vec![],
                 schema: schema.clone(),
                 hidden_unqualified_slot_ids: HashSet::new(),
@@ -46,16 +38,15 @@ impl Algebraizer {
         }
 
         let from_item = &select.from[0];
-        let (mut relation, left_scope) =
-            self.build_table_factor(&from_item.relation, catalog, functions, context)?;
+        let (mut relation, left_scope) = self.build_table_factor(&from_item.relation)?;
         let mut scopes = vec![left_scope];
-        context.set_current_relation_bindings(scopes.clone());
+        self.set_current_relation_bindings(scopes.clone());
 
         for join in &from_item.joins {
-            relation = self.build_join(relation, &mut scopes, join, catalog, functions, context)?;
+            relation = self.build_join(relation, &mut scopes, join)?;
         }
 
-        context.set_current_relation_bindings(scopes);
+        self.set_current_relation_bindings(scopes);
         Ok(relation)
     }
 }

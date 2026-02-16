@@ -6,41 +6,35 @@ use sqlparser::ast::{Expr, Select, SelectItem, SetExpr};
 use crate::{
     algebraizer::{
         Algebraizer,
-        context::{BuildContext, CteBinding},
         model::{
             relation::{Relation, ScanNode},
             schema::{BoundColumn, ColumnOrigin, OutputSchema},
         },
+        scope::CteBinding,
     },
-    catalog::{Catalog, normalize::normalize_ident},
+    catalog::normalize::normalize_ident,
     diagnostics::{Diagnostic, Phase},
-    functions::FunctionRegistry,
 };
 
-impl Algebraizer {
+impl Algebraizer<'_> {
     pub(crate) fn register_ctes(
-        &self,
+        &mut self,
         with_clause: &sqlparser::ast::With,
-        catalog: &Catalog,
-        functions: &FunctionRegistry,
-        context: &mut BuildContext,
     ) -> Result<(), Diagnostic> {
         let mut seen_names = HashSet::new();
 
         if with_clause.recursive {
             for cte in &with_clause.cte_tables {
                 let cte_name = normalize_ident(&cte.alias.name, self.dialect);
-                if !seen_names.insert(cte_name.clone())
-                    || context.cte_exists_in_any_scope(&cte_name)
-                {
+                if !seen_names.insert(cte_name.clone()) || self.cte_exists_in_any_scope(&cte_name) {
                     return Err(Diagnostic::new(
                         "A3025",
                         Phase::Algebraize,
                         format!("duplicate CTE name: {cte_name}"),
                     ));
                 }
-                let binding = self.build_recursive_cte_stub(cte, catalog, context)?;
-                let _ = context.insert_cte(cte_name, binding);
+                let binding = self.build_recursive_cte_stub(cte)?;
+                let _ = self.insert_cte(cte_name, binding);
             }
             return Ok(());
         }
@@ -56,30 +50,23 @@ impl Algebraizer {
                 }
 
                 let cte_name = normalize_ident(&cte.alias.name, self.dialect);
-                if !seen_names.insert(cte_name.clone())
-                    || context.cte_exists_in_any_scope(&cte_name)
-                {
+                if !seen_names.insert(cte_name.clone()) || self.cte_exists_in_any_scope(&cte_name) {
                     return Err(Diagnostic::new(
                         "A3025",
                         Phase::Algebraize,
                         format!("duplicate CTE name: {cte_name}"),
                     ));
                 }
-                let binding = self.build_recursive_cte_stub(cte, catalog, context)?;
-                let _ = context.insert_cte(cte_name, binding);
+                let binding = self.build_recursive_cte_stub(cte)?;
+                let _ = self.insert_cte(cte_name, binding);
             }
 
             for _ in 0..with_clause.cte_tables.len() {
                 for cte in &with_clause.cte_tables {
                     let cte_name = normalize_ident(&cte.alias.name, self.dialect);
-                    let literal_assignment_mode = context.literal_assignment_mode();
-                    let cte_relation = self.build_query_relation(
-                        cte.query.as_ref(),
-                        catalog,
-                        functions,
-                        context,
-                        literal_assignment_mode,
-                    )?;
+                    let literal_assignment_mode = self.literal_assignment_mode();
+                    let cte_relation =
+                        self.build_query_relation(cte.query.as_ref(), literal_assignment_mode)?;
 
                     let mut exposed_schema = super::output_schema_of(&cte_relation)?;
                     if !cte.alias.columns.is_empty() {
@@ -103,7 +90,7 @@ impl Algebraizer {
                         }
                     }
 
-                    let _ = context.insert_cte(
+                    let _ = self.insert_cte(
                         cte_name.clone(),
                         CteBinding {
                             relation: cte_relation,
@@ -125,21 +112,16 @@ impl Algebraizer {
             }
 
             let cte_name = normalize_ident(&cte.alias.name, self.dialect);
-            if !seen_names.insert(cte_name.clone()) || context.cte_exists_in_any_scope(&cte_name) {
+            if !seen_names.insert(cte_name.clone()) || self.cte_exists_in_any_scope(&cte_name) {
                 return Err(Diagnostic::new(
                     "A3025",
                     Phase::Algebraize,
                     format!("duplicate CTE name: {cte_name}"),
                 ));
             }
-            let literal_assignment_mode = context.literal_assignment_mode();
-            let cte_relation = self.build_query_relation(
-                cte.query.as_ref(),
-                catalog,
-                functions,
-                context,
-                literal_assignment_mode,
-            )?;
+            let literal_assignment_mode = self.literal_assignment_mode();
+            let cte_relation =
+                self.build_query_relation(cte.query.as_ref(), literal_assignment_mode)?;
 
             let mut exposed_schema = super::output_schema_of(&cte_relation)?;
             if !cte.alias.columns.is_empty() {
@@ -163,7 +145,7 @@ impl Algebraizer {
                 }
             }
 
-            let _ = context.insert_cte(
+            let _ = self.insert_cte(
                 cte_name,
                 CteBinding {
                     relation: cte_relation,
@@ -176,10 +158,8 @@ impl Algebraizer {
     }
 
     fn build_recursive_cte_stub(
-        &self,
+        &mut self,
         cte: &sqlparser::ast::Cte,
-        catalog: &Catalog,
-        context: &mut BuildContext,
     ) -> Result<CteBinding, Diagnostic> {
         if let Some((seed_count, recursive_count)) =
             recursive_cte_set_operation_projection_counts(&cte.query.body)
@@ -220,7 +200,7 @@ impl Algebraizer {
         let mut columns = Vec::with_capacity(seed_select.projection.len());
         for (index, item) in seed_select.projection.iter().enumerate() {
             let (data_type, nullable) = projection_sql_expr(item)
-                .and_then(|expr| self.resolve_scalar_subquery_expr_type(seed_select, expr, catalog))
+                .and_then(|expr| self.resolve_scalar_subquery_expr_type(seed_select, expr))
                 .unwrap_or((DataType::Custom("unknown".to_string()), true));
 
             let name = if !alias_columns.is_empty() {
@@ -238,7 +218,7 @@ impl Algebraizer {
             };
 
             columns.push(BoundColumn {
-                slot_id: context.allocate_slot_id(),
+                slot_id: self.allocate_slot_id(),
                 name,
                 table_alias: None,
                 data_type: Some(data_type),
@@ -249,7 +229,7 @@ impl Algebraizer {
 
         let cte_name = normalize_ident(&cte.alias.name, self.dialect);
         let schema = OutputSchema {
-            relation_id: context.allocate_relation_id(),
+            relation_id: self.allocate_relation_id(),
             columns,
         };
         Ok(CteBinding {

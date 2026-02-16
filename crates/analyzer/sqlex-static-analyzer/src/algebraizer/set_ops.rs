@@ -3,36 +3,24 @@ use sqlparser::ast::{SetExpr, SetOperator, SetQuantifier};
 use crate::{
     algebraizer::{
         Algebraizer,
-        context::BuildContext,
         model::{
             relation::Relation,
             schema::{BoundColumn, ColumnOrigin, OutputSchema},
         },
     },
-    catalog::Catalog,
     diagnostics::{Diagnostic, Phase},
-    functions::FunctionRegistry,
 };
 
-impl Algebraizer {
+impl Algebraizer<'_> {
     pub(crate) fn build_set_relation(
-        &self,
+        &mut self,
         sql_set_expr: &SetExpr,
-        catalog: &Catalog,
-        functions: &FunctionRegistry,
-        context: &mut BuildContext,
     ) -> Result<Relation, Diagnostic> {
         match sql_set_expr {
-            SetExpr::Select(select) => self.build_select(select, catalog, functions, context),
+            SetExpr::Select(select) => self.build_select(select),
             SetExpr::Query(query) => {
-                let literal_assignment_mode = context.literal_assignment_mode();
-                self.build_query_relation(
-                    query,
-                    catalog,
-                    functions,
-                    context,
-                    literal_assignment_mode,
-                )
+                let literal_assignment_mode = self.literal_assignment_mode();
+                self.build_query_relation(query, literal_assignment_mode)
             },
             SetExpr::SetOperation {
                 left,
@@ -40,8 +28,8 @@ impl Algebraizer {
                 set_quantifier,
                 right,
             } => {
-                let left_relation = self.build_set_relation(left, catalog, functions, context)?;
-                let right_relation = self.build_set_relation(right, catalog, functions, context)?;
+                let left_relation = self.build_set_relation(left)?;
+                let right_relation = self.build_set_relation(right)?;
 
                 let left_schema = super::output_schema_of(&left_relation)?;
                 let right_schema = super::output_schema_of(&right_relation)?;
@@ -74,7 +62,7 @@ impl Algebraizer {
                     left_schema.columns.iter().zip(right_schema.columns.iter())
                 {
                     columns.push(BoundColumn {
-                        slot_id: context.allocate_slot_id(),
+                        slot_id: self.allocate_slot_id(),
                         name: left_column.name.clone(),
                         table_alias: None,
                         data_type: left_column
@@ -93,7 +81,7 @@ impl Algebraizer {
                         op: set_op,
                         all,
                         schema: OutputSchema {
-                            relation_id: context.allocate_relation_id(),
+                            relation_id: self.allocate_relation_id(),
                             columns,
                         },
                     },

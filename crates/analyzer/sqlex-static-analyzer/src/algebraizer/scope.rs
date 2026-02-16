@@ -2,9 +2,12 @@ use std::collections::{HashMap, HashSet};
 
 use sqlparser::ast::WindowSpec;
 
-use crate::algebraizer::model::{relation::Relation, schema::OutputSchema};
+use crate::algebraizer::{
+    Algebraizer,
+    model::{relation::Relation, schema::OutputSchema},
+};
 
-type CteScope = HashMap<String, CteBinding>;
+pub(super) type CteScope = HashMap<String, CteBinding>;
 
 #[derive(Debug, Clone)]
 pub(crate) struct RelationBinding {
@@ -20,36 +23,13 @@ pub(crate) struct CteBinding {
 }
 
 #[derive(Debug, Clone)]
-struct QueryScope {
-    relation_bindings: Vec<RelationBinding>,
-    named_windows: HashMap<String, WindowSpec>,
-    literal_assignment_mode: bool,
+pub(super) struct QueryScope {
+    pub(super) relation_bindings: Vec<RelationBinding>,
+    pub(super) named_windows: HashMap<String, WindowSpec>,
+    pub(super) literal_assignment_mode: bool,
 }
 
-#[derive(Debug)]
-pub(crate) struct BuildContext {
-    query_scope_stack: Vec<QueryScope>,
-    cte_scope_stack: Vec<CteScope>,
-    next_relation_id: u32,
-    next_slot_id: u32,
-}
-
-impl BuildContext {
-    pub(crate) fn new() -> Self {
-        Self {
-            query_scope_stack: vec![QueryScope {
-                relation_bindings: Vec::new(),
-                named_windows: HashMap::new(),
-                literal_assignment_mode: false,
-            }],
-            cte_scope_stack: vec![HashMap::new()],
-            next_relation_id: 1,
-            next_slot_id: 1,
-        }
-    }
-}
-
-impl BuildContext {
+impl Algebraizer<'_> {
     pub(crate) fn push_query_scope(&mut self, literal_assignment_mode: bool) {
         self.query_scope_stack.push(QueryScope {
             relation_bindings: Vec::new(),
@@ -64,9 +44,7 @@ impl BuildContext {
         }
         let _ = self.query_scope_stack.pop();
     }
-}
 
-impl BuildContext {
     pub(crate) fn current_relation_bindings(&self) -> &[RelationBinding] {
         self.query_scope_stack
             .last()
@@ -90,9 +68,7 @@ impl BuildContext {
             .rev()
             .map(|scope| scope.relation_bindings.as_slice())
     }
-}
 
-impl BuildContext {
     pub(crate) fn current_named_windows(&self) -> &HashMap<String, WindowSpec> {
         &self
             .query_scope_stack
@@ -117,18 +93,14 @@ impl BuildContext {
             .expect("query scope stack is never empty")
             .named_windows = windows;
     }
-}
 
-impl BuildContext {
     pub(crate) fn literal_assignment_mode(&self) -> bool {
         self.query_scope_stack
             .last()
             .expect("query scope stack is never empty")
             .literal_assignment_mode
     }
-}
 
-impl BuildContext {
     pub(crate) fn push_cte_scope(&mut self) {
         self.cte_scope_stack.push(HashMap::new());
     }
@@ -159,9 +131,7 @@ impl BuildContext {
             .iter()
             .any(|scope| scope.contains_key(name))
     }
-}
 
-impl BuildContext {
     pub(crate) fn allocate_relation_id(&mut self) -> u32 {
         let relation_id = self.next_relation_id;
         self.next_relation_id += 1;

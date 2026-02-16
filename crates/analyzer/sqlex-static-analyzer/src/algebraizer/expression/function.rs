@@ -8,21 +8,14 @@ use sqlparser::ast::{
 use crate::{
     algebraizer::{
         Algebraizer,
-        context::BuildContext,
         model::{
             expression::{BoundLiteral, Expression},
             schema::SortKey,
         },
     },
-    catalog::{
-        Catalog,
-        normalize::{normalize_ident, normalize_object_name},
-    },
+    catalog::normalize::{normalize_ident, normalize_object_name},
     diagnostics::{Diagnostic, Phase},
-    functions::{
-        FunctionRegistry,
-        model::{FunctionArgType, FunctionCoercionProfile, FunctionSignature},
-    },
+    functions::model::{FunctionArgType, FunctionCoercionProfile, FunctionSignature},
 };
 
 enum FunctionBindKind {
@@ -31,13 +24,10 @@ enum FunctionBindKind {
     Window,
 }
 
-impl Algebraizer {
+impl Algebraizer<'_> {
     pub(crate) fn bind_function(
-        &self,
+        &mut self,
         function: &Function,
-        catalog: &Catalog,
-        functions: &FunctionRegistry,
-        context: &mut BuildContext,
     ) -> Result<(Expression, bool), Diagnostic> {
         let function_name = normalize_object_name(&function.name, self.dialect);
         let function_name_lower = function_name.to_ascii_lowercase();
@@ -48,37 +38,23 @@ impl Algebraizer {
         match &function.args {
             FunctionArguments::None => {},
             FunctionArguments::Subquery(query) => {
-                let bound_subquery = self.bind_single_column_subquery(
-                    query,
-                    catalog,
-                    functions,
-                    context,
-                    "function subquery argument",
-                )?;
+                let bound_subquery =
+                    self.bind_single_column_subquery(query, "function subquery argument")?;
                 bound_args.push(Expression::ScalarSubquery(Box::new(bound_subquery)));
             },
             FunctionArguments::List(argument_list) => {
                 for arg in &argument_list.args {
-                    let (bound_arg, arg_has_aggregate) =
-                        self.bind_function_arg(arg, catalog, functions, context)?;
+                    let (bound_arg, arg_has_aggregate) = self.bind_function_arg(arg)?;
                     bound_args.push(bound_arg);
                     has_aggregate_in_args |= arg_has_aggregate;
                 }
             },
         }
 
-        let (bind_kind, signature) = self.resolve_function_call_signature(
-            &function_name_lower,
-            function.over.is_some(),
-            functions,
-        )?;
+        let (bind_kind, signature) =
+            self.resolve_function_call_signature(&function_name_lower, function.over.is_some())?;
         self.validate_function_arity(&function_name_lower, bound_args.len(), signature)?;
-        self.validate_function_argument_types(
-            &function_name_lower,
-            &bound_args,
-            context,
-            signature,
-        )?;
+        self.validate_function_argument_types(&function_name_lower, &bound_args, signature)?;
 
         let distinct = matches!(
             &function.args,
@@ -88,15 +64,10 @@ impl Algebraizer {
 
         if matches!(bind_kind, FunctionBindKind::Window) {
             let (partition_by, order_by) = match &function.over {
-                Some(WindowType::WindowSpec(spec)) => {
-                    self.bind_window_spec(spec, catalog, functions, context)?
-                },
+                Some(WindowType::WindowSpec(spec)) => self.bind_window_spec(spec)?,
                 Some(WindowType::NamedWindow(window_name)) => {
                     let normalized_name = normalize_ident(window_name, self.dialect);
-                    let Some(spec) = context
-                        .current_named_windows()
-                        .get(&normalized_name)
-                        .cloned()
+                    let Some(spec) = self.current_named_windows().get(&normalized_name).cloned()
                     else {
                         return Err(Diagnostic::new(
                             "A3048",
@@ -104,7 +75,7 @@ impl Algebraizer {
                             format!("unknown WINDOW definition: {normalized_name}"),
                         ));
                     };
-                    self.bind_window_spec(&spec, catalog, functions, context)?
+                    self.bind_window_spec(&spec)?
                 },
                 None => {
                     return Err(Diagnostic::new(
@@ -146,15 +117,14 @@ impl Algebraizer {
         ))
     }
 
-    fn resolve_function_call_signature<'a>(
+    fn resolve_function_call_signature(
         &self,
         function_name_lower: &str,
         has_over: bool,
-        functions: &'a FunctionRegistry,
-    ) -> Result<(FunctionBindKind, Option<&'a FunctionSignature>), Diagnostic> {
-        let scalar_signature = functions.resolve_scalar(function_name_lower);
-        let aggregate_signature = functions.resolve_aggregate(function_name_lower);
-        let window_signature = functions.resolve_window(function_name_lower);
+    ) -> Result<(FunctionBindKind, Option<&FunctionSignature>), Diagnostic> {
+        let scalar_signature = self.functions.resolve_scalar(function_name_lower);
+        let aggregate_signature = self.functions.resolve_aggregate(function_name_lower);
+        let window_signature = self.functions.resolve_window(function_name_lower);
 
         if has_over {
             if let Some(signature) = window_signature.or(aggregate_signature) {
@@ -188,17 +158,14 @@ impl Algebraizer {
     }
 
     fn bind_window_spec(
-        &self,
+        &mut self,
         spec: &WindowSpec,
-        catalog: &Catalog,
-        functions: &FunctionRegistry,
-        context: &mut BuildContext,
     ) -> Result<(Vec<Expression>, Vec<SortKey>), Diagnostic> {
-        let resolved_spec = self.resolve_window_spec_for_over(spec, context)?;
+        let resolved_spec = self.resolve_window_spec_for_over(spec)?;
 
         let mut partition_by = Vec::new();
         for expr in &resolved_spec.partition_by {
-            let (bound_expr, _) = self.bind_expression(expr, catalog, functions, context)?;
+            let (bound_expr, _) = self.bind_expression(expr)?;
             partition_by.push(bound_expr);
         }
 
@@ -211,8 +178,7 @@ impl Algebraizer {
                     "ORDER BY WITH FILL is not supported in this iteration",
                 ));
             }
-            let (bound_expr, _) =
-                self.bind_expression(&order_expr.expr, catalog, functions, context)?;
+            let (bound_expr, _) = self.bind_expression(&order_expr.expr)?;
             order_by.push(SortKey {
                 expr: bound_expr,
                 asc: order_expr.asc.unwrap_or(true),
@@ -223,14 +189,10 @@ impl Algebraizer {
         Ok((partition_by, order_by))
     }
 
-    fn resolve_window_spec_for_over(
-        &self,
-        spec: &WindowSpec,
-        context: &BuildContext,
-    ) -> Result<WindowSpec, Diagnostic> {
+    fn resolve_window_spec_for_over(&self, spec: &WindowSpec) -> Result<WindowSpec, Diagnostic> {
         let mut resolved_spec = if let Some(base_name) = &spec.window_name {
             let normalized_base = normalize_ident(base_name, self.dialect);
-            let Some(base_spec) = context.current_named_windows().get(&normalized_base) else {
+            let Some(base_spec) = self.current_named_windows().get(&normalized_base) else {
                 return Err(Diagnostic::new(
                     "A3048",
                     Phase::Algebraize,
@@ -261,13 +223,7 @@ impl Algebraizer {
         Ok(resolved_spec)
     }
 
-    fn bind_function_arg(
-        &self,
-        arg: &FunctionArg,
-        catalog: &Catalog,
-        functions: &FunctionRegistry,
-        context: &mut BuildContext,
-    ) -> Result<(Expression, bool), Diagnostic> {
+    fn bind_function_arg(&mut self, arg: &FunctionArg) -> Result<(Expression, bool), Diagnostic> {
         let arg_expr = match arg {
             FunctionArg::Named { arg, .. } => arg,
             FunctionArg::ExprNamed { arg, .. } => arg,
@@ -275,7 +231,7 @@ impl Algebraizer {
         };
 
         match arg_expr {
-            FunctionArgExpr::Expr(expr) => self.bind_expression(expr, catalog, functions, context),
+            FunctionArgExpr::Expr(expr) => self.bind_expression(expr),
             FunctionArgExpr::Wildcard => Ok((Expression::Placeholder, false)),
             FunctionArgExpr::QualifiedWildcard(_) => Ok((Expression::Placeholder, false)),
         }
@@ -321,7 +277,6 @@ impl Algebraizer {
         &self,
         function_name_lower: &str,
         bound_args: &[Expression],
-        context: &BuildContext,
         signature: Option<&FunctionSignature>,
     ) -> Result<(), Diagnostic> {
         let Some(signature) = signature else {
@@ -335,8 +290,7 @@ impl Algebraizer {
         }
 
         for rule in &signature.arg_type_rules {
-            let Some(arg_type) = self.bound_expr_static_type(bound_args.get(rule.index), context)
-            else {
+            let Some(arg_type) = self.bound_expr_static_type(bound_args.get(rule.index)) else {
                 continue;
             };
             let matches_rule = match rule.expected {
@@ -367,16 +321,12 @@ impl Algebraizer {
     }
 
     pub(crate) fn bind_ceil_or_floor(
-        &self,
+        &mut self,
         function_name: &str,
         expr: &sqlparser::ast::Expr,
         field: &CeilFloorKind,
-        catalog: &Catalog,
-        functions: &FunctionRegistry,
-        context: &mut BuildContext,
     ) -> Result<(Expression, bool), Diagnostic> {
-        let (bound_expr, has_aggregate) =
-            self.bind_expression(expr, catalog, functions, context)?;
+        let (bound_expr, has_aggregate) = self.bind_expression(expr)?;
         let bound_args = match field {
             CeilFloorKind::DateTimeField(DateTimeField::NoDateTime) => vec![bound_expr],
             CeilFloorKind::DateTimeField(_) | CeilFloorKind::Scale(_) => {
@@ -388,9 +338,9 @@ impl Algebraizer {
             },
         };
 
-        let signature = functions.resolve_scalar(function_name);
+        let signature = self.functions.resolve_scalar(function_name);
         self.validate_function_arity(function_name, bound_args.len(), signature)?;
-        self.validate_function_argument_types(function_name, &bound_args, context, signature)?;
+        self.validate_function_argument_types(function_name, &bound_args, signature)?;
 
         Ok((
             Expression::Function {
@@ -427,14 +377,10 @@ impl Algebraizer {
         Ok(())
     }
 
-    fn bound_expr_static_type(
-        &self,
-        expr: Option<&Expression>,
-        context: &BuildContext,
-    ) -> Option<DataType> {
+    fn bound_expr_static_type(&self, expr: Option<&Expression>) -> Option<DataType> {
         let expr = expr?;
         match expr {
-            Expression::SlotRef(slot_id) => context
+            Expression::SlotRef(slot_id) => self
                 .current_relation_bindings()
                 .iter()
                 .flat_map(|scope| scope.schema.columns.iter())

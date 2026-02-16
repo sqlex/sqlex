@@ -5,7 +5,7 @@ use crate::{
     diagnostics::{Diagnostic, Phase},
 };
 
-impl Algebraizer {
+impl Algebraizer<'_> {
     pub(crate) fn bind_literal(
         &self,
         value: &Value,

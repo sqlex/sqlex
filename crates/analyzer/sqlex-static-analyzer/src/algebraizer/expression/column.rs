@@ -2,11 +2,7 @@ use sqlex_common::dialect::Dialect;
 use sqlparser::ast::{Expr, Value};
 
 use crate::{
-    algebraizer::{
-        Algebraizer,
-        context::{BuildContext, RelationBinding},
-        model::expression::Expression,
-    },
+    algebraizer::{Algebraizer, model::expression::Expression, scope::RelationBinding},
     catalog::normalize::{normalize_ident, normalize_object_name},
     diagnostics::{Diagnostic, Phase},
 };
@@ -32,19 +28,18 @@ enum QualifiedResolution {
     RelationMissing,
 }
 
-impl Algebraizer {
+impl Algebraizer<'_> {
     pub(crate) fn resolve_unqualified_column(
         &self,
         column_name: &str,
-        context: &BuildContext,
     ) -> Result<ResolvedColumnBinding, Diagnostic> {
-        if let Some(slot_id) = self
-            .resolve_unqualified_in_scope_level(context.current_relation_bindings(), column_name)?
+        if let Some(slot_id) =
+            self.resolve_unqualified_in_scope_level(self.current_relation_bindings(), column_name)?
         {
             return Ok(ResolvedColumnBinding::Local { slot_id });
         }
 
-        for (index, scope_level) in context.iter_outer_query_relation_bindings().enumerate() {
+        for (index, scope_level) in self.iter_outer_query_relation_bindings().enumerate() {
             if let Some(slot_id) =
                 self.resolve_unqualified_in_scope_level(scope_level, column_name)?
             {
@@ -66,10 +61,9 @@ impl Algebraizer {
         &self,
         qualifier: &str,
         column_name: &str,
-        context: &BuildContext,
     ) -> Result<ResolvedColumnBinding, Diagnostic> {
         match self.resolve_qualified_in_scope_level(
-            context.current_relation_bindings(),
+            self.current_relation_bindings(),
             qualifier,
             column_name,
         )? {
@@ -87,7 +81,7 @@ impl Algebraizer {
         }
 
         let mut relation_found = false;
-        for (index, scope_level) in context.iter_outer_query_relation_bindings().enumerate() {
+        for (index, scope_level) in self.iter_outer_query_relation_bindings().enumerate() {
             match self.resolve_qualified_in_scope_level(scope_level, qualifier, column_name)? {
                 QualifiedResolution::Found(slot_id) => {
                     return Ok(ResolvedColumnBinding::Correlated {
@@ -242,13 +236,17 @@ mod tests {
 
     use sqlex_common::dialect::Dialect;
 
-    use crate::algebraizer::{
-        Algebraizer,
-        context::{BuildContext, RelationBinding},
-        model::{
-            expression::Expression,
-            schema::{BoundColumn, ColumnOrigin, OutputSchema},
+    use crate::{
+        algebraizer::{
+            Algebraizer,
+            model::{
+                expression::Expression,
+                schema::{BoundColumn, ColumnOrigin, OutputSchema},
+            },
+            scope::RelationBinding,
         },
+        catalog::Catalog,
+        functions::FunctionRegistry,
     };
 
     fn make_scope(
@@ -278,30 +276,32 @@ mod tests {
 
     #[test]
     fn resolve_unqualified_prefers_current_scope() {
-        let algebraizer = Algebraizer::new(Dialect::Postgres);
-        let mut context = BuildContext::new();
-        context.set_current_relation_bindings(vec![make_scope(2, "outer", &[(2, "id")])]);
-        context.push_query_scope(false);
-        context.set_current_relation_bindings(vec![make_scope(1, "cur", &[(1, "id")])]);
+        let catalog = Catalog::new();
+        let functions = FunctionRegistry::new(Dialect::Postgres);
+        let mut algebraizer = Algebraizer::new(Dialect::Postgres, &catalog, &functions);
+        algebraizer.set_current_relation_bindings(vec![make_scope(2, "outer", &[(2, "id")])]);
+        algebraizer.push_query_scope(false);
+        algebraizer.set_current_relation_bindings(vec![make_scope(1, "cur", &[(1, "id")])]);
 
         let binding = algebraizer
-            .resolve_unqualified_column("id", &context)
+            .resolve_unqualified_column("id")
             .expect("binding should succeed");
         assert!(matches!(binding.into_scalar_expr(), Expression::SlotRef(1)));
     }
 
     #[test]
     fn resolve_unqualified_binds_correlated_depth() {
-        let algebraizer = Algebraizer::new(Dialect::Postgres);
-        let mut context = BuildContext::new();
-        context.set_current_relation_bindings(vec![make_scope(2, "outer_lv2", &[(20, "id")])]);
-        context.push_query_scope(false);
-        context.set_current_relation_bindings(vec![make_scope(3, "outer_lv1", &[(30, "id")])]);
-        context.push_query_scope(false);
-        context.set_current_relation_bindings(vec![make_scope(1, "cur", &[(1, "cur_col")])]);
+        let catalog = Catalog::new();
+        let functions = FunctionRegistry::new(Dialect::Postgres);
+        let mut algebraizer = Algebraizer::new(Dialect::Postgres, &catalog, &functions);
+        algebraizer.set_current_relation_bindings(vec![make_scope(2, "outer_lv2", &[(20, "id")])]);
+        algebraizer.push_query_scope(false);
+        algebraizer.set_current_relation_bindings(vec![make_scope(3, "outer_lv1", &[(30, "id")])]);
+        algebraizer.push_query_scope(false);
+        algebraizer.set_current_relation_bindings(vec![make_scope(1, "cur", &[(1, "cur_col")])]);
 
         let binding = algebraizer
-            .resolve_unqualified_column("id", &context)
+            .resolve_unqualified_column("id")
             .expect("binding should succeed");
         assert!(matches!(
             binding.into_scalar_expr(),
@@ -314,16 +314,17 @@ mod tests {
 
     #[test]
     fn resolve_qualified_binds_correlated_depth() {
-        let algebraizer = Algebraizer::new(Dialect::Postgres);
-        let mut context = BuildContext::new();
-        context.set_current_relation_bindings(vec![make_scope(2, "t2", &[(20, "id")])]);
-        context.push_query_scope(false);
-        context.set_current_relation_bindings(vec![make_scope(3, "t1", &[(30, "id")])]);
-        context.push_query_scope(false);
-        context.set_current_relation_bindings(vec![make_scope(1, "cur", &[(1, "cur_col")])]);
+        let catalog = Catalog::new();
+        let functions = FunctionRegistry::new(Dialect::Postgres);
+        let mut algebraizer = Algebraizer::new(Dialect::Postgres, &catalog, &functions);
+        algebraizer.set_current_relation_bindings(vec![make_scope(2, "t2", &[(20, "id")])]);
+        algebraizer.push_query_scope(false);
+        algebraizer.set_current_relation_bindings(vec![make_scope(3, "t1", &[(30, "id")])]);
+        algebraizer.push_query_scope(false);
+        algebraizer.set_current_relation_bindings(vec![make_scope(1, "cur", &[(1, "cur_col")])]);
 
         let binding = algebraizer
-            .resolve_qualified_column("t1", "id", &context)
+            .resolve_qualified_column("t1", "id")
             .expect("binding should succeed");
         assert!(matches!(
             binding.into_scalar_expr(),
@@ -336,15 +337,16 @@ mod tests {
 
     #[test]
     fn resolve_unqualified_reports_ambiguous_current_scope() {
-        let algebraizer = Algebraizer::new(Dialect::Postgres);
-        let mut context = BuildContext::new();
-        context.set_current_relation_bindings(vec![
+        let catalog = Catalog::new();
+        let functions = FunctionRegistry::new(Dialect::Postgres);
+        let mut algebraizer = Algebraizer::new(Dialect::Postgres, &catalog, &functions);
+        algebraizer.set_current_relation_bindings(vec![
             make_scope(1, "t1", &[(1, "id")]),
             make_scope(2, "t2", &[(2, "id")]),
         ]);
 
         let error = algebraizer
-            .resolve_unqualified_column("id", &context)
+            .resolve_unqualified_column("id")
             .expect_err("binding should fail");
         assert_eq!(error.code, "A3009");
     }
