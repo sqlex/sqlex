@@ -30,9 +30,9 @@ impl Analyzer for StaticAnalyzer {
         let relation = algebraizer
             .build(&query_statement)
             .map_err(Diagnostic::into_analysis_error)?;
-        let inferencer = Inferencer::new(self.dialect, &self.functions);
+        let inferencer = Inferencer::new(self.dialect, &self.catalog, &self.functions);
         let metadata = inferencer
-            .infer(&relation, &self.catalog)
+            .infer(&relation)
             .map_err(Diagnostic::into_analysis_error)?;
 
         Ok(metadata.to_result_set())

@@ -3,16 +3,9 @@ use sqlex_common::{dialect::Dialect, types::DataType};
 
 use crate::{
     algebraizer::model::expression::{BoundBinaryOp, BoundLiteral, BoundUnaryOp, Expression},
-    catalog::Catalog,
     diagnostics::{Diagnostic, Phase},
-    functions::{
-        FunctionRegistry,
-        model::{FunctionNullabilityRule, FunctionReturnTypeRule, FunctionSignature},
-    },
-    infer::{
-        cardinality::MinRows, metadata::InferColumn,
-        operator_infer::infer_operator_with_outer_scopes,
-    },
+    functions::model::{FunctionNullabilityRule, FunctionReturnTypeRule, FunctionSignature},
+    infer::{Inferencer, cardinality::MinRows, metadata::InferColumn},
 };
 
 #[derive(Debug, Clone)]
@@ -21,302 +14,193 @@ pub(crate) struct ScalarInference {
     pub(crate) nullable: bool,
 }
 
-pub(crate) fn infer_scalar(
-    expr: &Expression,
-    input_columns: &[InferColumn],
-    catalog: &Catalog,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-    outer_scopes: &[Vec<InferColumn>],
-) -> Result<ScalarInference, Diagnostic> {
-    match expr {
-        Expression::SlotRef(slot_id) => infer_slot(*slot_id, input_columns),
-        Expression::CorrelatedRef { depth, slot_id } => {
-            infer_correlated_slot(*depth, *slot_id, outer_scopes)
-        },
-        Expression::Literal(literal) => Ok(infer_literal(literal, dialect)),
-        Expression::BinaryOp { left, op, right } => {
-            let left_info = infer_scalar(
-                left,
-                input_columns,
-                catalog,
-                dialect,
-                functions,
-                outer_scopes,
-            )?;
-            let right_info = infer_scalar(
-                right,
-                input_columns,
-                catalog,
-                dialect,
-                functions,
-                outer_scopes,
-            )?;
-            validate_binary_op(op, &left_info.data_type, &right_info.data_type, dialect)?;
+impl Inferencer<'_> {
+    pub(crate) fn infer_scalar(
+        &self,
+        expr: &Expression,
+        input_columns: &[InferColumn],
+        outer_scopes: &[Vec<InferColumn>],
+    ) -> Result<ScalarInference, Diagnostic> {
+        match expr {
+            Expression::SlotRef(slot_id) => infer_slot(*slot_id, input_columns),
+            Expression::CorrelatedRef { depth, slot_id } => {
+                infer_correlated_slot(*depth, *slot_id, outer_scopes)
+            },
+            Expression::Literal(literal) => Ok(infer_literal(literal, self.dialect)),
+            Expression::BinaryOp { left, op, right } => {
+                let left_info = self.infer_scalar(left, input_columns, outer_scopes)?;
+                let right_info = self.infer_scalar(right, input_columns, outer_scopes)?;
+                validate_binary_op(
+                    op,
+                    &left_info.data_type,
+                    &right_info.data_type,
+                    self.dialect,
+                )?;
 
-            let data_type = match op {
-                BoundBinaryOp::Add
-                | BoundBinaryOp::Sub
-                | BoundBinaryOp::Mul
-                | BoundBinaryOp::Div => left_info.data_type.promote_numeric(&right_info.data_type),
-                BoundBinaryOp::Eq
-                | BoundBinaryOp::NotEq
-                | BoundBinaryOp::Lt
-                | BoundBinaryOp::Lte
-                | BoundBinaryOp::Gt
-                | BoundBinaryOp::Gte
-                | BoundBinaryOp::And
-                | BoundBinaryOp::Or => boolean_result_type(dialect),
-            };
+                let data_type = match op {
+                    BoundBinaryOp::Add
+                    | BoundBinaryOp::Sub
+                    | BoundBinaryOp::Mul
+                    | BoundBinaryOp::Div => {
+                        left_info.data_type.promote_numeric(&right_info.data_type)
+                    },
+                    BoundBinaryOp::Eq
+                    | BoundBinaryOp::NotEq
+                    | BoundBinaryOp::Lt
+                    | BoundBinaryOp::Lte
+                    | BoundBinaryOp::Gt
+                    | BoundBinaryOp::Gte
+                    | BoundBinaryOp::And
+                    | BoundBinaryOp::Or => boolean_result_type(self.dialect),
+                };
 
-            Ok(ScalarInference {
-                data_type,
-                nullable: left_info.nullable || right_info.nullable,
-            })
-        },
-        Expression::UnaryOp { op, expr } => {
-            let info = infer_scalar(
-                expr,
-                input_columns,
-                catalog,
-                dialect,
-                functions,
-                outer_scopes,
-            )?;
-            let data_type = match op {
-                BoundUnaryOp::Not => boolean_result_type(dialect),
-                BoundUnaryOp::Neg | BoundUnaryOp::Pos => info.data_type.clone(),
-            };
-            Ok(ScalarInference {
-                data_type,
-                nullable: info.nullable,
-            })
-        },
-        Expression::Function { name, args } => {
-            let args_info = infer_args(
+                Ok(ScalarInference {
+                    data_type,
+                    nullable: left_info.nullable || right_info.nullable,
+                })
+            },
+            Expression::UnaryOp { op, expr } => {
+                let info = self.infer_scalar(expr, input_columns, outer_scopes)?;
+                let data_type = match op {
+                    BoundUnaryOp::Not => boolean_result_type(self.dialect),
+                    BoundUnaryOp::Neg | BoundUnaryOp::Pos => info.data_type.clone(),
+                };
+                Ok(ScalarInference {
+                    data_type,
+                    nullable: info.nullable,
+                })
+            },
+            Expression::Function { name, args } => {
+                let args_info = self.infer_args(args, input_columns, outer_scopes)?;
+                Ok(self.infer_function(name, args_info))
+            },
+            Expression::AggregateCall {
+                name,
                 args,
-                input_columns,
-                catalog,
-                dialect,
-                functions,
-                outer_scopes,
-            )?;
-            Ok(infer_function(name, args_info, dialect, functions))
-        },
-        Expression::AggregateCall {
-            name,
-            args,
-            distinct,
-        } => {
-            let _ = distinct;
-            let args_info = infer_args(
-                args,
-                input_columns,
-                catalog,
-                dialect,
-                functions,
-                outer_scopes,
-            )?;
-            infer_aggregate(name, args_info, dialect, functions)
-        },
-        Expression::WindowCall { name, args, .. } => {
-            let args_info = infer_args(
-                args,
-                input_columns,
-                catalog,
-                dialect,
-                functions,
-                outer_scopes,
-            )?;
-            infer_window(name, args_info, dialect, functions)
-        },
-        Expression::Cast { expr, target_type } => {
-            let info = infer_scalar(
-                expr,
-                input_columns,
-                catalog,
-                dialect,
-                functions,
-                outer_scopes,
-            )?;
-            Ok(ScalarInference {
-                data_type: target_type.clone(),
-                nullable: info.nullable,
-            })
-        },
-        Expression::IsNull { .. } => Ok(ScalarInference {
-            data_type: boolean_result_type(dialect),
-            nullable: false,
-        }),
-        Expression::Case {
-            when_clauses,
-            else_expr,
-            ..
-        } => {
-            let mut branch_types = Vec::new();
-            let mut nullable = false;
-
-            for (condition, result) in when_clauses {
-                let _ = infer_scalar(
-                    condition,
-                    input_columns,
-                    catalog,
-                    dialect,
-                    functions,
-                    outer_scopes,
-                )?;
-                let result_info = infer_scalar(
-                    result,
-                    input_columns,
-                    catalog,
-                    dialect,
-                    functions,
-                    outer_scopes,
-                )?;
-                nullable |= result_info.nullable;
-                branch_types.push(result_info.data_type);
-            }
-
-            if let Some(else_expr) = else_expr {
-                let else_info = infer_scalar(
-                    else_expr,
-                    input_columns,
-                    catalog,
-                    dialect,
-                    functions,
-                    outer_scopes,
-                )?;
-                nullable |= else_info.nullable;
-                branch_types.push(else_info.data_type);
-            } else {
-                nullable = true;
-            }
-
-            let data_type = DataType::common_type(dialect, &branch_types)
-                .unwrap_or_else(|| DataType::Custom("unknown".to_string()));
-
-            Ok(ScalarInference {
-                data_type,
-                nullable,
-            })
-        },
-        Expression::InList { expr, list, .. } => {
-            let expr_info = infer_scalar(
-                expr,
-                input_columns,
-                catalog,
-                dialect,
-                functions,
-                outer_scopes,
-            )?;
-            let mut nullable = expr_info.nullable;
-            for item in list {
-                let item_info = infer_scalar(
-                    item,
-                    input_columns,
-                    catalog,
-                    dialect,
-                    functions,
-                    outer_scopes,
-                )?;
-                nullable |= item_info.nullable;
-            }
-            Ok(ScalarInference {
-                data_type: boolean_result_type(dialect),
-                nullable,
-            })
-        },
-        Expression::InSubquery {
-            expr,
-            subquery,
-            negated,
-        } => {
-            let _ = negated;
-            let expr_info = infer_scalar(
-                expr,
-                input_columns,
-                catalog,
-                dialect,
-                functions,
-                outer_scopes,
-            )?;
-            let subquery_info = infer_subquery_single_column(
-                subquery,
-                input_columns,
-                outer_scopes,
-                catalog,
-                dialect,
-                functions,
-            )?;
-            Ok(ScalarInference {
-                data_type: boolean_result_type(dialect),
-                nullable: expr_info.nullable || subquery_info.nullable,
-            })
-        },
-        Expression::Exists { subquery, negated } => {
-            let _ = negated;
-            let mut subquery_outer_scopes = outer_scopes.to_vec();
-            subquery_outer_scopes.push(input_columns.to_vec());
-            let _ = infer_operator_with_outer_scopes(
-                subquery,
-                catalog,
-                dialect,
-                functions,
-                &subquery_outer_scopes,
-            )?;
-            Ok(ScalarInference {
-                data_type: boolean_result_type(dialect),
+                distinct,
+            } => {
+                let _ = distinct;
+                let args_info = self.infer_args(args, input_columns, outer_scopes)?;
+                self.infer_aggregate(name, args_info)
+            },
+            Expression::WindowCall { name, args, .. } => {
+                let args_info = self.infer_args(args, input_columns, outer_scopes)?;
+                self.infer_window_call(name, args_info)
+            },
+            Expression::Cast { expr, target_type } => {
+                let info = self.infer_scalar(expr, input_columns, outer_scopes)?;
+                Ok(ScalarInference {
+                    data_type: target_type.clone(),
+                    nullable: info.nullable,
+                })
+            },
+            Expression::IsNull { .. } => Ok(ScalarInference {
+                data_type: boolean_result_type(self.dialect),
                 nullable: false,
-            })
-        },
-        Expression::ScalarSubquery(subquery) => infer_subquery_single_column(
-            subquery,
-            input_columns,
-            outer_scopes,
-            catalog,
-            dialect,
-            functions,
-        ),
-        Expression::Placeholder => Ok(ScalarInference {
-            data_type: DataType::Custom("unknown".to_string()),
-            nullable: false,
-        }),
-    }
-}
+            }),
+            Expression::Case {
+                when_clauses,
+                else_expr,
+                ..
+            } => {
+                let mut branch_types = Vec::new();
+                let mut nullable = false;
 
-fn infer_subquery_single_column(
-    subquery: &crate::algebraizer::model::relation::Relation,
-    input_columns: &[InferColumn],
-    outer_scopes: &[Vec<InferColumn>],
-    catalog: &Catalog,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-) -> Result<ScalarInference, Diagnostic> {
-    let mut subquery_outer_scopes = outer_scopes.to_vec();
-    subquery_outer_scopes.push(input_columns.to_vec());
-    let metadata = infer_operator_with_outer_scopes(
-        subquery,
-        catalog,
-        dialect,
-        functions,
-        &subquery_outer_scopes,
-    )?;
-    if metadata.columns.len() != 1 {
-        return Err(Diagnostic::new(
-            "I4105",
-            Phase::Infer,
-            format!(
-                "subquery expression expects exactly one column, got {}",
-                metadata.columns.len()
-            ),
-        ));
+                for (condition, result) in when_clauses {
+                    let _ = self.infer_scalar(condition, input_columns, outer_scopes)?;
+                    let result_info = self.infer_scalar(result, input_columns, outer_scopes)?;
+                    nullable |= result_info.nullable;
+                    branch_types.push(result_info.data_type);
+                }
+
+                if let Some(else_expr) = else_expr {
+                    let else_info = self.infer_scalar(else_expr, input_columns, outer_scopes)?;
+                    nullable |= else_info.nullable;
+                    branch_types.push(else_info.data_type);
+                } else {
+                    nullable = true;
+                }
+
+                let data_type = DataType::common_type(self.dialect, &branch_types)
+                    .unwrap_or_else(|| DataType::Custom("unknown".to_string()));
+
+                Ok(ScalarInference {
+                    data_type,
+                    nullable,
+                })
+            },
+            Expression::InList { expr, list, .. } => {
+                let expr_info = self.infer_scalar(expr, input_columns, outer_scopes)?;
+                let mut nullable = expr_info.nullable;
+                for item in list {
+                    let item_info = self.infer_scalar(item, input_columns, outer_scopes)?;
+                    nullable |= item_info.nullable;
+                }
+                Ok(ScalarInference {
+                    data_type: boolean_result_type(self.dialect),
+                    nullable,
+                })
+            },
+            Expression::InSubquery {
+                expr,
+                subquery,
+                negated,
+            } => {
+                let _ = negated;
+                let expr_info = self.infer_scalar(expr, input_columns, outer_scopes)?;
+                let subquery_info =
+                    self.infer_subquery_single_column(subquery, input_columns, outer_scopes)?;
+                Ok(ScalarInference {
+                    data_type: boolean_result_type(self.dialect),
+                    nullable: expr_info.nullable || subquery_info.nullable,
+                })
+            },
+            Expression::Exists { subquery, negated } => {
+                let _ = negated;
+                let mut subquery_outer_scopes = outer_scopes.to_vec();
+                subquery_outer_scopes.push(input_columns.to_vec());
+                let _ = self.infer_operator_with_outer_scopes(subquery, &subquery_outer_scopes)?;
+                Ok(ScalarInference {
+                    data_type: boolean_result_type(self.dialect),
+                    nullable: false,
+                })
+            },
+            Expression::ScalarSubquery(subquery) => {
+                self.infer_subquery_single_column(subquery, input_columns, outer_scopes)
+            },
+            Expression::Placeholder => Ok(ScalarInference {
+                data_type: DataType::Custom("unknown".to_string()),
+                nullable: false,
+            }),
+        }
     }
 
-    let column = &metadata.columns[0];
-    Ok(ScalarInference {
-        data_type: column.data_type.clone(),
-        nullable: column.nullable || !matches!(metadata.cardinality.min(), MinRows::One),
-    })
+    fn infer_subquery_single_column(
+        &self,
+        subquery: &crate::algebraizer::model::relation::Relation,
+        input_columns: &[InferColumn],
+        outer_scopes: &[Vec<InferColumn>],
+    ) -> Result<ScalarInference, Diagnostic> {
+        let mut subquery_outer_scopes = outer_scopes.to_vec();
+        subquery_outer_scopes.push(input_columns.to_vec());
+        let metadata = self.infer_operator_with_outer_scopes(subquery, &subquery_outer_scopes)?;
+        if metadata.columns.len() != 1 {
+            return Err(Diagnostic::new(
+                "I4105",
+                Phase::Infer,
+                format!(
+                    "subquery expression expects exactly one column, got {}",
+                    metadata.columns.len()
+                ),
+            ));
+        }
+
+        let column = &metadata.columns[0];
+        Ok(ScalarInference {
+            data_type: column.data_type.clone(),
+            nullable: column.nullable || !matches!(metadata.cardinality.min(), MinRows::One),
+        })
+    }
 }
 
 fn validate_binary_op(
@@ -495,78 +379,64 @@ fn mysql_integer_literal_should_be_int(raw: &str) -> bool {
     digit_count <= 8
 }
 
-fn infer_args(
-    args: &[Expression],
-    input_columns: &[InferColumn],
-    catalog: &Catalog,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-    outer_scopes: &[Vec<InferColumn>],
-) -> Result<Vec<ScalarInference>, Diagnostic> {
-    let mut result = Vec::with_capacity(args.len());
-    for arg in args {
-        result.push(infer_scalar(
-            arg,
-            input_columns,
-            catalog,
-            dialect,
-            functions,
-            outer_scopes,
-        )?);
+impl Inferencer<'_> {
+    fn infer_args(
+        &self,
+        args: &[Expression],
+        input_columns: &[InferColumn],
+        outer_scopes: &[Vec<InferColumn>],
+    ) -> Result<Vec<ScalarInference>, Diagnostic> {
+        let mut result = Vec::with_capacity(args.len());
+        for arg in args {
+            result.push(self.infer_scalar(arg, input_columns, outer_scopes)?);
+        }
+        Ok(result)
     }
-    Ok(result)
-}
 
-fn infer_function(
-    name: &str,
-    args: Vec<ScalarInference>,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-) -> ScalarInference {
-    let Some(signature) = functions.resolve_scalar(name) else {
-        let data_type = first_arg_type(&args);
-        let nullable = args.iter().any(|arg| arg.nullable);
-        return ScalarInference {
-            data_type,
-            nullable,
+    fn infer_function(&self, name: &str, args: Vec<ScalarInference>) -> ScalarInference {
+        let Some(signature) = self.functions.resolve_scalar(name) else {
+            let data_type = first_arg_type(&args);
+            let nullable = args.iter().any(|arg| arg.nullable);
+            return ScalarInference {
+                data_type,
+                nullable,
+            };
         };
-    };
 
-    infer_with_signature(signature, &args, dialect)
-}
+        infer_with_signature(signature, &args, self.dialect)
+    }
 
-fn infer_aggregate(
-    name: &str,
-    args: Vec<ScalarInference>,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-) -> Result<ScalarInference, Diagnostic> {
-    let Some(signature) = functions.resolve_aggregate(name) else {
-        return Err(Diagnostic::new(
-            "I4102",
-            Phase::Infer,
-            format!("unsupported aggregate function: {name}"),
-        ));
-    };
+    fn infer_aggregate(
+        &self,
+        name: &str,
+        args: Vec<ScalarInference>,
+    ) -> Result<ScalarInference, Diagnostic> {
+        let Some(signature) = self.functions.resolve_aggregate(name) else {
+            return Err(Diagnostic::new(
+                "I4102",
+                Phase::Infer,
+                format!("unsupported aggregate function: {name}"),
+            ));
+        };
 
-    Ok(infer_with_signature(signature, &args, dialect))
-}
+        Ok(infer_with_signature(signature, &args, self.dialect))
+    }
 
-fn infer_window(
-    name: &str,
-    args: Vec<ScalarInference>,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-) -> Result<ScalarInference, Diagnostic> {
-    let Some(signature) = functions.resolve_window_call(name) else {
-        return Err(Diagnostic::new(
-            "I4103",
-            Phase::Infer,
-            format!("unsupported window function: {name}"),
-        ));
-    };
+    fn infer_window_call(
+        &self,
+        name: &str,
+        args: Vec<ScalarInference>,
+    ) -> Result<ScalarInference, Diagnostic> {
+        let Some(signature) = self.functions.resolve_window_call(name) else {
+            return Err(Diagnostic::new(
+                "I4103",
+                Phase::Infer,
+                format!("unsupported window function: {name}"),
+            ));
+        };
 
-    Ok(infer_with_signature(signature, &args, dialect))
+        Ok(infer_with_signature(signature, &args, self.dialect))
+    }
 }
 
 fn infer_with_signature(

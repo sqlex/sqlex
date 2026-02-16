@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use sqlex_analyzer::extension::DataTypeExt;
-use sqlex_common::{dialect::Dialect, types::DataType};
+use sqlex_common::types::DataType;
 
 use crate::{
     algebraizer::model::{
@@ -13,501 +13,411 @@ use crate::{
     },
     catalog::Catalog,
     diagnostics::{Diagnostic, Phase},
-    functions::FunctionRegistry,
     infer::{
+        Inferencer,
         cardinality::{CardInterval, MaxRows, MinRows},
         metadata::{ColumnOrigin, InferColumn, InferMetadata, ResolvedKey},
-        scalar_infer::infer_scalar,
     },
 };
 
-pub(crate) fn infer_operator(
-    relation: &Relation,
-    catalog: &Catalog,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-) -> Result<InferMetadata, Diagnostic> {
-    infer_operator_with_outer_scopes(relation, catalog, dialect, functions, &[])
-}
-
-pub(crate) fn infer_operator_with_outer_scopes(
-    relation: &Relation,
-    catalog: &Catalog,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-    outer_scopes: &[Vec<InferColumn>],
-) -> Result<InferMetadata, Diagnostic> {
-    match relation {
-        Relation::Scan(node) => infer_scan(node, catalog),
-        Relation::Values(_) => Ok(InferMetadata {
-            columns: Vec::new(),
-            cardinality: CardInterval::exactly_one(),
-            keys: Vec::new(),
-        }),
-        Relation::Selection(node) => {
-            infer_selection(node, catalog, dialect, functions, outer_scopes)
-        },
-        Relation::Aggregation(node) => {
-            infer_aggregation(node, catalog, dialect, functions, outer_scopes)
-        },
-        Relation::Window(node) => infer_window(node, catalog, dialect, functions, outer_scopes),
-        Relation::Projection(node) => {
-            infer_projection(node, catalog, dialect, functions, outer_scopes)
-        },
-        Relation::Join(node) => infer_join(node, catalog, dialect, functions, outer_scopes),
-        Relation::Distinct(node) => infer_distinct(node, catalog, dialect, functions, outer_scopes),
-        Relation::Sort(node) => infer_sort(node, catalog, dialect, functions, outer_scopes),
-        Relation::Limit(node) => infer_limit(node, catalog, dialect, functions, outer_scopes),
-        Relation::Alias(node) => infer_alias(node, catalog, dialect, functions, outer_scopes),
-        Relation::SetOperation(node) => {
-            infer_set_operation(node, catalog, dialect, functions, outer_scopes)
-        },
+impl Inferencer<'_> {
+    pub(crate) fn infer_operator(&self, relation: &Relation) -> Result<InferMetadata, Diagnostic> {
+        self.infer_operator_with_outer_scopes(relation, &[])
     }
-}
 
-fn infer_scan(
-    node: &crate::algebraizer::model::relation::ScanNode,
-    catalog: &Catalog,
-) -> Result<InferMetadata, Diagnostic> {
-    let _ = &node.table;
-    let mut columns = Vec::with_capacity(node.schema.columns.len());
+    pub(crate) fn infer_operator_with_outer_scopes(
+        &self,
+        relation: &Relation,
+        outer_scopes: &[Vec<InferColumn>],
+    ) -> Result<InferMetadata, Diagnostic> {
+        match relation {
+            Relation::Scan(node) => self.infer_scan(node),
+            Relation::Values(_) => Ok(InferMetadata {
+                columns: Vec::new(),
+                cardinality: CardInterval::exactly_one(),
+                keys: Vec::new(),
+            }),
+            Relation::Selection(node) => self.infer_selection(node, outer_scopes),
+            Relation::Aggregation(node) => self.infer_aggregation(node, outer_scopes),
+            Relation::Window(node) => self.infer_window(node, outer_scopes),
+            Relation::Projection(node) => self.infer_projection(node, outer_scopes),
+            Relation::Join(node) => self.infer_join(node, outer_scopes),
+            Relation::Distinct(node) => self.infer_distinct(node, outer_scopes),
+            Relation::Sort(node) => self.infer_sort(node, outer_scopes),
+            Relation::Limit(node) => self.infer_limit(node, outer_scopes),
+            Relation::Alias(node) => self.infer_alias(node, outer_scopes),
+            Relation::SetOperation(node) => self.infer_set_operation(node, outer_scopes),
+        }
+    }
 
-    for column in &node.schema.columns {
-        let data_type = column
-            .data_type
-            .clone()
-            .unwrap_or_else(|| DataType::Custom("unknown".to_string()));
-        let origin = match &column.origin {
-            BoundColumnOrigin::Base { table, column } => ColumnOrigin::Base {
-                table: table.clone(),
-                column: column.clone(),
+    fn infer_scan(
+        &self,
+        node: &crate::algebraizer::model::relation::ScanNode,
+    ) -> Result<InferMetadata, Diagnostic> {
+        let _ = &node.table;
+        let mut columns = Vec::with_capacity(node.schema.columns.len());
+
+        for column in &node.schema.columns {
+            let data_type = column
+                .data_type
+                .clone()
+                .unwrap_or_else(|| DataType::Custom("unknown".to_string()));
+            let origin = match &column.origin {
+                BoundColumnOrigin::Base { table, column } => ColumnOrigin::Base {
+                    table: table.clone(),
+                    column: column.clone(),
+                },
+                BoundColumnOrigin::Derived => ColumnOrigin::Derived,
+            };
+
+            columns.push(InferColumn {
+                slot_id: Some(column.slot_id),
+                name: column.name.clone(),
+                data_type,
+                nullable: column.nullable,
+                origin,
+            });
+        }
+
+        let keys = resolve_scan_keys(node, self.catalog);
+
+        Ok(InferMetadata {
+            columns,
+            cardinality: if node.table.starts_with("__recursive_cte__") {
+                CardInterval::one_or_more()
+            } else {
+                CardInterval::zero_or_more()
             },
-            BoundColumnOrigin::Derived => ColumnOrigin::Derived,
+            keys,
+        })
+    }
+
+    fn infer_selection(
+        &self,
+        node: &crate::algebraizer::model::relation::SelectionNode,
+        outer_scopes: &[Vec<InferColumn>],
+    ) -> Result<InferMetadata, Diagnostic> {
+        let mut child = self.infer_operator_with_outer_scopes(&node.input, outer_scopes)?;
+
+        let _ = self.infer_scalar(&node.condition, &child.columns, outer_scopes)?;
+
+        if condition_implies_empty_result(&node.condition, &child.keys, &child.columns) {
+            child.cardinality = CardInterval::exactly_zero();
+            return Ok(child);
+        }
+
+        if let Relation::Join(join_node) = node.input.as_ref() {
+            child.cardinality = self.refine_join_cardinality_from_selection(
+                child.cardinality,
+                join_node,
+                &node.condition,
+                outer_scopes,
+            )?;
+        }
+
+        if selection_is_at_most_one(&node.condition, &child.keys, &child.columns) {
+            child.cardinality = child.cardinality.constrain_at_most_one();
+        }
+
+        Ok(child)
+    }
+
+    fn infer_aggregation(
+        &self,
+        node: &AggregationNode,
+        outer_scopes: &[Vec<InferColumn>],
+    ) -> Result<InferMetadata, Diagnostic> {
+        let child = self.infer_operator_with_outer_scopes(&node.input, outer_scopes)?;
+        for projection in &node.group_by {
+            let _ = self.infer_scalar(&projection.expr, &child.columns, outer_scopes)?;
+        }
+        for projection in &node.aggregates {
+            let _ = self.infer_scalar(&projection.expr, &child.columns, outer_scopes)?;
+        }
+
+        let columns = align_columns_to_schema(&child.columns, &node.schema);
+        let cardinality = if node.group_by.is_empty() && !node.aggregates.is_empty() {
+            CardInterval::exactly_one()
+        } else {
+            child.cardinality
         };
 
-        columns.push(InferColumn {
-            slot_id: Some(column.slot_id),
-            name: column.name.clone(),
-            data_type,
-            nullable: column.nullable,
-            origin,
-        });
+        Ok(InferMetadata {
+            columns,
+            cardinality,
+            keys: Vec::new(),
+        })
     }
 
-    let keys = resolve_scan_keys(node, catalog);
-
-    Ok(InferMetadata {
-        columns,
-        cardinality: if node.table.starts_with("__recursive_cte__") {
-            CardInterval::one_or_more()
-        } else {
-            CardInterval::zero_or_more()
-        },
-        keys,
-    })
-}
-
-fn infer_selection(
-    node: &crate::algebraizer::model::relation::SelectionNode,
-    catalog: &Catalog,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-    outer_scopes: &[Vec<InferColumn>],
-) -> Result<InferMetadata, Diagnostic> {
-    let mut child =
-        infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
-
-    let _ = infer_scalar(
-        &node.condition,
-        &child.columns,
-        catalog,
-        dialect,
-        functions,
-        outer_scopes,
-    )?;
-
-    if condition_implies_empty_result(&node.condition, &child.keys, &child.columns) {
-        child.cardinality = CardInterval::exactly_zero();
-        return Ok(child);
-    }
-
-    if let Relation::Join(join_node) = node.input.as_ref() {
-        child.cardinality = refine_join_cardinality_from_selection(
-            child.cardinality,
-            join_node,
-            &node.condition,
-            catalog,
-            dialect,
-            functions,
-            outer_scopes,
-        )?;
-    }
-
-    if selection_is_at_most_one(&node.condition, &child.keys, &child.columns) {
-        child.cardinality = child.cardinality.constrain_at_most_one();
-    }
-
-    Ok(child)
-}
-
-fn infer_aggregation(
-    node: &AggregationNode,
-    catalog: &Catalog,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-    outer_scopes: &[Vec<InferColumn>],
-) -> Result<InferMetadata, Diagnostic> {
-    let child =
-        infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
-    for projection in &node.group_by {
-        let _ = infer_scalar(
-            &projection.expr,
-            &child.columns,
-            catalog,
-            dialect,
-            functions,
-            outer_scopes,
-        )?;
-    }
-    for projection in &node.aggregates {
-        let _ = infer_scalar(
-            &projection.expr,
-            &child.columns,
-            catalog,
-            dialect,
-            functions,
-            outer_scopes,
-        )?;
-    }
-
-    let columns = align_columns_to_schema(&child.columns, &node.schema);
-    let cardinality = if node.group_by.is_empty() && !node.aggregates.is_empty() {
-        CardInterval::exactly_one()
-    } else {
-        child.cardinality
-    };
-
-    Ok(InferMetadata {
-        columns,
-        cardinality,
-        keys: Vec::new(),
-    })
-}
-
-fn infer_window(
-    node: &WindowNode,
-    catalog: &Catalog,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-    outer_scopes: &[Vec<InferColumn>],
-) -> Result<InferMetadata, Diagnostic> {
-    let child =
-        infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
-    for projection in &node.window_exprs {
-        let _ = infer_scalar(
-            &projection.expr,
-            &child.columns,
-            catalog,
-            dialect,
-            functions,
-            outer_scopes,
-        )?;
-    }
-
-    Ok(InferMetadata {
-        columns: align_columns_to_schema(&child.columns, &node.schema),
-        cardinality: child.cardinality,
-        keys: child.keys,
-    })
-}
-
-fn infer_projection(
-    node: &ProjectionNode,
-    catalog: &Catalog,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-    outer_scopes: &[Vec<InferColumn>],
-) -> Result<InferMetadata, Diagnostic> {
-    let child =
-        infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
-
-    let mut columns = Vec::with_capacity(node.columns.len());
-    let mut slot_mapping = HashMap::new();
-    for (index, projection_column) in node.columns.iter().enumerate() {
-        let scalar = infer_scalar(
-            &projection_column.expr,
-            &child.columns,
-            catalog,
-            dialect,
-            functions,
-            outer_scopes,
-        )?;
-        let output_slot_id = node.schema.columns.get(index).map(|column| column.slot_id);
-        let output_name = projection_column.alias.clone().ok_or_else(|| {
-            Diagnostic::new(
-                "I4201",
-                Phase::Infer,
-                "projection column alias was not assigned during planning",
-            )
-        })?;
-        if let (
-            crate::algebraizer::model::expression::Expression::SlotRef(input_slot_id),
-            Some(output_slot_id),
-        ) = (&projection_column.expr, output_slot_id)
-        {
-            slot_mapping.insert(*input_slot_id, output_slot_id);
+    fn infer_window(
+        &self,
+        node: &WindowNode,
+        outer_scopes: &[Vec<InferColumn>],
+    ) -> Result<InferMetadata, Diagnostic> {
+        let child = self.infer_operator_with_outer_scopes(&node.input, outer_scopes)?;
+        for projection in &node.window_exprs {
+            let _ = self.infer_scalar(&projection.expr, &child.columns, outer_scopes)?;
         }
 
-        columns.push(InferColumn {
-            slot_id: output_slot_id,
-            name: output_name,
-            data_type: scalar.data_type,
-            nullable: scalar.nullable,
-            origin: ColumnOrigin::Derived,
-        });
+        Ok(InferMetadata {
+            columns: align_columns_to_schema(&child.columns, &node.schema),
+            cardinality: child.cardinality,
+            keys: child.keys,
+        })
     }
 
-    Ok(InferMetadata {
-        columns,
-        cardinality: child.cardinality,
-        keys: child.remap_keys(&slot_mapping),
-    })
-}
+    fn infer_projection(
+        &self,
+        node: &ProjectionNode,
+        outer_scopes: &[Vec<InferColumn>],
+    ) -> Result<InferMetadata, Diagnostic> {
+        let child = self.infer_operator_with_outer_scopes(&node.input, outer_scopes)?;
 
-fn infer_join(
-    node: &JoinNode,
-    catalog: &Catalog,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-    outer_scopes: &[Vec<InferColumn>],
-) -> Result<InferMetadata, Diagnostic> {
-    let left =
-        infer_operator_with_outer_scopes(&node.left, catalog, dialect, functions, outer_scopes)?;
-    let right =
-        infer_operator_with_outer_scopes(&node.right, catalog, dialect, functions, outer_scopes)?;
+        let mut columns = Vec::with_capacity(node.columns.len());
+        let mut slot_mapping = HashMap::new();
+        for (index, projection_column) in node.columns.iter().enumerate() {
+            let scalar =
+                self.infer_scalar(&projection_column.expr, &child.columns, outer_scopes)?;
+            let output_slot_id = node.schema.columns.get(index).map(|column| column.slot_id);
+            let output_name = projection_column.alias.clone().ok_or_else(|| {
+                Diagnostic::new(
+                    "I4201",
+                    Phase::Infer,
+                    "projection column alias was not assigned during planning",
+                )
+            })?;
+            if let (
+                crate::algebraizer::model::expression::Expression::SlotRef(input_slot_id),
+                Some(output_slot_id),
+            ) = (&projection_column.expr, output_slot_id)
+            {
+                slot_mapping.insert(*input_slot_id, output_slot_id);
+            }
 
-    let mut left_columns = left.columns;
-    let mut right_columns = right.columns;
-    match node.kind {
-        JoinKind::Left => {
-            for column in &mut right_columns {
-                column.nullable = true;
-            }
-        },
-        JoinKind::Right => {
-            for column in &mut left_columns {
-                column.nullable = true;
-            }
-        },
-        JoinKind::Full => {
-            for column in &mut left_columns {
-                column.nullable = true;
-            }
-            for column in &mut right_columns {
-                column.nullable = true;
-            }
-        },
-        JoinKind::Inner | JoinKind::Cross => {},
-    }
-
-    let mut columns_by_slot = HashMap::new();
-    for column in left_columns.into_iter().chain(right_columns) {
-        if let Some(slot_id) = column.slot_id {
-            columns_by_slot.insert(slot_id, column);
+            columns.push(InferColumn {
+                slot_id: output_slot_id,
+                name: output_name,
+                data_type: scalar.data_type,
+                nullable: scalar.nullable,
+                origin: ColumnOrigin::Derived,
+            });
         }
+
+        Ok(InferMetadata {
+            columns,
+            cardinality: child.cardinality,
+            keys: child.remap_keys(&slot_mapping),
+        })
     }
 
-    let mut columns = Vec::with_capacity(node.schema.columns.len());
-    for schema_column in &node.schema.columns {
-        if let Some(source_column) = columns_by_slot.get(&schema_column.slot_id) {
+    fn infer_join(
+        &self,
+        node: &JoinNode,
+        outer_scopes: &[Vec<InferColumn>],
+    ) -> Result<InferMetadata, Diagnostic> {
+        let left = self.infer_operator_with_outer_scopes(&node.left, outer_scopes)?;
+        let right = self.infer_operator_with_outer_scopes(&node.right, outer_scopes)?;
+
+        let mut left_columns = left.columns;
+        let mut right_columns = right.columns;
+        match node.kind {
+            JoinKind::Left => {
+                for column in &mut right_columns {
+                    column.nullable = true;
+                }
+            },
+            JoinKind::Right => {
+                for column in &mut left_columns {
+                    column.nullable = true;
+                }
+            },
+            JoinKind::Full => {
+                for column in &mut left_columns {
+                    column.nullable = true;
+                }
+                for column in &mut right_columns {
+                    column.nullable = true;
+                }
+            },
+            JoinKind::Inner | JoinKind::Cross => {},
+        }
+
+        let mut columns_by_slot = HashMap::new();
+        for column in left_columns.into_iter().chain(right_columns) {
+            if let Some(slot_id) = column.slot_id {
+                columns_by_slot.insert(slot_id, column);
+            }
+        }
+
+        let mut columns = Vec::with_capacity(node.schema.columns.len());
+        for schema_column in &node.schema.columns {
+            if let Some(source_column) = columns_by_slot.get(&schema_column.slot_id) {
+                columns.push(InferColumn {
+                    slot_id: Some(schema_column.slot_id),
+                    name: schema_column.name.clone(),
+                    data_type: source_column.data_type.clone(),
+                    nullable: source_column.nullable,
+                    origin: source_column.origin.clone(),
+                });
+                continue;
+            }
+
+            let data_type = schema_column
+                .data_type
+                .clone()
+                .unwrap_or_else(|| DataType::Custom("unknown".to_string()));
+            let origin = match &schema_column.origin {
+                BoundColumnOrigin::Base { table, column } => ColumnOrigin::Base {
+                    table: table.clone(),
+                    column: column.clone(),
+                },
+                BoundColumnOrigin::Derived => ColumnOrigin::Derived,
+            };
+
             columns.push(InferColumn {
                 slot_id: Some(schema_column.slot_id),
                 name: schema_column.name.clone(),
-                data_type: source_column.data_type.clone(),
-                nullable: source_column.nullable,
-                origin: source_column.origin.clone(),
+                data_type,
+                nullable: schema_column.nullable,
+                origin,
             });
-            continue;
         }
 
-        let data_type = schema_column
-            .data_type
-            .clone()
-            .unwrap_or_else(|| DataType::Custom("unknown".to_string()));
-        let origin = match &schema_column.origin {
-            BoundColumnOrigin::Base { table, column } => ColumnOrigin::Base {
-                table: table.clone(),
-                column: column.clone(),
-            },
-            BoundColumnOrigin::Derived => ColumnOrigin::Derived,
-        };
-
-        columns.push(InferColumn {
-            slot_id: Some(schema_column.slot_id),
-            name: schema_column.name.clone(),
-            data_type,
-            nullable: schema_column.nullable,
-            origin,
-        });
-    }
-
-    let cardinality = infer_join_cardinality_without_condition(
-        node.kind.clone(),
-        left.cardinality,
-        right.cardinality,
-    )?;
-
-    Ok(InferMetadata {
-        columns,
-        cardinality,
-        keys: Vec::new(),
-    })
-}
-
-fn infer_distinct(
-    node: &crate::algebraizer::model::relation::DistinctNode,
-    catalog: &Catalog,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-    outer_scopes: &[Vec<InferColumn>],
-) -> Result<InferMetadata, Diagnostic> {
-    let mut child =
-        infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
-    let output_columns = align_columns_to_schema(&child.columns, &node.schema);
-    child.keys = slots_key(output_columns.iter().filter_map(|column| column.slot_id));
-
-    Ok(InferMetadata {
-        columns: output_columns,
-        cardinality: child.cardinality,
-        keys: child.keys,
-    })
-}
-
-fn infer_sort(
-    node: &SortNode,
-    catalog: &Catalog,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-    outer_scopes: &[Vec<InferColumn>],
-) -> Result<InferMetadata, Diagnostic> {
-    let child =
-        infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
-    for key in &node.keys {
-        let _ = infer_scalar(
-            &key.expr,
-            &child.columns,
-            catalog,
-            dialect,
-            functions,
-            outer_scopes,
+        let cardinality = infer_join_cardinality_without_condition(
+            node.kind.clone(),
+            left.cardinality,
+            right.cardinality,
         )?;
-    }
-    Ok(InferMetadata {
-        columns: align_columns_to_schema(&child.columns, &node.schema),
-        cardinality: child.cardinality,
-        keys: child.keys,
-    })
-}
 
-fn infer_alias(
-    node: &AliasNode,
-    catalog: &Catalog,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-    outer_scopes: &[Vec<InferColumn>],
-) -> Result<InferMetadata, Diagnostic> {
-    let child =
-        infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
-    Ok(InferMetadata {
-        columns: align_columns_to_schema(&child.columns, &node.schema),
-        cardinality: child.cardinality,
-        keys: child.keys,
-    })
-}
-
-fn infer_limit(
-    node: &LimitNode,
-    catalog: &Catalog,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-    outer_scopes: &[Vec<InferColumn>],
-) -> Result<InferMetadata, Diagnostic> {
-    let mut child =
-        infer_operator_with_outer_scopes(&node.input, catalog, dialect, functions, outer_scopes)?;
-
-    child.cardinality = infer_limit_cardinality(child.cardinality, node.limit, node.offset)?;
-
-    Ok(child)
-}
-
-fn infer_set_operation(
-    node: &SetOpNode,
-    catalog: &Catalog,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-    outer_scopes: &[Vec<InferColumn>],
-) -> Result<InferMetadata, Diagnostic> {
-    let left =
-        infer_operator_with_outer_scopes(&node.left, catalog, dialect, functions, outer_scopes)?;
-    let right =
-        infer_operator_with_outer_scopes(&node.right, catalog, dialect, functions, outer_scopes)?;
-    if left.columns.len() != right.columns.len() {
-        return Err(Diagnostic::new(
-            "I4202",
-            Phase::Infer,
-            format!(
-                "set operation column count mismatch: left {}, right {}",
-                left.columns.len(),
-                right.columns.len()
-            ),
-        ));
+        Ok(InferMetadata {
+            columns,
+            cardinality,
+            keys: Vec::new(),
+        })
     }
 
-    let mut columns = Vec::with_capacity(left.columns.len());
-    for index in 0..left.columns.len() {
-        let left_column = &left.columns[index];
-        let right_column = &right.columns[index];
-        let output_slot_id = node.schema.columns.get(index).map(|column| column.slot_id);
-        let output_name = node
-            .schema
-            .columns
-            .get(index)
-            .map(|column| column.name.clone())
-            .unwrap_or_else(|| left_column.name.clone());
-        let data_type = DataType::common_type(
-            dialect,
-            &[
-                left_column.data_type.clone(),
-                right_column.data_type.clone(),
-            ],
-        )
-        .unwrap_or_else(|| left_column.data_type.clone());
+    fn infer_distinct(
+        &self,
+        node: &crate::algebraizer::model::relation::DistinctNode,
+        outer_scopes: &[Vec<InferColumn>],
+    ) -> Result<InferMetadata, Diagnostic> {
+        let mut child = self.infer_operator_with_outer_scopes(&node.input, outer_scopes)?;
+        let output_columns = align_columns_to_schema(&child.columns, &node.schema);
+        child.keys = slots_key(output_columns.iter().filter_map(|column| column.slot_id));
 
-        columns.push(InferColumn {
-            slot_id: output_slot_id,
-            name: output_name,
-            data_type,
-            nullable: set_operation_output_nullable(
-                node.op.clone(),
-                left_column.nullable,
-                right_column.nullable,
-            ),
-            origin: ColumnOrigin::Derived,
-        });
+        Ok(InferMetadata {
+            columns: output_columns,
+            cardinality: child.cardinality,
+            keys: child.keys,
+        })
     }
 
-    let cardinality = infer_set_operation_cardinality(
-        node.op.clone(),
-        node.all,
-        left.cardinality,
-        right.cardinality,
-    )?;
+    fn infer_sort(
+        &self,
+        node: &SortNode,
+        outer_scopes: &[Vec<InferColumn>],
+    ) -> Result<InferMetadata, Diagnostic> {
+        let child = self.infer_operator_with_outer_scopes(&node.input, outer_scopes)?;
+        for key in &node.keys {
+            let _ = self.infer_scalar(&key.expr, &child.columns, outer_scopes)?;
+        }
+        Ok(InferMetadata {
+            columns: align_columns_to_schema(&child.columns, &node.schema),
+            cardinality: child.cardinality,
+            keys: child.keys,
+        })
+    }
 
-    Ok(InferMetadata {
-        columns,
-        cardinality,
-        keys: Vec::new(),
-    })
+    fn infer_alias(
+        &self,
+        node: &AliasNode,
+        outer_scopes: &[Vec<InferColumn>],
+    ) -> Result<InferMetadata, Diagnostic> {
+        let child = self.infer_operator_with_outer_scopes(&node.input, outer_scopes)?;
+        Ok(InferMetadata {
+            columns: align_columns_to_schema(&child.columns, &node.schema),
+            cardinality: child.cardinality,
+            keys: child.keys,
+        })
+    }
+
+    fn infer_limit(
+        &self,
+        node: &LimitNode,
+        outer_scopes: &[Vec<InferColumn>],
+    ) -> Result<InferMetadata, Diagnostic> {
+        let mut child = self.infer_operator_with_outer_scopes(&node.input, outer_scopes)?;
+
+        child.cardinality = infer_limit_cardinality(child.cardinality, node.limit, node.offset)?;
+
+        Ok(child)
+    }
+
+    fn infer_set_operation(
+        &self,
+        node: &SetOpNode,
+        outer_scopes: &[Vec<InferColumn>],
+    ) -> Result<InferMetadata, Diagnostic> {
+        let left = self.infer_operator_with_outer_scopes(&node.left, outer_scopes)?;
+        let right = self.infer_operator_with_outer_scopes(&node.right, outer_scopes)?;
+        if left.columns.len() != right.columns.len() {
+            return Err(Diagnostic::new(
+                "I4202",
+                Phase::Infer,
+                format!(
+                    "set operation column count mismatch: left {}, right {}",
+                    left.columns.len(),
+                    right.columns.len()
+                ),
+            ));
+        }
+
+        let mut columns = Vec::with_capacity(left.columns.len());
+        for index in 0..left.columns.len() {
+            let left_column = &left.columns[index];
+            let right_column = &right.columns[index];
+            let output_slot_id = node.schema.columns.get(index).map(|column| column.slot_id);
+            let output_name = node
+                .schema
+                .columns
+                .get(index)
+                .map(|column| column.name.clone())
+                .unwrap_or_else(|| left_column.name.clone());
+            let data_type = DataType::common_type(
+                self.dialect,
+                &[
+                    left_column.data_type.clone(),
+                    right_column.data_type.clone(),
+                ],
+            )
+            .unwrap_or_else(|| left_column.data_type.clone());
+
+            columns.push(InferColumn {
+                slot_id: output_slot_id,
+                name: output_name,
+                data_type,
+                nullable: set_operation_output_nullable(
+                    node.op.clone(),
+                    left_column.nullable,
+                    right_column.nullable,
+                ),
+                origin: ColumnOrigin::Derived,
+            });
+        }
+
+        let cardinality = infer_set_operation_cardinality(
+            node.op.clone(),
+            node.all,
+            left.cardinality,
+            right.cardinality,
+        )?;
+
+        Ok(InferMetadata {
+            columns,
+            cardinality,
+            keys: Vec::new(),
+        })
+    }
 }
 
 fn infer_set_operation_cardinality(
@@ -813,64 +723,53 @@ fn column_is_non_nullable(columns: &[InferColumn], slot_id: u32) -> bool {
         .is_some_and(|column| !column.nullable)
 }
 
-fn refine_join_cardinality_from_selection(
-    current: CardInterval,
-    join_node: &JoinNode,
-    condition: &crate::algebraizer::model::expression::Expression,
-    catalog: &Catalog,
-    dialect: Dialect,
-    functions: &FunctionRegistry,
-    outer_scopes: &[Vec<InferColumn>],
-) -> Result<CardInterval, Diagnostic> {
-    let left = infer_operator_with_outer_scopes(
-        &join_node.left,
-        catalog,
-        dialect,
-        functions,
-        outer_scopes,
-    )?;
-    let right = infer_operator_with_outer_scopes(
-        &join_node.right,
-        catalog,
-        dialect,
-        functions,
-        outer_scopes,
-    )?;
+impl Inferencer<'_> {
+    fn refine_join_cardinality_from_selection(
+        &self,
+        current: CardInterval,
+        join_node: &JoinNode,
+        condition: &crate::algebraizer::model::expression::Expression,
+        outer_scopes: &[Vec<InferColumn>],
+    ) -> Result<CardInterval, Diagnostic> {
+        let left = self.infer_operator_with_outer_scopes(&join_node.left, outer_scopes)?;
+        let right = self.infer_operator_with_outer_scopes(&join_node.right, outer_scopes)?;
 
-    let Some(join_pairs) = extract_join_equijoin_pairs(condition, &left.columns, &right.columns)
-    else {
-        return Ok(current);
-    };
+        let Some(join_pairs) =
+            extract_join_equijoin_pairs(condition, &left.columns, &right.columns)
+        else {
+            return Ok(current);
+        };
 
-    let at_most_one_right_per_left =
-        join_pairs_cover_non_nullable_key(&join_pairs, &right.keys, &right.columns, false);
-    let at_most_one_left_per_right =
-        join_pairs_cover_non_nullable_key(&join_pairs, &left.keys, &left.columns, true);
+        let at_most_one_right_per_left =
+            join_pairs_cover_non_nullable_key(&join_pairs, &right.keys, &right.columns, false);
+        let at_most_one_left_per_right =
+            join_pairs_cover_non_nullable_key(&join_pairs, &left.keys, &left.columns, true);
 
-    let mut max = current.max();
-    match join_node.kind {
-        JoinKind::Inner => {
-            if at_most_one_right_per_left {
-                max = upper_min(max, left.cardinality.max());
-            }
-            if at_most_one_left_per_right {
-                max = upper_min(max, right.cardinality.max());
-            }
-        },
-        JoinKind::Left => {
-            if at_most_one_right_per_left {
-                max = upper_min(max, left.cardinality.max());
-            }
-        },
-        JoinKind::Right => {
-            if at_most_one_left_per_right {
-                max = upper_min(max, right.cardinality.max());
-            }
-        },
-        JoinKind::Full | JoinKind::Cross => {},
+        let mut max = current.max();
+        match join_node.kind {
+            JoinKind::Inner => {
+                if at_most_one_right_per_left {
+                    max = upper_min(max, left.cardinality.max());
+                }
+                if at_most_one_left_per_right {
+                    max = upper_min(max, right.cardinality.max());
+                }
+            },
+            JoinKind::Left => {
+                if at_most_one_right_per_left {
+                    max = upper_min(max, left.cardinality.max());
+                }
+            },
+            JoinKind::Right => {
+                if at_most_one_left_per_right {
+                    max = upper_min(max, right.cardinality.max());
+                }
+            },
+            JoinKind::Full | JoinKind::Cross => {},
+        }
+
+        CardInterval::try_new(current.min(), max, "refine_join_cardinality_from_selection")
     }
-
-    CardInterval::try_new(current.min(), max, "refine_join_cardinality_from_selection")
 }
 
 fn extract_join_equijoin_pairs(
@@ -1243,10 +1142,9 @@ mod tests {
         },
         functions::FunctionRegistry,
         infer::{
+            Inferencer,
             cardinality::CardInterval,
-            operator_infer::{
-                infer_limit_cardinality, infer_operator, infer_set_operation_cardinality,
-            },
+            operator_infer::{infer_limit_cardinality, infer_set_operation_cardinality},
         },
     };
 
@@ -1293,7 +1191,9 @@ mod tests {
         });
 
         let functions = FunctionRegistry::new(Dialect::Postgres);
-        let metadata = infer_operator(&relation, &catalog, Dialect::Postgres, &functions)
+        let inferencer = Inferencer::new(Dialect::Postgres, &catalog, &functions);
+        let metadata = inferencer
+            .infer_operator(&relation)
             .expect("inference should succeed");
 
         assert_eq!(
@@ -1317,7 +1217,9 @@ mod tests {
         });
 
         let functions = FunctionRegistry::new(Dialect::Postgres);
-        let metadata = infer_operator(&relation, &catalog, Dialect::Postgres, &functions)
+        let inferencer = Inferencer::new(Dialect::Postgres, &catalog, &functions);
+        let metadata = inferencer
+            .infer_operator(&relation)
             .expect("inference should succeed");
 
         assert_eq!(
@@ -1360,7 +1262,9 @@ mod tests {
         });
 
         let functions = FunctionRegistry::new(Dialect::Postgres);
-        let metadata = infer_operator(&relation, &catalog, Dialect::Postgres, &functions)
+        let inferencer = Inferencer::new(Dialect::Postgres, &catalog, &functions);
+        let metadata = inferencer
+            .infer_operator(&relation)
             .expect("inference should succeed");
 
         assert_eq!(
@@ -1386,7 +1290,9 @@ mod tests {
         });
 
         let functions = FunctionRegistry::new(Dialect::Postgres);
-        let metadata = infer_operator(&relation, &catalog, Dialect::Postgres, &functions)
+        let inferencer = Inferencer::new(Dialect::Postgres, &catalog, &functions);
+        let metadata = inferencer
+            .infer_operator(&relation)
             .expect("inference should succeed");
 
         assert_eq!(
@@ -1497,7 +1403,9 @@ mod tests {
         });
 
         let functions = FunctionRegistry::new(Dialect::Postgres);
-        let metadata = infer_operator(&relation, &catalog, Dialect::Postgres, &functions)
+        let inferencer = Inferencer::new(Dialect::Postgres, &catalog, &functions);
+        let metadata = inferencer
+            .infer_operator(&relation)
             .expect("inference should succeed");
 
         assert_eq!(
