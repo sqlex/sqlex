@@ -15,15 +15,9 @@ use crate::{
 
 pub(crate) mod model;
 
-mod cte;
 mod expression;
-mod from_join;
-mod from_table_factor;
-mod join;
-mod query;
+mod relation;
 mod scope;
-mod select;
-mod set_ops;
 
 #[derive(Debug)]
 pub(crate) struct Algebraizer<'a> {
