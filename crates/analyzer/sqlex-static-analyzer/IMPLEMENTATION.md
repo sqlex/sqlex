@@ -706,8 +706,8 @@ Use existing `tests/specs_runner.rs` as contract.
 Recommended loop:
 
 ```bash
-SQLEX_SPECS_FILTER=postgres/cardinality/basic cargo test -p sqlex-static-analyzer --test specs_runner
-SQLEX_SPECS_FILTER=mysql/errors/advanced cargo test -p sqlex-static-analyzer --test specs_runner
+SQLEX_SPECS_FILTER=postgres/cardinality_primary_key cargo test -p sqlex-static-analyzer --test specs_runner
+SQLEX_SPECS_FILTER=mysql/errors_advanced cargo test -p sqlex-static-analyzer --test specs_runner
 ```
 
 ## 12.3 Regression Gates

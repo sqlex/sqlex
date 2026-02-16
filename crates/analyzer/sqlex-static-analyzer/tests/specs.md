@@ -19,9 +19,9 @@ They do **not** define runtime semantics.
 Recommended layout:
 
 1. `tests/specs/common/**`: shared scenarios.
-2. `tests/specs/mysql/**`: MySQL-focused scenarios.
-3. `tests/specs/postgres/**`: PostgreSQL-focused scenarios.
-4. `tests/specs/sqlite/**`: SQLite-focused scenarios.
+2. `tests/specs/mysql/*.yaml`: MySQL-focused scenarios (flat under dialect directory).
+3. `tests/specs/postgres/*.yaml`: PostgreSQL-focused scenarios (flat under dialect directory).
+4. `tests/specs/sqlite/*.yaml`: SQLite-focused scenarios (flat under dialect directory).
 
 Dialect execution is determined only by YAML fields.
 
@@ -223,7 +223,7 @@ cargo test -p sqlex-static-analyzer --test specs_runner
 Run filtered specs:
 
 ```bash
-SQLEX_SPECS_FILTER=sqlite/select cargo test -p sqlex-static-analyzer --test specs_runner
+SQLEX_SPECS_FILTER=sqlite/select_column_names cargo test -p sqlex-static-analyzer --test specs_runner
 ```
 
 Enable TDD cases:
