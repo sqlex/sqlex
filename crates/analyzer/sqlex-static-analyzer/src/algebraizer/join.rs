@@ -47,15 +47,15 @@ impl Algebraizer<'_> {
         join_scopes.push(right_scope.clone());
         self.set_current_relation_bindings(join_scopes.clone());
 
-        let left_schema = super::output_schema_of(&left_relation)?;
-        let right_schema = super::output_schema_of(&right_relation)?;
+        let left_schema = left_relation.output_schema();
+        let right_schema = right_relation.output_schema();
 
         let using_pairs = self.resolve_join_using_pairs(
             &using_columns,
             scopes,
             &right_scope,
-            &left_schema,
-            &right_schema,
+            left_schema,
+            right_schema,
         )?;
 
         let mut effective_kind = kind.clone();
@@ -65,8 +65,8 @@ impl Algebraizer<'_> {
             if self.outer_join_is_effectively_inner(
                 kind.clone(),
                 &condition,
-                &left_schema,
-                &right_schema,
+                left_schema,
+                right_schema,
             ) {
                 effective_kind = JoinKind::Inner;
             }
@@ -76,8 +76,8 @@ impl Algebraizer<'_> {
             if self.outer_join_is_effectively_inner(
                 kind.clone(),
                 &condition,
-                &left_schema,
-                &right_schema,
+                left_schema,
+                right_schema,
             ) {
                 effective_kind = JoinKind::Inner;
             }

@@ -31,8 +31,8 @@ impl Algebraizer<'_> {
                 let left_relation = self.build_set_relation(left)?;
                 let right_relation = self.build_set_relation(right)?;
 
-                let left_schema = super::output_schema_of(&left_relation)?;
-                let right_schema = super::output_schema_of(&right_relation)?;
+                let left_schema = left_relation.output_schema();
+                let right_schema = right_relation.output_schema();
                 if left_schema.columns.len() != right_schema.columns.len() {
                     return Err(Diagnostic::new(
                         "A3019",

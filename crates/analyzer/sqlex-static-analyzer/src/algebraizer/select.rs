@@ -64,7 +64,7 @@ impl Algebraizer<'_> {
                         "window expression is not allowed in WHERE",
                     ));
                 }
-                let schema = super::output_schema_of(&input_relation)?;
+                let schema = input_relation.output_schema().clone();
                 input_relation = Relation::Selection(SelectionNode {
                     input: Box::new(input_relation),
                     condition,
@@ -114,7 +114,7 @@ impl Algebraizer<'_> {
                 bound_having = Some((condition, having_has_aggregate));
             }
 
-            let input_schema = super::output_schema_of(&input_relation)?;
+            let input_schema = input_relation.output_schema();
             let mut projected_columns = Vec::new();
             let mut projection_schema_columns = Vec::new();
             let mut has_non_aggregate_projection = false;
@@ -295,7 +295,7 @@ impl Algebraizer<'_> {
 
             let mut relation = input_relation;
             if has_aggregate || group_by_count > 0 {
-                let schema = super::output_schema_of(&relation)?;
+                let schema = relation.output_schema().clone();
                 relation = Relation::Aggregation(AggregationNode {
                     input: Box::new(relation),
                     group_by: bound_group_by,
@@ -305,7 +305,7 @@ impl Algebraizer<'_> {
             }
 
             if let Some((condition, _)) = bound_having {
-                let schema = super::output_schema_of(&relation)?;
+                let schema = relation.output_schema().clone();
                 relation = Relation::Selection(SelectionNode {
                     input: Box::new(relation),
                     condition,
@@ -314,7 +314,7 @@ impl Algebraizer<'_> {
             }
 
             if has_window {
-                let schema = super::output_schema_of(&relation)?;
+                let schema = relation.output_schema().clone();
                 relation = Relation::Window(WindowNode {
                     input: Box::new(relation),
                     window_exprs,
@@ -332,7 +332,7 @@ impl Algebraizer<'_> {
             });
 
             if select.distinct.is_some() {
-                let schema = super::output_schema_of(&relation)?;
+                let schema = relation.output_schema().clone();
                 relation = Relation::Distinct(crate::algebraizer::model::relation::DistinctNode {
                     input: Box::new(relation),
                     schema,

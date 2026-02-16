@@ -56,7 +56,7 @@ impl Algebraizer<'_> {
             ));
         }
 
-        let input_schema = super::output_schema_of(&input_relation)?;
+        let input_schema = input_relation.output_schema().clone();
         let inherited_named_windows = self.current_named_windows().clone();
         self.push_query_scope(false);
         self.set_current_named_windows(inherited_named_windows);
@@ -257,7 +257,7 @@ impl Algebraizer<'_> {
             return Ok(input_relation);
         }
 
-        let schema = super::output_schema_of(&input_relation)?;
+        let schema = input_relation.output_schema().clone();
         Ok(Relation::Limit(LimitNode {
             input: Box::new(input_relation),
             limit,

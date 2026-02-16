@@ -24,7 +24,7 @@ impl Algebraizer<'_> {
         usage: &str,
     ) -> Result<Relation, Diagnostic> {
         let relation = self.bind_subquery_relation(query)?;
-        let schema = super::super::output_schema_of(&relation)?;
+        let schema = relation.output_schema();
         if schema.columns.len() != 1 {
             return Err(Diagnostic::new(
                 "A3035",

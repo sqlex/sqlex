@@ -68,7 +68,7 @@ impl Algebraizer<'_> {
                     let cte_relation =
                         self.build_query_relation(cte.query.as_ref(), literal_assignment_mode)?;
 
-                    let mut exposed_schema = super::output_schema_of(&cte_relation)?;
+                    let mut exposed_schema = cte_relation.output_schema().clone();
                     if !cte.alias.columns.is_empty() {
                         if cte.alias.columns.len() != exposed_schema.columns.len() {
                             return Err(Diagnostic::new(
@@ -123,7 +123,7 @@ impl Algebraizer<'_> {
             let cte_relation =
                 self.build_query_relation(cte.query.as_ref(), literal_assignment_mode)?;
 
-            let mut exposed_schema = super::output_schema_of(&cte_relation)?;
+            let mut exposed_schema = cte_relation.output_schema().clone();
             if !cte.alias.columns.is_empty() {
                 if cte.alias.columns.len() != exposed_schema.columns.len() {
                     return Err(Diagnostic::new(

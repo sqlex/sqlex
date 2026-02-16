@@ -5,7 +5,7 @@ use sqlparser::ast::Statement;
 
 use crate::{
     algebraizer::{
-        model::{relation::Relation, schema::OutputSchema},
+        model::relation::Relation,
         scope::{CteScope, QueryScope},
     },
     catalog::Catalog,
@@ -67,22 +67,5 @@ impl<'a> Algebraizer<'a> {
         };
 
         self.build_query_relation(query, false)
-    }
-}
-
-fn output_schema_of(relation: &Relation) -> Result<OutputSchema, Diagnostic> {
-    match relation {
-        Relation::Scan(node) => Ok(node.schema.clone()),
-        Relation::Values(node) => Ok(node.schema.clone()),
-        Relation::Selection(node) => Ok(node.schema.clone()),
-        Relation::Projection(node) => Ok(node.schema.clone()),
-        Relation::Aggregation(node) => Ok(node.schema.clone()),
-        Relation::Window(node) => Ok(node.schema.clone()),
-        Relation::Distinct(node) => Ok(node.schema.clone()),
-        Relation::Sort(node) => Ok(node.schema.clone()),
-        Relation::Limit(node) => Ok(node.schema.clone()),
-        Relation::Alias(node) => Ok(node.schema.clone()),
-        Relation::Join(node) => Ok(node.schema.clone()),
-        Relation::SetOperation(node) => Ok(node.schema.clone()),
     }
 }

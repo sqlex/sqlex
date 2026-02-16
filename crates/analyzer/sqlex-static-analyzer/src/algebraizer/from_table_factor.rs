@@ -93,7 +93,7 @@ impl Algebraizer<'_> {
                 self.validate_alias_ident(&alias.name)?;
                 let alias_name = normalize_ident(&alias.name, self.dialect);
 
-                let mut schema = super::output_schema_of(&subquery_relation)?;
+                let mut schema = subquery_relation.output_schema().clone();
                 if !alias.columns.is_empty() {
                     if alias.columns.len() != schema.columns.len() {
                         return Err(Diagnostic::new(

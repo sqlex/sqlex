@@ -118,3 +118,22 @@ pub(crate) enum Relation {
     Join(JoinNode),
     SetOperation(SetOpNode),
 }
+
+impl Relation {
+    pub(crate) fn output_schema(&self) -> &OutputSchema {
+        match self {
+            Relation::Scan(node) => &node.schema,
+            Relation::Values(node) => &node.schema,
+            Relation::Selection(node) => &node.schema,
+            Relation::Projection(node) => &node.schema,
+            Relation::Aggregation(node) => &node.schema,
+            Relation::Window(node) => &node.schema,
+            Relation::Distinct(node) => &node.schema,
+            Relation::Sort(node) => &node.schema,
+            Relation::Limit(node) => &node.schema,
+            Relation::Alias(node) => &node.schema,
+            Relation::Join(node) => &node.schema,
+            Relation::SetOperation(node) => &node.schema,
+        }
+    }
+}
