@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use sqlex_common::types::{ColumnInfo, DataType, ResultSet};
 
-use crate::infer::cardinality::CardInterval;
+use crate::infer::model::cardinality::CardInterval;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ColumnOrigin {
@@ -95,13 +95,13 @@ impl InferMetadata {
 mod tests {
     use std::collections::HashMap;
 
-    use crate::infer::metadata::{InferMetadata, ResolvedKey};
+    use crate::infer::model::metadata::{InferMetadata, ResolvedKey};
 
     #[test]
     fn remap_keys_drops_incomplete_mapping() {
         let metadata = InferMetadata {
             columns: Vec::new(),
-            cardinality: crate::infer::cardinality::CardInterval::zero_or_more(),
+            cardinality: crate::infer::model::cardinality::CardInterval::zero_or_more(),
             keys: vec![
                 ResolvedKey::from_slots(vec![1]).expect("key should be created"),
                 ResolvedKey::from_slots(vec![2, 3]).expect("key should be created"),

@@ -22,13 +22,6 @@ pub(crate) struct CardInterval {
 }
 
 impl CardInterval {
-    pub(crate) const fn exactly_zero() -> Self {
-        Self {
-            min: MinRows::Zero,
-            max: MaxRows::Zero,
-        }
-    }
-
     pub(crate) fn try_new(
         min: MinRows,
         max: MaxRows,
@@ -42,6 +35,13 @@ impl CardInterval {
             ));
         }
         Ok(Self { min, max })
+    }
+
+    pub(crate) const fn exactly_zero() -> Self {
+        Self {
+            min: MinRows::Zero,
+            max: MaxRows::Zero,
+        }
     }
 
     pub(crate) const fn exactly_one() -> Self {
@@ -132,7 +132,7 @@ const fn upper_rank(max: MaxRows) -> u8 {
 mod tests {
     use sqlex_common::types::Cardinality;
 
-    use crate::infer::cardinality::{CardInterval, MaxRows, MinRows};
+    use crate::infer::model::cardinality::{CardInterval, MaxRows, MinRows};
 
     #[test]
     fn invalid_interval_is_rejected() {
