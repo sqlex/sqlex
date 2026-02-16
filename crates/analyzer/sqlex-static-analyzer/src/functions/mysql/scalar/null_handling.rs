@@ -3,7 +3,7 @@ use crate::functions::{
     model::{FunctionCategory, FunctionNullabilityRule, FunctionReturnTypeRule, FunctionSignature},
 };
 
-pub(crate) fn register_mysql_functions(registry: &mut FunctionRegistry) {
+pub(crate) fn register_null_handling_functions(registry: &mut FunctionRegistry) {
     registry.register(
         "ifnull",
         FunctionSignature::new(
