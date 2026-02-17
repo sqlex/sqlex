@@ -40,8 +40,22 @@ Dialect execution is determined only by YAML fields.
 Top-level fields:
 
 1. `dialects` (optional): non-empty `string[]` of `mysql`/`postgres`/`sqlite`.
-2. `migrations` (optional): `string[]`; each SQL statement runs before query cases.
+2. `migrations` (optional): `string[]` or `migration_case[]`; each SQL statement runs before query cases.
 3. `queries` (required): query cases.
+
+`migrations[]` fields (when using object form):
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `name` | No | Migration case name for logging. |
+| `sql` | Yes | Migration SQL text. |
+| `expected_error_code` | No | Expected static analyzer diagnostic code for failing migrations. |
+
+Migration form rules:
+
+1. Single-SQL migration entries must use string form.
+2. Use object form only when you need migration-level `expected_error_code` assertions.
+3. Do not wrap setup-only migrations as object-form cases.
 
 `queries[]` fields:
 
@@ -87,12 +101,15 @@ The runner fails fast when specs are malformed:
 3. `dialects`, when present, must be non-empty and duplicate-free.
 4. Query names must be unique.
 5. `sql` must be non-empty.
-6. `tdd_reason`, when present, must be non-empty.
-7. `expected_error_code`, when present, must be non-empty.
-8. Valid-query shape: if `expected` is non-empty, `cardinality` is required and `expected_error_code` must be absent.
-9. Invalid-query shape: if `expected_error_code` is set, both `expected` and `cardinality` must be absent.
-10. TDD shape: if `tdd_reason` is set, the query must satisfy either the valid-query shape or the invalid-query shape.
-11. Status-only shape is legacy-compatible only: it is allowed only when `expected`, `cardinality`, and `expected_error_code` are all absent; do not add new cases in this shape.
+6. Migration object form: `name`, when present, must be non-empty.
+7. Migration object form: `expected_error_code`, when present, must be non-empty.
+8. Migration form rule: setup-only migrations must use string form; object form is only for migration error-code assertions.
+9. `tdd_reason`, when present, must be non-empty.
+10. `expected_error_code`, when present, must be non-empty.
+11. Valid-query shape: if `expected` is non-empty, `cardinality` is required and `expected_error_code` must be absent.
+12. Invalid-query shape: if `expected_error_code` is set, both `expected` and `cardinality` must be absent.
+13. TDD shape: if `tdd_reason` is set, the query must satisfy either the valid-query shape or the invalid-query shape.
+14. Status-only shape is legacy-compatible only: it is allowed only when `expected`, `cardinality`, and `expected_error_code` are all absent; do not add new cases in this shape.
 
 ## 6. Assertion Modes
 
@@ -168,6 +185,22 @@ Notes:
 1. This mode is kept only for backward compatibility.
 2. Do not add new specs in this mode.
 
+### 6.5 Migration Error-Code Assertions
+
+Condition:
+
+1. A migration case uses object form and sets `expected_error_code`.
+
+Checks:
+
+1. The database analyzer and static analyzer must both fail on that migration SQL.
+2. Static migration error code must match `expected_error_code`.
+
+Notes:
+
+1. String-form migrations are required for setup-only entries and use status-parity checks only.
+2. Migration cases are executed in order.
+
 ## 7. Examples
 
 ### 7.1 Shared Valid-Query Case
@@ -220,6 +253,21 @@ queries:
     sql: WITH RECURSIVE t(n) AS (...) SELECT n FROM t
     expected_error_code: A3067
     tdd_reason: "Feature is not implemented yet and tracked in roadmap."
+```
+
+### 7.5 Migration Error-Code Case
+
+```yaml
+dialects:
+  - mysql
+  - postgres
+migrations:
+  - CREATE TABLE users (id INT PRIMARY KEY)
+  - CREATE TABLE orders (id INT PRIMARY KEY, user_id INT NOT NULL, CONSTRAINT orders_user_fk FOREIGN KEY (user_id) REFERENCES users(id))
+  - name: drop_referenced_users
+    sql: DROP TABLE users
+    expected_error_code: C2012
+queries: []
 ```
 
 ## 8. Commands

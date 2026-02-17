@@ -1,0 +1,18 @@
+dialects:
+- mysql
+- postgres
+migrations:
+- |
+  CREATE TABLE users (
+    id INT PRIMARY KEY
+  )
+- |
+  CREATE TABLE orders (
+    id INT PRIMARY KEY,
+    user_id INT NOT NULL,
+    CONSTRAINT orders_user_fk FOREIGN KEY (user_id) REFERENCES users(id)
+  )
+- name: drop_referenced_users
+  sql: DROP TABLE users
+  expected_error_code: C2012
+queries: []

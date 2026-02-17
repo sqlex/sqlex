@@ -19,8 +19,49 @@ use tokio::fs as tokio_fs;
 struct YamlTestSuite {
     dialects: Option<Vec<Dialect>>,
     #[serde(default)]
-    migrations: Vec<String>,
+    migrations: Vec<YamlMigration>,
     queries: Vec<YamlQuery>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum YamlMigration {
+    Sql(String),
+    Case(YamlMigrationCase),
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct YamlMigrationCase {
+    name: Option<String>,
+    sql: String,
+    expected_error_code: Option<String>,
+}
+
+impl YamlMigration {
+    fn name(&self, index: usize) -> String {
+        match self {
+            YamlMigration::Sql(_) => format!("migration_{}", index),
+            YamlMigration::Case(case) => case
+                .name
+                .as_ref()
+                .map_or_else(|| format!("migration_{}", index), ToString::to_string),
+        }
+    }
+
+    fn sql(&self) -> &str {
+        match self {
+            YamlMigration::Sql(sql) => sql,
+            YamlMigration::Case(case) => &case.sql,
+        }
+    }
+
+    fn expected_error_code(&self) -> Option<&str> {
+        match self {
+            YamlMigration::Sql(_) => None,
+            YamlMigration::Case(case) => case.expected_error_code.as_deref(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -269,6 +310,47 @@ fn validate_suite(suite: &YamlTestSuite, display_path: &str) -> Result<(), Strin
         }
     }
 
+    for (index, migration) in suite.migrations.iter().enumerate() {
+        match migration {
+            YamlMigration::Sql(sql) => {
+                if sql.trim().is_empty() {
+                    return Err(format!(
+                        "Suite {} migration #{} has empty SQL.",
+                        display_path,
+                        index + 1
+                    ));
+                }
+            },
+            YamlMigration::Case(case) => {
+                if let Some(name) = case.name.as_deref() {
+                    if name.trim().is_empty() {
+                        return Err(format!(
+                            "Suite {} migration #{} has an empty name.",
+                            display_path,
+                            index + 1
+                        ));
+                    }
+                }
+                if case.sql.trim().is_empty() {
+                    return Err(format!(
+                        "Suite {} migration #{} has empty SQL.",
+                        display_path,
+                        index + 1
+                    ));
+                }
+                if let Some(error_code) = case.expected_error_code.as_deref() {
+                    if error_code.trim().is_empty() {
+                        return Err(format!(
+                            "Suite {} migration #{} has an empty expected_error_code.",
+                            display_path,
+                            index + 1
+                        ));
+                    }
+                }
+            },
+        }
+    }
+
     let mut names = HashSet::with_capacity(suite.queries.len());
     for query in &suite.queries {
         if query.name.trim().is_empty() {
@@ -385,15 +467,28 @@ async fn run_test_file_for_dialect(
         )
     });
 
-    for sql in &suite.migrations {
-        let sql = sql.trim();
+    for (index, migration) in suite.migrations.iter().enumerate() {
+        let migration_name = migration.name(index + 1);
+        let sql = migration.sql().trim();
         if sql.is_empty() {
             continue;
         }
 
         let static_result = static_analyzer.execute(sql).await;
         let db_result = db_analyzer.execute(sql).await;
-        assert_same_status_for_migration(display_path, sql, db_result, static_result);
+        if let Some(expected_error_code) = migration.expected_error_code() {
+            assert_error_code_for_migration(
+                display_path,
+                dialect,
+                &migration_name,
+                sql,
+                expected_error_code,
+                db_result,
+                static_result,
+            );
+        } else {
+            assert_same_status_for_migration(display_path, sql, db_result, static_result);
+        }
     }
 
     verify_schema_equivalence(display_path, &mut db_analyzer, &mut static_analyzer).await;
@@ -452,6 +547,57 @@ fn assert_same_status_for_migration(
             panic!(
                 "Migration in {} succeeded on database analyzer, but static analyzer failed.",
                 display_path
+            );
+        },
+    }
+}
+
+fn assert_error_code_for_migration(
+    display_path: &str,
+    dialect: Dialect,
+    migration_name: &str,
+    sql: &str,
+    expected_error_code: &str,
+    db_result: sqlex_analyzer::Result<()>,
+    static_result: sqlex_analyzer::Result<()>,
+) {
+    match (db_result, static_result) {
+        (Err(db_err), Err(static_err)) => {
+            let observed_code = extract_error_code(&static_err).unwrap_or_else(|| {
+                panic!(
+                    "Migration '{}' in {} on {}: failed to extract static error code from '{}'",
+                    migration_name, display_path, dialect, static_err
+                )
+            });
+            assert_eq!(
+                observed_code, expected_error_code,
+                "Migration '{}' in {} on {}: expected static error code {}, got {}",
+                migration_name, display_path, dialect, expected_error_code, observed_code
+            );
+            println!(
+                "  Migration result: db=ERROR, static=ERROR (code={})",
+                observed_code
+            );
+            println!("    SQL: {}", sql);
+            println!("    DB error: {}", db_err);
+            println!("    Static error: {}", static_err);
+        },
+        (Err(db_err), Ok(_)) => {
+            panic!(
+                "Migration '{}' in {} on {} expected error code {}, but static analyzer succeeded while db failed: {}",
+                migration_name, display_path, dialect, expected_error_code, db_err
+            );
+        },
+        (Ok(_), Err(static_err)) => {
+            panic!(
+                "Migration '{}' in {} on {} expected error code {}, but database analyzer succeeded while static failed: {}",
+                migration_name, display_path, dialect, expected_error_code, static_err
+            );
+        },
+        (Ok(_), Ok(_)) => {
+            panic!(
+                "Migration '{}' in {} on {} expected error code {}, but both analyzers succeeded.",
+                migration_name, display_path, dialect, expected_error_code
             );
         },
     }

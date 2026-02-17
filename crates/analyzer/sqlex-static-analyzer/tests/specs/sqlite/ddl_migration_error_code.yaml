@@ -1,0 +1,16 @@
+dialects:
+- sqlite
+migrations:
+- |
+  CREATE TABLE users (
+    id INT PRIMARY KEY
+  )
+- |
+  CREATE TABLE orders (
+    id INT PRIMARY KEY,
+    user_id INT NOT NULL
+  )
+- name: add_foreign_key_via_alter_table
+  sql: ALTER TABLE orders ADD CONSTRAINT orders_user_fk FOREIGN KEY (user_id) REFERENCES users(id)
+  expected_error_code: C2026
+queries: []
