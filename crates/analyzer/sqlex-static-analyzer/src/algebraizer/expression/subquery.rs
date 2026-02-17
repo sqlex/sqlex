@@ -15,7 +15,10 @@ impl Algebraizer<'_> {
         &mut self,
         query: &sqlparser::ast::Query,
     ) -> Result<Relation, Diagnostic> {
-        self.build_query_relation(query, true)
+        self.literal_scope.push_with(true);
+        let result = self.build_query_relation(query);
+        self.literal_scope.pop();
+        result
     }
 
     pub(crate) fn build_single_column_subquery_relation(

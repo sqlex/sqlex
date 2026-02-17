@@ -26,7 +26,9 @@ impl Algebraizer<'_> {
         if with_clause.recursive {
             for cte in &with_clause.cte_tables {
                 let cte_name = normalize_ident(&cte.alias.name, self.dialect);
-                if !seen_names.insert(cte_name.clone()) || self.cte_exists_in_any_scope(&cte_name) {
+                if !seen_names.insert(cte_name.clone())
+                    || self.cte_scope.exists_in_any_scope(&cte_name)
+                {
                     return Err(Diagnostic::new(
                         "A3025",
                         Phase::Algebraize,
@@ -34,7 +36,7 @@ impl Algebraizer<'_> {
                     ));
                 }
                 let binding = self.build_recursive_cte_stub(cte)?;
-                let _ = self.insert_cte(cte_name, binding);
+                self.cte_scope.register(cte_name, binding);
             }
             return Ok(());
         }
@@ -50,7 +52,9 @@ impl Algebraizer<'_> {
                 }
 
                 let cte_name = normalize_ident(&cte.alias.name, self.dialect);
-                if !seen_names.insert(cte_name.clone()) || self.cte_exists_in_any_scope(&cte_name) {
+                if !seen_names.insert(cte_name.clone())
+                    || self.cte_scope.exists_in_any_scope(&cte_name)
+                {
                     return Err(Diagnostic::new(
                         "A3025",
                         Phase::Algebraize,
@@ -58,15 +62,13 @@ impl Algebraizer<'_> {
                     ));
                 }
                 let binding = self.build_recursive_cte_stub(cte)?;
-                let _ = self.insert_cte(cte_name, binding);
+                self.cte_scope.register(cte_name, binding);
             }
 
             for _ in 0..with_clause.cte_tables.len() {
                 for cte in &with_clause.cte_tables {
                     let cte_name = normalize_ident(&cte.alias.name, self.dialect);
-                    let literal_assignment_mode = self.literal_assignment_mode();
-                    let cte_relation =
-                        self.build_query_relation(cte.query.as_ref(), literal_assignment_mode)?;
+                    let cte_relation = self.build_query_relation(cte.query.as_ref())?;
 
                     let mut exposed_schema = cte_relation.output_schema().clone();
                     if !cte.alias.columns.is_empty() {
@@ -90,7 +92,7 @@ impl Algebraizer<'_> {
                         }
                     }
 
-                    let _ = self.insert_cte(
+                    self.cte_scope.register(
                         cte_name.clone(),
                         CteBinding {
                             relation: cte_relation,
@@ -112,16 +114,15 @@ impl Algebraizer<'_> {
             }
 
             let cte_name = normalize_ident(&cte.alias.name, self.dialect);
-            if !seen_names.insert(cte_name.clone()) || self.cte_exists_in_any_scope(&cte_name) {
+            if !seen_names.insert(cte_name.clone()) || self.cte_scope.exists_in_any_scope(&cte_name)
+            {
                 return Err(Diagnostic::new(
                     "A3025",
                     Phase::Algebraize,
                     format!("duplicate CTE name: {cte_name}"),
                 ));
             }
-            let literal_assignment_mode = self.literal_assignment_mode();
-            let cte_relation =
-                self.build_query_relation(cte.query.as_ref(), literal_assignment_mode)?;
+            let cte_relation = self.build_query_relation(cte.query.as_ref())?;
 
             let mut exposed_schema = cte_relation.output_schema().clone();
             if !cte.alias.columns.is_empty() {
@@ -145,7 +146,7 @@ impl Algebraizer<'_> {
                 }
             }
 
-            let _ = self.insert_cte(
+            self.cte_scope.register(
                 cte_name,
                 CteBinding {
                     relation: cte_relation,

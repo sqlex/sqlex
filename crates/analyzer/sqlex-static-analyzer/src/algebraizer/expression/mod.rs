@@ -46,7 +46,7 @@ impl Algebraizer<'_> {
             },
             Expr::Value(value) => Ok((
                 Expression::Literal(
-                    self.build_literal_expression(value, self.literal_assignment_mode())?,
+                    self.build_literal_expression(value, self.literal_scope.current())?,
                 ),
                 false,
             )),

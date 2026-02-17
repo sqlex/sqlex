@@ -18,10 +18,7 @@ impl Algebraizer<'_> {
     ) -> Result<Relation, Diagnostic> {
         match sql_set_expr {
             SetExpr::Select(select) => self.build_select_relation(select),
-            SetExpr::Query(query) => {
-                let literal_assignment_mode = self.literal_assignment_mode();
-                self.build_query_relation(query, literal_assignment_mode)
-            },
+            SetExpr::Query(query) => self.build_query_relation(query),
             SetExpr::SetOperation {
                 left,
                 op,

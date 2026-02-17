@@ -18,13 +18,11 @@ use crate::{
 };
 
 impl Algebraizer<'_> {
-    pub(crate) fn build_query_relation(
-        &mut self,
-        query: &Query,
-        literal_assignment_mode: bool,
-    ) -> Result<Relation, Diagnostic> {
-        self.push_query_scope(literal_assignment_mode);
-        self.push_cte_scope();
+    pub(crate) fn build_query_relation(&mut self, query: &Query) -> Result<Relation, Diagnostic> {
+        self.relation_scope.push();
+        self.named_window_scope.push();
+        self.literal_scope.push();
+        self.cte_scope.push();
         let result = (|| {
             if let Some(with_clause) = &query.with {
                 self.register_ctes(with_clause)?;
@@ -34,8 +32,10 @@ impl Algebraizer<'_> {
             let relation = self.apply_query_order_by(relation, query)?;
             self.apply_query_limit_offset(relation, query)
         })();
-        self.pop_cte_scope();
-        self.pop_query_scope();
+        self.cte_scope.pop();
+        self.literal_scope.pop();
+        self.named_window_scope.pop();
+        self.relation_scope.pop();
         result
     }
 
@@ -57,10 +57,10 @@ impl Algebraizer<'_> {
         }
 
         let input_schema = input_relation.output_schema().clone();
-        let inherited_named_windows = self.current_named_windows().clone();
-        self.push_query_scope(false);
-        self.set_current_named_windows(inherited_named_windows);
-        self.set_current_relation_bindings(vec![RelationBinding {
+        self.relation_scope.push();
+        self.named_window_scope.push();
+        self.literal_scope.push();
+        self.relation_scope.set_current(vec![RelationBinding {
             qualifier_names: Vec::new(),
             schema: input_schema.clone(),
             hidden_unqualified_slot_ids: HashSet::new(),
@@ -120,7 +120,9 @@ impl Algebraizer<'_> {
                 schema: input_schema,
             }))
         })();
-        self.pop_query_scope();
+        self.literal_scope.pop();
+        self.named_window_scope.pop();
+        self.relation_scope.pop();
         result
     }
 

@@ -34,12 +34,12 @@ impl Algebraizer<'_> {
         column_name: &str,
     ) -> Result<ResolvedColumnBinding, Diagnostic> {
         if let Some(slot_id) =
-            self.resolve_unqualified_in_scope_level(self.current_relation_bindings(), column_name)?
+            self.resolve_unqualified_in_scope_level(self.relation_scope.current(), column_name)?
         {
             return Ok(ResolvedColumnBinding::Local { slot_id });
         }
 
-        for (index, scope_level) in self.iter_outer_query_relation_bindings().enumerate() {
+        for (index, scope_level) in self.relation_scope.iter_outer().enumerate() {
             if let Some(slot_id) =
                 self.resolve_unqualified_in_scope_level(scope_level, column_name)?
             {
@@ -63,7 +63,7 @@ impl Algebraizer<'_> {
         column_name: &str,
     ) -> Result<ResolvedColumnBinding, Diagnostic> {
         match self.resolve_qualified_in_scope_level(
-            self.current_relation_bindings(),
+            self.relation_scope.current(),
             qualifier,
             column_name,
         )? {
@@ -81,7 +81,7 @@ impl Algebraizer<'_> {
         }
 
         let mut relation_found = false;
-        for (index, scope_level) in self.iter_outer_query_relation_bindings().enumerate() {
+        for (index, scope_level) in self.relation_scope.iter_outer().enumerate() {
             match self.resolve_qualified_in_scope_level(scope_level, qualifier, column_name)? {
                 QualifiedResolution::Found(slot_id) => {
                     return Ok(ResolvedColumnBinding::Correlated {
@@ -279,9 +279,13 @@ mod tests {
         let catalog = Catalog::new();
         let functions = FunctionRegistry::new(Dialect::Postgres);
         let mut algebraizer = Algebraizer::new(Dialect::Postgres, &catalog, &functions);
-        algebraizer.set_current_relation_bindings(vec![make_scope(2, "outer", &[(2, "id")])]);
-        algebraizer.push_query_scope(false);
-        algebraizer.set_current_relation_bindings(vec![make_scope(1, "cur", &[(1, "id")])]);
+        algebraizer
+            .relation_scope
+            .set_current(vec![make_scope(2, "outer", &[(2, "id")])]);
+        algebraizer.relation_scope.push();
+        algebraizer
+            .relation_scope
+            .set_current(vec![make_scope(1, "cur", &[(1, "id")])]);
 
         let binding = algebraizer
             .resolve_unqualified_column("id")
@@ -294,11 +298,17 @@ mod tests {
         let catalog = Catalog::new();
         let functions = FunctionRegistry::new(Dialect::Postgres);
         let mut algebraizer = Algebraizer::new(Dialect::Postgres, &catalog, &functions);
-        algebraizer.set_current_relation_bindings(vec![make_scope(2, "outer_lv2", &[(20, "id")])]);
-        algebraizer.push_query_scope(false);
-        algebraizer.set_current_relation_bindings(vec![make_scope(3, "outer_lv1", &[(30, "id")])]);
-        algebraizer.push_query_scope(false);
-        algebraizer.set_current_relation_bindings(vec![make_scope(1, "cur", &[(1, "cur_col")])]);
+        algebraizer
+            .relation_scope
+            .set_current(vec![make_scope(2, "outer_lv2", &[(20, "id")])]);
+        algebraizer.relation_scope.push();
+        algebraizer
+            .relation_scope
+            .set_current(vec![make_scope(3, "outer_lv1", &[(30, "id")])]);
+        algebraizer.relation_scope.push();
+        algebraizer
+            .relation_scope
+            .set_current(vec![make_scope(1, "cur", &[(1, "cur_col")])]);
 
         let binding = algebraizer
             .resolve_unqualified_column("id")
@@ -317,11 +327,17 @@ mod tests {
         let catalog = Catalog::new();
         let functions = FunctionRegistry::new(Dialect::Postgres);
         let mut algebraizer = Algebraizer::new(Dialect::Postgres, &catalog, &functions);
-        algebraizer.set_current_relation_bindings(vec![make_scope(2, "t2", &[(20, "id")])]);
-        algebraizer.push_query_scope(false);
-        algebraizer.set_current_relation_bindings(vec![make_scope(3, "t1", &[(30, "id")])]);
-        algebraizer.push_query_scope(false);
-        algebraizer.set_current_relation_bindings(vec![make_scope(1, "cur", &[(1, "cur_col")])]);
+        algebraizer
+            .relation_scope
+            .set_current(vec![make_scope(2, "t2", &[(20, "id")])]);
+        algebraizer.relation_scope.push();
+        algebraizer
+            .relation_scope
+            .set_current(vec![make_scope(3, "t1", &[(30, "id")])]);
+        algebraizer.relation_scope.push();
+        algebraizer
+            .relation_scope
+            .set_current(vec![make_scope(1, "cur", &[(1, "cur_col")])]);
 
         let binding = algebraizer
             .resolve_qualified_column("t1", "id")
@@ -340,7 +356,7 @@ mod tests {
         let catalog = Catalog::new();
         let functions = FunctionRegistry::new(Dialect::Postgres);
         let mut algebraizer = Algebraizer::new(Dialect::Postgres, &catalog, &functions);
-        algebraizer.set_current_relation_bindings(vec![
+        algebraizer.relation_scope.set_current(vec![
             make_scope(1, "t1", &[(1, "id")]),
             make_scope(2, "t2", &[(2, "id")]),
         ]);

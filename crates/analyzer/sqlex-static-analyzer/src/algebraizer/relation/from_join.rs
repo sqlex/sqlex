@@ -21,7 +21,7 @@ impl Algebraizer<'_> {
                 relation_id: self.allocate_relation_id(),
                 columns: Vec::new(),
             };
-            self.set_current_relation_bindings(vec![RelationBinding {
+            self.relation_scope.set_current(vec![RelationBinding {
                 qualifier_names: vec![],
                 schema: schema.clone(),
                 hidden_unqualified_slot_ids: HashSet::new(),
@@ -40,13 +40,13 @@ impl Algebraizer<'_> {
         let from_item = &select.from[0];
         let (mut relation, left_scope) = self.build_table_factor_relation(&from_item.relation)?;
         let mut scopes = vec![left_scope];
-        self.set_current_relation_bindings(scopes.clone());
+        self.relation_scope.set_current(scopes.clone());
 
         for join in &from_item.joins {
             relation = self.build_join_relation(relation, &mut scopes, join)?;
         }
 
-        self.set_current_relation_bindings(scopes);
+        self.relation_scope.set_current(scopes);
         Ok(relation)
     }
 }

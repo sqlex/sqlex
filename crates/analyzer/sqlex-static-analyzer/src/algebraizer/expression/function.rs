@@ -67,7 +67,7 @@ impl Algebraizer<'_> {
                 Some(WindowType::WindowSpec(spec)) => self.build_window_spec_expression(spec)?,
                 Some(WindowType::NamedWindow(window_name)) => {
                     let normalized_name = normalize_ident(window_name, self.dialect);
-                    let Some(spec) = self.current_named_windows().get(&normalized_name).cloned()
+                    let Some(spec) = self.named_window_scope.resolve(&normalized_name).cloned()
                     else {
                         return Err(Diagnostic::new(
                             "A3048",
@@ -192,7 +192,7 @@ impl Algebraizer<'_> {
     fn resolve_window_spec_for_over(&self, spec: &WindowSpec) -> Result<WindowSpec, Diagnostic> {
         let mut resolved_spec = if let Some(base_name) = &spec.window_name {
             let normalized_base = normalize_ident(base_name, self.dialect);
-            let Some(base_spec) = self.current_named_windows().get(&normalized_base) else {
+            let Some(base_spec) = self.named_window_scope.resolve(&normalized_base) else {
                 return Err(Diagnostic::new(
                     "A3048",
                     Phase::Algebraize,
@@ -384,7 +384,8 @@ impl Algebraizer<'_> {
         let expr = expr?;
         match expr {
             Expression::SlotRef(slot_id) => self
-                .current_relation_bindings()
+                .relation_scope
+                .current()
                 .iter()
                 .flat_map(|scope| scope.schema.columns.iter())
                 .find(|column| column.slot_id == *slot_id)

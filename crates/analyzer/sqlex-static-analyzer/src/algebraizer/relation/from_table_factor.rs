@@ -29,7 +29,7 @@ impl Algebraizer<'_> {
                     self.validate_alias_ident(&alias.name)?;
                 }
                 let normalized_table_name = normalize_object_name(name, self.dialect);
-                if let Some(cte_binding) = self.resolve_cte(&normalized_table_name) {
+                if let Some(cte_binding) = self.cte_scope.resolve(&normalized_table_name) {
                     let scope = RelationBinding {
                         qualifier_names: self
                             .qualifier_names_for_relation(&normalized_table_name, alias.as_ref()),
@@ -81,7 +81,7 @@ impl Algebraizer<'_> {
                     ));
                 }
 
-                let subquery_relation = self.build_query_relation(subquery, true)?;
+                let subquery_relation = self.build_subquery_relation(subquery)?;
 
                 let Some(alias) = alias.as_ref() else {
                     return Err(Diagnostic::new(

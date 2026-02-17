@@ -40,8 +40,8 @@ impl Algebraizer<'_> {
             ));
         }
 
-        let previous_scope_level = self.current_relation_bindings().to_vec();
-        let previous_named_windows = self.take_current_named_windows();
+        let previous_relation_bindings = self.relation_scope.current().to_vec();
+        let previous_named_windows = self.named_window_scope.current().clone();
 
         let build_result = (|| {
             self.register_named_windows(&select.named_window)?;
@@ -49,7 +49,7 @@ impl Algebraizer<'_> {
             let group_by_exprs = self.group_by_expressions(&select.group_by)?;
             let mut bound_group_by = Vec::with_capacity(group_by_exprs.len());
 
-            self.set_current_relation_bindings(Vec::new());
+            self.relation_scope.set_current(Vec::new());
             let mut input_relation = self.build_from_relation(select)?;
             if let Some(selection) = &select.selection {
                 let (condition, where_has_aggregate) = self.build_expression(selection)?;
@@ -148,7 +148,7 @@ impl Algebraizer<'_> {
                     SelectItem::QualifiedWildcard(qualifier, _) => {
                         has_non_aggregate_projection = true;
                         let qualifier_name = normalize_object_name(qualifier, self.dialect);
-                        let Some(scope) = self.current_relation_bindings().iter().find(|scope| {
+                        let Some(scope) = self.relation_scope.current().iter().find(|scope| {
                             scope
                                 .qualifier_names
                                 .iter()
@@ -345,8 +345,8 @@ impl Algebraizer<'_> {
             Ok(relation)
         })();
 
-        self.set_current_relation_bindings(previous_scope_level);
-        self.set_current_named_windows(previous_named_windows);
+        self.relation_scope.set_current(previous_relation_bindings);
+        self.named_window_scope.set_current(previous_named_windows);
 
         build_result
     }
@@ -400,7 +400,9 @@ impl Algebraizer<'_> {
             resolved.insert(name.clone(), spec);
         }
 
-        self.set_current_named_windows(resolved);
+        for (name, spec) in resolved {
+            self.named_window_scope.register(name, spec);
+        }
         Ok(())
     }
 

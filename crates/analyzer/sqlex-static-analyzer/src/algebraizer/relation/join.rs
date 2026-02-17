@@ -45,7 +45,7 @@ impl Algebraizer<'_> {
 
         let mut join_scopes = scopes.clone();
         join_scopes.push(right_scope.clone());
-        self.set_current_relation_bindings(join_scopes.clone());
+        self.relation_scope.set_current(join_scopes.clone());
 
         let left_schema = left_relation.output_schema();
         let right_schema = right_relation.output_schema();
@@ -191,7 +191,7 @@ impl Algebraizer<'_> {
         }
 
         *scopes = updated_scopes.clone();
-        self.set_current_relation_bindings(updated_scopes);
+        self.relation_scope.set_current(updated_scopes);
         Ok(join_relation)
     }
 
