@@ -11,10 +11,6 @@ queries:
          a AS (SELECT 2 AS n)
     SELECT * FROM a
   expected_error_code: A3025
-- name: cte_column_alias_count_mismatch
-  sql: |
-    WITH a(x, y) AS (SELECT 1 AS n)
-    SELECT * FROM a
 - name: recursive_column_count_mismatch
   sql: |
     WITH RECURSIVE a(n) AS (

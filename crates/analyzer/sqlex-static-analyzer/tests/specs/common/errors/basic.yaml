@@ -13,4 +13,5 @@ queries:
   sql: SELECT missing_col FROM users
   expected_error_code: A3008
 - name: syntax_error
-  sql: SELECT FROM users
+  sql: SELECT * FROM
+  expected_error_code: P1001

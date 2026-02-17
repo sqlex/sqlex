@@ -21,3 +21,8 @@ queries:
     sql: SELECT X'AB'
     expected_error_code: A3073
     tdd_reason: "Hex literal handling is tracked for future implementation."
+
+  - name: natural_join_not_supported
+    sql: SELECT * FROM t1 NATURAL JOIN t2
+    expected_error_code: A3056
+    tdd_reason: "NATURAL JOIN parity with database analyzer is pending; static currently rejects this path."

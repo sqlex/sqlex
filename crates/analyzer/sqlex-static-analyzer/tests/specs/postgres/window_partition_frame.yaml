@@ -1,0 +1,43 @@
+dialects:
+- postgres
+migrations:
+- |
+  CREATE TABLE sales (
+    id INT NOT NULL,
+    region TEXT NOT NULL,
+    amount DECIMAL,
+    PRIMARY KEY (id)
+  )
+queries:
+- name: sum_partition_rows_frame
+  sql: |
+    SELECT id,
+           SUM(amount) OVER (
+             PARTITION BY region
+             ORDER BY id
+             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+           ) AS running_sum
+    FROM sales
+  cardinality: ZeroOrMore
+  expected:
+  - name: id
+    nullability: false
+  - name: running_sum
+    nullability: true
+
+- name: sum_named_window_with_rows_frame
+  sql: |
+    SELECT id,
+           SUM(amount) OVER w AS trailing_sum
+    FROM sales
+    WINDOW w AS (
+      PARTITION BY region
+      ORDER BY id
+      ROWS BETWEEN 1 PRECEDING AND CURRENT ROW
+    )
+  cardinality: ZeroOrMore
+  expected:
+  - name: id
+    nullability: false
+  - name: trailing_sum
+    nullability: true

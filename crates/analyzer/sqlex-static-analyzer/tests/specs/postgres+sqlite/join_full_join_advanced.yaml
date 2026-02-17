@@ -1,0 +1,41 @@
+dialects:
+- postgres
+- sqlite
+migrations:
+- |
+  CREATE TABLE users (
+    id INT NOT NULL,
+    name TEXT NOT NULL,
+    PRIMARY KEY (id)
+  )
+- |
+  CREATE TABLE orders (
+    id INT NOT NULL,
+    user_id INT,
+    amount DECIMAL,
+    PRIMARY KEY (id)
+  )
+queries:
+- name: full_join_projection_with_aliases
+  sql: |
+    SELECT u.id AS user_id, o.id AS order_id, o.amount
+    FROM users u
+    FULL JOIN orders o ON u.id = o.user_id
+  cardinality: ZeroOrMore
+  expected:
+  - name: user_id
+    nullability: true
+  - name: order_id
+    nullability: true
+  - name: amount
+    nullability: true
+
+- name: full_join_coalesce_non_null
+  sql: |
+    SELECT COALESCE(u.id, o.id) AS merged_id
+    FROM users u
+    FULL JOIN orders o ON u.id = o.user_id
+  cardinality: ZeroOrMore
+  expected:
+  - name: merged_id
+    nullability: true

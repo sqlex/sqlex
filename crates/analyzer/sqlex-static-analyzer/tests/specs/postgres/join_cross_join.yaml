@@ -1,0 +1,40 @@
+dialects:
+- postgres
+migrations:
+- |
+  CREATE TABLE a (
+    id INT NOT NULL,
+    name TEXT NOT NULL,
+    PRIMARY KEY (id)
+  )
+- |
+  CREATE TABLE b (
+    id INT NOT NULL,
+    label TEXT,
+    PRIMARY KEY (id)
+  )
+queries:
+- name: cross_join_basic_projection
+  sql: |
+    SELECT a.id AS a_id, b.id AS b_id
+    FROM a
+    CROSS JOIN b
+  cardinality: ZeroOrMore
+  expected:
+  - name: a_id
+    nullability: false
+  - name: b_id
+    nullability: false
+
+- name: cross_join_with_filter
+  sql: |
+    SELECT a.id AS a_id, b.id AS b_id
+    FROM a
+    CROSS JOIN b
+    WHERE a.id = b.id
+  cardinality: ZeroOrMore
+  expected:
+  - name: a_id
+    nullability: false
+  - name: b_id
+    nullability: false

@@ -1,0 +1,27 @@
+dialects:
+- mysql
+- sqlite
+migrations:
+- |
+  CREATE TABLE t1 (
+    id INT NOT NULL
+  )
+- |
+  CREATE TABLE t2 (
+    id INT NOT NULL
+  )
+queries:
+- name: union_all_order_by_limit
+  sql: |
+    SELECT id
+    FROM (
+      SELECT id FROM t1
+      UNION ALL
+      SELECT id FROM t2
+    ) u
+    ORDER BY id DESC
+    LIMIT 1
+  cardinality: AtMostOne
+  expected:
+  - name: id
+    nullability: false
