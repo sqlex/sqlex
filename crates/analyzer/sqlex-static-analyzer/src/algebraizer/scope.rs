@@ -45,6 +45,33 @@ impl Algebraizer<'_> {
         let _ = self.query_scope_stack.pop();
     }
 
+    pub(crate) fn push_cte_scope(&mut self) {
+        self.cte_scope_stack.push(HashMap::new());
+    }
+
+    pub(crate) fn pop_cte_scope(&mut self) {
+        if self.cte_scope_stack.len() <= 1 {
+            panic!("cannot pop root CTE scope");
+        }
+        let _ = self.cte_scope_stack.pop();
+    }
+}
+
+impl Algebraizer<'_> {
+    pub(crate) fn allocate_relation_id(&mut self) -> u32 {
+        let relation_id = self.next_relation_id;
+        self.next_relation_id += 1;
+        relation_id
+    }
+
+    pub(crate) fn allocate_slot_id(&mut self) -> u32 {
+        let slot_id = self.next_slot_id;
+        self.next_slot_id += 1;
+        slot_id
+    }
+}
+
+impl Algebraizer<'_> {
     pub(crate) fn current_relation_bindings(&self) -> &[RelationBinding] {
         self.query_scope_stack
             .last()
@@ -68,7 +95,31 @@ impl Algebraizer<'_> {
             .rev()
             .map(|scope| scope.relation_bindings.as_slice())
     }
+}
 
+impl Algebraizer<'_> {
+    pub(crate) fn resolve_cte(&self, name: &str) -> Option<&CteBinding> {
+        self.cte_scope_stack
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(name))
+    }
+
+    pub(crate) fn insert_cte(&mut self, name: String, binding: CteBinding) -> Option<CteBinding> {
+        self.cte_scope_stack
+            .last_mut()
+            .expect("CTE scope stack is never empty")
+            .insert(name, binding)
+    }
+
+    pub(crate) fn cte_exists_in_any_scope(&self, name: &str) -> bool {
+        self.cte_scope_stack
+            .iter()
+            .any(|scope| scope.contains_key(name))
+    }
+}
+
+impl Algebraizer<'_> {
     pub(crate) fn current_named_windows(&self) -> &HashMap<String, WindowSpec> {
         &self
             .query_scope_stack
@@ -93,54 +144,13 @@ impl Algebraizer<'_> {
             .expect("query scope stack is never empty")
             .named_windows = windows;
     }
+}
 
+impl Algebraizer<'_> {
     pub(crate) fn literal_assignment_mode(&self) -> bool {
         self.query_scope_stack
             .last()
             .expect("query scope stack is never empty")
             .literal_assignment_mode
-    }
-
-    pub(crate) fn push_cte_scope(&mut self) {
-        self.cte_scope_stack.push(HashMap::new());
-    }
-
-    pub(crate) fn pop_cte_scope(&mut self) {
-        if self.cte_scope_stack.len() <= 1 {
-            panic!("cannot pop root CTE scope");
-        }
-        let _ = self.cte_scope_stack.pop();
-    }
-
-    pub(crate) fn resolve_cte(&self, name: &str) -> Option<&CteBinding> {
-        self.cte_scope_stack
-            .iter()
-            .rev()
-            .find_map(|scope| scope.get(name))
-    }
-
-    pub(crate) fn insert_cte(&mut self, name: String, binding: CteBinding) -> Option<CteBinding> {
-        self.cte_scope_stack
-            .last_mut()
-            .expect("CTE scope stack is never empty")
-            .insert(name, binding)
-    }
-
-    pub(crate) fn cte_exists_in_any_scope(&self, name: &str) -> bool {
-        self.cte_scope_stack
-            .iter()
-            .any(|scope| scope.contains_key(name))
-    }
-
-    pub(crate) fn allocate_relation_id(&mut self) -> u32 {
-        let relation_id = self.next_relation_id;
-        self.next_relation_id += 1;
-        relation_id
-    }
-
-    pub(crate) fn allocate_slot_id(&mut self) -> u32 {
-        let slot_id = self.next_slot_id;
-        self.next_slot_id += 1;
-        slot_id
     }
 }
