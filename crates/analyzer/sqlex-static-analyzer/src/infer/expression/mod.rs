@@ -7,7 +7,7 @@ use crate::{
     infer::{
         Inferencer,
         expression::{
-            function::{first_arg_type, infer_with_signature},
+            function::{first_arg_type, infer_with_signature, validate_argument_types},
             literal::infer_literal_expression,
             slot::{infer_correlated_slot_expression, infer_slot_expression},
             type_rules::{boolean_result_type, validate_binary_op},
@@ -86,7 +86,7 @@ impl Inferencer<'_> {
             },
             Expression::Function { name, args } => {
                 let args_info = self.infer_expression_args(args, input_columns, outer_scopes)?;
-                Ok(self.infer_function_expression(name, args_info))
+                self.infer_function_expression(name, args_info)
             },
             Expression::AggregateCall {
                 name,
@@ -212,17 +212,18 @@ impl Inferencer<'_> {
         &self,
         name: &str,
         args: Vec<ExpressionInference>,
-    ) -> ExpressionInference {
+    ) -> Result<ExpressionInference, Diagnostic> {
         let Some(signature) = self.functions.resolve_scalar(name) else {
             let data_type = first_arg_type(&args);
             let nullable = args.iter().any(|arg| arg.nullable);
-            return ExpressionInference {
+            return Ok(ExpressionInference {
                 data_type,
                 nullable,
-            };
+            });
         };
 
-        infer_with_signature(signature, &args, self.dialect)
+        validate_argument_types(name, signature, &args)?;
+        Ok(infer_with_signature(signature, &args, self.dialect))
     }
 
     fn infer_aggregate_expression(
@@ -238,6 +239,7 @@ impl Inferencer<'_> {
             ));
         };
 
+        validate_argument_types(name, signature, &args)?;
         Ok(infer_with_signature(signature, &args, self.dialect))
     }
 
@@ -254,6 +256,7 @@ impl Inferencer<'_> {
             ));
         };
 
+        validate_argument_types(name, signature, &args)?;
         Ok(infer_with_signature(signature, &args, self.dialect))
     }
 }

@@ -121,7 +121,6 @@ impl Algebraizer<'_> {
                 let bound_args = vec![bound_expr];
                 let signature = self.functions.resolve_scalar("trim");
                 self.validate_function_arity("trim", bound_args.len(), signature)?;
-                self.validate_function_argument_types("trim", &bound_args, signature)?;
                 Ok((
                     Expression::Function {
                         name: "trim".to_string(),

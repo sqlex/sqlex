@@ -2,9 +2,58 @@ use sqlex_analyzer::extension::DataTypeExt;
 use sqlex_common::{dialect::Dialect, types::DataType};
 
 use crate::{
-    functions::model::{FunctionNullabilityRule, FunctionReturnTypeRule, FunctionSignature},
+    diagnostics::{Diagnostic, Phase},
+    functions::model::{
+        FunctionArgType, FunctionCoercionProfile, FunctionNullabilityRule, FunctionReturnTypeRule,
+        FunctionSignature,
+    },
     infer::expression::ExpressionInference,
 };
+
+pub(super) fn validate_argument_types(
+    function_name: &str,
+    signature: &FunctionSignature,
+    args: &[ExpressionInference],
+) -> Result<(), Diagnostic> {
+    if matches!(
+        signature.coercion_profile,
+        FunctionCoercionProfile::Permissive
+    ) {
+        return Ok(());
+    }
+
+    for rule in &signature.arg_type_rules {
+        let Some(arg_info) = args.get(rule.index) else {
+            continue;
+        };
+
+        let matches_rule = match rule.expected {
+            FunctionArgType::TextLike => arg_info.data_type.is_text_like(),
+            FunctionArgType::Numeric => arg_info.data_type.is_numeric(),
+        };
+        if matches_rule {
+            continue;
+        }
+
+        let (code, requirement_label) = match rule.expected {
+            FunctionArgType::TextLike => ("I4108", "text"),
+            FunctionArgType::Numeric => ("I4109", "numeric"),
+        };
+
+        return Err(Diagnostic::new(
+            code,
+            Phase::Infer,
+            format!(
+                "function '{}' expects {} argument at position {}",
+                function_name,
+                requirement_label,
+                rule.index + 1
+            ),
+        ));
+    }
+
+    Ok(())
+}
 
 pub(super) fn infer_with_signature(
     signature: &FunctionSignature,

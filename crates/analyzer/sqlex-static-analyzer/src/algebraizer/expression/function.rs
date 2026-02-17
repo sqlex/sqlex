@@ -1,5 +1,4 @@
-use sqlex_analyzer::extension::DataTypeExt;
-use sqlex_common::{dialect::Dialect, types::DataType};
+use sqlex_common::dialect::Dialect;
 use sqlparser::ast::{
     CeilFloorKind, DateTimeField, Function, FunctionArg, FunctionArgExpr, FunctionArguments,
     WindowSpec, WindowType,
@@ -8,14 +7,11 @@ use sqlparser::ast::{
 use crate::{
     algebraizer::{
         Algebraizer,
-        model::{
-            expression::{BoundLiteral, Expression},
-            schema::SortKey,
-        },
+        model::{expression::Expression, schema::SortKey},
     },
     catalog::normalize::{normalize_ident, normalize_object_name},
     diagnostics::{Diagnostic, Phase},
-    functions::model::{FunctionArgType, FunctionCoercionProfile, FunctionSignature},
+    functions::model::FunctionSignature,
 };
 
 enum FunctionBindKind {
@@ -54,7 +50,6 @@ impl Algebraizer<'_> {
         let (bind_kind, signature) =
             self.resolve_function_call_signature(&function_name_lower, function.over.is_some())?;
         self.validate_function_arity(&function_name_lower, bound_args.len(), signature)?;
-        self.validate_function_argument_types(&function_name_lower, &bound_args, signature)?;
 
         let distinct = matches!(
             &function.args,
@@ -276,53 +271,6 @@ impl Algebraizer<'_> {
         Ok(())
     }
 
-    pub(crate) fn validate_function_argument_types(
-        &self,
-        function_name_lower: &str,
-        bound_args: &[Expression],
-        signature: Option<&FunctionSignature>,
-    ) -> Result<(), Diagnostic> {
-        let Some(signature) = signature else {
-            return Ok(());
-        };
-        if matches!(
-            signature.coercion_profile,
-            FunctionCoercionProfile::Permissive
-        ) {
-            return Ok(());
-        }
-
-        for rule in &signature.arg_type_rules {
-            let Some(arg_type) = self.bound_expr_static_type(bound_args.get(rule.index)) else {
-                continue;
-            };
-            let matches_rule = match rule.expected {
-                FunctionArgType::TextLike => arg_type.is_text_like(),
-                FunctionArgType::Numeric => arg_type.is_numeric(),
-            };
-            if matches_rule {
-                continue;
-            }
-
-            let (code, requirement_label) = match rule.expected {
-                FunctionArgType::TextLike => ("A3022", "text"),
-                FunctionArgType::Numeric => ("A3023", "numeric"),
-            };
-            return Err(Diagnostic::new(
-                code,
-                Phase::Algebraize,
-                format!(
-                    "function '{}' expects {} argument at position {}",
-                    function_name_lower,
-                    requirement_label,
-                    rule.index + 1
-                ),
-            ));
-        }
-
-        Ok(())
-    }
-
     pub(crate) fn build_ceil_or_floor_expression(
         &mut self,
         function_name: &str,
@@ -343,7 +291,6 @@ impl Algebraizer<'_> {
 
         let signature = self.functions.resolve_scalar(function_name);
         self.validate_function_arity(function_name, bound_args.len(), signature)?;
-        self.validate_function_argument_types(function_name, &bound_args, signature)?;
 
         Ok((
             Expression::Function {
@@ -378,44 +325,5 @@ impl Algebraizer<'_> {
         }
 
         Ok(())
-    }
-
-    fn bound_expr_static_type(&self, expr: Option<&Expression>) -> Option<DataType> {
-        let expr = expr?;
-        match expr {
-            Expression::SlotRef(slot_id) => self
-                .relation_scope
-                .current()
-                .iter()
-                .flat_map(|scope| scope.schema.columns.iter())
-                .find(|column| column.slot_id == *slot_id)
-                .and_then(|column| column.data_type.clone()),
-            Expression::Literal(literal) => self.bound_literal_static_type(literal),
-            Expression::Cast { target_type, .. } => Some(target_type.clone()),
-            _ => None,
-        }
-    }
-
-    fn bound_literal_static_type(&self, literal: &BoundLiteral) -> Option<DataType> {
-        match literal {
-            BoundLiteral::Null => None,
-            BoundLiteral::Bool(_) => Some(match self.dialect {
-                Dialect::Postgres => DataType::Bool,
-                Dialect::MySQL | Dialect::SQLite => DataType::BigInt,
-            }),
-            BoundLiteral::Int { .. } => Some(match self.dialect {
-                Dialect::Postgres => DataType::Int,
-                Dialect::MySQL | Dialect::SQLite => DataType::BigInt,
-            }),
-            BoundLiteral::Float(_) => Some(match self.dialect {
-                Dialect::SQLite => DataType::Double,
-                Dialect::MySQL | Dialect::Postgres => DataType::Decimal,
-            }),
-            BoundLiteral::String(_) => Some(match self.dialect {
-                Dialect::MySQL => DataType::Varchar,
-                Dialect::Postgres | Dialect::SQLite => DataType::Text,
-            }),
-            BoundLiteral::Placeholder => None,
-        }
     }
 }

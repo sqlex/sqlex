@@ -45,7 +45,7 @@ Extraction scope:
 
 - `crates/analyzer/sqlex-static-analyzer/src/**/*.rs`
 - `Diagnostic::new(...)` calls
-- Dynamic code binding is expanded for `A3022`/`A3023`
+- Dynamic code binding is expanded for `I4108`/`I4109`
 
 Columns:
 
@@ -60,8 +60,8 @@ Columns:
 - Total unique codes: 103
 - PARSE (`P`): 4
 - CATALOG (`C`): 26
-- ALGEBRAIZE (`A`): 63
-- INFER (`I`): 10
+- ALGEBRAIZE (`A`): 61
+- INFER (`I`): 12
 
 ## 6.1 PARSE Codes
 
@@ -127,8 +127,6 @@ Columns:
 | `A3019` | `ALGEBRAIZE` | set operation column count mismatch: left {}, right {} | `src/algebraizer/relation/set_ops.rs:37` | 1 |
 | `A3020` | `ALGEBRAIZE` | function '{}' expects at least {} argument(s), got {} | `src/algebraizer/expression/function.rs:254` | 1 |
 | `A3021` | `ALGEBRAIZE` | function '{}' expects at most {} argument(s), got {} | `src/algebraizer/expression/function.rs:265` | 1 |
-| `A3022` | `ALGEBRAIZE` | function expects text argument at a specific position | `src/algebraizer/expression/function.rs:311` | 1 |
-| `A3023` | `ALGEBRAIZE` | function expects numeric argument at a specific position | `src/algebraizer/expression/function.rs:311` | 1 |
 | `A3024` | `ALGEBRAIZE` | reserved keyword cannot be used as alias: {} | `src/algebraizer/expression/function.rs:373` | 1 |
 | `A3025` | `ALGEBRAIZE` | duplicate CTE name: {cte_name} | `src/algebraizer/relation/cte.rs:30` | 3 |
 | `A3026` | `ALGEBRAIZE` | recursive CTE term column count mismatch: seed {}, recursive {} | `src/algebraizer/relation/cte.rs:168` | 1 |
@@ -182,7 +180,8 @@ Columns:
 | `I4105` | `INFER` | subquery expression expects exactly one column, got {} | `src/infer/expression/subquery.rs:22` | 1 |
 | `I4106` | `INFER` | invalid correlated reference depth {depth} for slot {slot_id} | `src/infer/expression/slot.rs:33` | 1 |
 | `I4107` | `INFER` | unknown correlated slot reference: slot {slot_id}, depth {depth} | `src/infer/expression/slot.rs:45` | 1 |
+| `I4108` | `INFER` | function expects text argument at a specific position | `src/infer/expression/function.rs:43` | 1 |
+| `I4109` | `INFER` | function expects numeric argument at a specific position | `src/infer/expression/function.rs:43` | 1 |
 | `I4201` | `INFER` | projection column alias was not assigned during planning | `src/infer/relation/projection.rs:27` | 1 |
 | `I4202` | `INFER` | set operation column count mismatch: left {}, right {} | `src/infer/relation/set_ops.rs:23` | 1 |
 | `I4203` | `INFER` | invalid cardinality interval [{min:?}, {max:?}] at {location} | `src/infer/model/cardinality.rs:31` | 1 |
-
