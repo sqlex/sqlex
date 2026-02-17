@@ -7,6 +7,8 @@ migrations:
 queries:
   - name: window_function_without_over
     sql: SELECT ROW_NUMBER() FROM users
+    expected_error_code: A3059
 
   - name: scalar_function_with_over
     sql: SELECT UPPER(name) OVER () FROM users
+    expected_error_code: A3058

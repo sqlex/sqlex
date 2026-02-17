@@ -11,8 +11,10 @@ queries:
       SELECT n + 1 FROM a
     )
     SELECT * FROM a
+  expected_error_code: A3003
 - name: cte_forward_reference
   sql: |
     WITH a AS (SELECT * FROM b),
          b AS (SELECT 1 AS n)
     SELECT * FROM a
+  expected_error_code: A3003

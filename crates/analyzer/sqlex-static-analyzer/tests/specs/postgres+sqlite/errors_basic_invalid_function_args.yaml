@@ -11,3 +11,4 @@ migrations:
 queries:
 - name: invalid_function_args
   sql: SELECT LENGTH(1, 2) FROM users
+  expected_error_code: A3021

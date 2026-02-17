@@ -11,6 +11,8 @@ migrations:
 queries:
   - name: ceil_on_text
     sql: SELECT CEIL(name) FROM test_table
+    expected_error_code: A3023
 
   - name: floor_on_text
     sql: SELECT FLOOR(name) FROM test_table
+    expected_error_code: A3023

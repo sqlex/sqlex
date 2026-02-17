@@ -4,11 +4,13 @@ queries:
   sql: |
     WITH a AS (SELECT 1 AS n)
     SELECT * FROM b
+  expected_error_code: A3003
 - name: duplicate_cte_name
   sql: |
     WITH a AS (SELECT 1 AS n),
          a AS (SELECT 2 AS n)
     SELECT * FROM a
+  expected_error_code: A3025
 - name: cte_column_alias_count_mismatch
   sql: |
     WITH a(x, y) AS (SELECT 1 AS n)
@@ -21,3 +23,4 @@ queries:
       SELECT n, n + 1 FROM a
     )
     SELECT * FROM a
+  expected_error_code: A3026

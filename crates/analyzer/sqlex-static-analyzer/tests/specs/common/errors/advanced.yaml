@@ -7,19 +7,24 @@ migrations:
   )
 queries:
 - name: ambiguous_column
-  sql: 'SELECT id FROM users u1 JOIN users u2 ON u1.id = u2.id
-
-    '
+  sql: SELECT id FROM users u1 JOIN users u2 ON u1.id = u2.id
+  expected_error_code: A3009
 - name: table_name_hidden_by_alias
   sql: SELECT users.id FROM users AS u
+  expected_error_code: A3010
 - name: missing_column_in_where
   sql: SELECT id FROM users WHERE missing_col = 1
+  expected_error_code: A3008
 - name: join_using_missing_column
   sql: SELECT * FROM users u1 JOIN users u2 USING (missing_col)
+  expected_error_code: A3008
 - name: aggregate_in_where
   sql: SELECT id FROM users WHERE COUNT(*) > 0
+  expected_error_code: A3041
 - name: window_in_where
   sql: SELECT id FROM users WHERE ROW_NUMBER() OVER (ORDER BY id) > 0
+  expected_error_code: A3042
 - name: window_in_having
   sql: SELECT id, COUNT(*) FROM users GROUP BY id HAVING ROW_NUMBER() OVER (ORDER
     BY id) > 0
+  expected_error_code: A3043

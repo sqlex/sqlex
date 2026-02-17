@@ -8,7 +8,9 @@ migrations:
 queries:
 - name: missing_table
   sql: SELECT id FROM missing_table
+  expected_error_code: A3003
 - name: missing_column
   sql: SELECT missing_col FROM users
+  expected_error_code: A3008
 - name: syntax_error
   sql: SELECT FROM users
