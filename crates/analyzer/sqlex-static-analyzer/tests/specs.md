@@ -22,6 +22,16 @@ Recommended layout:
 2. `tests/specs/mysql/*.yaml`: MySQL-focused scenarios (flat under dialect directory).
 3. `tests/specs/postgres/*.yaml`: PostgreSQL-focused scenarios (flat under dialect directory).
 4. `tests/specs/sqlite/*.yaml`: SQLite-focused scenarios (flat under dialect directory).
+5. `tests/specs/mysql+postgres/*.yaml`: MySQL+PostgreSQL scenarios.
+6. `tests/specs/mysql+sqlite/*.yaml`: MySQL+SQLite scenarios.
+7. `tests/specs/postgres+sqlite/*.yaml`: PostgreSQL+SQLite scenarios.
+
+File naming convention:
+
+1. Use lowercase snake_case only: `[a-z0-9_]+.yaml`.
+2. In flat dialect directories (`mysql`, `postgres`, `sqlite`, `mysql+postgres`, `mysql+sqlite`, `postgres+sqlite`), use a category prefix in filenames, such as `select_`, `errors_`, `cardinality_`, `nullability_`, `join_`, `agg_`, `functions_`, `ddl_`, `contracts_`, `window_`, or `set_ops_`.
+3. Do not include dialect names in filenames when the directory already encodes dialect scope.
+4. Separate trailing numbers with `_`, for example `advanced_2.yaml`.
 
 Dialect execution is determined only by YAML fields.
 
@@ -220,10 +230,22 @@ Run all specs:
 cargo test -p sqlex-static-analyzer --test specs_runner
 ```
 
+Run all specs with full logs:
+
+```bash
+cargo test -p sqlex-static-analyzer --test specs_runner -- --nocapture
+```
+
 Run filtered specs:
 
 ```bash
 SQLEX_SPECS_FILTER=sqlite/select_column_names cargo test -p sqlex-static-analyzer --test specs_runner
+```
+
+Run filtered specs with full logs:
+
+```bash
+SQLEX_SPECS_FILTER=sqlite/select_column_names cargo test -p sqlex-static-analyzer --test specs_runner -- --nocapture
 ```
 
 Enable TDD cases:
