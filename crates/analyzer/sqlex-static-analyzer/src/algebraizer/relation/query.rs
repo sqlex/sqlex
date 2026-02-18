@@ -21,7 +21,6 @@ impl Algebraizer<'_> {
     pub(crate) fn build_query_relation(&mut self, query: &Query) -> Result<Relation, Diagnostic> {
         self.relation_scope.push();
         self.named_window_scope.push();
-        self.literal_scope.push();
         self.cte_scope.push();
         let result = (|| {
             if let Some(with_clause) = &query.with {
@@ -33,7 +32,6 @@ impl Algebraizer<'_> {
             self.apply_query_limit_offset(relation, query)
         })();
         self.cte_scope.pop();
-        self.literal_scope.pop();
         self.named_window_scope.pop();
         self.relation_scope.pop();
         result
@@ -59,7 +57,6 @@ impl Algebraizer<'_> {
         let input_schema = input_relation.output_schema().clone();
         self.relation_scope.push();
         self.named_window_scope.push();
-        self.literal_scope.push();
         self.relation_scope.set_current(vec![RelationBinding {
             qualifier_names: Vec::new(),
             schema: input_schema.clone(),
@@ -120,7 +117,6 @@ impl Algebraizer<'_> {
                 schema: input_schema,
             }))
         })();
-        self.literal_scope.pop();
         self.named_window_scope.pop();
         self.relation_scope.pop();
         result

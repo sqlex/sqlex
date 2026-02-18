@@ -1,4 +1,4 @@
-use sqlex_analyzer::extension::DataTypeExt;
+use sqlex_analyzer::extension::data_type_ext::DataTypeExt;
 use sqlex_common::types::DataType;
 
 use crate::{
@@ -16,6 +16,7 @@ use crate::{
     },
 };
 
+mod arithmetic;
 mod function;
 mod literal;
 mod slot;
@@ -26,6 +27,14 @@ mod type_rules;
 pub(crate) struct ExpressionInference {
     pub(crate) data_type: DataType,
     pub(crate) nullable: bool,
+    pub(crate) int_literal_info: Option<IntLiteralInfo>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct IntLiteralInfo {
+    pub(crate) value: i128,
+    pub(crate) unsigned: bool,
+    pub(crate) display_width: usize,
 }
 
 impl Inferencer<'_> {
@@ -55,9 +64,9 @@ impl Inferencer<'_> {
                     BoundBinaryOp::Add
                     | BoundBinaryOp::Sub
                     | BoundBinaryOp::Mul
-                    | BoundBinaryOp::Div => {
-                        left_info.data_type.promote_numeric(&right_info.data_type)
-                    },
+                    | BoundBinaryOp::Div => left_info
+                        .data_type
+                        .promote_numeric(self.dialect, &right_info.data_type),
                     BoundBinaryOp::Eq
                     | BoundBinaryOp::NotEq
                     | BoundBinaryOp::Lt
@@ -67,10 +76,22 @@ impl Inferencer<'_> {
                     | BoundBinaryOp::And
                     | BoundBinaryOp::Or => boolean_result_type(self.dialect),
                 };
+                // Arithmetic on pure int literals: compute result value for MySQL narrowing.
+                // If both operands have IntLiteralInfo, the result does too (computed value).
+                let int_literal_info = match op {
+                    BoundBinaryOp::Add
+                    | BoundBinaryOp::Sub
+                    | BoundBinaryOp::Mul
+                    | BoundBinaryOp::Div => {
+                        self.fold_int_literal_binary(op, &left_info, &right_info)
+                    },
+                    _ => None,
+                };
 
                 Ok(ExpressionInference {
                     data_type,
                     nullable: left_info.nullable || right_info.nullable,
+                    int_literal_info,
                 })
             },
             Expression::UnaryOp { op, expr } => {
@@ -79,9 +100,18 @@ impl Inferencer<'_> {
                     BoundUnaryOp::Not => boolean_result_type(self.dialect),
                     BoundUnaryOp::Neg | BoundUnaryOp::Pos => info.data_type.clone(),
                 };
+                let nullable = info.nullable;
+                // Unary +/- on pure int literals: preserve IntLiteralInfo for MySQL narrowing.
+                let mysql_hint = info.int_literal_info;
+                let int_literal_info = match op {
+                    BoundUnaryOp::Not => None,
+                    BoundUnaryOp::Pos => mysql_hint,
+                    BoundUnaryOp::Neg => self.fold_int_literal_negate(mysql_hint),
+                };
                 Ok(ExpressionInference {
                     data_type,
-                    nullable: info.nullable,
+                    nullable,
+                    int_literal_info,
                 })
             },
             Expression::Function { name, args } => {
@@ -106,11 +136,13 @@ impl Inferencer<'_> {
                 Ok(ExpressionInference {
                     data_type: target_type.clone(),
                     nullable: info.nullable,
+                    int_literal_info: None,
                 })
             },
             Expression::IsNull { .. } => Ok(ExpressionInference {
                 data_type: boolean_result_type(self.dialect),
                 nullable: false,
+                int_literal_info: None,
             }),
             Expression::Case {
                 when_clauses,
@@ -142,6 +174,7 @@ impl Inferencer<'_> {
                 Ok(ExpressionInference {
                     data_type,
                     nullable,
+                    int_literal_info: None,
                 })
             },
             Expression::InList { expr, list, .. } => {
@@ -154,6 +187,7 @@ impl Inferencer<'_> {
                 Ok(ExpressionInference {
                     data_type: boolean_result_type(self.dialect),
                     nullable,
+                    int_literal_info: None,
                 })
             },
             Expression::InSubquery {
@@ -171,6 +205,7 @@ impl Inferencer<'_> {
                 Ok(ExpressionInference {
                     data_type: boolean_result_type(self.dialect),
                     nullable: expr_info.nullable || subquery_info.nullable,
+                    int_literal_info: None,
                 })
             },
             Expression::Exists { subquery, negated } => {
@@ -181,6 +216,7 @@ impl Inferencer<'_> {
                 Ok(ExpressionInference {
                     data_type: boolean_result_type(self.dialect),
                     nullable: false,
+                    int_literal_info: None,
                 })
             },
             Expression::ScalarSubquery(subquery) => {
@@ -189,6 +225,7 @@ impl Inferencer<'_> {
             Expression::Placeholder => Ok(ExpressionInference {
                 data_type: DataType::Custom("unknown".to_string()),
                 nullable: false,
+                int_literal_info: None,
             }),
         }
     }
@@ -219,6 +256,7 @@ impl Inferencer<'_> {
             return Ok(ExpressionInference {
                 data_type,
                 nullable,
+                int_literal_info: None,
             });
         };
 

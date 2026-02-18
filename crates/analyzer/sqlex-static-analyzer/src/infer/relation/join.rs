@@ -64,6 +64,7 @@ impl Inferencer<'_> {
                     data_type: source_column.data_type.clone(),
                     nullable: source_column.nullable,
                     origin: source_column.origin.clone(),
+                    int_literal_info: None,
                 });
                 continue;
             }
@@ -86,6 +87,7 @@ impl Inferencer<'_> {
                 data_type,
                 nullable: schema_column.nullable,
                 origin,
+                int_literal_info: None,
             });
         }
 

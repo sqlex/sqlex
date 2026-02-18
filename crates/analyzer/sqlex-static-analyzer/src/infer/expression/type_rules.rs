@@ -1,4 +1,4 @@
-use sqlex_analyzer::extension::DataTypeExt;
+use sqlex_analyzer::extension::data_type_ext::DataTypeExt;
 use sqlex_common::{dialect::Dialect, types::DataType};
 
 use crate::{

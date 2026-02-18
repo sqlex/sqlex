@@ -1,3 +1,4 @@
+use sqlex_analyzer::extension::data_type_ext::DataTypeExt;
 use sqlex_common::{dialect::Dialect, types::DataType};
 use sqlparser::ast::{
     AlterTableOperation, ColumnDef, ColumnOption, CreateTable, ObjectType, Statement,
@@ -6,7 +7,7 @@ use sqlparser::ast::{
 
 use crate::{
     catalog::{
-        Catalog, ddl_type_map,
+        Catalog,
         model::{ColumnSchema, ForeignKeyConstraint, KeyConstraint, TableSchema},
         normalize::{normalize_ident, normalize_object_name, original_object_name},
     },
@@ -296,7 +297,7 @@ impl CatalogMutator {
         ColumnSchema {
             name,
             original_name: column_def.name.value.clone(),
-            data_type: ddl_type_map::map_sql_data_type(self.dialect, &column_def.data_type),
+            data_type: DataType::from_sql_data_type(self.dialect, &column_def.data_type),
             nullable,
         }
     }

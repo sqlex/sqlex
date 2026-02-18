@@ -21,6 +21,7 @@ pub(super) fn infer_slot_expression(
     Ok(ExpressionInference {
         data_type: column.data_type.clone(),
         nullable: column.nullable,
+        int_literal_info: None,
     })
 }
 
@@ -52,5 +53,6 @@ pub(super) fn infer_correlated_slot_expression(
     Ok(ExpressionInference {
         data_type: column.data_type.clone(),
         nullable: column.nullable,
+        int_literal_info: None,
     })
 }

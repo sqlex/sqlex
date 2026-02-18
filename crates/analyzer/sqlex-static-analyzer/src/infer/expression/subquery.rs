@@ -18,6 +18,8 @@ impl Inferencer<'_> {
         let mut subquery_outer_scopes = outer_scopes.to_vec();
         subquery_outer_scopes.push(input_columns.to_vec());
         let metadata = self.infer_relation_with_outer_scopes(subquery, &subquery_outer_scopes)?;
+        let metadata = self.narrow_int_literals_at_boundary(metadata);
+
         if metadata.columns.len() != 1 {
             return Err(Diagnostic::new(
                 "I4105",
@@ -33,6 +35,7 @@ impl Inferencer<'_> {
         Ok(ExpressionInference {
             data_type: column.data_type.clone(),
             nullable: column.nullable || !matches!(metadata.cardinality.min(), MinRows::One),
+            int_literal_info: None,
         })
     }
 }

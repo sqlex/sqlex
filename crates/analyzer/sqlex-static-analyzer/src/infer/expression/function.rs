@@ -1,4 +1,4 @@
-use sqlex_analyzer::extension::DataTypeExt;
+use sqlex_analyzer::extension::data_type_ext::DataTypeExt;
 use sqlex_common::{dialect::Dialect, types::DataType};
 
 use crate::{
@@ -63,6 +63,7 @@ pub(super) fn infer_with_signature(
     ExpressionInference {
         data_type: infer_return_type(signature.return_type_rule, args, dialect),
         nullable: infer_nullability(signature.nullability_rule, args),
+        int_literal_info: None,
     }
 }
 

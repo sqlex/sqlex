@@ -37,6 +37,7 @@ impl Inferencer<'_> {
                 data_type,
                 nullable: column.nullable,
                 origin,
+                int_literal_info: None,
             });
         }
 

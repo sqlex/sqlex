@@ -42,6 +42,7 @@ impl Inferencer<'_> {
                 data_type: expression_info.data_type,
                 nullable: expression_info.nullable,
                 origin: ColumnOrigin::Derived,
+                int_literal_info: expression_info.int_literal_info,
             });
         }
 

@@ -1,0 +1,44 @@
+dialects:
+- mysql
+queries:
+  - name: top_level_cast_unsigned_literal
+    sql: SELECT CAST(1 AS UNSIGNED) AS x
+    cardinality: ExactlyOne
+    expected:
+      - name: x
+        nullability: false
+
+  - name: derived_cast_unsigned_literal
+    sql: SELECT * FROM (SELECT CAST(1 AS UNSIGNED) AS x) t
+    cardinality: ExactlyOne
+    expected:
+      - name: x
+        nullability: false
+
+  - name: derived_cast_unsigned_nine_digits
+    sql: SELECT * FROM (SELECT CAST(999999999 AS UNSIGNED) AS x) t
+    cardinality: ExactlyOne
+    expected:
+      - name: x
+        nullability: false
+
+  - name: top_level_cast_unsigned_add_literal
+    sql: SELECT CAST(1 AS UNSIGNED) + 1 AS x
+    cardinality: ExactlyOne
+    expected:
+      - name: x
+        nullability: false
+
+  - name: derived_cast_unsigned_add_literal
+    sql: SELECT * FROM (SELECT CAST(1 AS UNSIGNED) + 1 AS x) t
+    cardinality: ExactlyOne
+    expected:
+      - name: x
+        nullability: false
+
+  - name: derived_cast_unsigned_negative
+    sql: SELECT * FROM (SELECT CAST(-1 AS UNSIGNED) AS x) t
+    cardinality: ExactlyOne
+    expected:
+      - name: x
+        nullability: false

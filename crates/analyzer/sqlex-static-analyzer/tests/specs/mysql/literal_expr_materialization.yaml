@@ -1,0 +1,79 @@
+dialects:
+- mysql
+migrations:
+  - |
+    CREATE TABLE nums (
+      value INT NOT NULL,
+      a INT NOT NULL,
+      b INT NOT NULL
+    )
+queries:
+  - name: top_level_literal
+    sql: SELECT 1 AS x
+    cardinality: ExactlyOne
+    expected:
+      - name: x
+        nullability: false
+
+  - name: derived_literal
+    sql: SELECT * FROM (SELECT 1 AS x) t
+    cardinality: ExactlyOne
+    expected:
+      - name: x
+        nullability: false
+
+  - name: top_level_literal_add
+    sql: SELECT 1 + 1 AS x
+    cardinality: ExactlyOne
+    expected:
+      - name: x
+        nullability: false
+
+  - name: derived_literal_add
+    sql: SELECT * FROM (SELECT 1 + 1 AS x) t
+    cardinality: ExactlyOne
+    expected:
+      - name: x
+        nullability: false
+
+  - name: top_level_column_add_literal
+    sql: SELECT value + 1 AS x FROM nums
+    cardinality: ZeroOrMore
+    expected:
+      - name: x
+        nullability: false
+
+  - name: derived_column_add_literal
+    sql: SELECT * FROM (SELECT value + 1 AS x FROM nums) t
+    cardinality: ZeroOrMore
+    expected:
+      - name: x
+        nullability: false
+
+  - name: top_level_column_add_column
+    sql: SELECT a + b AS x FROM nums
+    cardinality: ZeroOrMore
+    expected:
+      - name: x
+        nullability: false
+
+  - name: derived_column_add_column
+    sql: SELECT * FROM (SELECT a + b AS x FROM nums) t
+    cardinality: ZeroOrMore
+    expected:
+      - name: x
+        nullability: false
+
+  - name: top_level_abs_column_add
+    sql: SELECT ABS(value + 1) AS x FROM nums
+    cardinality: ZeroOrMore
+    expected:
+      - name: x
+        nullability: false
+
+  - name: derived_abs_column_add
+    sql: SELECT * FROM (SELECT ABS(value + 1) AS x FROM nums) t
+    cardinality: ZeroOrMore
+    expected:
+      - name: x
+        nullability: false

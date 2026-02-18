@@ -1,4 +1,4 @@
-use sqlex_analyzer::extension::DataTypeExt;
+use sqlex_analyzer::extension::data_type_ext::DataTypeExt;
 use sqlex_common::types::DataType;
 
 use crate::{
@@ -61,6 +61,7 @@ impl Inferencer<'_> {
                     right_column.nullable,
                 ),
                 origin: ColumnOrigin::Derived,
+                int_literal_info: None,
             });
         }
 

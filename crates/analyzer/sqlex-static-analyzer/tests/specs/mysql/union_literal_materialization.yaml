@@ -1,0 +1,50 @@
+dialects:
+- mysql
+migrations:
+  - |
+    CREATE TABLE nums (
+      a INT NOT NULL,
+      b INT NOT NULL
+    )
+queries:
+  - name: union_all_literals_top_level
+    sql: SELECT 1 AS n UNION ALL SELECT 2 AS n
+    cardinality: OneOrMore
+    expected:
+      - name: n
+        nullability: false
+
+  - name: union_all_literals_derived
+    sql: SELECT * FROM (SELECT 1 AS n UNION ALL SELECT 2 AS n) t
+    cardinality: OneOrMore
+    expected:
+      - name: n
+        nullability: false
+
+  - name: union_distinct_literals_derived
+    sql: SELECT * FROM (SELECT 1 AS n UNION SELECT 2 AS n) t
+    cardinality: OneOrMore
+    expected:
+      - name: n
+        nullability: false
+
+  - name: union_all_literal_and_expr_derived
+    sql: SELECT * FROM (SELECT 1 AS n UNION ALL SELECT 1 + 1 AS n) t
+    cardinality: OneOrMore
+    expected:
+      - name: n
+        nullability: false
+
+  - name: union_all_same_int_column
+    sql: SELECT a AS x FROM nums UNION ALL SELECT b AS x FROM nums
+    cardinality: ZeroOrMore
+    expected:
+      - name: x
+        nullability: false
+
+  - name: union_same_int_column
+    sql: SELECT a AS x FROM nums UNION SELECT b AS x FROM nums
+    cardinality: ZeroOrMore
+    expected:
+      - name: x
+        nullability: false

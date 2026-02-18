@@ -4,9 +4,7 @@ use sqlparser::ast::Statement;
 use crate::{
     algebraizer::{
         model::relation::Relation,
-        scope::{
-            CteScopeStack, LiteralAssignmentModeStack, NamedWindowScopeStack, RelationScopeStack,
-        },
+        scope::{CteScopeStack, NamedWindowScopeStack, RelationScopeStack},
     },
     catalog::Catalog,
     diagnostics::{Diagnostic, Phase},
@@ -27,7 +25,6 @@ pub(crate) struct Algebraizer<'a> {
     pub(crate) relation_scope: RelationScopeStack,
     pub(crate) cte_scope: CteScopeStack,
     pub(crate) named_window_scope: NamedWindowScopeStack,
-    pub(crate) literal_scope: LiteralAssignmentModeStack,
     pub(crate) next_relation_id: u32,
     pub(crate) next_slot_id: u32,
 }
@@ -45,7 +42,6 @@ impl<'a> Algebraizer<'a> {
             relation_scope: RelationScopeStack::new(),
             cte_scope: CteScopeStack::new(),
             named_window_scope: NamedWindowScopeStack::new(),
-            literal_scope: LiteralAssignmentModeStack::new(),
             next_relation_id: 1,
             next_slot_id: 1,
         }

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use sqlex_common::types::{ColumnInfo, DataType, ResultSet};
 
-use crate::infer::model::cardinality::CardInterval;
+use crate::infer::{expression::IntLiteralInfo, model::cardinality::CardInterval};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ColumnOrigin {
@@ -17,6 +17,7 @@ pub(crate) struct InferColumn {
     pub(crate) data_type: DataType,
     pub(crate) nullable: bool,
     pub(crate) origin: ColumnOrigin,
+    pub(crate) int_literal_info: Option<IntLiteralInfo>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

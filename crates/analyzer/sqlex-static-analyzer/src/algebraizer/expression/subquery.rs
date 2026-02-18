@@ -15,10 +15,7 @@ impl Algebraizer<'_> {
         &mut self,
         query: &sqlparser::ast::Query,
     ) -> Result<Relation, Diagnostic> {
-        self.literal_scope.push_with(true);
-        let result = self.build_query_relation(query);
-        self.literal_scope.pop();
-        result
+        self.build_query_relation(query)
     }
 
     pub(crate) fn build_single_column_subquery_relation(
@@ -63,7 +60,7 @@ impl Algebraizer<'_> {
                 self.resolve_subquery_column(select, Some(&qualifier), &column_name)
             },
             Expr::Value(value) => {
-                let bound_literal = self.build_literal_expression(value, false).ok()?;
+                let bound_literal = self.build_literal_expression(value).ok()?;
                 match bound_literal {
                     BoundLiteral::Null => Some((DataType::Custom("null".to_string()), true)),
                     BoundLiteral::Bool(_) => Some((
@@ -73,20 +70,10 @@ impl Algebraizer<'_> {
                         },
                         false,
                     )),
-                    BoundLiteral::Int {
-                        raw, assignment, ..
-                    } => Some((
+                    BoundLiteral::Int { .. } => Some((
                         match self.dialect {
                             Dialect::Postgres => DataType::Int,
-                            Dialect::MySQL => {
-                                if assignment
-                                    && crate::algebraizer::expression::literal::mysql_integer_literal_should_be_int(&raw)
-                                {
-                                    DataType::Int
-                                } else {
-                                    DataType::BigInt
-                                }
-                            },
+                            Dialect::MySQL => DataType::BigInt,
                             Dialect::SQLite => DataType::BigInt,
                         },
                         false,

@@ -7,6 +7,7 @@ use crate::{
 
 mod expression;
 pub(crate) mod model;
+mod mysql_narrowing;
 mod relation;
 
 #[derive(Debug, Clone)]
@@ -95,7 +96,6 @@ mod tests {
                 right: Box::new(Expression::Literal(BoundLiteral::Int {
                     value: 7,
                     raw: "7".to_string(),
-                    assignment: false,
                 })),
             },
             schema: projection_schema,
@@ -155,7 +155,6 @@ mod tests {
                     right: Box::new(Expression::Literal(BoundLiteral::Int {
                         value: 1,
                         raw: "1".to_string(),
-                        assignment: false,
                     })),
                 }),
                 op: BoundBinaryOp::And,
@@ -165,7 +164,6 @@ mod tests {
                     right: Box::new(Expression::Literal(BoundLiteral::Int {
                         value: 2,
                         raw: "2".to_string(),
-                        assignment: false,
                     })),
                 }),
             },

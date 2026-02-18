@@ -9,7 +9,6 @@ impl Algebraizer<'_> {
     pub(crate) fn build_literal_expression(
         &self,
         value: &Value,
-        literal_assignment_mode: bool,
     ) -> Result<BoundLiteral, Diagnostic> {
         let literal = match value {
             Value::Boolean(boolean) => BoundLiteral::Bool(*boolean),
@@ -48,7 +47,6 @@ impl Algebraizer<'_> {
                     BoundLiteral::Int {
                         value: parsed,
                         raw: number.clone(),
-                        assignment: literal_assignment_mode,
                     }
                 }
             },
@@ -63,9 +61,4 @@ impl Algebraizer<'_> {
         };
         Ok(literal)
     }
-}
-
-pub(super) fn mysql_integer_literal_should_be_int(raw: &str) -> bool {
-    let digit_count = raw.chars().filter(|c| c.is_ascii_digit()).count();
-    digit_count <= 8
 }

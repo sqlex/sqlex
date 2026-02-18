@@ -9,11 +9,7 @@ use crate::algebraizer::model::{
 pub(crate) enum BoundLiteral {
     Null,
     Bool(bool),
-    Int {
-        value: i64,
-        raw: String,
-        assignment: bool,
-    },
+    Int { value: i64, raw: String },
     Float(f64),
     String(String),
     Placeholder,

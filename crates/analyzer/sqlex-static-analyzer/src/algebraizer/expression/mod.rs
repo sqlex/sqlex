@@ -1,3 +1,5 @@
+use sqlex_analyzer::extension::data_type_ext::DataTypeExt;
+use sqlex_common::types::DataType;
 use sqlparser::ast::{BinaryOperator, Expr};
 
 use crate::{
@@ -45,9 +47,7 @@ impl Algebraizer<'_> {
                 Ok((binding.into_scalar_expr(), false))
             },
             Expr::Value(value) => Ok((
-                Expression::Literal(
-                    self.build_literal_expression(value, self.literal_scope.current())?,
-                ),
+                Expression::Literal(self.build_literal_expression(value)?),
                 false,
             )),
             Expr::Nested(inner) => self.build_expression(inner),
@@ -90,8 +90,7 @@ impl Algebraizer<'_> {
                 expr, data_type, ..
             } => {
                 let (inner, has_aggregate) = self.build_expression(expr)?;
-                let target_type =
-                    crate::catalog::ddl_type_map::map_sql_data_type(self.dialect, data_type);
+                let target_type = DataType::from_sql_data_type(self.dialect, data_type);
                 Ok((
                     Expression::Cast {
                         expr: Box::new(inner),

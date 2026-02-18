@@ -17,6 +17,7 @@ pub(super) fn align_columns_to_schema(
             data_type: column.data_type.clone(),
             nullable: column.nullable,
             origin: column.origin.clone(),
+            int_literal_info: column.int_literal_info,
         })
         .collect()
 }
