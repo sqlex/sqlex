@@ -13,7 +13,7 @@ use crate::{
         },
         scope::RelationBinding,
     },
-    catalog::{model::TableSchema, normalize::normalize_object_name},
+    catalog::normalize::normalize_object_name,
     diagnostics::{Diagnostic, Phase},
 };
 
@@ -58,39 +58,19 @@ impl Algebraizer<'_> {
             right_schema,
         )?;
 
-        let mut effective_kind = kind.clone();
-        let mut bound_condition = None;
-        if let Some(on_expr) = on_expr {
+        let bound_condition = if let Some(on_expr) = on_expr {
             let (condition, _) = self.build_expression(on_expr)?;
-            if self.outer_join_is_effectively_inner(
-                kind.clone(),
-                &condition,
-                left_schema,
-                right_schema,
-            ) {
-                effective_kind = JoinKind::Inner;
-            }
-            bound_condition = Some(condition);
+            Some(condition)
         } else if !using_pairs.is_empty() {
             let condition = self.build_join_using_condition(&using_pairs)?;
-            if self.outer_join_is_effectively_inner(
-                kind.clone(),
-                &condition,
-                left_schema,
-                right_schema,
-            ) {
-                effective_kind = JoinKind::Inner;
-            }
-            bound_condition = Some(condition);
-        }
+            Some(condition)
+        } else {
+            None
+        };
 
         let mut left_columns = left_schema.columns.clone();
         let mut right_columns = right_schema.columns.clone();
-        force_outer_join_nullability(
-            effective_kind.clone(),
-            &mut left_columns,
-            &mut right_columns,
-        );
+        force_outer_join_nullability(kind.clone(), &mut left_columns, &mut right_columns);
 
         let left_slot_columns: HashMap<u32, BoundColumn> = left_columns
             .iter()
@@ -136,7 +116,7 @@ impl Algebraizer<'_> {
                     .clone()
                     .or_else(|| right_column.data_type.clone()),
                 nullable: merged_using_nullability(
-                    effective_kind.clone(),
+                    kind.clone(),
                     left_column.nullable,
                     right_column.nullable,
                 ),
@@ -158,7 +138,7 @@ impl Algebraizer<'_> {
         let mut join_relation = Relation::Join(crate::algebraizer::model::relation::JoinNode {
             left: Box::new(left_relation),
             right: Box::new(right_relation),
-            kind: effective_kind.clone(),
+            kind,
             schema: join_schema.clone(),
         });
 
@@ -375,164 +355,6 @@ impl Algebraizer<'_> {
         }
         Ok(slot_id)
     }
-
-    fn outer_join_is_effectively_inner(
-        &self,
-        kind: JoinKind,
-        condition: &Expression,
-        left_schema: &OutputSchema,
-        right_schema: &OutputSchema,
-    ) -> bool {
-        match kind {
-            JoinKind::Left => self.guaranteed_match_from_preserved_side(
-                condition,
-                &left_schema.columns,
-                &right_schema.columns,
-            ),
-            JoinKind::Right => self.guaranteed_match_from_preserved_side(
-                condition,
-                &right_schema.columns,
-                &left_schema.columns,
-            ),
-            JoinKind::Inner | JoinKind::Cross | JoinKind::Full => false,
-        }
-    }
-
-    fn guaranteed_match_from_preserved_side(
-        &self,
-        condition: &Expression,
-        preserved_columns: &[BoundColumn],
-        other_columns: &[BoundColumn],
-    ) -> bool {
-        let mut slot_pairs = Vec::new();
-        if !collect_pure_equijoin_slot_pairs(condition, &mut slot_pairs) || slot_pairs.is_empty() {
-            return false;
-        }
-
-        self.slot_pairs_cover_full_fk_to_unique(preserved_columns, other_columns, &slot_pairs)
-    }
-
-    fn slot_pairs_cover_full_fk_to_unique(
-        &self,
-        preserved_columns: &[BoundColumn],
-        other_columns: &[BoundColumn],
-        slot_pairs: &[(u32, u32)],
-    ) -> bool {
-        let preserved_slot_map: HashMap<u32, &BoundColumn> = preserved_columns
-            .iter()
-            .map(|column| (column.slot_id, column))
-            .collect();
-        let other_slot_map: HashMap<u32, &BoundColumn> = other_columns
-            .iter()
-            .map(|column| (column.slot_id, column))
-            .collect();
-
-        let mut mapping: HashMap<String, String> = HashMap::new();
-        let mut preserved_table_name: Option<String> = None;
-        let mut other_table_name: Option<String> = None;
-
-        for (left_slot, right_slot) in slot_pairs {
-            let (preserved_column, other_column) = if let (Some(preserved), Some(other)) = (
-                preserved_slot_map.get(left_slot),
-                other_slot_map.get(right_slot),
-            ) {
-                (*preserved, *other)
-            } else if let (Some(preserved), Some(other)) = (
-                preserved_slot_map.get(right_slot),
-                other_slot_map.get(left_slot),
-            ) {
-                (*preserved, *other)
-            } else {
-                return false;
-            };
-
-            if preserved_column.nullable {
-                return false;
-            }
-
-            let ColumnOrigin::Base {
-                table: preserved_table,
-                column: preserved_column_name,
-            } = &preserved_column.origin
-            else {
-                return false;
-            };
-            let ColumnOrigin::Base {
-                table: other_table,
-                column: other_column_name,
-            } = &other_column.origin
-            else {
-                return false;
-            };
-
-            match &preserved_table_name {
-                Some(existing) if existing != preserved_table => return false,
-                Some(_) => {},
-                None => preserved_table_name = Some(preserved_table.clone()),
-            }
-            match &other_table_name {
-                Some(existing) if existing != other_table => return false,
-                Some(_) => {},
-                None => other_table_name = Some(other_table.clone()),
-            }
-
-            match mapping.get(preserved_column_name) {
-                Some(existing) if existing != other_column_name => return false,
-                Some(_) => {},
-                None => {
-                    mapping.insert(preserved_column_name.clone(), other_column_name.clone());
-                },
-            }
-        }
-
-        let Some(preserved_table_name) = preserved_table_name else {
-            return false;
-        };
-        let Some(other_table_name) = other_table_name else {
-            return false;
-        };
-
-        let Some(preserved_table_schema) = self.catalog.table(&preserved_table_name) else {
-            return false;
-        };
-        let Some(other_table_schema) = self.catalog.table(&other_table_name) else {
-            return false;
-        };
-
-        preserved_table_schema
-            .foreign_keys
-            .iter()
-            .any(|foreign_key| {
-                if foreign_key.ref_table != other_table_name {
-                    return false;
-                }
-                if foreign_key.columns.is_empty()
-                    || foreign_key.columns.len() != foreign_key.ref_columns.len()
-                {
-                    return false;
-                }
-                if mapping.len() != foreign_key.columns.len() {
-                    return false;
-                }
-                if !foreign_key_columns_are_not_null(preserved_table_schema, &foreign_key.columns) {
-                    return false;
-                }
-                if !foreign_key
-                    .columns
-                    .iter()
-                    .zip(foreign_key.ref_columns.iter())
-                    .all(|(foreign_key_column, referenced_column)| {
-                        mapping
-                            .get(foreign_key_column)
-                            .is_some_and(|mapped| mapped == referenced_column)
-                    })
-                {
-                    return false;
-                }
-
-                columns_cover_unique_key(other_table_schema, &foreign_key.ref_columns)
-            })
-    }
 }
 
 fn force_outer_join_nullability(
@@ -584,63 +406,4 @@ fn find_column_by_slot(schema: &OutputSchema, slot_id: u32) -> Option<&BoundColu
         .columns
         .iter()
         .find(|column| column.slot_id == slot_id)
-}
-
-fn collect_pure_equijoin_slot_pairs(expr: &Expression, output: &mut Vec<(u32, u32)>) -> bool {
-    match expr {
-        Expression::BinaryOp {
-            left,
-            op: BoundBinaryOp::And,
-            right,
-        } => {
-            collect_pure_equijoin_slot_pairs(left, output)
-                && collect_pure_equijoin_slot_pairs(right, output)
-        },
-        Expression::BinaryOp {
-            left,
-            op: BoundBinaryOp::Eq,
-            right,
-        } => {
-            if let (Expression::SlotRef(left_slot), Expression::SlotRef(right_slot)) =
-                (&**left, &**right)
-            {
-                output.push((*left_slot, *right_slot));
-                true
-            } else {
-                false
-            }
-        },
-        _ => false,
-    }
-}
-
-fn foreign_key_columns_are_not_null(table: &TableSchema, columns: &[String]) -> bool {
-    columns.iter().all(|column_name| {
-        table
-            .columns
-            .iter()
-            .find(|column| column.name == *column_name)
-            .is_some_and(|column| !column.nullable)
-    })
-}
-
-fn columns_cover_unique_key(table: &TableSchema, columns: &[String]) -> bool {
-    table
-        .primary_key
-        .as_ref()
-        .is_some_and(|primary_key| same_column_set(&primary_key.columns, columns))
-        || table
-            .unique_keys
-            .iter()
-            .any(|key| same_column_set(&key.columns, columns))
-}
-
-fn same_column_set(left: &[String], right: &[String]) -> bool {
-    if left.len() != right.len() {
-        return false;
-    }
-
-    let left_set = left.iter().map(String::as_str).collect::<HashSet<_>>();
-    let right_set = right.iter().map(String::as_str).collect::<HashSet<_>>();
-    left_set.len() == left.len() && right_set.len() == right.len() && left_set == right_set
 }

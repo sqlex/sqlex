@@ -22,7 +22,7 @@ impl<'a> Inferencer<'a> {
                     (DataType::BigInt, Some(h)) if h.display_width <= 8 => DataType::Int,
                     (DataType::UnsignedBigInt, Some(h)) if h.display_width <= 8 => {
                         DataType::UnsignedInt
-                    }
+                    },
                     _ => col.data_type.clone(),
                 };
 
