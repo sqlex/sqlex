@@ -109,14 +109,13 @@ fn column_is_non_nullable(columns: &[InferColumn], slot_id: u32) -> bool {
 
 impl Inferencer<'_> {
     pub(super) fn refine_join_cardinality_from_selection(
-        &self,
+        &mut self,
         current: CardInterval,
         join_node: &JoinNode,
         condition: &Expression,
-        outer_scopes: &[Vec<InferColumn>],
     ) -> Result<CardInterval, Diagnostic> {
-        let left = self.infer_relation_with_outer_scopes(&join_node.left, outer_scopes)?;
-        let right = self.infer_relation_with_outer_scopes(&join_node.right, outer_scopes)?;
+        let left = self.infer_relation(&join_node.left)?;
+        let right = self.infer_relation(&join_node.right)?;
 
         let Some(join_pairs) =
             extract_join_equijoin_pairs(condition, &left.columns, &right.columns)

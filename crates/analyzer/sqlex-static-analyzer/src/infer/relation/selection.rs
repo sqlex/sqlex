@@ -19,13 +19,12 @@ use crate::{
 
 impl Inferencer<'_> {
     pub(super) fn infer_selection_relation(
-        &self,
+        &mut self,
         node: &SelectionNode,
-        outer_scopes: &[Vec<InferColumn>],
     ) -> Result<crate::infer::model::metadata::InferMetadata, Diagnostic> {
-        let mut child = self.infer_relation_with_outer_scopes(&node.input, outer_scopes)?;
+        let mut child = self.infer_relation(&node.input)?;
 
-        let _ = self.infer_expression(&node.condition, &child.columns, outer_scopes)?;
+        let _ = self.infer_expression(&node.condition, &child.columns)?;
 
         if condition_implies_empty_result(&node.condition, &child.keys, &child.columns) {
             child.cardinality = CardInterval::exactly_zero();
@@ -37,14 +36,11 @@ impl Inferencer<'_> {
                 child.cardinality,
                 join_node,
                 &node.condition,
-                outer_scopes,
             )?;
 
-            if let Some(optimized_columns) = self.refine_join_nullability_from_selection(
-                join_node,
-                &node.condition,
-                outer_scopes,
-            )? {
+            if let Some(optimized_columns) =
+                self.refine_join_nullability_from_selection(join_node, &node.condition)?
+            {
                 child.columns = optimized_columns;
             }
         }
@@ -63,10 +59,9 @@ impl Inferencer<'_> {
     /// the referenced table's columns can preserve their original nullability
     /// instead of being forced to nullable.
     fn refine_join_nullability_from_selection(
-        &self,
+        &mut self,
         join_node: &JoinNode,
         condition: &Expression,
-        outer_scopes: &[Vec<InferColumn>],
     ) -> Result<Option<Vec<InferColumn>>, Diagnostic> {
         let (preserved_side, other_side, _preserved_is_left) = match join_node.kind {
             JoinKind::Left => (&join_node.left, &join_node.right, true),
@@ -74,8 +69,8 @@ impl Inferencer<'_> {
             _ => return Ok(None),
         };
 
-        let preserved_meta = self.infer_relation_with_outer_scopes(preserved_side, outer_scopes)?;
-        let other_meta = self.infer_relation_with_outer_scopes(other_side, outer_scopes)?;
+        let preserved_meta = self.infer_relation(preserved_side)?;
+        let other_meta = self.infer_relation(other_side)?;
 
         let Some(join_pairs) =
             extract_equijoin_pairs(condition, &preserved_meta.columns, &other_meta.columns)

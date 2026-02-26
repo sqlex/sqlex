@@ -9,7 +9,7 @@ use crate::{
         expression::{
             function::{first_arg_type, infer_with_signature, validate_argument_types},
             literal::infer_literal_expression,
-            slot::{infer_correlated_slot_expression, infer_slot_expression},
+            slot::infer_slot_expression,
             type_rules::{boolean_result_type, validate_binary_op},
         },
         model::metadata::InferColumn,
@@ -39,20 +39,19 @@ pub(crate) struct IntLiteralInfo {
 
 impl Inferencer<'_> {
     pub(crate) fn infer_expression(
-        &self,
+        &mut self,
         expr: &Expression,
         input_columns: &[InferColumn],
-        outer_scopes: &[Vec<InferColumn>],
     ) -> Result<ExpressionInference, Diagnostic> {
         match expr {
             Expression::SlotRef(slot_id) => infer_slot_expression(*slot_id, input_columns),
             Expression::CorrelatedRef { depth, slot_id } => {
-                infer_correlated_slot_expression(*depth, *slot_id, outer_scopes)
+                self.infer_correlated_slot_expression(*depth, *slot_id)
             },
             Expression::Literal(literal) => Ok(infer_literal_expression(literal, self.dialect)),
             Expression::BinaryOp { left, op, right } => {
-                let left_info = self.infer_expression(left, input_columns, outer_scopes)?;
-                let right_info = self.infer_expression(right, input_columns, outer_scopes)?;
+                let left_info = self.infer_expression(left, input_columns)?;
+                let right_info = self.infer_expression(right, input_columns)?;
                 validate_binary_op(
                     op,
                     &left_info.data_type,
@@ -95,7 +94,7 @@ impl Inferencer<'_> {
                 })
             },
             Expression::UnaryOp { op, expr } => {
-                let info = self.infer_expression(expr, input_columns, outer_scopes)?;
+                let info = self.infer_expression(expr, input_columns)?;
                 let data_type = match op {
                     BoundUnaryOp::Not => boolean_result_type(self.dialect),
                     BoundUnaryOp::Neg | BoundUnaryOp::Pos => info.data_type.clone(),
@@ -115,7 +114,10 @@ impl Inferencer<'_> {
                 })
             },
             Expression::Function { name, args } => {
-                let args_info = self.infer_expression_args(args, input_columns, outer_scopes)?;
+                let mut args_info = Vec::with_capacity(args.len());
+                for arg in args {
+                    args_info.push(self.infer_expression(arg, input_columns)?);
+                }
                 self.infer_function_expression(name, args_info)
             },
             Expression::AggregateCall {
@@ -124,15 +126,21 @@ impl Inferencer<'_> {
                 distinct,
             } => {
                 let _ = distinct;
-                let args_info = self.infer_expression_args(args, input_columns, outer_scopes)?;
+                let mut args_info = Vec::with_capacity(args.len());
+                for arg in args {
+                    args_info.push(self.infer_expression(arg, input_columns)?);
+                }
                 self.infer_aggregate_expression(name, args_info)
             },
             Expression::WindowCall { name, args, .. } => {
-                let args_info = self.infer_expression_args(args, input_columns, outer_scopes)?;
+                let mut args_info = Vec::with_capacity(args.len());
+                for arg in args {
+                    args_info.push(self.infer_expression(arg, input_columns)?);
+                }
                 self.infer_window_call_expression(name, args_info)
             },
             Expression::Cast { expr, target_type } => {
-                let info = self.infer_expression(expr, input_columns, outer_scopes)?;
+                let info = self.infer_expression(expr, input_columns)?;
                 Ok(ExpressionInference {
                     data_type: target_type.clone(),
                     nullable: info.nullable,
@@ -153,15 +161,14 @@ impl Inferencer<'_> {
                 let mut nullable = false;
 
                 for (condition, result) in when_clauses {
-                    let _ = self.infer_expression(condition, input_columns, outer_scopes)?;
-                    let result_info = self.infer_expression(result, input_columns, outer_scopes)?;
+                    let _ = self.infer_expression(condition, input_columns)?;
+                    let result_info = self.infer_expression(result, input_columns)?;
                     nullable |= result_info.nullable;
                     branch_types.push(result_info.data_type);
                 }
 
                 if let Some(else_expr) = else_expr {
-                    let else_info =
-                        self.infer_expression(else_expr, input_columns, outer_scopes)?;
+                    let else_info = self.infer_expression(else_expr, input_columns)?;
                     nullable |= else_info.nullable;
                     branch_types.push(else_info.data_type);
                 } else {
@@ -178,10 +185,10 @@ impl Inferencer<'_> {
                 })
             },
             Expression::InList { expr, list, .. } => {
-                let expr_info = self.infer_expression(expr, input_columns, outer_scopes)?;
+                let expr_info = self.infer_expression(expr, input_columns)?;
                 let mut nullable = expr_info.nullable;
                 for item in list {
-                    let item_info = self.infer_expression(item, input_columns, outer_scopes)?;
+                    let item_info = self.infer_expression(item, input_columns)?;
                     nullable |= item_info.nullable;
                 }
                 Ok(ExpressionInference {
@@ -196,12 +203,9 @@ impl Inferencer<'_> {
                 negated,
             } => {
                 let _ = negated;
-                let expr_info = self.infer_expression(expr, input_columns, outer_scopes)?;
-                let subquery_info = self.infer_single_column_subquery_expression(
-                    subquery,
-                    input_columns,
-                    outer_scopes,
-                )?;
+                let expr_info = self.infer_expression(expr, input_columns)?;
+                let subquery_info =
+                    self.infer_single_column_subquery_expression(subquery, input_columns)?;
                 Ok(ExpressionInference {
                     data_type: boolean_result_type(self.dialect),
                     nullable: expr_info.nullable || subquery_info.nullable,
@@ -210,9 +214,10 @@ impl Inferencer<'_> {
             },
             Expression::Exists { subquery, negated } => {
                 let _ = negated;
-                let mut subquery_outer_scopes = outer_scopes.to_vec();
-                subquery_outer_scopes.push(input_columns.to_vec());
-                let _ = self.infer_relation_with_outer_scopes(subquery, &subquery_outer_scopes)?;
+                self.outer_scopes.push(input_columns);
+                let subquery_result = self.infer_relation(subquery);
+                self.outer_scopes.pop();
+                let _ = subquery_result?;
                 Ok(ExpressionInference {
                     data_type: boolean_result_type(self.dialect),
                     nullable: false,
@@ -220,7 +225,7 @@ impl Inferencer<'_> {
                 })
             },
             Expression::ScalarSubquery(subquery) => {
-                self.infer_single_column_subquery_expression(subquery, input_columns, outer_scopes)
+                self.infer_single_column_subquery_expression(subquery, input_columns)
             },
             Expression::Placeholder => Ok(ExpressionInference {
                 data_type: DataType::Custom("unknown".to_string()),
@@ -232,19 +237,6 @@ impl Inferencer<'_> {
 }
 
 impl Inferencer<'_> {
-    fn infer_expression_args(
-        &self,
-        args: &[Expression],
-        input_columns: &[InferColumn],
-        outer_scopes: &[Vec<InferColumn>],
-    ) -> Result<Vec<ExpressionInference>, Diagnostic> {
-        let mut result = Vec::with_capacity(args.len());
-        for arg in args {
-            result.push(self.infer_expression(arg, input_columns, outer_scopes)?);
-        }
-        Ok(result)
-    }
-
     fn infer_function_expression(
         &self,
         name: &str,

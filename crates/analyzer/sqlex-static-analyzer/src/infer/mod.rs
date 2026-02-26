@@ -1,20 +1,25 @@
 use sqlex_common::dialect::Dialect;
 
 use crate::{
-    algebraizer::model::relation::Relation, catalog::Catalog, diagnostics::Diagnostic,
-    functions::FunctionRegistry, infer::model::metadata::InferMetadata,
+    algebraizer::model::relation::Relation,
+    catalog::Catalog,
+    diagnostics::Diagnostic,
+    functions::FunctionRegistry,
+    infer::{model::metadata::InferMetadata, scope::OuterScopeStack},
 };
 
 mod expression;
 pub(crate) mod model;
 mod mysql_narrowing;
 mod relation;
+mod scope;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Inferencer<'a> {
     dialect: Dialect,
     catalog: &'a Catalog,
     functions: &'a FunctionRegistry,
+    outer_scopes: OuterScopeStack,
 }
 
 impl<'a> Inferencer<'a> {
@@ -27,10 +32,11 @@ impl<'a> Inferencer<'a> {
             dialect,
             catalog,
             functions,
+            outer_scopes: OuterScopeStack::new(),
         }
     }
 
-    pub(crate) fn infer(&self, relation: &Relation) -> Result<InferMetadata, Diagnostic> {
+    pub(crate) fn infer(mut self, relation: &Relation) -> Result<InferMetadata, Diagnostic> {
         self.infer_relation(relation)
     }
 }
@@ -102,7 +108,7 @@ mod tests {
         });
 
         let functions = FunctionRegistry::new(Dialect::Postgres);
-        let inferencer = Inferencer::new(Dialect::Postgres, &catalog, &functions);
+        let mut inferencer = Inferencer::new(Dialect::Postgres, &catalog, &functions);
         let metadata = inferencer
             .infer_relation(&relation)
             .expect("inference should succeed");
@@ -128,7 +134,7 @@ mod tests {
         });
 
         let functions = FunctionRegistry::new(Dialect::Postgres);
-        let inferencer = Inferencer::new(Dialect::Postgres, &catalog, &functions);
+        let mut inferencer = Inferencer::new(Dialect::Postgres, &catalog, &functions);
         let metadata = inferencer
             .infer_relation(&relation)
             .expect("inference should succeed");
@@ -171,7 +177,7 @@ mod tests {
         });
 
         let functions = FunctionRegistry::new(Dialect::Postgres);
-        let inferencer = Inferencer::new(Dialect::Postgres, &catalog, &functions);
+        let mut inferencer = Inferencer::new(Dialect::Postgres, &catalog, &functions);
         let metadata = inferencer
             .infer_relation(&relation)
             .expect("inference should succeed");
@@ -199,7 +205,7 @@ mod tests {
         });
 
         let functions = FunctionRegistry::new(Dialect::Postgres);
-        let inferencer = Inferencer::new(Dialect::Postgres, &catalog, &functions);
+        let mut inferencer = Inferencer::new(Dialect::Postgres, &catalog, &functions);
         let metadata = inferencer
             .infer_relation(&relation)
             .expect("inference should succeed");
@@ -312,7 +318,7 @@ mod tests {
         });
 
         let functions = FunctionRegistry::new(Dialect::Postgres);
-        let inferencer = Inferencer::new(Dialect::Postgres, &catalog, &functions);
+        let mut inferencer = Inferencer::new(Dialect::Postgres, &catalog, &functions);
         let metadata = inferencer
             .infer_relation(&relation)
             .expect("inference should succeed");

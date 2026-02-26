@@ -17,12 +17,11 @@ use crate::{
 
 impl Inferencer<'_> {
     pub(super) fn infer_join_relation(
-        &self,
+        &mut self,
         node: &JoinNode,
-        outer_scopes: &[Vec<InferColumn>],
     ) -> Result<InferMetadata, Diagnostic> {
-        let left = self.infer_relation_with_outer_scopes(&node.left, outer_scopes)?;
-        let right = self.infer_relation_with_outer_scopes(&node.right, outer_scopes)?;
+        let left = self.infer_relation(&node.left)?;
+        let right = self.infer_relation(&node.right)?;
 
         let mut left_columns = left.columns;
         let mut right_columns = right.columns;

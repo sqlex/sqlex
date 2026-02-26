@@ -10,14 +10,14 @@ use crate::{
 
 impl Inferencer<'_> {
     pub(super) fn infer_single_column_subquery_expression(
-        &self,
+        &mut self,
         subquery: &Relation,
         input_columns: &[InferColumn],
-        outer_scopes: &[Vec<InferColumn>],
     ) -> Result<ExpressionInference, Diagnostic> {
-        let mut subquery_outer_scopes = outer_scopes.to_vec();
-        subquery_outer_scopes.push(input_columns.to_vec());
-        let metadata = self.infer_relation_with_outer_scopes(subquery, &subquery_outer_scopes)?;
+        self.outer_scopes.push(input_columns);
+        let metadata = self.infer_relation(subquery);
+        self.outer_scopes.pop();
+        let metadata = metadata?;
         let metadata = self.narrow_int_literals_at_boundary(metadata);
 
         if metadata.columns.len() != 1 {

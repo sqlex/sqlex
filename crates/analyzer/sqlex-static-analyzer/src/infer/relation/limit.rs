@@ -2,19 +2,16 @@ use crate::{
     algebraizer::model::relation::LimitNode,
     diagnostics::Diagnostic,
     infer::{
-        Inferencer,
-        model::metadata::{InferColumn, InferMetadata},
-        relation::cardinality::infer_limit_cardinality,
+        Inferencer, model::metadata::InferMetadata, relation::cardinality::infer_limit_cardinality,
     },
 };
 
 impl Inferencer<'_> {
     pub(super) fn infer_limit_relation(
-        &self,
+        &mut self,
         node: &LimitNode,
-        outer_scopes: &[Vec<InferColumn>],
     ) -> Result<InferMetadata, Diagnostic> {
-        let mut child = self.infer_relation_with_outer_scopes(&node.input, outer_scopes)?;
+        let mut child = self.infer_relation(&node.input)?;
 
         child.cardinality = infer_limit_cardinality(child.cardinality, node.limit, node.offset)?;
 
