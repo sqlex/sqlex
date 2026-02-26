@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use sqlex_analyzer::extension::object_name_ext::ObjectNameExt;
 use sqlex_common::dialect::Dialect;
 use sqlparser::ast::{Expr, Join, JoinConstraint, JoinOperator};
 
@@ -13,7 +14,6 @@ use crate::{
         },
         scope::RelationBinding,
     },
-    catalog::normalize::normalize_object_name,
     diagnostics::{Diagnostic, Phase},
 };
 
@@ -243,7 +243,7 @@ impl Algebraizer<'_> {
 
         columns
             .iter()
-            .map(|column| normalize_object_name(column, self.dialect))
+            .map(|column| column.to_normalized_string(self.dialect))
             .collect()
     }
 

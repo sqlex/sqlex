@@ -2925,6 +2925,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlex-static-analyzer-v2"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "sqlex-analyzer",
+ "sqlex-common",
+ "sqlparser",
+]
+
+[[package]]
 name = "sqlparser"
 version = "0.54.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use rand::{Rng, distributions::Alphanumeric};
-use sqlex_analyzer::{Analyzer, AnalyzerError, Result};
+use sqlex_analyzer::{Analyzer, Result, error::AnalyzerError};
 use sqlex_common::{
     dialect::Dialect,
     types::{ColumnInfo, DataType, ResultSet, Table},
@@ -39,22 +39,19 @@ impl PostgresDatabaseAnalyzer {
                     .with_label(DIALECT_LABEL_KEY, "postgres");
 
                 let container = image.start().await.map_err(|e| {
-                    AnalyzerError::ExecutionError(format!(
-                        "Failed to start postgres container: {}",
-                        e
-                    ))
+                    AnalyzerError::other(format!("Failed to start postgres container: {}", e))
                 })?;
 
                 let container_id = container.id().to_string();
                 let host = container
                     .get_host()
                     .await
-                    .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?
+                    .map_err(|e| AnalyzerError::other(e.to_string()))?
                     .to_string();
                 let port = container
                     .get_host_port_ipv4(5432)
                     .await
-                    .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+                    .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
                 let url = format!(
                     "postgres://postgres:{}@{}:{}/postgres",
@@ -91,12 +88,12 @@ impl PostgresDatabaseAnalyzer {
         let admin_pool = PgPoolOptions::new()
             .connect(&admin_url)
             .await
-            .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+            .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
         admin_pool
             .execute(format!("CREATE DATABASE {}", db_name).as_str())
             .await
-            .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+            .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
         // Connect to the new database
         let url = format!(
@@ -106,7 +103,7 @@ impl PostgresDatabaseAnalyzer {
         let pool = PgPoolOptions::new()
             .connect(&url)
             .await
-            .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+            .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
         Ok(Self {
             pool,
@@ -122,7 +119,7 @@ impl Analyzer for PostgresDatabaseAnalyzer {
         self.pool
             .execute(sql)
             .await
-            .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+            .map_err(|e| AnalyzerError::other(e.to_string()))?;
         Ok(())
     }
 
@@ -131,7 +128,7 @@ impl Analyzer for PostgresDatabaseAnalyzer {
             .pool
             .prepare(sql)
             .await
-            .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+            .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
         let mut columns = Vec::new();
         for col in stmt.columns() {
@@ -166,7 +163,7 @@ impl Analyzer for PostgresDatabaseAnalyzer {
         let rows = sqlx::query(query)
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+            .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
         let mut tables_map: std::collections::HashMap<String, Vec<ColumnInfo>> =
             std::collections::HashMap::new();
@@ -175,16 +172,16 @@ impl Analyzer for PostgresDatabaseAnalyzer {
         for row in rows {
             let table_name: String = row
                 .try_get("table_name")
-                .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+                .map_err(|e| AnalyzerError::other(e.to_string()))?;
             let column_name: String = row
                 .try_get("column_name")
-                .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+                .map_err(|e| AnalyzerError::other(e.to_string()))?;
             let udt_name: String = row
                 .try_get("udt_name")
-                .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+                .map_err(|e| AnalyzerError::other(e.to_string()))?;
             let is_nullable: String = row
                 .try_get("is_nullable")
-                .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+                .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
             let data_type = map_udt(&udt_name);
             let nullability = is_nullable == "YES";
@@ -202,7 +199,7 @@ impl Analyzer for PostgresDatabaseAnalyzer {
             if let Some(columns) = tables_map.get_mut(&table_name) {
                 columns.push(col_info);
             } else {
-                return Err(AnalyzerError::AnalysisError(format!(
+                return Err(AnalyzerError::other(format!(
                     "Missing table entry while collecting Postgres metadata: {}",
                     table_name
                 )));
@@ -212,7 +209,7 @@ impl Analyzer for PostgresDatabaseAnalyzer {
         let mut tables = Vec::with_capacity(table_order.len());
         for name in table_order {
             let columns = tables_map.remove(&name).ok_or_else(|| {
-                AnalyzerError::AnalysisError(format!(
+                AnalyzerError::other(format!(
                     "Missing collected columns for Postgres table: {}",
                     name
                 ))

@@ -1,14 +1,10 @@
 use async_trait::async_trait;
-pub mod extension;
-use thiserror::Error;
+use sqlex_common::types::{ResultSet, Table};
 
-#[derive(Error, Debug)]
-pub enum AnalyzerError {
-    #[error("Execution failed: {0}")]
-    ExecutionError(String),
-    #[error("Analysis failed: {0}")]
-    AnalysisError(String),
-}
+use crate::error::AnalyzerError;
+
+pub mod error;
+pub mod extension;
 
 pub type Result<T> = std::result::Result<T, AnalyzerError>;
 
@@ -18,8 +14,8 @@ pub trait Analyzer: Send + Sync {
     async fn execute(&mut self, sql: &str) -> Result<()>;
 
     /// Analyze a query to determine its result set structure.
-    async fn analyze(&self, sql: &str) -> Result<sqlex_common::types::ResultSet>;
+    async fn analyze(&self, sql: &str) -> Result<ResultSet>;
 
     /// Get all tables schema
-    async fn get_all_tables(&self) -> Result<Vec<sqlex_common::types::Table>>;
+    async fn get_all_tables(&self) -> Result<Vec<Table>>;
 }

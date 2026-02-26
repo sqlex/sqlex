@@ -1,4 +1,6 @@
-use sqlex_analyzer::extension::data_type_ext::DataTypeExt;
+use sqlex_analyzer::extension::{
+    data_type_ext::DataTypeExt, ident_ext::IdentExt, object_name_ext::ObjectNameExt,
+};
 use sqlex_common::{dialect::Dialect, types::DataType};
 use sqlparser::ast::{
     AlterTableOperation, ColumnDef, ColumnOption, CreateTable, ObjectType, Statement,
@@ -9,7 +11,6 @@ use crate::{
     catalog::{
         Catalog,
         model::{ColumnSchema, ForeignKeyConstraint, KeyConstraint, TableSchema},
-        normalize::{normalize_ident, normalize_object_name, original_object_name},
     },
     diagnostics::{Diagnostic, Phase},
 };
@@ -70,8 +71,8 @@ impl CatalogMutator {
             ));
         }
 
-        let table_name = normalize_object_name(&create_table.name, self.dialect);
-        let original_table_name = original_object_name(&create_table.name);
+        let table_name = create_table.name.to_normalized_string(self.dialect);
+        let original_table_name = create_table.name.to_dotted_string();
 
         if catalog.table(&table_name).is_some() {
             if create_table.if_not_exists {
@@ -152,7 +153,7 @@ impl CatalogMutator {
         if_exists: bool,
         operations: &[AlterTableOperation],
     ) -> Result<(), Diagnostic> {
-        let table_name = normalize_object_name(table_name_ast, self.dialect);
+        let table_name = table_name_ast.to_normalized_string(self.dialect);
         let Some(table_index) = catalog.table_index(&table_name) else {
             if if_exists {
                 return Ok(());
@@ -195,7 +196,7 @@ impl CatalogMutator {
                     if_exists,
                     ..
                 } => {
-                    let normalized_column = normalize_ident(column_name, self.dialect);
+                    let normalized_column = column_name.to_normalized_string(self.dialect);
                     self.validate_drop_column(catalog, table_index, &normalized_column)?;
                     let table = &mut catalog.tables[table_index];
                     let Some(column_index) = table.column_index(&normalized_column) else {
@@ -252,7 +253,7 @@ impl CatalogMutator {
         }
 
         for object_name in names {
-            let normalized_name = normalize_object_name(object_name, self.dialect);
+            let normalized_name = object_name.to_normalized_string(self.dialect);
             if catalog.table(&normalized_name).is_none() {
                 if if_exists {
                     continue;
@@ -288,7 +289,7 @@ impl CatalogMutator {
     }
 
     fn build_column(&self, column_def: &ColumnDef) -> ColumnSchema {
-        let name = normalize_ident(&column_def.name, self.dialect);
+        let name = column_def.name.to_normalized_string(self.dialect);
         let nullable = !column_def
             .options
             .iter()
@@ -307,7 +308,7 @@ impl CatalogMutator {
         table: &mut TableSchema,
         column_def: &ColumnDef,
     ) -> Result<(), Diagnostic> {
-        let column_name = normalize_ident(&column_def.name, self.dialect);
+        let column_name = column_def.name.to_normalized_string(self.dialect);
         for option_def in &column_def.options {
             match &option_def.option {
                 ColumnOption::Unique { is_primary, .. } => {
@@ -336,13 +337,13 @@ impl CatalogMutator {
                     } else {
                         referred_columns
                             .iter()
-                            .map(|ident| normalize_ident(ident, self.dialect))
+                            .map(|ident| ident.to_normalized_string(self.dialect))
                             .collect()
                     };
                     table.foreign_keys.push(ForeignKeyConstraint {
                         name: option_def.name.as_ref().map(|ident| ident.value.clone()),
                         columns: vec![column_name.clone()],
-                        ref_table: normalize_object_name(foreign_table, self.dialect),
+                        ref_table: foreign_table.to_normalized_string(self.dialect),
                         ref_columns,
                     });
                 },
@@ -421,14 +422,14 @@ impl CatalogMutator {
                 } else {
                     referred_columns
                         .iter()
-                        .map(|ident| normalize_ident(ident, self.dialect))
+                        .map(|ident| ident.to_normalized_string(self.dialect))
                         .collect()
                 };
 
                 let foreign_key = ForeignKeyConstraint {
                     name: name.as_ref().map(|ident| ident.value.clone()),
                     columns: normalized_columns,
-                    ref_table: normalize_object_name(foreign_table, self.dialect),
+                    ref_table: foreign_table.to_normalized_string(self.dialect),
                     ref_columns: normalized_ref_columns,
                 };
 
@@ -458,7 +459,7 @@ impl CatalogMutator {
 
         let mut normalized_columns = Vec::with_capacity(columns.len());
         for column in columns {
-            let normalized = normalize_ident(column, self.dialect);
+            let normalized = column.to_normalized_string(self.dialect);
             if !table.has_column(&normalized) {
                 return Err(Diagnostic::new(
                     "C2015",

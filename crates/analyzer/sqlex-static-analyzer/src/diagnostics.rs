@@ -1,6 +1,6 @@
 use std::fmt;
 
-use sqlex_analyzer::AnalyzerError;
+use sqlex_analyzer::error::AnalyzerError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Phase {
@@ -38,15 +38,11 @@ impl Diagnostic {
         }
     }
 
-    pub(crate) fn render(&self) -> String {
-        format!("[{}:{}] {}", self.phase, self.code, self.message)
-    }
-
     pub(crate) fn into_execution_error(self) -> AnalyzerError {
-        AnalyzerError::ExecutionError(self.render())
+        AnalyzerError::analysis(self.code, format!("[{}] {}", self.phase, self.message))
     }
 
     pub(crate) fn into_analysis_error(self) -> AnalyzerError {
-        AnalyzerError::AnalysisError(self.render())
+        AnalyzerError::analysis(self.code, format!("[{}] {}", self.phase, self.message))
     }
 }

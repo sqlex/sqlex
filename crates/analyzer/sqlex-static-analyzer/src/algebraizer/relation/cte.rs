@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use sqlex_analyzer::extension::ident_ext::IdentExt;
 use sqlex_common::types::DataType;
 use sqlparser::ast::{Expr, Select, SelectItem, SetExpr};
 
@@ -12,7 +13,6 @@ use crate::{
         },
         scope::CteBinding,
     },
-    catalog::normalize::normalize_ident,
     diagnostics::{Diagnostic, Phase},
 };
 
@@ -25,7 +25,7 @@ impl Algebraizer<'_> {
 
         if with_clause.recursive {
             for cte in &with_clause.cte_tables {
-                let cte_name = normalize_ident(&cte.alias.name, self.dialect);
+                let cte_name = cte.alias.name.to_normalized_string(self.dialect);
                 if !seen_names.insert(cte_name.clone())
                     || self.cte_scope.exists_in_any_scope(&cte_name)
                 {
@@ -51,7 +51,7 @@ impl Algebraizer<'_> {
                     ));
                 }
 
-                let cte_name = normalize_ident(&cte.alias.name, self.dialect);
+                let cte_name = cte.alias.name.to_normalized_string(self.dialect);
                 if !seen_names.insert(cte_name.clone())
                     || self.cte_scope.exists_in_any_scope(&cte_name)
                 {
@@ -67,7 +67,7 @@ impl Algebraizer<'_> {
 
             for _ in 0..with_clause.cte_tables.len() {
                 for cte in &with_clause.cte_tables {
-                    let cte_name = normalize_ident(&cte.alias.name, self.dialect);
+                    let cte_name = cte.alias.name.to_normalized_string(self.dialect);
                     let cte_relation = self.build_query_relation(cte.query.as_ref())?;
 
                     let mut exposed_schema = cte_relation.output_schema().clone();
@@ -88,7 +88,7 @@ impl Algebraizer<'_> {
                             .iter_mut()
                             .zip(cte.alias.columns.iter())
                         {
-                            column.name = normalize_ident(&alias_column.name, self.dialect);
+                            column.name = alias_column.name.to_normalized_string(self.dialect);
                         }
                     }
 
@@ -113,7 +113,7 @@ impl Algebraizer<'_> {
                 ));
             }
 
-            let cte_name = normalize_ident(&cte.alias.name, self.dialect);
+            let cte_name = cte.alias.name.to_normalized_string(self.dialect);
             if !seen_names.insert(cte_name.clone()) || self.cte_scope.exists_in_any_scope(&cte_name)
             {
                 return Err(Diagnostic::new(
@@ -142,7 +142,7 @@ impl Algebraizer<'_> {
                     .iter_mut()
                     .zip(cte.alias.columns.iter())
                 {
-                    column.name = normalize_ident(&alias_column.name, self.dialect);
+                    column.name = alias_column.name.to_normalized_string(self.dialect);
                 }
             }
 
@@ -205,10 +205,12 @@ impl Algebraizer<'_> {
                 .unwrap_or((DataType::Custom("unknown".to_string()), true));
 
             let name = if !alias_columns.is_empty() {
-                normalize_ident(&alias_columns[index].name, self.dialect)
+                alias_columns[index].name.to_normalized_string(self.dialect)
             } else {
                 match item {
-                    SelectItem::ExprWithAlias { alias, .. } => normalize_ident(alias, self.dialect),
+                    SelectItem::ExprWithAlias { alias, .. } => {
+                        alias.to_normalized_string(self.dialect)
+                    },
                     SelectItem::UnnamedExpr(expr) => self
                         .derive_output_name(expr)
                         .unwrap_or_else(|_| format!("column_{}", index + 1)),
@@ -228,7 +230,7 @@ impl Algebraizer<'_> {
             });
         }
 
-        let cte_name = normalize_ident(&cte.alias.name, self.dialect);
+        let cte_name = cte.alias.name.to_normalized_string(self.dialect);
         let schema = OutputSchema {
             relation_id: self.allocate_relation_id(),
             columns,

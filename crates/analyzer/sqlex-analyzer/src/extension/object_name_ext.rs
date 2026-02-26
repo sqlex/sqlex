@@ -1,6 +1,8 @@
 use sqlex_common::dialect::Dialect;
 use sqlparser::ast::ObjectName;
 
+use crate::extension::ident_ext::IdentExt;
+
 /// Extension trait for sqlparser ObjectName
 pub trait ObjectNameExt {
     /// Convert ObjectName to a dotted string (e.g. "schema.table")
@@ -24,20 +26,7 @@ impl ObjectNameExt for ObjectName {
     fn to_normalized_string(&self, dialect: Dialect) -> String {
         self.0
             .iter()
-            .map(|ident| match dialect {
-                Dialect::Postgres => {
-                    // PostgreSQL: unquoted identifiers are case-insensitive (converted to lowercase)
-                    if ident.quote_style.is_none() {
-                        ident.value.to_lowercase()
-                    } else {
-                        ident.value.clone()
-                    }
-                },
-                Dialect::MySQL | Dialect::SQLite => {
-                    // MySQL and SQLite: use identifier as-is
-                    ident.value.clone()
-                },
-            })
+            .map(|ident| ident.to_normalized_string(dialect))
             .collect::<Vec<_>>()
             .join(".")
     }

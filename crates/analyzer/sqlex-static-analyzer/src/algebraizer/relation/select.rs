@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use sqlex_analyzer::extension::{ident_ext::IdentExt, object_name_ext::ObjectNameExt};
 use sqlparser::ast::{
     Expr, GroupByExpr, NamedWindowDefinition, NamedWindowExpr, Select, SelectItem, WindowSpec,
 };
@@ -13,7 +14,6 @@ use crate::{
             schema::{BoundColumn, ColumnOrigin, OutputSchema, ProjectionColumn, Visibility},
         },
     },
-    catalog::normalize::{normalize_ident, normalize_object_name},
     diagnostics::{Diagnostic, Phase},
 };
 
@@ -147,7 +147,7 @@ impl Algebraizer<'_> {
                     },
                     SelectItem::QualifiedWildcard(qualifier, _) => {
                         has_non_aggregate_projection = true;
-                        let qualifier_name = normalize_object_name(qualifier, self.dialect);
+                        let qualifier_name = qualifier.to_normalized_string(self.dialect);
                         let Some(scope) = self.relation_scope.current().iter().find(|scope| {
                             scope
                                 .qualifier_names
@@ -375,7 +375,7 @@ impl Algebraizer<'_> {
 
         let mut raw_definitions = HashMap::new();
         for NamedWindowDefinition(name, expr) in definitions {
-            let normalized_name = normalize_ident(name, self.dialect);
+            let normalized_name = name.to_normalized_string(self.dialect);
             if raw_definitions
                 .insert(normalized_name.clone(), expr.clone())
                 .is_some()
@@ -436,7 +436,7 @@ impl Algebraizer<'_> {
         resolving_stack.push(name.to_string());
         let resolved_spec = match definition {
             NamedWindowExpr::NamedWindow(base_name) => {
-                let normalized_base = normalize_ident(base_name, self.dialect);
+                let normalized_base = base_name.to_normalized_string(self.dialect);
                 self.resolve_named_window_spec(
                     &normalized_base,
                     definitions,
@@ -446,7 +446,7 @@ impl Algebraizer<'_> {
             },
             NamedWindowExpr::WindowSpec(spec) => {
                 let mut merged = if let Some(base_name) = &spec.window_name {
-                    let normalized_base = normalize_ident(base_name, self.dialect);
+                    let normalized_base = base_name.to_normalized_string(self.dialect);
                     self.resolve_named_window_spec(
                         &normalized_base,
                         definitions,

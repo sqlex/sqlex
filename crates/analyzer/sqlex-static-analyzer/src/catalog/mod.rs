@@ -2,7 +2,6 @@ use sqlex_common::types::{ColumnInfo, Table};
 
 pub(crate) mod model;
 pub(crate) mod mutator;
-pub(crate) mod normalize;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Catalog {
