@@ -287,7 +287,11 @@ fn extract_error_code(error: &impl std::fmt::Display) -> Option<String> {
     let payload = &rendered[(bracket_start + 1)..];
     let bracket_end_relative = payload.find(']')?;
     let payload = &payload[..bracket_end_relative];
-    payload.split(':').nth(1).map(ToString::to_string)
+    payload
+        .rsplit(':')
+        .next()
+        .filter(|code| !code.is_empty())
+        .map(ToString::to_string)
 }
 
 fn validate_suite(suite: &YamlTestSuite, display_path: &str) -> Result<(), String> {

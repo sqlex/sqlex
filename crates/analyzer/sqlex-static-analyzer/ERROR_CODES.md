@@ -9,12 +9,12 @@ the corresponding **error reason** for each code.
 Diagnostics are rendered as:
 
 ```text
-[PHASE:CODE] message
+[CODE] [PHASE] message
 ```
 
 Rendering implementation:
 
-- `src/diagnostics.rs` (`Diagnostic::render`)
+- `src/diagnostics.rs` (`Diagnostic::into_execution_error` / `Diagnostic::into_analysis_error`)
 
 ## 2. Phase and Code Namespace
 

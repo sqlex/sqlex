@@ -7,7 +7,7 @@ use crate::{
 };
 
 pub(super) fn resolve_scan_keys(node: &ScanNode, catalog: &Catalog) -> Vec<ResolvedKey> {
-    let Some(table) = catalog.table(&node.table) else {
+    let Ok(table) = catalog.get_table(&node.table) else {
         return Vec::new();
     };
 

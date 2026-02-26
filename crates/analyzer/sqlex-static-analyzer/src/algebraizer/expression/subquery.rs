@@ -1,3 +1,4 @@
+use sqlex_analyzer::extension::{ident_ext::IdentExt, object_name_ext::ObjectNameExt};
 use sqlex_common::{dialect::Dialect, types::DataType};
 use sqlparser::ast::{Expr, Select, TableFactor};
 
@@ -6,7 +7,6 @@ use crate::{
         Algebraizer,
         model::{expression::BoundLiteral, relation::Relation},
     },
-    catalog::normalize::{normalize_ident, normalize_object_name},
     diagnostics::{Diagnostic, Phase},
 };
 
@@ -53,10 +53,10 @@ impl Algebraizer<'_> {
                 }
                 let qualifier = idents[..idents.len() - 1]
                     .iter()
-                    .map(|ident| normalize_ident(ident, self.dialect))
+                    .map(|ident| ident.to_normalized_string(self.dialect))
                     .collect::<Vec<_>>()
                     .join(".");
-                let column_name = normalize_ident(idents.last()?, self.dialect);
+                let column_name = idents.last()?.to_normalized_string(self.dialect);
                 self.resolve_subquery_column(select, Some(&qualifier), &column_name)
             },
             Expr::Value(value) => {
@@ -120,8 +120,8 @@ impl Algebraizer<'_> {
             return None;
         };
 
-        let normalized_table_name = normalize_object_name(name, self.dialect);
-        let table = self.catalog.table(&normalized_table_name)?;
+        let normalized_table_name = name.to_normalized_string(self.dialect);
+        let table = self.catalog.get_table(&normalized_table_name).ok()?;
 
         if let Some(qualifier) = qualifier {
             let mut qualifier_names = vec![normalized_table_name.clone()];
@@ -131,7 +131,7 @@ impl Algebraizer<'_> {
                 }
             }
             if let Some(alias) = alias {
-                qualifier_names.push(normalize_ident(&alias.name, self.dialect));
+                qualifier_names.push(alias.name.to_normalized_string(self.dialect));
             }
 
             if !qualifier_names.iter().any(|name| name == qualifier) {

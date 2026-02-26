@@ -1,4 +1,4 @@
-use sqlex_analyzer::{AnalyzerError, Result};
+use sqlex_analyzer::{Result, error::AnalyzerError};
 use tokio::time::{Duration, sleep};
 
 pub async fn parse_retry_connect<F, Fut, P>(connect_fn: F) -> Result<P>
@@ -12,7 +12,7 @@ where
             Ok(pool) => return Ok(pool),
             Err(e) => {
                 if attempts >= 10 {
-                    return Err(AnalyzerError::ExecutionError(format!(
+                    return Err(AnalyzerError::other(format!(
                         "Failed to connect after 10 attempts: {}",
                         e
                     )));

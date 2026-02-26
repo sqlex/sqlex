@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use rand::{Rng, distributions::Alphanumeric};
-use sqlex_analyzer::{Analyzer, AnalyzerError, Result};
+use sqlex_analyzer::{Analyzer, Result, error::AnalyzerError};
 use sqlex_common::{
     dialect::Dialect,
     types::{ColumnInfo, DataType, ResultSet, Table},
@@ -39,19 +39,19 @@ impl MySqlDatabaseAnalyzer {
                     .with_label(DIALECT_LABEL_KEY, "mysql");
 
                 let container = image.start().await.map_err(|e| {
-                    AnalyzerError::ExecutionError(format!("Failed to start mysql container: {}", e))
+                    AnalyzerError::other(format!("Failed to start mysql container: {}", e))
                 })?;
 
                 let container_id = container.id().to_string();
                 let host = container
                     .get_host()
                     .await
-                    .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?
+                    .map_err(|e| AnalyzerError::other(e.to_string()))?
                     .to_string();
                 let port = container
                     .get_host_port_ipv4(3306)
                     .await
-                    .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+                    .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
                 let url = format!("mysql://root:{}@{}:{}", password, host, port);
                 parse_retry_connect(|| MySqlPoolOptions::new().connect(&url)).await?;
@@ -84,12 +84,12 @@ impl MySqlDatabaseAnalyzer {
         let admin_pool = MySqlPoolOptions::new()
             .connect(&admin_url)
             .await
-            .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+            .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
         admin_pool
             .execute(format!("CREATE DATABASE {}", db_name).as_str())
             .await
-            .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+            .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
         let url = format!(
             "mysql://root:{}@{}:{}/{}",
@@ -98,7 +98,7 @@ impl MySqlDatabaseAnalyzer {
         let pool = MySqlPoolOptions::new()
             .connect(&url)
             .await
-            .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+            .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
         Ok(Self {
             pool,
@@ -114,7 +114,7 @@ impl Analyzer for MySqlDatabaseAnalyzer {
         self.pool
             .execute(sql)
             .await
-            .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+            .map_err(|e| AnalyzerError::other(e.to_string()))?;
         Ok(())
     }
 
@@ -123,7 +123,7 @@ impl Analyzer for MySqlDatabaseAnalyzer {
             .pool
             .prepare(sql)
             .await
-            .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+            .map_err(|e| AnalyzerError::other(e.to_string()))?;
         let mut columns = Vec::new();
         for col in stmt.columns() {
             let name = col.name().trim().to_string();
@@ -160,7 +160,7 @@ impl Analyzer for MySqlDatabaseAnalyzer {
         let rows = sqlx::query(query)
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+            .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
         let mut tables_map: std::collections::HashMap<String, Vec<ColumnInfo>> =
             std::collections::HashMap::new();
@@ -169,16 +169,16 @@ impl Analyzer for MySqlDatabaseAnalyzer {
         for row in rows {
             let table_name: String = row
                 .try_get("TABLE_NAME")
-                .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+                .map_err(|e| AnalyzerError::other(e.to_string()))?;
             let column_name: String = row
                 .try_get("COLUMN_NAME")
-                .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+                .map_err(|e| AnalyzerError::other(e.to_string()))?;
             let data_type_str: String = row
                 .try_get("DATA_TYPE")
-                .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+                .map_err(|e| AnalyzerError::other(e.to_string()))?;
             let is_nullable: String = row
                 .try_get("IS_NULLABLE")
-                .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+                .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
             let data_type = map_string_type(&data_type_str);
 
@@ -198,7 +198,7 @@ impl Analyzer for MySqlDatabaseAnalyzer {
             if let Some(columns) = tables_map.get_mut(&table_name) {
                 columns.push(col_info);
             } else {
-                return Err(AnalyzerError::AnalysisError(format!(
+                return Err(AnalyzerError::other(format!(
                     "Missing table entry while collecting MySQL metadata: {}",
                     table_name
                 )));
@@ -208,7 +208,7 @@ impl Analyzer for MySqlDatabaseAnalyzer {
         let mut tables = Vec::with_capacity(table_order.len());
         for name in table_order {
             let columns = tables_map.remove(&name).ok_or_else(|| {
-                AnalyzerError::AnalysisError(format!(
+                AnalyzerError::other(format!(
                     "Missing collected columns for MySQL table: {}",
                     name
                 ))

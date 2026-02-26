@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use sqlex_analyzer::{Analyzer, AnalyzerError, Result};
+use sqlex_analyzer::{Analyzer, Result, error::AnalyzerError};
 use sqlex_common::types::{ColumnInfo, DataType, ResultSet, Table};
 use sqlx::{
     Column, Executor, Row, Statement, TypeInfo,
@@ -15,7 +15,7 @@ impl SqliteDatabaseAnalyzer {
         let pool = SqlitePoolOptions::new()
             .connect("sqlite::memory:")
             .await
-            .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+            .map_err(|e| AnalyzerError::other(e.to_string()))?;
         Ok(Self { pool })
     }
 }
@@ -26,7 +26,7 @@ impl Analyzer for SqliteDatabaseAnalyzer {
         self.pool
             .execute(sql)
             .await
-            .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+            .map_err(|e| AnalyzerError::other(e.to_string()))?;
         Ok(())
     }
 
@@ -35,7 +35,7 @@ impl Analyzer for SqliteDatabaseAnalyzer {
             .pool
             .prepare(sql)
             .await
-            .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+            .map_err(|e| AnalyzerError::other(e.to_string()))?;
         let mut columns = Vec::new();
         for col in stmt.columns() {
             let name = col.name().trim().to_string();
@@ -61,35 +61,35 @@ impl Analyzer for SqliteDatabaseAnalyzer {
         let rows = sqlx::query(tables_query)
             .fetch_all(&self.pool)
             .await
-            .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+            .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
         let mut tables = Vec::new();
         for row in rows {
             let table_name: String = row
                 .try_get("name")
-                .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+                .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
             let pragma_query = format!("PRAGMA table_info('{}')", table_name);
 
             let col_rows = sqlx::query(&pragma_query)
                 .fetch_all(&self.pool)
                 .await
-                .map_err(|e| AnalyzerError::ExecutionError(e.to_string()))?;
+                .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
             let mut columns = Vec::new();
             for col_row in col_rows {
                 let name: String = col_row
                     .try_get("name")
-                    .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+                    .map_err(|e| AnalyzerError::other(e.to_string()))?;
                 let type_str: String = col_row
                     .try_get("type")
-                    .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+                    .map_err(|e| AnalyzerError::other(e.to_string()))?;
                 let notnull: i32 = col_row
                     .try_get("notnull")
-                    .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+                    .map_err(|e| AnalyzerError::other(e.to_string()))?;
                 let pk: i32 = col_row
                     .try_get("pk")
-                    .map_err(|e| AnalyzerError::AnalysisError(e.to_string()))?;
+                    .map_err(|e| AnalyzerError::other(e.to_string()))?;
 
                 let data_type = map_string_type(&type_str);
 

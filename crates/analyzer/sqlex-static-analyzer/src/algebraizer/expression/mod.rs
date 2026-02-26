@@ -1,4 +1,4 @@
-use sqlex_analyzer::extension::data_type_ext::DataTypeExt;
+use sqlex_analyzer::extension::{data_type_ext::DataTypeExt, ident_ext::IdentExt};
 use sqlex_common::types::DataType;
 use sqlparser::ast::{BinaryOperator, Expr};
 
@@ -22,7 +22,7 @@ impl Algebraizer<'_> {
     ) -> Result<(Expression, bool), Diagnostic> {
         match expr {
             Expr::Identifier(ident) => {
-                let normalized = crate::catalog::normalize::normalize_ident(ident, self.dialect);
+                let normalized = ident.to_normalized_string(self.dialect);
                 let binding = self.resolve_unqualified_column(&normalized)?;
                 Ok((binding.into_scalar_expr(), false))
             },
@@ -34,13 +34,13 @@ impl Algebraizer<'_> {
                         "empty compound identifier",
                     ));
                 }
-                let column_name = crate::catalog::normalize::normalize_ident(
-                    idents.last().expect("not empty"),
-                    self.dialect,
-                );
+                let column_name = idents
+                    .last()
+                    .expect("not empty")
+                    .to_normalized_string(self.dialect);
                 let qualifier = idents[..idents.len() - 1]
                     .iter()
-                    .map(|ident| crate::catalog::normalize::normalize_ident(ident, self.dialect))
+                    .map(|ident| ident.to_normalized_string(self.dialect))
                     .collect::<Vec<_>>()
                     .join(".");
                 let binding = self.resolve_qualified_column(&qualifier, &column_name)?;

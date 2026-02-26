@@ -14,7 +14,7 @@ use std::{
 
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
-use sqlex_analyzer::{AnalyzerError, Result};
+use sqlex_analyzer::{Result, error::AnalyzerError};
 use sqlex_common::dialect::Dialect;
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -73,9 +73,7 @@ impl ContainerPool {
         let existing = self
             .containers
             .lock()
-            .map_err(|e| {
-                AnalyzerError::ExecutionError(format!("Failed to lock container pool: {}", e))
-            })?
+            .map_err(|e| AnalyzerError::other(format!("Failed to lock container pool: {}", e)))?
             .get(&dialect)
             .map(|entry| entry.info.clone());
         if let Some(container) = existing {
@@ -86,9 +84,7 @@ impl ContainerPool {
         let existing = self
             .containers
             .lock()
-            .map_err(|e| {
-                AnalyzerError::ExecutionError(format!("Failed to lock container pool: {}", e))
-            })?
+            .map_err(|e| AnalyzerError::other(format!("Failed to lock container pool: {}", e)))?
             .get(&dialect)
             .map(|entry| entry.info.clone());
         if let Some(container) = existing {
@@ -97,7 +93,7 @@ impl ContainerPool {
 
         let info = creator().await?;
         if info.dialect != dialect {
-            return Err(AnalyzerError::ExecutionError(format!(
+            return Err(AnalyzerError::other(format!(
                 "Container dialect mismatch: expected {}, got {}",
                 dialect, info.dialect
             )));
@@ -105,24 +101,22 @@ impl ContainerPool {
 
         let dir = std::env::temp_dir().join("sqlex").join("containers");
         fs::create_dir_all(&dir)
-            .map_err(|e| AnalyzerError::ExecutionError(format!("Failed to create dir: {}", e)))?;
+            .map_err(|e| AnalyzerError::other(format!("Failed to create dir: {}", e)))?;
 
         let short_id: String = info.container_id.chars().take(12).collect();
         let lock_path = dir.join(format!("{}_{}.json", info.dialect, short_id));
-        let mut file = File::create(&lock_path).map_err(|e| {
-            AnalyzerError::ExecutionError(format!("Failed to create lock file: {}", e))
-        })?;
+        let mut file = File::create(&lock_path)
+            .map_err(|e| AnalyzerError::other(format!("Failed to create lock file: {}", e)))?;
 
         file.try_lock_exclusive()
-            .map_err(|e| AnalyzerError::ExecutionError(format!("Failed to lock file: {}", e)))?;
+            .map_err(|e| AnalyzerError::other(format!("Failed to lock file: {}", e)))?;
 
         let json = serde_json::to_string(&info)
-            .map_err(|e| AnalyzerError::ExecutionError(format!("Failed to serialize: {}", e)))?;
+            .map_err(|e| AnalyzerError::other(format!("Failed to serialize: {}", e)))?;
         file.write_all(json.as_bytes())
-            .map_err(|e| AnalyzerError::ExecutionError(format!("Failed to write: {}", e)))?;
-        file.sync_all().map_err(|e| {
-            AnalyzerError::ExecutionError(format!("Failed to sync lock file: {}", e))
-        })?;
+            .map_err(|e| AnalyzerError::other(format!("Failed to write: {}", e)))?;
+        file.sync_all()
+            .map_err(|e| AnalyzerError::other(format!("Failed to sync lock file: {}", e)))?;
 
         let entry = ContainerEntry {
             info: info.clone(),
@@ -130,9 +124,10 @@ impl ContainerPool {
             lock_path,
         };
 
-        let mut guard = self.containers.lock().map_err(|e| {
-            AnalyzerError::ExecutionError(format!("Failed to lock container pool: {}", e))
-        })?;
+        let mut guard = self
+            .containers
+            .lock()
+            .map_err(|e| AnalyzerError::other(format!("Failed to lock container pool: {}", e)))?;
         guard.insert(info.dialect, entry);
 
         Ok(info)

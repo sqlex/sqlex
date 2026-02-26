@@ -292,7 +292,7 @@ Pipeline:
 2. For each statement:
    - validate statement kind is DDL supported by catalog mutator.
    - apply mutator to catalog.
-3. Stop at first failure and return `AnalyzerError::ExecutionError`.
+3. Stop at first failure and return `AnalyzerError::analysis(...)` with phase-local diagnostic code.
 
 ## 6.3 `analyze(&self, sql)`
 
@@ -677,13 +677,13 @@ SQLite:
 
 `Diagnostic` to public errors:
 
-1. parse/catalog errors during `execute` -> `AnalyzerError::ExecutionError`.
-2. parse/algebraize/infer errors during `analyze` -> `AnalyzerError::AnalysisError`.
+1. parse/catalog errors during `execute` -> `AnalyzerError::analysis(code, "[PHASE] message")`.
+2. parse/algebraize/infer errors during `analyze` -> `AnalyzerError::analysis(code, "[PHASE] message")`.
 
 Message format suggestion:
 
 ```text
-[ALGEBRAIZE:E1003] ambiguous column 'id'
+[A3009] [ALGEBRAIZE] ambiguous column reference: id
 ```
 
 ## 12. Testing Strategy

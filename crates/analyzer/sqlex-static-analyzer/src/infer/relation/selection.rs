@@ -152,10 +152,10 @@ impl Inferencer<'_> {
             return Ok(false);
         };
 
-        let Some(preserved_schema) = self.catalog.table(&preserved_table) else {
+        let Ok(preserved_schema) = self.catalog.get_table(&preserved_table) else {
             return Ok(false);
         };
-        let Some(other_schema) = self.catalog.table(&other_table) else {
+        let Ok(other_schema) = self.catalog.get_table(&other_table) else {
             return Ok(false);
         };
 

@@ -1,9 +1,9 @@
+use sqlex_analyzer::extension::{ident_ext::IdentExt, object_name_ext::ObjectNameExt};
 use sqlex_common::dialect::Dialect;
 use sqlparser::ast::{Expr, Value};
 
 use crate::{
     algebraizer::{Algebraizer, model::expression::Expression, scope::RelationBinding},
-    catalog::normalize::{normalize_ident, normalize_object_name},
     diagnostics::{Diagnostic, Phase},
 };
 
@@ -181,7 +181,7 @@ impl Algebraizer<'_> {
 
     pub(crate) fn derive_output_name(&self, expr: &Expr) -> Result<String, Diagnostic> {
         match expr {
-            Expr::Identifier(ident) => Ok(normalize_ident(ident, self.dialect)),
+            Expr::Identifier(ident) => Ok(ident.to_normalized_string(self.dialect)),
             Expr::CompoundIdentifier(idents) => {
                 let last = idents.last().ok_or_else(|| {
                     Diagnostic::new(
@@ -190,10 +190,10 @@ impl Algebraizer<'_> {
                         "empty compound identifier in projection",
                     )
                 })?;
-                Ok(normalize_ident(last, self.dialect))
+                Ok(last.to_normalized_string(self.dialect))
             },
             Expr::Function(function) => {
-                let function_name = normalize_object_name(&function.name, self.dialect);
+                let function_name = function.name.to_normalized_string(self.dialect);
                 match self.dialect {
                     Dialect::Postgres => Ok(function_name.to_ascii_lowercase()),
                     Dialect::MySQL | Dialect::SQLite => Ok(expr.to_string()),

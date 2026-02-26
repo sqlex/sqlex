@@ -1,11 +1,10 @@
 use std::fmt;
 
-use sqlex_analyzer::AnalyzerError;
+use sqlex_analyzer::error::AnalyzerError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Phase {
     Parse,
-    Catalog,
     Algebraize,
     Infer,
 }
@@ -14,7 +13,6 @@ impl fmt::Display for Phase {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let value = match self {
             Self::Parse => "PARSE",
-            Self::Catalog => "CATALOG",
             Self::Algebraize => "ALGEBRAIZE",
             Self::Infer => "INFER",
         };
@@ -38,15 +36,11 @@ impl Diagnostic {
         }
     }
 
-    pub(crate) fn render(&self) -> String {
-        format!("[{}:{}] {}", self.phase, self.code, self.message)
-    }
-
     pub(crate) fn into_execution_error(self) -> AnalyzerError {
-        AnalyzerError::ExecutionError(self.render())
+        AnalyzerError::analysis(self.code, format!("[{}] {}", self.phase, self.message))
     }
 
     pub(crate) fn into_analysis_error(self) -> AnalyzerError {
-        AnalyzerError::AnalysisError(self.render())
+        AnalyzerError::analysis(self.code, format!("[{}] {}", self.phase, self.message))
     }
 }

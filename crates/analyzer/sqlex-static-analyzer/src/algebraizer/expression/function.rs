@@ -1,3 +1,4 @@
+use sqlex_analyzer::extension::{ident_ext::IdentExt, object_name_ext::ObjectNameExt};
 use sqlex_common::dialect::Dialect;
 use sqlparser::ast::{
     CeilFloorKind, DateTimeField, Function, FunctionArg, FunctionArgExpr, FunctionArguments,
@@ -9,7 +10,6 @@ use crate::{
         Algebraizer,
         model::{expression::Expression, schema::SortKey},
     },
-    catalog::normalize::{normalize_ident, normalize_object_name},
     diagnostics::{Diagnostic, Phase},
     functions::model::FunctionSignature,
 };
@@ -25,7 +25,7 @@ impl Algebraizer<'_> {
         &mut self,
         function: &Function,
     ) -> Result<(Expression, bool), Diagnostic> {
-        let function_name = normalize_object_name(&function.name, self.dialect);
+        let function_name = function.name.to_normalized_string(self.dialect);
         let function_name_lower = function_name.to_ascii_lowercase();
 
         let mut bound_args = Vec::new();
@@ -61,7 +61,7 @@ impl Algebraizer<'_> {
             let (partition_by, order_by) = match &function.over {
                 Some(WindowType::WindowSpec(spec)) => self.build_window_spec_expression(spec)?,
                 Some(WindowType::NamedWindow(window_name)) => {
-                    let normalized_name = normalize_ident(window_name, self.dialect);
+                    let normalized_name = window_name.to_normalized_string(self.dialect);
                     let Some(spec) = self.named_window_scope.resolve(&normalized_name).cloned()
                     else {
                         return Err(Diagnostic::new(
@@ -186,7 +186,7 @@ impl Algebraizer<'_> {
 
     fn resolve_window_spec_for_over(&self, spec: &WindowSpec) -> Result<WindowSpec, Diagnostic> {
         let mut resolved_spec = if let Some(base_name) = &spec.window_name {
-            let normalized_base = normalize_ident(base_name, self.dialect);
+            let normalized_base = base_name.to_normalized_string(self.dialect);
             let Some(base_spec) = self.named_window_scope.resolve(&normalized_base) else {
                 return Err(Diagnostic::new(
                     "A3048",

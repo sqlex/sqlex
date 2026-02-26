@@ -1,12 +1,25 @@
-use sqlex_common::types::{ColumnInfo, Table};
+#![allow(dead_code)]
 
+use sqlex_analyzer::error::AnalyzerError;
+use sqlex_common::dialect::Dialect;
+use sqlparser::ast::Statement;
+
+mod alter;
+mod create;
+mod drop;
+pub(crate) mod error_code;
 pub(crate) mod model;
-pub(crate) mod mutator;
-pub(crate) mod normalize;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Catalog {
     pub(crate) tables: Vec<model::TableSchema>,
+}
+
+enum ParsedTableConstraint {
+    PrimaryKey(model::KeyConstraint),
+    UniqueKey(model::KeyConstraint),
+    ForeignKey(model::ForeignKeyConstraint),
+    Unsupported,
 }
 
 impl Catalog {
@@ -14,46 +27,45 @@ impl Catalog {
         Self::default()
     }
 
-    pub(crate) fn table_index(&self, table_name: &str) -> Option<usize> {
-        self.tables
-            .iter()
-            .position(|table| table.name == table_name)
-    }
-
-    pub(crate) fn table(&self, table_name: &str) -> Option<&model::TableSchema> {
-        self.tables.iter().find(|table| table.name == table_name)
-    }
-
-    pub(crate) fn add_table(&mut self, table: model::TableSchema) -> Result<(), String> {
-        if self.table(&table.name).is_some() {
-            return Err(format!("table '{}' already exists", table.original_name));
+    pub(crate) fn execute(
+        &mut self,
+        dialect: Dialect,
+        statement: &Statement,
+    ) -> Result<(), AnalyzerError> {
+        match statement {
+            Statement::CreateTable(create_table) => self.apply_create_table(dialect, create_table),
+            Statement::AlterTable {
+                name,
+                if_exists,
+                operations,
+                ..
+            } => self.apply_alter_table(dialect, name, *if_exists, operations),
+            Statement::Drop {
+                object_type,
+                if_exists,
+                names,
+                ..
+            } => self.apply_drop(dialect, object_type, *if_exists, names),
+            other => Err(AnalyzerError::analysis(
+                error_code::DISPATCH_UNSUPPORTED_STATEMENT,
+                format!("unsupported statement in execute: {}", other),
+            )),
         }
-        self.tables.push(table);
-        Ok(())
     }
 
-    pub(crate) fn drop_table(&mut self, table_name: &str) -> Result<model::TableSchema, String> {
-        let Some(index) = self.table_index(table_name) else {
-            return Err(format!("table '{}' does not exist", table_name));
-        };
-        Ok(self.tables.remove(index))
-    }
-
-    pub(crate) fn to_tables(&self) -> Vec<Table> {
+    pub(crate) fn get_table(&self, table_name: &str) -> Result<&model::TableSchema, AnalyzerError> {
         self.tables
             .iter()
-            .map(|table| Table {
-                name: table.name.clone(),
-                columns: table
-                    .columns
-                    .iter()
-                    .map(|column| ColumnInfo {
-                        name: column.name.clone(),
-                        data_type: column.data_type.clone(),
-                        nullability: column.nullable,
-                    })
-                    .collect(),
+            .find(|table| table.name == table_name)
+            .ok_or_else(|| {
+                AnalyzerError::analysis(
+                    error_code::CATALOG_TABLE_NOT_FOUND,
+                    format!("table '{}' does not exist", table_name),
+                )
             })
-            .collect()
+    }
+
+    pub(crate) fn get_all_tables(&self) -> Vec<model::TableSchema> {
+        self.tables.clone()
     }
 }

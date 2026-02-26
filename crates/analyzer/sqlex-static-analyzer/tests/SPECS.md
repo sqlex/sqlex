@@ -142,7 +142,7 @@ Checks:
 Error code format:
 
 ```text
-[PHASE:CODE] message
+[CODE] [PHASE] message
 ```
 
 Examples:

@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use sqlex_analyzer::extension::{ident_ext::IdentExt, object_name_ext::ObjectNameExt};
 use sqlparser::ast::TableFactor;
 
 use crate::{
@@ -11,10 +12,7 @@ use crate::{
         },
         scope::RelationBinding,
     },
-    catalog::{
-        model::TableSchema,
-        normalize::{normalize_ident, normalize_object_name},
-    },
+    catalog::model::TableSchema,
     diagnostics::{Diagnostic, Phase},
 };
 
@@ -28,7 +26,7 @@ impl Algebraizer<'_> {
                 if let Some(alias) = alias {
                     self.validate_alias_ident(&alias.name)?;
                 }
-                let normalized_table_name = normalize_object_name(name, self.dialect);
+                let normalized_table_name = name.to_normalized_string(self.dialect);
                 if let Some(cte_binding) = self.cte_scope.resolve(&normalized_table_name) {
                     let scope = RelationBinding {
                         qualifier_names: self
@@ -39,13 +37,16 @@ impl Algebraizer<'_> {
                     return Ok((cte_binding.relation.clone(), scope));
                 }
 
-                let Some(table) = self.catalog.table(&normalized_table_name) else {
-                    return Err(Diagnostic::new(
-                        "A3003",
-                        Phase::Algebraize,
-                        format!("table not found: {normalized_table_name}"),
-                    ));
-                };
+                let table = self
+                    .catalog
+                    .get_table(&normalized_table_name)
+                    .map_err(|_| {
+                        Diagnostic::new(
+                            "A3003",
+                            Phase::Algebraize,
+                            format!("table not found: {normalized_table_name}"),
+                        )
+                    })?;
 
                 let (schema, qualifier_names) =
                     self.build_table_scope(table, &normalized_table_name, alias.as_ref());
@@ -91,7 +92,7 @@ impl Algebraizer<'_> {
                     ));
                 };
                 self.validate_alias_ident(&alias.name)?;
-                let alias_name = normalize_ident(&alias.name, self.dialect);
+                let alias_name = alias.name.to_normalized_string(self.dialect);
 
                 let mut schema = subquery_relation.output_schema().clone();
                 if !alias.columns.is_empty() {
@@ -111,7 +112,7 @@ impl Algebraizer<'_> {
                         schema.columns.iter_mut().zip(alias.columns.iter())
                     {
                         self.validate_alias_ident(&alias_column.name)?;
-                        column.name = normalize_ident(&alias_column.name, self.dialect);
+                        column.name = alias_column.name.to_normalized_string(self.dialect);
                     }
                 }
 
@@ -142,7 +143,7 @@ impl Algebraizer<'_> {
         alias: Option<&sqlparser::ast::TableAlias>,
     ) -> Vec<String> {
         if let Some(alias) = alias {
-            return vec![normalize_ident(&alias.name, self.dialect)];
+            return vec![alias.name.to_normalized_string(self.dialect)];
         }
 
         let mut qualifier_names = Vec::new();
@@ -169,7 +170,7 @@ impl Algebraizer<'_> {
                 name: column.name.clone(),
                 table_alias: alias
                     .as_ref()
-                    .map(|table_alias| normalize_ident(&table_alias.name, self.dialect))
+                    .map(|table_alias| table_alias.name.to_normalized_string(self.dialect))
                     .or_else(|| {
                         normalized_table_name
                             .split('.')
