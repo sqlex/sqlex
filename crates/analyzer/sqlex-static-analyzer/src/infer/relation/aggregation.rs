@@ -1,6 +1,7 @@
+use sqlex_analyzer::error::AnalyzerError;
+
 use crate::{
     algebraizer::model::relation::AggregationNode,
-    diagnostics::Diagnostic,
     infer::{
         Inferencer,
         model::{cardinality::CardInterval, metadata::InferMetadata},
@@ -12,7 +13,7 @@ impl Inferencer<'_> {
     pub(super) fn infer_aggregation_relation(
         &mut self,
         node: &AggregationNode,
-    ) -> Result<InferMetadata, Diagnostic> {
+    ) -> Result<InferMetadata, AnalyzerError> {
         let child = self.infer_relation(&node.input)?;
         for projection in &node.group_by {
             let _ = self.infer_expression(&projection.expr, &child.columns)?;

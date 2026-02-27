@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
+use sqlex_analyzer::error::AnalyzerError;
+
 use crate::{
     algebraizer::model::{expression::Expression, relation::ProjectionNode},
-    diagnostics::{Diagnostic, Phase},
     infer::{
-        Inferencer,
+        Inferencer, error_code,
         model::metadata::{ColumnOrigin, InferColumn, InferMetadata},
     },
 };
@@ -13,7 +14,7 @@ impl Inferencer<'_> {
     pub(super) fn infer_projection_relation(
         &mut self,
         node: &ProjectionNode,
-    ) -> Result<InferMetadata, Diagnostic> {
+    ) -> Result<InferMetadata, AnalyzerError> {
         let child = self.infer_relation(&node.input)?;
 
         let mut columns = Vec::with_capacity(node.columns.len());
@@ -22,9 +23,8 @@ impl Inferencer<'_> {
             let expression_info = self.infer_expression(&projection_column.expr, &child.columns)?;
             let output_slot_id = node.schema.columns.get(index).map(|column| column.slot_id);
             let output_name = projection_column.alias.clone().ok_or_else(|| {
-                Diagnostic::new(
-                    "I4201",
-                    Phase::Infer,
+                AnalyzerError::analysis(
+                    error_code::PROJECTION_ALIAS_NOT_ASSIGNED,
                     "projection column alias was not assigned during planning",
                 )
             })?;

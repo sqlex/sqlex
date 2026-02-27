@@ -1,12 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
+use sqlex_analyzer::error::AnalyzerError;
+
 use crate::{
     algebraizer::model::{
         expression::{BoundBinaryOp, Expression},
         relation::{JoinKind, JoinNode, Relation, SelectionNode},
     },
     catalog::model::TableSchema,
-    diagnostics::Diagnostic,
     infer::{
         Inferencer,
         model::{
@@ -21,7 +22,7 @@ impl Inferencer<'_> {
     pub(super) fn infer_selection_relation(
         &mut self,
         node: &SelectionNode,
-    ) -> Result<crate::infer::model::metadata::InferMetadata, Diagnostic> {
+    ) -> Result<crate::infer::model::metadata::InferMetadata, AnalyzerError> {
         let mut child = self.infer_relation(&node.input)?;
 
         let _ = self.infer_expression(&node.condition, &child.columns)?;
@@ -62,7 +63,7 @@ impl Inferencer<'_> {
         &mut self,
         join_node: &JoinNode,
         condition: &Expression,
-    ) -> Result<Option<Vec<InferColumn>>, Diagnostic> {
+    ) -> Result<Option<Vec<InferColumn>>, AnalyzerError> {
         let (preserved_side, other_side, _preserved_is_left) = match join_node.kind {
             JoinKind::Left => (&join_node.left, &join_node.right, true),
             JoinKind::Right => (&join_node.right, &join_node.left, false),
@@ -94,7 +95,7 @@ impl Inferencer<'_> {
         join_pairs: &[(u32, u32)],
         preserved_columns: &[InferColumn],
         other_columns: &[InferColumn],
-    ) -> Result<bool, Diagnostic> {
+    ) -> Result<bool, AnalyzerError> {
         let mut preserved_col_map: HashMap<u32, &InferColumn> = HashMap::new();
         for col in preserved_columns {
             if let Some(slot_id) = col.slot_id {

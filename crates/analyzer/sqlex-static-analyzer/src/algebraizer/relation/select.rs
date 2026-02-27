@@ -1,27 +1,27 @@
 use std::collections::{HashMap, HashSet};
 
-use sqlex_analyzer::extension::{ident_ext::IdentExt, object_name_ext::ObjectNameExt};
+use sqlex_analyzer::{
+    error::AnalyzerError,
+    extension::{ident_ext::IdentExt, object_name_ext::ObjectNameExt},
+};
 use sqlparser::ast::{
     Expr, GroupByExpr, NamedWindowDefinition, NamedWindowExpr, Select, SelectItem, WindowSpec,
 };
 
-use crate::{
-    algebraizer::{
-        Algebraizer,
-        model::{
-            expression::Expression,
-            relation::{AggregationNode, ProjectionNode, Relation, SelectionNode, WindowNode},
-            schema::{BoundColumn, ColumnOrigin, OutputSchema, ProjectionColumn, Visibility},
-        },
+use crate::algebraizer::{
+    Algebraizer, error_code,
+    model::{
+        expression::Expression,
+        relation::{AggregationNode, ProjectionNode, Relation, SelectionNode, WindowNode},
+        schema::{BoundColumn, ColumnOrigin, OutputSchema, ProjectionColumn, Visibility},
     },
-    diagnostics::{Diagnostic, Phase},
 };
 
 impl Algebraizer<'_> {
     pub(crate) fn build_select_relation(
         &mut self,
         select: &Select,
-    ) -> Result<Relation, Diagnostic> {
+    ) -> Result<Relation, AnalyzerError> {
         if select.into.is_some()
             || !select.lateral_views.is_empty()
             || select.prewhere.is_some()
@@ -33,9 +33,8 @@ impl Algebraizer<'_> {
             || select.top.is_some()
             || select.value_table_mode.is_some()
         {
-            return Err(Diagnostic::new(
-                "A3051",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::SELECT_ADVANCED_CLAUSES_UNSUPPORTED,
                 "advanced SELECT clauses are not supported in this algebraizer path",
             ));
         }
@@ -54,16 +53,14 @@ impl Algebraizer<'_> {
             if let Some(selection) = &select.selection {
                 let (condition, where_has_aggregate) = self.build_expression(selection)?;
                 if where_has_aggregate {
-                    return Err(Diagnostic::new(
-                        "A3041",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::WHERE_AGGREGATE_NOT_ALLOWED,
                         "aggregate expression is not allowed in WHERE",
                     ));
                 }
                 if contains_window_call(&condition) {
-                    return Err(Diagnostic::new(
-                        "A3042",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::WHERE_WINDOW_NOT_ALLOWED,
                         "window expression is not allowed in WHERE",
                     ));
                 }
@@ -78,9 +75,8 @@ impl Algebraizer<'_> {
             for group_expr in group_by_exprs {
                 let (bound_group_expr, has_aggregate) = self.build_expression(group_expr)?;
                 if has_aggregate {
-                    return Err(Diagnostic::new(
-                        "A3016",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::GROUP_BY_AGGREGATE_NOT_ALLOWED,
                         "aggregate expression is not allowed in GROUP BY",
                     ));
                 }
@@ -100,9 +96,8 @@ impl Algebraizer<'_> {
             if let Some(having_expr) = &select.having {
                 let (condition, having_has_aggregate) = self.build_expression(having_expr)?;
                 if contains_window_call(&condition) {
-                    return Err(Diagnostic::new(
-                        "A3043",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::HAVING_WINDOW_NOT_ALLOWED,
                         "window expression is not allowed in HAVING",
                     ));
                 }
@@ -154,9 +149,8 @@ impl Algebraizer<'_> {
                                 .iter()
                                 .any(|name| name == &qualifier_name)
                         }) else {
-                            return Err(Diagnostic::new(
-                                "A3002",
-                                Phase::Algebraize,
+                            return Err(AnalyzerError::analysis(
+                                error_code::SELECT_UNKNOWN_QUALIFIED_WILDCARD_TARGET,
                                 format!("unknown qualified wildcard target: {qualifier_name}"),
                             ));
                         };
@@ -261,9 +255,8 @@ impl Algebraizer<'_> {
             }
 
             if group_by_count == 0 && has_aggregate && has_non_aggregate_projection {
-                return Err(Diagnostic::new(
-                    "A3017",
-                    Phase::Algebraize,
+                return Err(AnalyzerError::analysis(
+                    error_code::PROJECTION_NON_AGGREGATED_WITHOUT_GROUP_BY,
                     "non-aggregated projection is not allowed when GROUP BY is absent",
                 ));
             }
@@ -272,9 +265,8 @@ impl Algebraizer<'_> {
                 let grouped_slots = grouped_slot_ids(&bound_group_by);
                 for (name, expr, _) in &projection_checks {
                     if contains_ungrouped_slot_outside_aggregate(expr, &grouped_slots, false) {
-                        return Err(Diagnostic::new(
-                            "A3044",
-                            Phase::Algebraize,
+                        return Err(AnalyzerError::analysis(
+                            error_code::PROJECTION_NOT_GROUPED_OR_AGGREGATED,
                             format!(
                                 "projection expression '{name}' must reference grouped columns or aggregates",
                             ),
@@ -287,9 +279,8 @@ impl Algebraizer<'_> {
                         &grouped_slots,
                         false,
                     ) {
-                        return Err(Diagnostic::new(
-                            "A3045",
-                            Phase::Algebraize,
+                        return Err(AnalyzerError::analysis(
+                            error_code::HAVING_NOT_GROUPED_OR_AGGREGATED,
                             "HAVING expression must reference grouped columns or aggregates",
                         ));
                     }
@@ -354,12 +345,11 @@ impl Algebraizer<'_> {
     fn group_by_expressions<'a>(
         &self,
         group_by: &'a GroupByExpr,
-    ) -> Result<&'a [Expr], Diagnostic> {
+    ) -> Result<&'a [Expr], AnalyzerError> {
         match group_by {
             GroupByExpr::Expressions(expressions, _) => Ok(expressions.as_slice()),
-            _ => Err(Diagnostic::new(
-                "A3052",
-                Phase::Algebraize,
+            _ => Err(AnalyzerError::analysis(
+                error_code::GROUP_BY_FORM_UNSUPPORTED,
                 "GROUP BY form is not supported in this algebraizer path",
             )),
         }
@@ -368,7 +358,7 @@ impl Algebraizer<'_> {
     fn register_named_windows(
         &mut self,
         definitions: &[NamedWindowDefinition],
-    ) -> Result<(), Diagnostic> {
+    ) -> Result<(), AnalyzerError> {
         if definitions.is_empty() {
             return Ok(());
         }
@@ -380,9 +370,8 @@ impl Algebraizer<'_> {
                 .insert(normalized_name.clone(), expr.clone())
                 .is_some()
             {
-                return Err(Diagnostic::new(
-                    "A3046",
-                    Phase::Algebraize,
+                return Err(AnalyzerError::analysis(
+                    error_code::WINDOW_DEFINITION_DUPLICATE,
                     format!("duplicate WINDOW definition: {normalized_name}"),
                 ));
             }
@@ -412,23 +401,21 @@ impl Algebraizer<'_> {
         definitions: &HashMap<String, NamedWindowExpr>,
         resolved: &mut HashMap<String, WindowSpec>,
         resolving_stack: &mut Vec<String>,
-    ) -> Result<WindowSpec, Diagnostic> {
+    ) -> Result<WindowSpec, AnalyzerError> {
         if let Some(spec) = resolved.get(name) {
             return Ok(spec.clone());
         }
 
         if resolving_stack.iter().any(|item| item == name) {
-            return Err(Diagnostic::new(
-                "A3047",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::WINDOW_DEFINITION_CYCLIC,
                 format!("cyclic WINDOW definition: {name}"),
             ));
         }
 
         let Some(definition) = definitions.get(name) else {
-            return Err(Diagnostic::new(
-                "A3048",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::WINDOW_DEFINITION_NOT_FOUND,
                 format!("unknown WINDOW definition: {name}"),
             ));
         };

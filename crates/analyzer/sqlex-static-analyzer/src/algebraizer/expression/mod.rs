@@ -1,13 +1,13 @@
-use sqlex_analyzer::extension::{data_type_ext::DataTypeExt, ident_ext::IdentExt};
+use sqlex_analyzer::{
+    error::AnalyzerError,
+    extension::{data_type_ext::DataTypeExt, ident_ext::IdentExt},
+};
 use sqlex_common::types::DataType;
 use sqlparser::ast::{BinaryOperator, Expr};
 
-use crate::{
-    algebraizer::{
-        Algebraizer,
-        model::expression::{BoundBinaryOp, BoundUnaryOp, Expression},
-    },
-    diagnostics::{Diagnostic, Phase},
+use crate::algebraizer::{
+    Algebraizer, error_code,
+    model::expression::{BoundBinaryOp, BoundUnaryOp, Expression},
 };
 
 mod column;
@@ -19,7 +19,7 @@ impl Algebraizer<'_> {
     pub(crate) fn build_expression(
         &mut self,
         expr: &Expr,
-    ) -> Result<(Expression, bool), Diagnostic> {
+    ) -> Result<(Expression, bool), AnalyzerError> {
         match expr {
             Expr::Identifier(ident) => {
                 let normalized = ident.to_normalized_string(self.dialect);
@@ -28,9 +28,8 @@ impl Algebraizer<'_> {
             },
             Expr::CompoundIdentifier(idents) => {
                 if idents.is_empty() {
-                    return Err(Diagnostic::new(
-                        "A3004",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::EXPRESSION_EMPTY_COMPOUND_IDENTIFIER,
                         "empty compound identifier",
                     ));
                 }
@@ -58,9 +57,8 @@ impl Algebraizer<'_> {
                     sqlparser::ast::UnaryOperator::Minus => BoundUnaryOp::Neg,
                     sqlparser::ast::UnaryOperator::Not => BoundUnaryOp::Not,
                     _ => {
-                        return Err(Diagnostic::new(
-                            "A3068",
-                            Phase::Algebraize,
+                        return Err(AnalyzerError::analysis(
+                            error_code::UNARY_OPERATOR_UNSUPPORTED,
                             format!("unsupported unary operator in this iteration: {op}"),
                         ));
                     },
@@ -110,9 +108,8 @@ impl Algebraizer<'_> {
                 trim_characters,
             } => {
                 if trim_where.is_some() || trim_what.is_some() || trim_characters.is_some() {
-                    return Err(Diagnostic::new(
-                        "A3061",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::TRIM_MODIFIERS_UNSUPPORTED,
                         "TRIM modifiers are not supported in this iteration",
                     ));
                 }
@@ -244,16 +241,15 @@ impl Algebraizer<'_> {
                     self.build_single_column_subquery_relation(query, "scalar subquery")?;
                 Ok((Expression::ScalarSubquery(Box::new(bound_subquery)), false))
             },
-            _ => Err(Diagnostic::new(
-                "A3070",
-                Phase::Algebraize,
+            _ => Err(AnalyzerError::analysis(
+                error_code::SCALAR_EXPRESSION_UNSUPPORTED,
                 format!("unsupported scalar expression in this iteration: {expr}"),
             )),
         }
     }
 }
 
-fn map_binary_operator(operator: &BinaryOperator) -> Result<BoundBinaryOp, Diagnostic> {
+fn map_binary_operator(operator: &BinaryOperator) -> Result<BoundBinaryOp, AnalyzerError> {
     let mapped = match operator {
         BinaryOperator::Plus => BoundBinaryOp::Add,
         BinaryOperator::Minus => BoundBinaryOp::Sub,
@@ -268,9 +264,8 @@ fn map_binary_operator(operator: &BinaryOperator) -> Result<BoundBinaryOp, Diagn
         BinaryOperator::And => BoundBinaryOp::And,
         BinaryOperator::Or => BoundBinaryOp::Or,
         _ => {
-            return Err(Diagnostic::new(
-                "A3069",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::BINARY_OPERATOR_UNSUPPORTED,
                 format!("unsupported binary operator in this iteration: {operator}"),
             ));
         },

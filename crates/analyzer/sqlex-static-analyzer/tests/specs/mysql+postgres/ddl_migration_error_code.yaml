@@ -14,5 +14,5 @@ migrations:
   )
 - name: drop_referenced_users
   sql: DROP TABLE users
-  expected_error_code: C2012
+  expected_error_code: C0402
 queries: []

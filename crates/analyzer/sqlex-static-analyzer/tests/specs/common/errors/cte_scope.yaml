@@ -8,4 +8,4 @@ queries:
         SELECT id FROM t
       ) s
       JOIN t ON 1 = 1
-    expected_error_code: A3003
+    expected_error_code: A0003

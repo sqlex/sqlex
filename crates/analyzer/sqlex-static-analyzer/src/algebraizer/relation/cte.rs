@@ -1,26 +1,23 @@
 use std::collections::HashSet;
 
-use sqlex_analyzer::extension::ident_ext::IdentExt;
+use sqlex_analyzer::{error::AnalyzerError, extension::ident_ext::IdentExt};
 use sqlex_common::types::DataType;
 use sqlparser::ast::{Expr, Select, SelectItem, SetExpr};
 
-use crate::{
-    algebraizer::{
-        Algebraizer,
-        model::{
-            relation::{Relation, ScanNode},
-            schema::{BoundColumn, ColumnOrigin, OutputSchema},
-        },
-        scope::CteBinding,
+use crate::algebraizer::{
+    Algebraizer, error_code,
+    model::{
+        relation::{Relation, ScanNode},
+        schema::{BoundColumn, ColumnOrigin, OutputSchema},
     },
-    diagnostics::{Diagnostic, Phase},
+    scope::CteBinding,
 };
 
 impl Algebraizer<'_> {
     pub(crate) fn register_ctes(
         &mut self,
         with_clause: &sqlparser::ast::With,
-    ) -> Result<(), Diagnostic> {
+    ) -> Result<(), AnalyzerError> {
         let mut seen_names = HashSet::new();
 
         if with_clause.recursive {
@@ -29,9 +26,8 @@ impl Algebraizer<'_> {
                 if !seen_names.insert(cte_name.clone())
                     || self.cte_scope.exists_in_any_scope(&cte_name)
                 {
-                    return Err(Diagnostic::new(
-                        "A3025",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::CTE_DUPLICATE_NAME,
                         format!("duplicate CTE name: {cte_name}"),
                     ));
                 }
@@ -44,9 +40,8 @@ impl Algebraizer<'_> {
         if matches!(self.dialect, sqlex_common::dialect::Dialect::SQLite) {
             for cte in &with_clause.cte_tables {
                 if cte.from.is_some() {
-                    return Err(Diagnostic::new(
-                        "A3066",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::CTE_SEARCH_CYCLE_UNSUPPORTED,
                         "CTE SEARCH/CYCLE clauses are not supported in this iteration",
                     ));
                 }
@@ -55,9 +50,8 @@ impl Algebraizer<'_> {
                 if !seen_names.insert(cte_name.clone())
                     || self.cte_scope.exists_in_any_scope(&cte_name)
                 {
-                    return Err(Diagnostic::new(
-                        "A3025",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::CTE_DUPLICATE_NAME,
                         format!("duplicate CTE name: {cte_name}"),
                     ));
                 }
@@ -73,9 +67,8 @@ impl Algebraizer<'_> {
                     let mut exposed_schema = cte_relation.output_schema().clone();
                     if !cte.alias.columns.is_empty() {
                         if cte.alias.columns.len() != exposed_schema.columns.len() {
-                            return Err(Diagnostic::new(
-                                "A3014",
-                                Phase::Algebraize,
+                            return Err(AnalyzerError::analysis(
+                                error_code::CTE_COLUMN_ALIAS_COUNT_MISMATCH,
                                 format!(
                                     "CTE column alias count mismatch: expected {}, got {}",
                                     exposed_schema.columns.len(),
@@ -106,9 +99,8 @@ impl Algebraizer<'_> {
 
         for cte in &with_clause.cte_tables {
             if cte.from.is_some() {
-                return Err(Diagnostic::new(
-                    "A3066",
-                    Phase::Algebraize,
+                return Err(AnalyzerError::analysis(
+                    error_code::CTE_SEARCH_CYCLE_UNSUPPORTED,
                     "CTE SEARCH/CYCLE clauses are not supported in this iteration",
                 ));
             }
@@ -116,9 +108,8 @@ impl Algebraizer<'_> {
             let cte_name = cte.alias.name.to_normalized_string(self.dialect);
             if !seen_names.insert(cte_name.clone()) || self.cte_scope.exists_in_any_scope(&cte_name)
             {
-                return Err(Diagnostic::new(
-                    "A3025",
-                    Phase::Algebraize,
+                return Err(AnalyzerError::analysis(
+                    error_code::CTE_DUPLICATE_NAME,
                     format!("duplicate CTE name: {cte_name}"),
                 ));
             }
@@ -127,9 +118,8 @@ impl Algebraizer<'_> {
             let mut exposed_schema = cte_relation.output_schema().clone();
             if !cte.alias.columns.is_empty() {
                 if cte.alias.columns.len() != exposed_schema.columns.len() {
-                    return Err(Diagnostic::new(
-                        "A3014",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::CTE_COLUMN_ALIAS_COUNT_MISMATCH,
                         format!(
                             "CTE column alias count mismatch: expected {}, got {}",
                             exposed_schema.columns.len(),
@@ -161,14 +151,13 @@ impl Algebraizer<'_> {
     fn build_recursive_cte_stub(
         &mut self,
         cte: &sqlparser::ast::Cte,
-    ) -> Result<CteBinding, Diagnostic> {
+    ) -> Result<CteBinding, AnalyzerError> {
         if let Some((seed_count, recursive_count)) =
             recursive_cte_set_operation_projection_counts(&cte.query.body)
         {
             if seed_count != recursive_count {
-                return Err(Diagnostic::new(
-                    "A3026",
-                    Phase::Algebraize,
+                return Err(AnalyzerError::analysis(
+                    error_code::RECURSIVE_CTE_TERM_COLUMN_COUNT_MISMATCH,
                     format!(
                         "recursive CTE term column count mismatch: seed {}, recursive {}",
                         seed_count, recursive_count
@@ -178,18 +167,16 @@ impl Algebraizer<'_> {
         }
 
         let Some(seed_select) = recursive_cte_seed_select(&cte.query.body) else {
-            return Err(Diagnostic::new(
-                "A3067",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::RECURSIVE_CTE_SEED_NOT_SELECT_COMPATIBLE,
                 "recursive CTE seed term must be SELECT-compatible in this iteration",
             ));
         };
 
         let alias_columns = &cte.alias.columns;
         if !alias_columns.is_empty() && alias_columns.len() != seed_select.projection.len() {
-            return Err(Diagnostic::new(
-                "A3015",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::RECURSIVE_CTE_COLUMN_ALIAS_COUNT_MISMATCH,
                 format!(
                     "recursive CTE column alias count mismatch: expected {}, got {}",
                     seed_select.projection.len(),

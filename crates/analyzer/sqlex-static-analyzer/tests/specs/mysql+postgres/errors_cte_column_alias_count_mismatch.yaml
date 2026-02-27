@@ -7,4 +7,4 @@ queries:
   sql: |
     WITH a(x, y) AS (SELECT 1 AS n)
     SELECT * FROM a
-  expected_error_code: A3014
+  expected_error_code: A0104

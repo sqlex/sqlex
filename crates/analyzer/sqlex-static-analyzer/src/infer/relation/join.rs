@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use sqlex_analyzer::error::AnalyzerError;
 use sqlex_common::types::DataType;
 
 use crate::{
@@ -7,7 +8,6 @@ use crate::{
         relation::{JoinKind, JoinNode},
         schema::ColumnOrigin as BoundColumnOrigin,
     },
-    diagnostics::Diagnostic,
     infer::{
         Inferencer,
         model::metadata::{ColumnOrigin, InferColumn, InferMetadata},
@@ -19,7 +19,7 @@ impl Inferencer<'_> {
     pub(super) fn infer_join_relation(
         &mut self,
         node: &JoinNode,
-    ) -> Result<InferMetadata, Diagnostic> {
+    ) -> Result<InferMetadata, AnalyzerError> {
         let left = self.infer_relation(&node.left)?;
         let right = self.infer_relation(&node.right)?;
 

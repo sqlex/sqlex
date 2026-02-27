@@ -1,6 +1,7 @@
+use sqlex_analyzer::error::AnalyzerError;
+
 use crate::{
     algebraizer::model::relation::DistinctNode,
-    diagnostics::Diagnostic,
     infer::{
         Inferencer,
         model::metadata::InferMetadata,
@@ -12,7 +13,7 @@ impl Inferencer<'_> {
     pub(super) fn infer_distinct_relation(
         &mut self,
         node: &DistinctNode,
-    ) -> Result<InferMetadata, Diagnostic> {
+    ) -> Result<InferMetadata, AnalyzerError> {
         let mut child = self.infer_relation(&node.input)?;
         let output_columns = align_columns_to_schema(&child.columns, &node.schema);
         child.keys = slots_key(output_columns.iter().filter_map(|column| column.slot_id));

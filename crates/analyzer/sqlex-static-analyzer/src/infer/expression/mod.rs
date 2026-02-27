@@ -1,11 +1,10 @@
-use sqlex_analyzer::extension::data_type_ext::DataTypeExt;
+use sqlex_analyzer::{error::AnalyzerError, extension::data_type_ext::DataTypeExt};
 use sqlex_common::types::DataType;
 
 use crate::{
     algebraizer::model::expression::{BoundBinaryOp, BoundUnaryOp, Expression},
-    diagnostics::{Diagnostic, Phase},
     infer::{
-        Inferencer,
+        Inferencer, error_code,
         expression::{
             function::{first_arg_type, infer_with_signature, validate_argument_types},
             literal::infer_literal_expression,
@@ -42,7 +41,7 @@ impl Inferencer<'_> {
         &mut self,
         expr: &Expression,
         input_columns: &[InferColumn],
-    ) -> Result<ExpressionInference, Diagnostic> {
+    ) -> Result<ExpressionInference, AnalyzerError> {
         match expr {
             Expression::SlotRef(slot_id) => infer_slot_expression(*slot_id, input_columns),
             Expression::CorrelatedRef { depth, slot_id } => {
@@ -241,7 +240,7 @@ impl Inferencer<'_> {
         &self,
         name: &str,
         args: Vec<ExpressionInference>,
-    ) -> Result<ExpressionInference, Diagnostic> {
+    ) -> Result<ExpressionInference, AnalyzerError> {
         let Some(signature) = self.functions.resolve_scalar(name) else {
             let data_type = first_arg_type(&args);
             let nullable = args.iter().any(|arg| arg.nullable);
@@ -260,11 +259,10 @@ impl Inferencer<'_> {
         &self,
         name: &str,
         args: Vec<ExpressionInference>,
-    ) -> Result<ExpressionInference, Diagnostic> {
+    ) -> Result<ExpressionInference, AnalyzerError> {
         let Some(signature) = self.functions.resolve_aggregate(name) else {
-            return Err(Diagnostic::new(
-                "I4102",
-                Phase::Infer,
+            return Err(AnalyzerError::analysis(
+                error_code::AGGREGATE_FUNCTION_UNSUPPORTED,
                 format!("unsupported aggregate function: {name}"),
             ));
         };
@@ -277,11 +275,10 @@ impl Inferencer<'_> {
         &self,
         name: &str,
         args: Vec<ExpressionInference>,
-    ) -> Result<ExpressionInference, Diagnostic> {
+    ) -> Result<ExpressionInference, AnalyzerError> {
         let Some(signature) = self.functions.resolve_window_call(name) else {
-            return Err(Diagnostic::new(
-                "I4103",
-                Phase::Infer,
+            return Err(AnalyzerError::analysis(
+                error_code::WINDOW_FUNCTION_UNSUPPORTED,
                 format!("unsupported window function: {name}"),
             ));
         };

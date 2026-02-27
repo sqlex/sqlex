@@ -11,4 +11,4 @@ migrations:
 queries:
 - name: invalid_group_by
   sql: SELECT name, COUNT(*) FROM users
-  expected_error_code: A3017
+  expected_error_code: A0107

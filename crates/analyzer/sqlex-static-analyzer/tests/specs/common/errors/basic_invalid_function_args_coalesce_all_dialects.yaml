@@ -8,4 +8,4 @@ migrations:
 queries:
 - name: invalid_function_args_coalesce
   sql: SELECT COALESCE() FROM users
-  expected_error_code: A3020
+  expected_error_code: A0200

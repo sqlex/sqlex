@@ -1,24 +1,23 @@
 use std::collections::{HashMap, HashSet};
 
+use sqlex_analyzer::error::AnalyzerError;
 use sqlparser::ast::{Expr, OrderByExpr, Query, UnaryOperator, Value};
 
-use crate::{
-    algebraizer::{
-        Algebraizer,
-        model::{
-            expression::Expression,
-            relation::{LimitNode, ProjectionNode, Relation, SortNode},
-            schema::{
-                BoundColumn, ColumnOrigin, OutputSchema, ProjectionColumn, SortKey, Visibility,
-            },
-        },
-        scope::RelationBinding,
+use crate::algebraizer::{
+    Algebraizer, error_code,
+    model::{
+        expression::Expression,
+        relation::{LimitNode, ProjectionNode, Relation, SortNode},
+        schema::{BoundColumn, ColumnOrigin, OutputSchema, ProjectionColumn, SortKey, Visibility},
     },
-    diagnostics::{Diagnostic, Phase},
+    scope::RelationBinding,
 };
 
 impl Algebraizer<'_> {
-    pub(crate) fn build_query_relation(&mut self, query: &Query) -> Result<Relation, Diagnostic> {
+    pub(crate) fn build_query_relation(
+        &mut self,
+        query: &Query,
+    ) -> Result<Relation, AnalyzerError> {
         self.relation_scope.push();
         self.named_window_scope.push();
         self.cte_scope.push();
@@ -41,15 +40,14 @@ impl Algebraizer<'_> {
         &mut self,
         input_relation: Relation,
         query: &Query,
-    ) -> Result<Relation, Diagnostic> {
+    ) -> Result<Relation, AnalyzerError> {
         let Some(order_by) = &query.order_by else {
             return Ok(input_relation);
         };
 
         if order_by.interpolate.is_some() {
-            return Err(Diagnostic::new(
-                "A3030",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::ORDER_BY_INTERPOLATE_UNSUPPORTED,
                 "ORDER BY INTERPOLATE is not supported in this iteration",
             ));
         }
@@ -131,11 +129,10 @@ impl Algebraizer<'_> {
         hidden_schema_columns: &mut Vec<BoundColumn>,
         hidden_expr_slots: &mut HashMap<String, u32>,
         disallow_hidden: bool,
-    ) -> Result<SortKey, Diagnostic> {
+    ) -> Result<SortKey, AnalyzerError> {
         if order_expr.with_fill.is_some() {
-            return Err(Diagnostic::new(
-                "A3031",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::ORDER_BY_WITH_FILL_UNSUPPORTED,
                 "ORDER BY WITH FILL is not supported in this iteration",
             ));
         }
@@ -145,9 +142,8 @@ impl Algebraizer<'_> {
         let bound_expr =
             if let Some(position) = self.try_parse_order_by_position(&order_expr.expr)? {
                 let Some(column) = input_schema.columns.get(position - 1) else {
-                    return Err(Diagnostic::new(
-                        "A3033",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::ORDER_BY_POSITION_OUT_OF_RANGE,
                         format!(
                             "ORDER BY position {} is out of range for {} column(s)",
                             position,
@@ -165,9 +161,8 @@ impl Algebraizer<'_> {
             Expression::SlotRef(slot_id) => Expression::SlotRef(slot_id),
             other => {
                 if disallow_hidden {
-                    return Err(Diagnostic::new(
-                        "A3049",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::ORDER_BY_EXPRESSION_NOT_IN_SELECT_UNDER_DISTINCT,
                         "ORDER BY expression must appear in SELECT list when DISTINCT semantics are active",
                     ));
                 }
@@ -208,20 +203,18 @@ impl Algebraizer<'_> {
         })
     }
 
-    fn try_parse_order_by_position(&self, expr: &Expr) -> Result<Option<usize>, Diagnostic> {
+    fn try_parse_order_by_position(&self, expr: &Expr) -> Result<Option<usize>, AnalyzerError> {
         match expr {
             Expr::Value(Value::Number(number, _)) => {
                 let position = number.parse::<usize>().map_err(|error| {
-                    Diagnostic::new(
-                        "A3032",
-                        Phase::Algebraize,
+                    AnalyzerError::analysis(
+                        error_code::ORDER_BY_POSITION_INVALID,
                         format!("invalid ORDER BY position '{number}': {error}"),
                     )
                 })?;
                 if position == 0 {
-                    return Err(Diagnostic::new(
-                        "A3032",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::ORDER_BY_POSITION_INVALID,
                         "ORDER BY position starts from 1",
                     ));
                 }
@@ -239,7 +232,7 @@ impl Algebraizer<'_> {
         &self,
         input_relation: Relation,
         query: &Query,
-    ) -> Result<Relation, Diagnostic> {
+    ) -> Result<Relation, AnalyzerError> {
         let limit = query
             .limit
             .as_ref()
@@ -268,12 +261,11 @@ impl Algebraizer<'_> {
         &self,
         expr: &Expr,
         clause_name: &str,
-    ) -> Result<u64, Diagnostic> {
+    ) -> Result<u64, AnalyzerError> {
         match expr {
             Expr::Value(Value::Number(number, _)) => number.parse::<u64>().map_err(|error| {
-                Diagnostic::new(
-                    "A3018",
-                    Phase::Algebraize,
+                AnalyzerError::analysis(
+                    error_code::CLAUSE_INVALID_NUMERIC_VALUE,
                     format!("invalid {clause_name} value '{number}': {error}"),
                 )
             }),
@@ -281,9 +273,8 @@ impl Algebraizer<'_> {
                 op: UnaryOperator::Plus,
                 expr,
             } => self.parse_non_negative_integer_literal(expr, clause_name),
-            _ => Err(Diagnostic::new(
-                "A3050",
-                Phase::Algebraize,
+            _ => Err(AnalyzerError::analysis(
+                error_code::CLAUSE_EXPECTS_NON_NEGATIVE_INTEGER_LITERAL,
                 format!("{clause_name} expects a non-negative integer literal"),
             )),
         }

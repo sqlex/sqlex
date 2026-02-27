@@ -3,6 +3,7 @@
 //! A static SQL analyzer that infers result set types and nullability
 //! without requiring a database connection.
 
+use sqlex_analyzer::error::AnalyzerError;
 use sqlex_common::dialect::Dialect;
 use sqlparser::{
     ast::Statement,
@@ -13,11 +14,9 @@ use sqlparser::{
 mod algebraizer;
 mod analyzer;
 mod catalog;
-mod diagnostics;
+mod error_code;
 mod functions;
 mod infer;
-
-use crate::diagnostics::{Diagnostic, Phase};
 
 /// Static SQL analyzer implementation.
 #[derive(Debug)]
@@ -37,28 +36,29 @@ impl StaticAnalyzer {
         }
     }
 
-    pub(crate) fn parse_statement(&self, sql: &str) -> Result<Statement, Diagnostic> {
+    pub(crate) fn parse_statement(&self, sql: &str) -> Result<Statement, AnalyzerError> {
         let mut statements = match self.dialect {
             Dialect::Postgres => Parser::parse_sql(&PostgreSqlDialect {}, sql),
             Dialect::MySQL => Parser::parse_sql(&MySqlDialect {}, sql),
             Dialect::SQLite => Parser::parse_sql(&SQLiteDialect {}, sql),
         }
         .map_err(|err| {
-            Diagnostic::new("P1001", Phase::Parse, format!("failed to parse SQL: {err}"))
+            AnalyzerError::analysis(
+                error_code::PARSE_SQL_FAILED,
+                format!("failed to parse SQL: {err}"),
+            )
         })?;
 
         if statements.is_empty() {
-            return Err(Diagnostic::new(
-                "P1002",
-                Phase::Parse,
+            return Err(AnalyzerError::analysis(
+                error_code::PARSE_EMPTY_SQL,
                 "empty SQL is not allowed",
             ));
         }
 
         if statements.len() != 1 {
-            return Err(Diagnostic::new(
-                "P1003",
-                Phase::Parse,
+            return Err(AnalyzerError::analysis(
+                error_code::PARSE_EXPECT_SINGLE_STATEMENT,
                 "exactly one SQL statement is required",
             ));
         }

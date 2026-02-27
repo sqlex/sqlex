@@ -10,19 +10,19 @@ migrations:
 queries:
 - name: reserved_alias
   sql: SELECT id, RANK() OVER (ORDER BY age) AS rank FROM users
-  expected_error_code: A3024
+  expected_error_code: A0204
 - name: reserved_alias_row_number
   sql: SELECT id, ROW_NUMBER() OVER (ORDER BY age) AS row_number FROM users
-  expected_error_code: A3024
+  expected_error_code: A0204
 - name: reserved_alias_select
   sql: SELECT id AS select FROM users
-  expected_error_code: A3024
+  expected_error_code: A0204
 - name: reserved_alias_window
   sql: SELECT id AS window FROM users
-  expected_error_code: A3024
+  expected_error_code: A0204
 - name: reserved_table_alias
   sql: SELECT id FROM users AS select
-  expected_error_code: A3024
+  expected_error_code: A0204
 - name: reserved_derived_column_alias
   sql: SELECT * FROM (SELECT id FROM users) AS t(select)
-  expected_error_code: A3024
+  expected_error_code: A0204

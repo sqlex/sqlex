@@ -1,4 +1,7 @@
-use sqlex_analyzer::extension::{ident_ext::IdentExt, object_name_ext::ObjectNameExt};
+use sqlex_analyzer::{
+    error::AnalyzerError,
+    extension::{ident_ext::IdentExt, object_name_ext::ObjectNameExt},
+};
 use sqlex_common::dialect::Dialect;
 use sqlparser::ast::{
     CeilFloorKind, DateTimeField, Function, FunctionArg, FunctionArgExpr, FunctionArguments,
@@ -7,10 +10,9 @@ use sqlparser::ast::{
 
 use crate::{
     algebraizer::{
-        Algebraizer,
+        Algebraizer, error_code,
         model::{expression::Expression, schema::SortKey},
     },
-    diagnostics::{Diagnostic, Phase},
     functions::model::FunctionSignature,
 };
 
@@ -24,7 +26,7 @@ impl Algebraizer<'_> {
     pub(crate) fn build_function_expression(
         &mut self,
         function: &Function,
-    ) -> Result<(Expression, bool), Diagnostic> {
+    ) -> Result<(Expression, bool), AnalyzerError> {
         let function_name = function.name.to_normalized_string(self.dialect);
         let function_name_lower = function_name.to_ascii_lowercase();
 
@@ -64,18 +66,16 @@ impl Algebraizer<'_> {
                     let normalized_name = window_name.to_normalized_string(self.dialect);
                     let Some(spec) = self.named_window_scope.resolve(&normalized_name).cloned()
                     else {
-                        return Err(Diagnostic::new(
-                            "A3048",
-                            Phase::Algebraize,
+                        return Err(AnalyzerError::analysis(
+                            error_code::WINDOW_DEFINITION_NOT_FOUND,
                             format!("unknown WINDOW definition: {normalized_name}"),
                         ));
                     };
                     self.build_window_spec_expression(&spec)?
                 },
                 None => {
-                    return Err(Diagnostic::new(
-                        "A3059",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::WINDOW_FUNCTION_OVER_REQUIRED,
                         format!("window function '{function_name_lower}' requires OVER clause"),
                     ));
                 },
@@ -116,7 +116,7 @@ impl Algebraizer<'_> {
         &self,
         function_name_lower: &str,
         has_over: bool,
-    ) -> Result<(FunctionBindKind, Option<&FunctionSignature>), Diagnostic> {
+    ) -> Result<(FunctionBindKind, Option<&FunctionSignature>), AnalyzerError> {
         let scalar_signature = self.functions.resolve_scalar(function_name_lower);
         let aggregate_signature = self.functions.resolve_aggregate(function_name_lower);
         let window_signature = self.functions.resolve_window(function_name_lower);
@@ -126,9 +126,8 @@ impl Algebraizer<'_> {
                 return Ok((FunctionBindKind::Window, Some(signature)));
             }
             if scalar_signature.is_some() {
-                return Err(Diagnostic::new(
-                    "A3058",
-                    Phase::Algebraize,
+                return Err(AnalyzerError::analysis(
+                    error_code::FUNCTION_OVER_CLAUSE_UNSUPPORTED,
                     format!("function '{function_name_lower}' does not support OVER clause"),
                 ));
             }
@@ -142,9 +141,8 @@ impl Algebraizer<'_> {
             return Ok((FunctionBindKind::Scalar, Some(signature)));
         }
         if window_signature.is_some() {
-            return Err(Diagnostic::new(
-                "A3059",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::WINDOW_FUNCTION_OVER_REQUIRED,
                 format!("window function '{function_name_lower}' requires OVER clause"),
             ));
         }
@@ -155,7 +153,7 @@ impl Algebraizer<'_> {
     fn build_window_spec_expression(
         &mut self,
         spec: &WindowSpec,
-    ) -> Result<(Vec<Expression>, Vec<SortKey>), Diagnostic> {
+    ) -> Result<(Vec<Expression>, Vec<SortKey>), AnalyzerError> {
         let resolved_spec = self.resolve_window_spec_for_over(spec)?;
 
         let mut partition_by = Vec::new();
@@ -167,9 +165,8 @@ impl Algebraizer<'_> {
         let mut order_by = Vec::new();
         for order_expr in &resolved_spec.order_by {
             if order_expr.with_fill.is_some() {
-                return Err(Diagnostic::new(
-                    "A3031",
-                    Phase::Algebraize,
+                return Err(AnalyzerError::analysis(
+                    error_code::ORDER_BY_WITH_FILL_UNSUPPORTED,
                     "ORDER BY WITH FILL is not supported in this iteration",
                 ));
             }
@@ -184,13 +181,12 @@ impl Algebraizer<'_> {
         Ok((partition_by, order_by))
     }
 
-    fn resolve_window_spec_for_over(&self, spec: &WindowSpec) -> Result<WindowSpec, Diagnostic> {
+    fn resolve_window_spec_for_over(&self, spec: &WindowSpec) -> Result<WindowSpec, AnalyzerError> {
         let mut resolved_spec = if let Some(base_name) = &spec.window_name {
             let normalized_base = base_name.to_normalized_string(self.dialect);
             let Some(base_spec) = self.named_window_scope.resolve(&normalized_base) else {
-                return Err(Diagnostic::new(
-                    "A3048",
-                    Phase::Algebraize,
+                return Err(AnalyzerError::analysis(
+                    error_code::WINDOW_DEFINITION_NOT_FOUND,
                     format!("unknown WINDOW definition: {normalized_base}"),
                 ));
             };
@@ -221,7 +217,7 @@ impl Algebraizer<'_> {
     fn build_function_arg_expression(
         &mut self,
         arg: &FunctionArg,
-    ) -> Result<(Expression, bool), Diagnostic> {
+    ) -> Result<(Expression, bool), AnalyzerError> {
         let arg_expr = match arg {
             FunctionArg::Named { arg, .. } => arg,
             FunctionArg::ExprNamed { arg, .. } => arg,
@@ -240,15 +236,14 @@ impl Algebraizer<'_> {
         function_name_lower: &str,
         arity: usize,
         signature: Option<&FunctionSignature>,
-    ) -> Result<(), Diagnostic> {
+    ) -> Result<(), AnalyzerError> {
         let Some(signature) = signature else {
             return Ok(());
         };
 
         if arity < signature.min_arity {
-            return Err(Diagnostic::new(
-                "A3020",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::FUNCTION_ARGUMENTS_TOO_FEW,
                 format!(
                     "function '{}' expects at least {} argument(s), got {}",
                     function_name_lower, signature.min_arity, arity
@@ -257,9 +252,8 @@ impl Algebraizer<'_> {
         }
         if let Some(max_arity) = signature.max_arity {
             if arity > max_arity {
-                return Err(Diagnostic::new(
-                    "A3021",
-                    Phase::Algebraize,
+                return Err(AnalyzerError::analysis(
+                    error_code::FUNCTION_ARGUMENTS_TOO_MANY,
                     format!(
                         "function '{}' expects at most {} argument(s), got {}",
                         function_name_lower, max_arity, arity
@@ -276,14 +270,13 @@ impl Algebraizer<'_> {
         function_name: &str,
         expr: &sqlparser::ast::Expr,
         field: &CeilFloorKind,
-    ) -> Result<(Expression, bool), Diagnostic> {
+    ) -> Result<(Expression, bool), AnalyzerError> {
         let (bound_expr, has_aggregate) = self.build_expression(expr)?;
         let bound_args = match field {
             CeilFloorKind::DateTimeField(DateTimeField::NoDateTime) => vec![bound_expr],
             CeilFloorKind::DateTimeField(_) | CeilFloorKind::Scale(_) => {
-                return Err(Diagnostic::new(
-                    "A3060",
-                    Phase::Algebraize,
+                return Err(AnalyzerError::analysis(
+                    error_code::CEIL_FLOOR_MODIFIERS_UNSUPPORTED,
                     "CEIL/FLOOR modifiers are not supported in this iteration",
                 ));
             },
@@ -304,7 +297,7 @@ impl Algebraizer<'_> {
     pub(crate) fn validate_alias_ident(
         &self,
         alias: &sqlparser::ast::Ident,
-    ) -> Result<(), Diagnostic> {
+    ) -> Result<(), AnalyzerError> {
         if !matches!(self.dialect, Dialect::MySQL) {
             return Ok(());
         }
@@ -317,9 +310,8 @@ impl Algebraizer<'_> {
             alias_lower.as_str(),
             "select" | "window" | "rank" | "row_number"
         ) {
-            return Err(Diagnostic::new(
-                "A3024",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::ALIAS_RESERVED_KEYWORD,
                 format!("reserved keyword cannot be used as alias: {}", alias.value),
             ));
         }

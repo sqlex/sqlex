@@ -11,8 +11,8 @@ migrations:
 queries:
   - name: ceil_on_text
     sql: SELECT CEIL(name) FROM test_table
-    expected_error_code: I4109
+    expected_error_code: I0109
 
   - name: floor_on_text
     sql: SELECT FLOOR(name) FROM test_table
-    expected_error_code: I4109
+    expected_error_code: I0109

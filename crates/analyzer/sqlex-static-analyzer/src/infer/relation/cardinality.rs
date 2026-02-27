@@ -1,6 +1,7 @@
+use sqlex_analyzer::error::AnalyzerError;
+
 use crate::{
     algebraizer::model::relation::{JoinKind, SetOp},
-    diagnostics::Diagnostic,
     infer::model::cardinality::{CardInterval, MaxRows, MinRows},
 };
 
@@ -9,7 +10,7 @@ pub(in crate::infer) fn infer_set_operation_cardinality(
     _all: bool,
     left: CardInterval,
     right: CardInterval,
-) -> Result<CardInterval, Diagnostic> {
+) -> Result<CardInterval, AnalyzerError> {
     match op {
         SetOp::Union => CardInterval::try_new(
             lower_or(left.min(), right.min()),
@@ -37,7 +38,7 @@ pub(super) fn infer_join_cardinality_without_condition(
     kind: JoinKind,
     left: CardInterval,
     right: CardInterval,
-) -> Result<CardInterval, Diagnostic> {
+) -> Result<CardInterval, AnalyzerError> {
     match kind {
         JoinKind::Inner => CardInterval::try_new(
             MinRows::Zero,
@@ -94,7 +95,7 @@ pub(in crate::infer) fn infer_limit_cardinality(
     input: CardInterval,
     limit: Option<u64>,
     offset: Option<u64>,
-) -> Result<CardInterval, Diagnostic> {
+) -> Result<CardInterval, AnalyzerError> {
     let has_offset = offset.is_some_and(|value| value > 0);
     match limit {
         Some(0) => Ok(CardInterval::exactly_zero()),

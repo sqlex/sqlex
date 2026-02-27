@@ -142,13 +142,13 @@ Checks:
 Error code format:
 
 ```text
-[CODE] [PHASE] message
+[CODE] message
 ```
 
 Examples:
 
-1. `A3071`
-2. `A3065`
+1. `A0701`
+2. `A0605`
 
 ### 6.3 TDD Cases
 
@@ -227,7 +227,7 @@ dialects:
 queries:
   - name: unsupported_literal
     sql: SELECT X'AB'
-    expected_error_code: A3073
+    expected_error_code: A0703
 ```
 
 ### 7.3 Multi-Dialect Case
@@ -251,7 +251,7 @@ queries:
 queries:
   - name: future_recursive_case
     sql: WITH RECURSIVE t(n) AS (...) SELECT n FROM t
-    expected_error_code: A3067
+    expected_error_code: A0607
     tdd_reason: "Feature is not implemented yet and tracked in roadmap."
 ```
 
@@ -266,7 +266,7 @@ migrations:
   - CREATE TABLE orders (id INT PRIMARY KEY, user_id INT NOT NULL, CONSTRAINT orders_user_fk FOREIGN KEY (user_id) REFERENCES users(id))
   - name: drop_referenced_users
     sql: DROP TABLE users
-    expected_error_code: C2012
+    expected_error_code: C0402
 queries: []
 ```
 

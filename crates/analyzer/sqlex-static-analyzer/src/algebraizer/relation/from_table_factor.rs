@@ -1,11 +1,14 @@
 use std::collections::HashSet;
 
-use sqlex_analyzer::extension::{ident_ext::IdentExt, object_name_ext::ObjectNameExt};
+use sqlex_analyzer::{
+    error::AnalyzerError,
+    extension::{ident_ext::IdentExt, object_name_ext::ObjectNameExt},
+};
 use sqlparser::ast::TableFactor;
 
 use crate::{
     algebraizer::{
-        Algebraizer,
+        Algebraizer, error_code,
         model::{
             relation::{AliasNode, Relation, ScanNode},
             schema::{BoundColumn, ColumnOrigin, OutputSchema},
@@ -13,14 +16,13 @@ use crate::{
         scope::RelationBinding,
     },
     catalog::model::TableSchema,
-    diagnostics::{Diagnostic, Phase},
 };
 
 impl Algebraizer<'_> {
     pub(crate) fn build_table_factor_relation(
         &mut self,
         relation: &TableFactor,
-    ) -> Result<(Relation, RelationBinding), Diagnostic> {
+    ) -> Result<(Relation, RelationBinding), AnalyzerError> {
         match relation {
             TableFactor::Table { name, alias, .. } => {
                 if let Some(alias) = alias {
@@ -41,9 +43,8 @@ impl Algebraizer<'_> {
                     .catalog
                     .get_table(&normalized_table_name)
                     .map_err(|_| {
-                        Diagnostic::new(
-                            "A3003",
-                            Phase::Algebraize,
+                        AnalyzerError::analysis(
+                            error_code::FROM_TABLE_NOT_FOUND,
                             format!("table not found: {normalized_table_name}"),
                         )
                     })?;
@@ -75,9 +76,8 @@ impl Algebraizer<'_> {
                 alias,
             } => {
                 if *lateral {
-                    return Err(Diagnostic::new(
-                        "A3062",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::LATERAL_DERIVED_TABLE_UNSUPPORTED,
                         "LATERAL derived tables are not supported in this iteration",
                     ));
                 }
@@ -85,9 +85,8 @@ impl Algebraizer<'_> {
                 let subquery_relation = self.build_subquery_relation(subquery)?;
 
                 let Some(alias) = alias.as_ref() else {
-                    return Err(Diagnostic::new(
-                        "A3063",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::DERIVED_TABLE_ALIAS_REQUIRED,
                         "derived table in FROM requires an alias in this iteration",
                     ));
                 };
@@ -97,9 +96,8 @@ impl Algebraizer<'_> {
                 let mut schema = subquery_relation.output_schema().clone();
                 if !alias.columns.is_empty() {
                     if alias.columns.len() != schema.columns.len() {
-                        return Err(Diagnostic::new(
-                            "A3013",
-                            Phase::Algebraize,
+                        return Err(AnalyzerError::analysis(
+                            error_code::DERIVED_TABLE_ALIAS_COLUMN_COUNT_MISMATCH,
                             format!(
                                 "derived table alias column count mismatch: expected {}, got {}",
                                 schema.columns.len(),
@@ -129,9 +127,8 @@ impl Algebraizer<'_> {
                     scope,
                 ))
             },
-            _ => Err(Diagnostic::new(
-                "A3064",
-                Phase::Algebraize,
+            _ => Err(AnalyzerError::analysis(
+                error_code::TABLE_FACTOR_UNSUPPORTED,
                 format!("unsupported table factor in this iteration: {relation}"),
             )),
         }

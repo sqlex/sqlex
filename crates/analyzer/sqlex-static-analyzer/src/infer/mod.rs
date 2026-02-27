@@ -1,13 +1,14 @@
+use sqlex_analyzer::error::AnalyzerError;
 use sqlex_common::dialect::Dialect;
 
 use crate::{
     algebraizer::model::relation::Relation,
     catalog::Catalog,
-    diagnostics::Diagnostic,
     functions::FunctionRegistry,
     infer::{model::metadata::InferMetadata, scope::OuterScopeStack},
 };
 
+pub(crate) mod error_code;
 mod expression;
 pub(crate) mod model;
 mod mysql_narrowing;
@@ -36,7 +37,7 @@ impl<'a> Inferencer<'a> {
         }
     }
 
-    pub(crate) fn infer(mut self, relation: &Relation) -> Result<InferMetadata, Diagnostic> {
+    pub(crate) fn infer(mut self, relation: &Relation) -> Result<InferMetadata, AnalyzerError> {
         self.infer_relation(relation)
     }
 }

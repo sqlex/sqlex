@@ -1,20 +1,17 @@
 use std::collections::{HashMap, HashSet};
 
-use sqlex_analyzer::extension::object_name_ext::ObjectNameExt;
+use sqlex_analyzer::{error::AnalyzerError, extension::object_name_ext::ObjectNameExt};
 use sqlex_common::dialect::Dialect;
 use sqlparser::ast::{Expr, Join, JoinConstraint, JoinOperator};
 
-use crate::{
-    algebraizer::{
-        Algebraizer,
-        model::{
-            expression::{BoundBinaryOp, Expression},
-            relation::{JoinKind, Relation, SelectionNode},
-            schema::{BoundColumn, ColumnOrigin, OutputSchema},
-        },
-        scope::RelationBinding,
+use crate::algebraizer::{
+    Algebraizer, error_code,
+    model::{
+        expression::{BoundBinaryOp, Expression},
+        relation::{JoinKind, Relation, SelectionNode},
+        schema::{BoundColumn, ColumnOrigin, OutputSchema},
     },
-    diagnostics::{Diagnostic, Phase},
+    scope::RelationBinding,
 };
 
 #[derive(Debug, Clone)]
@@ -30,11 +27,10 @@ impl Algebraizer<'_> {
         left_relation: Relation,
         scopes: &mut Vec<RelationBinding>,
         join: &Join,
-    ) -> Result<Relation, Diagnostic> {
+    ) -> Result<Relation, AnalyzerError> {
         if join.global {
-            return Err(Diagnostic::new(
-                "A3053",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::GLOBAL_JOIN_UNSUPPORTED,
                 "GLOBAL JOIN is not supported in this algebraizer path",
             ));
         }
@@ -87,9 +83,8 @@ impl Algebraizer<'_> {
         let mut hidden_slots = HashSet::new();
         for pair in &using_pairs {
             let left_column = left_slot_columns.get(&pair.left_slot).ok_or_else(|| {
-                Diagnostic::new(
-                    "A3057",
-                    Phase::Algebraize,
+                AnalyzerError::analysis(
+                    error_code::INTERNAL_INVARIANT_VIOLATED,
                     format!(
                         "internal algebraizer invariant violated: missing left USING slot {}",
                         pair.left_slot
@@ -97,9 +92,8 @@ impl Algebraizer<'_> {
                 )
             })?;
             let right_column = right_slot_columns.get(&pair.right_slot).ok_or_else(|| {
-                Diagnostic::new(
-                    "A3057",
-                    Phase::Algebraize,
+                AnalyzerError::analysis(
+                    error_code::INTERNAL_INVARIANT_VIOLATED,
                     format!(
                         "internal algebraizer invariant violated: missing right USING slot {}",
                         pair.right_slot
@@ -178,7 +172,7 @@ impl Algebraizer<'_> {
     fn join_kind_and_condition<'a>(
         &self,
         operator: &'a JoinOperator,
-    ) -> Result<(JoinKind, Option<&'a Expr>), Diagnostic> {
+    ) -> Result<(JoinKind, Option<&'a Expr>), AnalyzerError> {
         match operator {
             JoinOperator::Inner(constraint) => {
                 self.join_constraint_with_kind(JoinKind::Inner, constraint)
@@ -191,18 +185,16 @@ impl Algebraizer<'_> {
             },
             JoinOperator::FullOuter(constraint) => {
                 if matches!(self.dialect, Dialect::MySQL) {
-                    return Err(Diagnostic::new(
-                        "A3054",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::MYSQL_FULL_JOIN_UNSUPPORTED,
                         "FULL JOIN is not supported for mysql",
                     ));
                 }
                 self.join_constraint_with_kind(JoinKind::Full, constraint)
             },
             JoinOperator::CrossJoin => Ok((JoinKind::Cross, None)),
-            _ => Err(Diagnostic::new(
-                "A3055",
-                Phase::Algebraize,
+            _ => Err(AnalyzerError::analysis(
+                error_code::JOIN_OPERATOR_UNSUPPORTED,
                 format!(
                     "JOIN operator is not supported for dialect {}: {:?}",
                     self.dialect, operator
@@ -215,14 +207,13 @@ impl Algebraizer<'_> {
         &self,
         kind: JoinKind,
         constraint: &'a JoinConstraint,
-    ) -> Result<(JoinKind, Option<&'a Expr>), Diagnostic> {
+    ) -> Result<(JoinKind, Option<&'a Expr>), AnalyzerError> {
         match constraint {
             JoinConstraint::On(expr) => Ok((kind, Some(expr))),
             JoinConstraint::None => Ok((kind, None)),
             JoinConstraint::Using(_) => Ok((kind, None)),
-            JoinConstraint::Natural => Err(Diagnostic::new(
-                "A3056",
-                Phase::Algebraize,
+            JoinConstraint::Natural => Err(AnalyzerError::analysis(
+                error_code::NATURAL_JOIN_UNSUPPORTED,
                 "NATURAL JOIN is not supported in this algebraizer path",
             )),
         }
@@ -254,7 +245,7 @@ impl Algebraizer<'_> {
         right_scope: &RelationBinding,
         left_schema: &OutputSchema,
         right_schema: &OutputSchema,
-    ) -> Result<Vec<JoinUsingPair>, Diagnostic> {
+    ) -> Result<Vec<JoinUsingPair>, AnalyzerError> {
         let mut pairs = Vec::with_capacity(using_columns.len());
         for column_name in using_columns {
             let left_slot = self.resolve_join_using_slot_in_scopes(left_scopes, column_name)?;
@@ -264,9 +255,8 @@ impl Algebraizer<'_> {
             )?;
 
             if find_column_by_slot(left_schema, left_slot).is_none() {
-                return Err(Diagnostic::new(
-                    "A3057",
-                    Phase::Algebraize,
+                return Err(AnalyzerError::analysis(
+                    error_code::INTERNAL_INVARIANT_VIOLATED,
                     format!(
                         "internal algebraizer invariant violated: left slot {} not found in schema",
                         left_slot
@@ -274,9 +264,8 @@ impl Algebraizer<'_> {
                 ));
             }
             if find_column_by_slot(right_schema, right_slot).is_none() {
-                return Err(Diagnostic::new(
-                    "A3057",
-                    Phase::Algebraize,
+                return Err(AnalyzerError::analysis(
+                    error_code::INTERNAL_INVARIANT_VIOLATED,
                     format!(
                         "internal algebraizer invariant violated: right slot {} not found in schema",
                         right_slot
@@ -296,7 +285,7 @@ impl Algebraizer<'_> {
     fn build_join_using_condition(
         &self,
         using_pairs: &[JoinUsingPair],
-    ) -> Result<Expression, Diagnostic> {
+    ) -> Result<Expression, AnalyzerError> {
         let mut condition = None;
         for pair in using_pairs {
             let equality = Expression::BinaryOp {
@@ -316,9 +305,8 @@ impl Algebraizer<'_> {
         }
 
         condition.ok_or_else(|| {
-            Diagnostic::new(
-                "A3027",
-                Phase::Algebraize,
+            AnalyzerError::analysis(
+                error_code::JOIN_USING_REQUIRES_SHARED_COLUMN,
                 "JOIN USING requires at least one shared column",
             )
         })
@@ -328,7 +316,7 @@ impl Algebraizer<'_> {
         &self,
         scopes: &[RelationBinding],
         column_name: &str,
-    ) -> Result<u32, Diagnostic> {
+    ) -> Result<u32, AnalyzerError> {
         let mut slots = scopes
             .iter()
             .flat_map(|scope| {
@@ -340,16 +328,14 @@ impl Algebraizer<'_> {
             .map(|column| column.slot_id);
 
         let Some(slot_id) = slots.next() else {
-            return Err(Diagnostic::new(
-                "A3008",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::COLUMN_NOT_FOUND,
                 format!("column not found: {column_name}"),
             ));
         };
         if slots.next().is_some() {
-            return Err(Diagnostic::new(
-                "A3009",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::COLUMN_REFERENCE_AMBIGUOUS,
                 format!("ambiguous column reference: {column_name}"),
             ));
         }

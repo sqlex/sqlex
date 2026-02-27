@@ -12,5 +12,5 @@ migrations:
   )
 - name: add_foreign_key_via_alter_table
   sql: ALTER TABLE orders ADD CONSTRAINT orders_user_fk FOREIGN KEY (user_id) REFERENCES users(id)
-  expected_error_code: C2026
+  expected_error_code: C0304
 queries: []

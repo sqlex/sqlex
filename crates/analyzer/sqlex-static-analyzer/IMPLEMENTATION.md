@@ -24,7 +24,7 @@ Important constraints:
 1. Keep public API minimal: export only `StaticAnalyzer` from this crate.
 2. Avoid `pub use` re-exports.
 3. No `unwrap()` in runtime logic; return structured analyzer errors.
-4. Keep deterministic behavior for tests (stable column order and diagnostics ordering).
+4. Keep deterministic behavior for tests (stable column order and deterministic error-code behavior).
 
 ## 3. Scope
 
@@ -48,41 +48,40 @@ Important constraints:
 crates/analyzer/sqlex-static-analyzer/src/
   lib.rs
   analyzer.rs
-  diagnostics.rs
-  parser.rs
+  error_code.rs
   catalog/
     mod.rs
+    error_code.rs
     model.rs
-    normalize.rs
-    mutator.rs
-    ddl_type_map.rs
+    create.rs
+    alter.rs
+    drop.rs
   algebraizer/
     mod.rs
+    error_code.rs
     model/
       mod.rs
       relation.rs
       expression.rs
       schema.rs
-    scope.rs
-    cte.rs
     expression/*
-    from_*.rs
-    join.rs
-    select.rs
-    set_ops.rs
+    relation/*
+    scope/*
   infer/
     mod.rs
-    metadata.rs
-    scalar_infer.rs
-    operator_infer.rs
-    cardinality.rs
+    error_code.rs
+    model/*
+    expression/*
+    relation/*
+    scope.rs
+    mysql_narrowing.rs
   functions/
     mod.rs
     model.rs
-    common.rs
-    postgres.rs
-    mysql.rs
-    sqlite.rs
+    common/*
+    postgres/*
+    mysql/*
+    sqlite/*
 ```
 
 Notes:
@@ -253,24 +252,22 @@ Mapping to `sqlex_common::types::Cardinality`:
 4. `[One, Many] -> OneOrMore`
 5. `[Zero, Many] -> ZeroOrMore`
 
-## 5.6 Diagnostics
+## 5.6 Error Model
+
+The crate now emits `sqlex_analyzer::error::AnalyzerError` directly.
 
 ```rust
-pub struct Diagnostic {
-    pub code: &'static str,
-    pub phase: Phase,
-    pub message: String,
-}
+AnalyzerError::analysis(code, message)
 ```
 
-Phase enum:
+Error-code allocation is module-based:
 
-1. Parse
-2. Catalog
-3. Algebraize
-4. Infer
+1. Parse: `src/error_code.rs`
+2. Catalog: `src/catalog/error_code.rs`
+3. Algebraizer: `src/algebraizer/error_code.rs`
+4. Infer: `src/infer/error_code.rs`
 
-v1 strategy is fail-fast with deterministic first error.
+The strategy remains fail-fast with deterministic first error.
 
 ## 6. Analyzer Lifecycle
 
@@ -675,15 +672,16 @@ SQLite:
 
 ## 11. Error Mapping Strategy
 
-`Diagnostic` to public errors:
+All internal failures are emitted directly as public analyzer errors:
 
-1. parse/catalog errors during `execute` -> `AnalyzerError::analysis(code, "[PHASE] message")`.
-2. parse/algebraize/infer errors during `analyze` -> `AnalyzerError::analysis(code, "[PHASE] message")`.
+1. `AnalyzerError::analysis(code, message)` for deterministic analyzer failures.
+2. `AnalyzerError::todo(message)` for explicitly unimplemented paths.
+3. `AnalyzerError::other(message)` for non-analysis failures.
 
 Message format suggestion:
 
 ```text
-[A3009] [ALGEBRAIZE] ambiguous column reference: id
+[A0009] ambiguous column reference: id
 ```
 
 ## 12. Testing Strategy
@@ -723,7 +721,7 @@ Before each merge:
 ## Milestone A: Skeleton and Catalog
 
 1. Create module layout.
-2. Implement parser wrapper and diagnostics base.
+2. Implement parse wrapper and module-specific error-code constants.
 3. Implement catalog + DDL mutator + `get_all_tables`.
 4. Pass all `ddl/*` specs.
 

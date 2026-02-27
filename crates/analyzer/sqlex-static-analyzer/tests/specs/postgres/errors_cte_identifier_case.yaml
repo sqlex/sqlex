@@ -6,10 +6,10 @@ queries:
     sql: |
       WITH "MixedCase" AS (SELECT 1 AS n)
       SELECT n FROM mixedcase
-    expected_error_code: A3003
+    expected_error_code: A0003
 
   - name: unquoted_cte_not_found_when_referenced_quoted_mixed_case
     sql: |
       WITH mixedcase AS (SELECT 1 AS n)
       SELECT n FROM "MixedCase"
-    expected_error_code: A3003
+    expected_error_code: A0003

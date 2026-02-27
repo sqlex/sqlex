@@ -11,4 +11,4 @@ migrations:
 queries:
 - name: invalid_group_by
   sql: SELECT name, COUNT(*) FROM users GROUP BY missing_col
-  expected_error_code: A3008
+  expected_error_code: A0008

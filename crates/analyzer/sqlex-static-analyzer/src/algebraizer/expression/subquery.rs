@@ -1,20 +1,20 @@
-use sqlex_analyzer::extension::{ident_ext::IdentExt, object_name_ext::ObjectNameExt};
+use sqlex_analyzer::{
+    error::AnalyzerError,
+    extension::{ident_ext::IdentExt, object_name_ext::ObjectNameExt},
+};
 use sqlex_common::{dialect::Dialect, types::DataType};
 use sqlparser::ast::{Expr, Select, TableFactor};
 
-use crate::{
-    algebraizer::{
-        Algebraizer,
-        model::{expression::BoundLiteral, relation::Relation},
-    },
-    diagnostics::{Diagnostic, Phase},
+use crate::algebraizer::{
+    Algebraizer, error_code,
+    model::{expression::BoundLiteral, relation::Relation},
 };
 
 impl Algebraizer<'_> {
     pub(crate) fn build_subquery_relation(
         &mut self,
         query: &sqlparser::ast::Query,
-    ) -> Result<Relation, Diagnostic> {
+    ) -> Result<Relation, AnalyzerError> {
         self.build_query_relation(query)
     }
 
@@ -22,13 +22,12 @@ impl Algebraizer<'_> {
         &mut self,
         query: &sqlparser::ast::Query,
         usage: &str,
-    ) -> Result<Relation, Diagnostic> {
+    ) -> Result<Relation, AnalyzerError> {
         let relation = self.build_subquery_relation(query)?;
         let schema = relation.output_schema();
         if schema.columns.len() != 1 {
-            return Err(Diagnostic::new(
-                "A3035",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::SUBQUERY_EXPECTS_SINGLE_COLUMN,
                 format!(
                     "{usage} expects subquery to return exactly one column, got {}",
                     schema.columns.len()

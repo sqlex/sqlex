@@ -1,6 +1,7 @@
+use sqlex_analyzer::error::AnalyzerError;
 use sqlex_common::types::Cardinality;
 
-use crate::diagnostics::{Diagnostic, Phase};
+use crate::infer::error_code;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum MinRows {
@@ -26,11 +27,10 @@ impl CardInterval {
         min: MinRows,
         max: MaxRows,
         location: &'static str,
-    ) -> Result<Self, Diagnostic> {
+    ) -> Result<Self, AnalyzerError> {
         if !is_valid_interval(min, max) {
-            return Err(Diagnostic::new(
-                "I4203",
-                Phase::Infer,
+            return Err(AnalyzerError::analysis(
+                error_code::CARDINALITY_INTERVAL_INVALID,
                 format!("invalid cardinality interval [{min:?}, {max:?}] at {location}"),
             ));
         }
@@ -130,9 +130,13 @@ const fn upper_rank(max: MaxRows) -> u8 {
 
 #[cfg(test)]
 mod tests {
+    use sqlex_analyzer::error::AnalyzerError;
     use sqlex_common::types::Cardinality;
 
-    use crate::infer::model::cardinality::{CardInterval, MaxRows, MinRows};
+    use crate::infer::{
+        error_code,
+        model::cardinality::{CardInterval, MaxRows, MinRows},
+    };
 
     #[test]
     fn invalid_interval_is_rejected() {
@@ -143,7 +147,12 @@ mod tests {
         );
 
         let diagnostic = result.expect_err("invalid interval should return diagnostic");
-        assert_eq!(diagnostic.code, "I4203");
+        match diagnostic {
+            AnalyzerError::Analysis { code, .. } => {
+                assert_eq!(code, error_code::CARDINALITY_INTERVAL_INVALID)
+            },
+            other => panic!("expected analysis error, got: {other:?}"),
+        }
     }
 
     #[test]

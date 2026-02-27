@@ -1,21 +1,19 @@
+use sqlex_analyzer::error::AnalyzerError;
 use sqlparser::ast::{SetExpr, SetOperator, SetQuantifier};
 
-use crate::{
-    algebraizer::{
-        Algebraizer,
-        model::{
-            relation::Relation,
-            schema::{BoundColumn, ColumnOrigin, OutputSchema},
-        },
+use crate::algebraizer::{
+    Algebraizer, error_code,
+    model::{
+        relation::Relation,
+        schema::{BoundColumn, ColumnOrigin, OutputSchema},
     },
-    diagnostics::{Diagnostic, Phase},
 };
 
 impl Algebraizer<'_> {
     pub(crate) fn build_set_relation(
         &mut self,
         sql_set_expr: &SetExpr,
-    ) -> Result<Relation, Diagnostic> {
+    ) -> Result<Relation, AnalyzerError> {
         match sql_set_expr {
             SetExpr::Select(select) => self.build_select_relation(select),
             SetExpr::Query(query) => self.build_query_relation(query),
@@ -31,9 +29,8 @@ impl Algebraizer<'_> {
                 let left_schema = left_relation.output_schema();
                 let right_schema = right_relation.output_schema();
                 if left_schema.columns.len() != right_schema.columns.len() {
-                    return Err(Diagnostic::new(
-                        "A3019",
-                        Phase::Algebraize,
+                    return Err(AnalyzerError::analysis(
+                        error_code::SET_OPERATION_COLUMN_COUNT_MISMATCH,
                         format!(
                             "set operation column count mismatch: left {}, right {}",
                             left_schema.columns.len(),
@@ -84,9 +81,8 @@ impl Algebraizer<'_> {
                     },
                 ))
             },
-            _ => Err(Diagnostic::new(
-                "A3065",
-                Phase::Algebraize,
+            _ => Err(AnalyzerError::analysis(
+                error_code::SET_EXPRESSION_UNSUPPORTED,
                 format!("unsupported set expression in this iteration: {sql_set_expr}"),
             )),
         }

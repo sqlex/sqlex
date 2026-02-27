@@ -1,11 +1,10 @@
-use sqlex_analyzer::extension::data_type_ext::DataTypeExt;
+use sqlex_analyzer::{error::AnalyzerError, extension::data_type_ext::DataTypeExt};
 use sqlex_common::types::DataType;
 
 use crate::{
     algebraizer::model::relation::SetOpNode,
-    diagnostics::{Diagnostic, Phase},
     infer::{
-        Inferencer,
+        Inferencer, error_code,
         model::metadata::{ColumnOrigin, InferColumn, InferMetadata},
         relation::cardinality::{infer_set_operation_cardinality, set_operation_output_nullable},
     },
@@ -15,13 +14,12 @@ impl Inferencer<'_> {
     pub(super) fn infer_set_operation_relation(
         &mut self,
         node: &SetOpNode,
-    ) -> Result<InferMetadata, Diagnostic> {
+    ) -> Result<InferMetadata, AnalyzerError> {
         let left = self.infer_relation(&node.left)?;
         let right = self.infer_relation(&node.right)?;
         if left.columns.len() != right.columns.len() {
-            return Err(Diagnostic::new(
-                "I4202",
-                Phase::Infer,
+            return Err(AnalyzerError::analysis(
+                error_code::SET_OPERATION_COLUMN_COUNT_MISMATCH,
                 format!(
                     "set operation column count mismatch: left {}, right {}",
                     left.columns.len(),

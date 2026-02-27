@@ -1,6 +1,7 @@
+use sqlex_analyzer::error::AnalyzerError;
+
 use crate::{
     algebraizer::model::relation::SortNode,
-    diagnostics::Diagnostic,
     infer::{
         Inferencer, model::metadata::InferMetadata, relation::schema::align_columns_to_schema,
     },
@@ -10,7 +11,7 @@ impl Inferencer<'_> {
     pub(super) fn infer_sort_relation(
         &mut self,
         node: &SortNode,
-    ) -> Result<InferMetadata, Diagnostic> {
+    ) -> Result<InferMetadata, AnalyzerError> {
         let child = self.infer_relation(&node.input)?;
         for key in &node.keys {
             let _ = self.infer_expression(&key.expr, &child.columns)?;

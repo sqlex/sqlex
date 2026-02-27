@@ -11,88 +11,88 @@ queries:
   # String functions with non-text arguments
   - name: upper_on_numeric
     sql: SELECT UPPER(id) FROM test_table
-    expected_error_code: I4108
+    expected_error_code: I0108
 
   - name: upper_on_numeric_expression
     sql: SELECT UPPER(id + 1) FROM test_table
-    expected_error_code: I4108
+    expected_error_code: I0108
 
   - name: lower_on_numeric
     sql: SELECT LOWER(amount) FROM test_table
-    expected_error_code: I4108
+    expected_error_code: I0108
 
   - name: trim_on_numeric
     sql: SELECT TRIM(id) FROM test_table
-    expected_error_code: I4108
+    expected_error_code: I0108
 
   - name: ltrim_on_numeric
     sql: SELECT LTRIM(id) FROM test_table
-    expected_error_code: I4108
+    expected_error_code: I0108
 
   - name: rtrim_on_numeric
     sql: SELECT RTRIM(id) FROM test_table
-    expected_error_code: I4108
+    expected_error_code: I0108
 
   - name: length_on_numeric
     sql: SELECT LENGTH(id) FROM test_table
-    expected_error_code: I4108
+    expected_error_code: I0108
 
   - name: char_length_on_numeric
     sql: SELECT CHAR_LENGTH(id) FROM test_table
 
   # Numeric functions with non-numeric arguments
-    expected_error_code: I4108
+    expected_error_code: I0108
   - name: abs_on_text
     sql: SELECT ABS(name) FROM test_table
-    expected_error_code: I4109
+    expected_error_code: I0109
 
   - name: round_on_text
     sql: SELECT ROUND(name) FROM test_table
-    expected_error_code: I4109
+    expected_error_code: I0109
 
   - name: sqrt_on_text
     sql: SELECT SQRT(name) FROM test_table
-    expected_error_code: I4109
+    expected_error_code: I0109
 
   - name: exp_on_text
     sql: SELECT EXP(name) FROM test_table
-    expected_error_code: I4109
+    expected_error_code: I0109
 
   - name: ln_on_text
     sql: SELECT LN(name) FROM test_table
-    expected_error_code: I4109
+    expected_error_code: I0109
 
   - name: log10_on_text
     sql: SELECT LOG10(name) FROM test_table
-    expected_error_code: I4109
+    expected_error_code: I0109
 
   - name: sign_on_text
     sql: SELECT SIGN(name) FROM test_table
 
   # Power and Mod with non-numeric arguments
-    expected_error_code: I4109
+    expected_error_code: I0109
   - name: power_on_text
     sql: SELECT POWER(name, 2) FROM test_table
-    expected_error_code: I4109
+    expected_error_code: I0109
 
   - name: mod_on_text
     sql: SELECT MOD(name, 2) FROM test_table
 
   # Aggregate functions with non-numeric arguments
-    expected_error_code: I4109
+    expected_error_code: I0109
   - name: sum_on_text
     sql: SELECT SUM(name) FROM test_table
-    expected_error_code: I4109
+    expected_error_code: I0109
 
   - name: avg_on_text
     sql: SELECT AVG(name) FROM test_table
 
   # Window functions with non-numeric arguments
-    expected_error_code: I4109
+    expected_error_code: I0109
   - name: sum_window_on_text
     sql: SELECT SUM(name) OVER () FROM test_table
-    expected_error_code: I4109
+    expected_error_code: I0109
 
   - name: avg_window_on_text
     sql: SELECT AVG(name) OVER () FROM test_table
-    expected_error_code: I4109
+    expected_error_code: I0109

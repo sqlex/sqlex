@@ -4,13 +4,13 @@ queries:
   sql: |
     WITH a AS (SELECT 1 AS n)
     SELECT * FROM b
-  expected_error_code: A3003
+  expected_error_code: A0003
 - name: duplicate_cte_name
   sql: |
     WITH a AS (SELECT 1 AS n),
          a AS (SELECT 2 AS n)
     SELECT * FROM a
-  expected_error_code: A3025
+  expected_error_code: A0205
 - name: recursive_column_count_mismatch
   sql: |
     WITH RECURSIVE a(n) AS (
@@ -19,4 +19,4 @@ queries:
       SELECT n, n + 1 FROM a
     )
     SELECT * FROM a
-  expected_error_code: A3026
+  expected_error_code: A0206

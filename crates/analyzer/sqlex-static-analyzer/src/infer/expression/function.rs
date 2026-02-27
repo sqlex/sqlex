@@ -1,20 +1,19 @@
-use sqlex_analyzer::extension::data_type_ext::DataTypeExt;
+use sqlex_analyzer::{error::AnalyzerError, extension::data_type_ext::DataTypeExt};
 use sqlex_common::{dialect::Dialect, types::DataType};
 
 use crate::{
-    diagnostics::{Diagnostic, Phase},
     functions::model::{
         FunctionArgType, FunctionCoercionProfile, FunctionNullabilityRule, FunctionReturnTypeRule,
         FunctionSignature,
     },
-    infer::expression::ExpressionInference,
+    infer::{error_code, expression::ExpressionInference},
 };
 
 pub(super) fn validate_argument_types(
     function_name: &str,
     signature: &FunctionSignature,
     args: &[ExpressionInference],
-) -> Result<(), Diagnostic> {
+) -> Result<(), AnalyzerError> {
     if matches!(
         signature.coercion_profile,
         FunctionCoercionProfile::Permissive
@@ -36,13 +35,12 @@ pub(super) fn validate_argument_types(
         }
 
         let (code, requirement_label) = match rule.expected {
-            FunctionArgType::TextLike => ("I4108", "text"),
-            FunctionArgType::Numeric => ("I4109", "numeric"),
+            FunctionArgType::TextLike => (error_code::FUNCTION_EXPECTS_TEXT_ARGUMENT, "text"),
+            FunctionArgType::Numeric => (error_code::FUNCTION_EXPECTS_NUMERIC_ARGUMENT, "numeric"),
         };
 
-        return Err(Diagnostic::new(
+        return Err(AnalyzerError::analysis(
             code,
-            Phase::Infer,
             format!(
                 "function '{}' expects {} argument at position {}",
                 function_name,

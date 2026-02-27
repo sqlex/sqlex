@@ -1,8 +1,9 @@
+use sqlex_analyzer::error::AnalyzerError;
+
 use crate::{
     algebraizer::model::relation::Relation,
-    diagnostics::{Diagnostic, Phase},
     infer::{
-        Inferencer,
+        Inferencer, error_code,
         expression::ExpressionInference,
         model::{cardinality::MinRows, metadata::InferColumn},
     },
@@ -13,7 +14,7 @@ impl Inferencer<'_> {
         &mut self,
         subquery: &Relation,
         input_columns: &[InferColumn],
-    ) -> Result<ExpressionInference, Diagnostic> {
+    ) -> Result<ExpressionInference, AnalyzerError> {
         self.outer_scopes.push(input_columns);
         let metadata = self.infer_relation(subquery);
         self.outer_scopes.pop();
@@ -21,9 +22,8 @@ impl Inferencer<'_> {
         let metadata = self.narrow_int_literals_at_boundary(metadata);
 
         if metadata.columns.len() != 1 {
-            return Err(Diagnostic::new(
-                "I4105",
-                Phase::Infer,
+            return Err(AnalyzerError::analysis(
+                error_code::SUBQUERY_EXPECTS_SINGLE_COLUMN,
                 format!(
                     "subquery expression expects exactly one column, got {}",
                     metadata.columns.len()

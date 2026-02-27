@@ -1,21 +1,22 @@
 use std::collections::HashSet;
 
+use sqlex_analyzer::error::AnalyzerError;
 use sqlparser::ast::Select;
 
-use crate::{
-    algebraizer::{
-        Algebraizer,
-        model::{
-            relation::{Relation, ValuesNode},
-            schema::OutputSchema,
-        },
-        scope::RelationBinding,
+use crate::algebraizer::{
+    Algebraizer, error_code,
+    model::{
+        relation::{Relation, ValuesNode},
+        schema::OutputSchema,
     },
-    diagnostics::{Diagnostic, Phase},
+    scope::RelationBinding,
 };
 
 impl Algebraizer<'_> {
-    pub(crate) fn build_from_relation(&mut self, select: &Select) -> Result<Relation, Diagnostic> {
+    pub(crate) fn build_from_relation(
+        &mut self,
+        select: &Select,
+    ) -> Result<Relation, AnalyzerError> {
         if select.from.is_empty() {
             let schema = OutputSchema {
                 relation_id: self.allocate_relation_id(),
@@ -30,9 +31,8 @@ impl Algebraizer<'_> {
         }
 
         if select.from.len() != 1 {
-            return Err(Diagnostic::new(
-                "A3071",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::MULTIPLE_FROM_ITEMS_UNSUPPORTED,
                 "multiple FROM items are not supported in this iteration",
             ));
         }

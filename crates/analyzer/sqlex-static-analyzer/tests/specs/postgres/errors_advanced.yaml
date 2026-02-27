@@ -10,4 +10,4 @@ migrations:
 queries:
 - name: invalid_function_args
   sql: SELECT SUBSTR(1, 2, 3) FROM users
-  expected_error_code: I4108
+  expected_error_code: I0108

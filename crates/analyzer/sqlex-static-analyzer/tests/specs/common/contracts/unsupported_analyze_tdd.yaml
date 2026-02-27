@@ -4,25 +4,25 @@ migrations:
 queries:
   - name: multi_from_items
     sql: SELECT * FROM t1, t2
-    expected_error_code: A3071
+    expected_error_code: A0701
     tdd_reason: "Static analyzer currently rejects multi-from items before full parity work is complete."
 
   - name: top_level_values_set_expr
     sql: VALUES (1)
-    expected_error_code: A3065
+    expected_error_code: A0605
     tdd_reason: "VALUES set expression parity is tracked as future support."
 
   - name: unsupported_binary_operator
     sql: SELECT 1 || 2
-    expected_error_code: A3069
+    expected_error_code: A0609
     tdd_reason: "Binary operator support is not finalized for all dialects."
 
   - name: unsupported_literal_kind
     sql: SELECT X'AB'
-    expected_error_code: A3073
+    expected_error_code: A0703
     tdd_reason: "Hex literal handling is tracked for future implementation."
 
   - name: natural_join_not_supported
     sql: SELECT * FROM t1 NATURAL JOIN t2
-    expected_error_code: A3056
+    expected_error_code: A0506
     tdd_reason: "NATURAL JOIN parity with database analyzer is pending; static currently rejects this path."

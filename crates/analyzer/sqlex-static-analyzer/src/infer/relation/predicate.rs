@@ -1,11 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
+use sqlex_analyzer::error::AnalyzerError;
+
 use crate::{
     algebraizer::model::{
         expression::{BoundBinaryOp, BoundLiteral, Expression},
         relation::{JoinKind, JoinNode},
     },
-    diagnostics::Diagnostic,
     infer::{
         Inferencer,
         model::{
@@ -113,7 +114,7 @@ impl Inferencer<'_> {
         current: CardInterval,
         join_node: &JoinNode,
         condition: &Expression,
-    ) -> Result<CardInterval, Diagnostic> {
+    ) -> Result<CardInterval, AnalyzerError> {
         let left = self.infer_relation(&join_node.left)?;
         let right = self.infer_relation(&join_node.right)?;
 

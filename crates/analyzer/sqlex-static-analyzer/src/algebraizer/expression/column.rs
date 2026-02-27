@@ -1,10 +1,12 @@
-use sqlex_analyzer::extension::{ident_ext::IdentExt, object_name_ext::ObjectNameExt};
+use sqlex_analyzer::{
+    error::AnalyzerError,
+    extension::{ident_ext::IdentExt, object_name_ext::ObjectNameExt},
+};
 use sqlex_common::dialect::Dialect;
 use sqlparser::ast::{Expr, Value};
 
-use crate::{
-    algebraizer::{Algebraizer, model::expression::Expression, scope::RelationBinding},
-    diagnostics::{Diagnostic, Phase},
+use crate::algebraizer::{
+    Algebraizer, error_code, model::expression::Expression, scope::RelationBinding,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -32,7 +34,7 @@ impl Algebraizer<'_> {
     pub(crate) fn resolve_unqualified_column(
         &self,
         column_name: &str,
-    ) -> Result<ResolvedColumnBinding, Diagnostic> {
+    ) -> Result<ResolvedColumnBinding, AnalyzerError> {
         if let Some(slot_id) =
             self.resolve_unqualified_in_scope_level(self.relation_scope.current(), column_name)?
         {
@@ -50,9 +52,8 @@ impl Algebraizer<'_> {
             }
         }
 
-        Err(Diagnostic::new(
-            "A3008",
-            Phase::Algebraize,
+        Err(AnalyzerError::analysis(
+            error_code::COLUMN_NOT_FOUND,
             format!("column not found: {column_name}"),
         ))
     }
@@ -61,7 +62,7 @@ impl Algebraizer<'_> {
         &self,
         qualifier: &str,
         column_name: &str,
-    ) -> Result<ResolvedColumnBinding, Diagnostic> {
+    ) -> Result<ResolvedColumnBinding, AnalyzerError> {
         match self.resolve_qualified_in_scope_level(
             self.relation_scope.current(),
             qualifier,
@@ -71,9 +72,8 @@ impl Algebraizer<'_> {
                 return Ok(ResolvedColumnBinding::Local { slot_id });
             },
             QualifiedResolution::RelationFoundColumnMissing => {
-                return Err(Diagnostic::new(
-                    "A3011",
-                    Phase::Algebraize,
+                return Err(AnalyzerError::analysis(
+                    error_code::QUALIFIED_COLUMN_NOT_FOUND,
                     format!("column not found: {qualifier}.{column_name}"),
                 ));
             },
@@ -97,15 +97,13 @@ impl Algebraizer<'_> {
         }
 
         if relation_found {
-            Err(Diagnostic::new(
-                "A3011",
-                Phase::Algebraize,
+            Err(AnalyzerError::analysis(
+                error_code::QUALIFIED_COLUMN_NOT_FOUND,
                 format!("column not found: {qualifier}.{column_name}"),
             ))
         } else {
-            Err(Diagnostic::new(
-                "A3010",
-                Phase::Algebraize,
+            Err(AnalyzerError::analysis(
+                error_code::RELATION_REFERENCE_INVALID,
                 format!("unknown relation reference: {qualifier}"),
             ))
         }
@@ -115,7 +113,7 @@ impl Algebraizer<'_> {
         &self,
         scope_level: &[RelationBinding],
         column_name: &str,
-    ) -> Result<Option<u32>, Diagnostic> {
+    ) -> Result<Option<u32>, AnalyzerError> {
         let mut matched_slots = scope_level
             .iter()
             .flat_map(|scope| {
@@ -129,9 +127,8 @@ impl Algebraizer<'_> {
         match (matched_slots.next(), matched_slots.next()) {
             (None, _) => Ok(None),
             (Some(slot_id), None) => Ok(Some(slot_id)),
-            (Some(_), Some(_)) => Err(Diagnostic::new(
-                "A3009",
-                Phase::Algebraize,
+            (Some(_), Some(_)) => Err(AnalyzerError::analysis(
+                error_code::COLUMN_REFERENCE_AMBIGUOUS,
                 format!("ambiguous column reference: {column_name}"),
             )),
         }
@@ -142,7 +139,7 @@ impl Algebraizer<'_> {
         scope_level: &[RelationBinding],
         qualifier: &str,
         column_name: &str,
-    ) -> Result<QualifiedResolution, Diagnostic> {
+    ) -> Result<QualifiedResolution, AnalyzerError> {
         let mut matched_scopes = scope_level.iter().filter(|scope| {
             scope
                 .qualifier_names
@@ -152,9 +149,8 @@ impl Algebraizer<'_> {
 
         let first_scope = matched_scopes.next();
         if matched_scopes.next().is_some() {
-            return Err(Diagnostic::new(
-                "A3010",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::RELATION_REFERENCE_INVALID,
                 format!("ambiguous relation reference: {qualifier}"),
             ));
         }
@@ -171,22 +167,20 @@ impl Algebraizer<'_> {
         match (matched_slots.next(), matched_slots.next()) {
             (None, _) => Ok(QualifiedResolution::RelationFoundColumnMissing),
             (Some(slot_id), None) => Ok(QualifiedResolution::Found(slot_id)),
-            (Some(_), Some(_)) => Err(Diagnostic::new(
-                "A3009",
-                Phase::Algebraize,
+            (Some(_), Some(_)) => Err(AnalyzerError::analysis(
+                error_code::COLUMN_REFERENCE_AMBIGUOUS,
                 format!("ambiguous column reference: {qualifier}.{column_name}"),
             )),
         }
     }
 
-    pub(crate) fn derive_output_name(&self, expr: &Expr) -> Result<String, Diagnostic> {
+    pub(crate) fn derive_output_name(&self, expr: &Expr) -> Result<String, AnalyzerError> {
         match expr {
             Expr::Identifier(ident) => Ok(ident.to_normalized_string(self.dialect)),
             Expr::CompoundIdentifier(idents) => {
                 let last = idents.last().ok_or_else(|| {
-                    Diagnostic::new(
-                        "A3012",
-                        Phase::Algebraize,
+                    AnalyzerError::analysis(
+                        error_code::PROJECTION_EMPTY_COMPOUND_IDENTIFIER,
                         "empty compound identifier in projection",
                     )
                 })?;
@@ -234,11 +228,12 @@ impl Algebraizer<'_> {
 mod tests {
     use std::collections::HashSet;
 
+    use sqlex_analyzer::error::AnalyzerError;
     use sqlex_common::dialect::Dialect;
 
     use crate::{
         algebraizer::{
-            Algebraizer,
+            Algebraizer, error_code,
             model::{
                 expression::Expression,
                 schema::{BoundColumn, ColumnOrigin, OutputSchema},
@@ -364,6 +359,11 @@ mod tests {
         let error = algebraizer
             .resolve_unqualified_column("id")
             .expect_err("binding should fail");
-        assert_eq!(error.code, "A3009");
+        match error {
+            AnalyzerError::Analysis { code, .. } => {
+                assert_eq!(code, error_code::COLUMN_REFERENCE_AMBIGUOUS)
+            },
+            other => panic!("expected analysis error, got: {other:?}"),
+        }
     }
 }

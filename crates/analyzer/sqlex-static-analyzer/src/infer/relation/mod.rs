@@ -1,6 +1,7 @@
+use sqlex_analyzer::error::AnalyzerError;
+
 use crate::{
     algebraizer::model::relation::Relation,
-    diagnostics::Diagnostic,
     infer::{
         Inferencer,
         model::{cardinality::CardInterval, metadata::InferMetadata},
@@ -27,7 +28,7 @@ impl Inferencer<'_> {
     pub(crate) fn infer_relation(
         &mut self,
         relation: &Relation,
-    ) -> Result<InferMetadata, Diagnostic> {
+    ) -> Result<InferMetadata, AnalyzerError> {
         match relation {
             Relation::Scan(node) => self.infer_scan_relation(node),
             Relation::Values(_) => Ok(InferMetadata {

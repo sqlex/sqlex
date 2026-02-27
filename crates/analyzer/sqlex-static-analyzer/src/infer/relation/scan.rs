@@ -1,8 +1,8 @@
+use sqlex_analyzer::error::AnalyzerError;
 use sqlex_common::types::DataType;
 
 use crate::{
     algebraizer::model::{relation::ScanNode, schema::ColumnOrigin as BoundColumnOrigin},
-    diagnostics::Diagnostic,
     infer::{
         Inferencer,
         model::{
@@ -14,7 +14,10 @@ use crate::{
 };
 
 impl Inferencer<'_> {
-    pub(super) fn infer_scan_relation(&self, node: &ScanNode) -> Result<InferMetadata, Diagnostic> {
+    pub(super) fn infer_scan_relation(
+        &self,
+        node: &ScanNode,
+    ) -> Result<InferMetadata, AnalyzerError> {
         let _ = &node.table;
         let mut columns = Vec::with_capacity(node.schema.columns.len());
 

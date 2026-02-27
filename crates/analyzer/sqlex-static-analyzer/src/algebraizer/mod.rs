@@ -1,3 +1,4 @@
+use sqlex_analyzer::error::AnalyzerError;
 use sqlex_common::dialect::Dialect;
 use sqlparser::ast::Statement;
 
@@ -7,10 +8,10 @@ use crate::{
         scope::{CteScopeStack, NamedWindowScopeStack, RelationScopeStack},
     },
     catalog::Catalog,
-    diagnostics::{Diagnostic, Phase},
     functions::FunctionRegistry,
 };
 
+pub(crate) mod error_code;
 pub(crate) mod model;
 
 mod expression;
@@ -47,11 +48,10 @@ impl<'a> Algebraizer<'a> {
         }
     }
 
-    pub(crate) fn build(mut self, statement: &Statement) -> Result<Relation, Diagnostic> {
+    pub(crate) fn build(mut self, statement: &Statement) -> Result<Relation, AnalyzerError> {
         let Statement::Query(query) = statement else {
-            return Err(Diagnostic::new(
-                "A3001",
-                Phase::Algebraize,
+            return Err(AnalyzerError::analysis(
+                error_code::DISPATCH_ONLY_QUERY_STATEMENT_SUPPORTED,
                 "only query statements are supported in analyze",
             ));
         };

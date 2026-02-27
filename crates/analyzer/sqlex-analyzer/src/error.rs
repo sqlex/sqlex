@@ -11,7 +11,8 @@ pub enum AnalyzerError {
     ///
     /// Error code format is `<module><major><minor>`, for example `P0000` or
     /// `P0120`:
-    /// - `<module>`: one uppercase letter representing analyzer module/feature.
+    /// - `<module>`: one uppercase letter namespace (`P` parse, `C` catalog,
+    ///   `A` algebraizer, `I` infer).
     /// - `<major>`: two digits (00-99) for top-level category.
     /// - `<minor>`: two digits (00-99) for sub-category within the major group.
     #[error("[{code}] {message}")]

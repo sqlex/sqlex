@@ -13,4 +13,4 @@ queries:
     SELECT u1.id, u2.id
     FROM users u1
     FULL JOIN users u2 ON u1.id = u2.id
-  expected_error_code: A3054
+  expected_error_code: A0504

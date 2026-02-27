@@ -11,4 +11,4 @@ migrations:
 queries:
 - name: invalid_function_args
   sql: SELECT SUBSTR(1, 2, 3, 4) FROM users
-  expected_error_code: A3021
+  expected_error_code: A0201

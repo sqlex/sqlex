@@ -10,4 +10,4 @@ migrations:
 queries:
 - name: type_mismatch
   sql: SELECT name + 1 FROM users
-  expected_error_code: I4104
+  expected_error_code: I0104

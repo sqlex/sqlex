@@ -1,15 +1,13 @@
+use sqlex_analyzer::error::AnalyzerError;
 use sqlparser::ast::Value;
 
-use crate::{
-    algebraizer::{Algebraizer, model::expression::BoundLiteral},
-    diagnostics::{Diagnostic, Phase},
-};
+use crate::algebraizer::{Algebraizer, error_code, model::expression::BoundLiteral};
 
 impl Algebraizer<'_> {
     pub(crate) fn build_literal_expression(
         &self,
         value: &Value,
-    ) -> Result<BoundLiteral, Diagnostic> {
+    ) -> Result<BoundLiteral, AnalyzerError> {
         let literal = match value {
             Value::Boolean(boolean) => BoundLiteral::Bool(*boolean),
             Value::Null => BoundLiteral::Null,
@@ -29,18 +27,16 @@ impl Algebraizer<'_> {
             Value::Number(number, _) => {
                 if number.contains('.') || number.contains('e') || number.contains('E') {
                     let parsed = number.parse::<f64>().map_err(|err| {
-                        Diagnostic::new(
-                            "A3005",
-                            Phase::Algebraize,
+                        AnalyzerError::analysis(
+                            error_code::LITERAL_INVALID_FLOAT,
                             format!("invalid floating literal '{number}': {err}"),
                         )
                     })?;
                     BoundLiteral::Float(parsed)
                 } else {
                     let parsed = number.parse::<i64>().map_err(|err| {
-                        Diagnostic::new(
-                            "A3006",
-                            Phase::Algebraize,
+                        AnalyzerError::analysis(
+                            error_code::LITERAL_INVALID_INTEGER,
                             format!("invalid integer literal '{number}': {err}"),
                         )
                     })?;
@@ -52,9 +48,8 @@ impl Algebraizer<'_> {
             },
             Value::Placeholder(_) => BoundLiteral::Placeholder,
             _ => {
-                return Err(Diagnostic::new(
-                    "A3073",
-                    Phase::Algebraize,
+                return Err(AnalyzerError::analysis(
+                    error_code::LITERAL_UNSUPPORTED,
                     format!("unsupported literal in this iteration: {value}"),
                 ));
             },

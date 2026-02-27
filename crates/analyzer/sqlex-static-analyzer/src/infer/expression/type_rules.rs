@@ -1,17 +1,14 @@
-use sqlex_analyzer::extension::data_type_ext::DataTypeExt;
+use sqlex_analyzer::{error::AnalyzerError, extension::data_type_ext::DataTypeExt};
 use sqlex_common::{dialect::Dialect, types::DataType};
 
-use crate::{
-    algebraizer::model::expression::BoundBinaryOp,
-    diagnostics::{Diagnostic, Phase},
-};
+use crate::{algebraizer::model::expression::BoundBinaryOp, infer::error_code};
 
 pub(super) fn validate_binary_op(
     op: &BoundBinaryOp,
     left_type: &DataType,
     right_type: &DataType,
     dialect: Dialect,
-) -> Result<(), Diagnostic> {
+) -> Result<(), AnalyzerError> {
     let is_arithmetic = matches!(
         op,
         BoundBinaryOp::Add | BoundBinaryOp::Sub | BoundBinaryOp::Mul | BoundBinaryOp::Div
@@ -32,9 +29,8 @@ pub(super) fn validate_binary_op(
         return Ok(());
     }
 
-    Err(Diagnostic::new(
-        "I4104",
-        Phase::Infer,
+    Err(AnalyzerError::analysis(
+        error_code::OPERATOR_TYPE_MISMATCH,
         format!(
             "operator '{}' is not defined for {:?} and {:?}",
             binary_op_symbol(op),
